@@ -7,11 +7,11 @@ interface RegisterRow {
   id: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; status: 'Draft' | 'Active' | 'Disposed' | 'Cancelled'
   assetAccountCode: string; inServiceDate: string; scheduleStartDate: string; usefulLifeMonths: number; originalCost: string; accumulated: string; netBookValue: string; disposalDate: string | null
 }
-interface Candidate { journalLineId: string; voucherNumber: string; postingDate: string; accountCode: string; description: string | null; lineAmount: string; assigned: string }
+interface Candidate { journalLineId: string; voucherNumber: string; postingDate: string; accountCode: string; description: string | null; lineAmount: string; assigned: string; stockSource?: string | null }
 interface Run { id: string; periodStart: string; periodEnd: string; status: 'Active' | 'Reversed'; voucherId: string | null }
 interface ReconRow { accountId: string; accountCode: string; kind: string; registerBalance: string; ledgerBalance: string; difference: string }
 interface Detail {
-  asset: { id: string; code: string; name: string; proration: string; scheduleStartDate: string; openingAccumulated: string; remainingLifeMonths: number | null }
+  asset: { id: string; code: string; name: string; proration: string; expenseAccountId?: string; expenseSplits?: { expenseAccountId: string; basisPoints: number }[]; scheduleStartDate: string; openingAccumulated: string; remainingLifeMonths: number | null }
   sources: { journalLineId: string; voucherNumber: string; postingDate: string; accountCode: string; lineAmount: string; amount: string }[]
   schedule: { periodEnd: string; planned: string; cumulative: string; booked: string | null }[]
 }
@@ -104,6 +104,8 @@ export function AssetsView() {
           <div className="toolbar"><h3>{detail.asset.code} – {detail.asset.name}</h3><button onClick={() => setDetail(null)}>Đóng</button></div>
           <p className="muted">Bắt đầu khấu hao {detail.asset.scheduleStartDate}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}
             {detail.asset.remainingLifeMonths ? `; chuyển từ hệ thống cũ: hao mòn đầu ${formatMoney(detail.asset.openingAccumulated)}, còn ${detail.asset.remainingLifeMonths} tháng` : ''}</p>
+          {detail.asset.expenseSplits && detail.asset.expenseSplits.length > 0 && <p className="muted">Chi phí chia theo: {detail.asset.expenseSplits
+            .map(x => `${accounts.find(a => a.id === x.expenseAccountId)?.code ?? '?'} ${bpToPercent(x.basisPoints)}%`).join(' · ')}</p>}
           <h4>Nguồn nguyên giá</h4>
           <table className="grid"><thead><tr><th>Chứng từ</th><th>Ngày</th><th>TK</th><th className="num">Dòng bút toán</th><th className="num">Gán cho tài sản</th></tr></thead>
             <tbody>{detail.sources.map(x => <tr key={x.journalLineId}><td>{x.voucherNumber}</td><td>{formatDate(x.postingDate)}</td><td>{x.accountCode}</td>
@@ -171,6 +173,15 @@ function Dispose({ row, accounts, busy, onSubmit, onCancel }: {
   )
 }
 
+/** "33,33" / "33.33" / "50" (%) → basis points (3333, 5000) without floats; null if not a percentage with at most two decimals. */
+function percentToBp(input: string): number | null {
+  const m = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(input.trim())
+  if (!m) return null
+  const bp = Number(m[1]) * 100 + Number(((m[2] ?? '') + '00').slice(0, 2))
+  return bp >= 1 && bp <= 10000 ? bp : null
+}
+const bpToPercent = (bp: number) => (bp / 100).toString().replace('.', ',')
+
 function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog>['accounts']; onDone: (msg?: string) => void }) {
   const [f, setF] = useState({
     code: '', name: '', class: 'FixedAsset' as 'FixedAsset' | 'Tool', assetAccountId: '', accumulatedAccountId: '', expenseAccountId: '',
@@ -179,10 +190,27 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
   })
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [picked, setPicked] = useState<Record<string, string>>({})
+  const [splitOn, setSplitOn] = useState(false)
+  const [splits, setSplits] = useState<{ accountId: string; pct: string }[]>([{ accountId: '', pct: '50' }, { accountId: '', pct: '50' }])
+  const [defaults, setDefaults] = useState<Record<string, string>>({})   // vai trò TK mặc định → mã TK (Thiết lập → Hạch toán tự động)
   const { busy, error, run } = useAction()
   // Cách tính tháng đầu/cuối mặc định của công ty (Thiết lập → Hạch toán tự động); thẻ vẫn đổi được.
   useEffect(() => { get<{ proration: string }>('/settings/depreciation-default').then(d => setF(x => ({ ...x, proration: d.proration }))).catch(() => undefined) }, [])
+  useEffect(() => {
+    get<{ code: string; account: string | null }[]>('/rules/account-roles')
+      .then(rs => setDefaults(Object.fromEntries(rs.filter(r => r.account).map(r => [r.code, (r.account as string).split(' – ')[0]])))).catch(() => undefined)   // account = "242 – Tên"
+  }, [])
+  // Điền sẵn tài khoản theo loại thẻ từ vai trò TK mặc định của công ty; vẫn đổi được.
+  useEffect(() => {
+    const idOf = (role: string) => accounts.find(a => a.code === defaults[role])?.id ?? ''
+    if (accounts.length === 0) return
+    setF(x => x.class === 'Tool'
+      ? { ...x, assetAccountId: idOf('TOOL_COST_DEFAULT'), accumulatedAccountId: '', expenseAccountId: idOf('TOOL_EXPENSE_DEFAULT') }
+      : { ...x, assetAccountId: idOf('ASSET_COST_DEFAULT'), accumulatedAccountId: idOf('ASSET_ACCUMULATED_DEFAULT'), expenseAccountId: idOf('ASSET_EXPENSE_DEFAULT') })
+  }, [defaults, accounts, f.class])
   const set = (k: keyof typeof f, v: string | boolean) => setF(x => ({ ...x, [k]: v }))
+  const splitBp = splits.map(x => percentToBp(x.pct))
+  const splitTotal = splitBp.reduce<number>((t, v) => t + (v ?? 0), 0)
 
   useEffect(() => {
     setPicked({})
@@ -194,9 +222,15 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
     const money = (s: string, label: string) => { const m = parseMoney(s); if (m == null) throw new Error(`${label} không hợp lệ.`); return m }
     const costSources = Object.entries(picked).map(([journalLineId, amount]) => ({ journalLineId, amount: money(amount, 'Số tiền gán') }))
     if (costSources.length === 0) throw new Error('Chọn ít nhất một bút toán hình thành nguyên giá.')
+    let expenseSplits: { expenseAccountId: string; basisPoints: number }[] | null = null
+    if (splitOn) {
+      if (splits.some((x, i) => !x.accountId || splitBp[i] === null)) throw new Error('Mỗi dòng chia chi phí cần chọn tài khoản và tỷ lệ hợp lệ (tối đa 2 số lẻ).')
+      if (splitTotal !== 10000) throw new Error(`Tỷ lệ chia chi phí phải cộng đúng 100% (hiện ${bpToPercent(splitTotal)}%).`)
+      expenseSplits = splits.map((x, i) => ({ expenseAccountId: x.accountId, basisPoints: splitBp[i] as number }))
+    }
     const a = await post<{ code: string }>('/assets', {
       code: f.code, name: f.name, class: f.class, assetAccountId: f.assetAccountId,
-      accumulatedAccountId: f.class === 'FixedAsset' ? f.accumulatedAccountId || null : null, expenseAccountId: f.expenseAccountId,
+      accumulatedAccountId: f.class === 'FixedAsset' ? f.accumulatedAccountId || null : null, expenseAccountId: expenseSplits ? expenseSplits[0].expenseAccountId : f.expenseAccountId, expenseSplits,
       proration: f.proration, residualValue: money(f.residualValue, 'Giá trị thu hồi'), usefulLifeMonths: Number(f.usefulLifeMonths),
       inServiceDate: f.inServiceDate, costSources, note: f.note || null,
       openingAccumulated: f.takenOver ? money(f.openingAccumulated, 'Hao mòn lũy kế đầu') : '0',
@@ -216,8 +250,9 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
         <label>Loại <select value={f.class} onChange={e => set('class', e.target.value)}><option value="FixedAsset">TSCĐ</option><option value="Tool">CCDC / chi phí trả trước</option></select></label>
         <label>TK tài sản <AccountSelect accounts={accounts} value={f.assetAccountId} onChange={v => set('assetAccountId', v)} filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK tài sản" /></label>
         {f.class === 'FixedAsset' && <label>TK hao mòn <AccountSelect accounts={accounts} value={f.accumulatedAccountId} onChange={v => set('accumulatedAccountId', v)} ariaLabel="TK hao mòn" /></label>}
-        <label>TK chi phí <AccountSelect accounts={accounts} value={f.expenseAccountId} onChange={v => set('expenseAccountId', v)} ariaLabel="TK chi phí" /></label>
-        <label>Ngày đưa vào sử dụng <DateInput value={formatDate(f.inServiceDate)} onChange={e => set('inServiceDate', e.target.value)} /></label>
+        {!splitOn && <label>TK chi phí <AccountSelect accounts={accounts} value={f.expenseAccountId} onChange={v => set('expenseAccountId', v)} ariaLabel="TK chi phí" /></label>}
+        <label className="check" style={{ gridColumn: "1 / -1" }}><input type="checkbox" checked={splitOn} onChange={e => setSplitOn(e.target.checked)} /> Chia chi phí cho nhiều tài khoản (nhiều bộ phận)</label>
+        <label>Ngày đưa vào sử dụng <DateInput value={f.inServiceDate} onChange={e => set('inServiceDate', e.target.value)} /></label>
         <label>Thời gian sử dụng (tháng) <input inputMode="numeric" value={f.usefulLifeMonths} onChange={e => set('usefulLifeMonths', e.target.value)} /></label>
         <label>Giá trị thu hồi ước tính <input inputMode="decimal" value={f.residualValue} onChange={e => set('residualValue', e.target.value)} /></label>
         <label>Tính tháng đầu/cuối <select value={f.proration} onChange={e => set('proration', e.target.value)}>
@@ -229,18 +264,37 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
           <label>Bắt đầu khấu hao trên hệ thống mới <DateInput value={f.scheduleStartDate} onChange={e => set('scheduleStartDate', e.target.value)} /></label>
         </>}
       </div>
+      {splitOn && (
+        <div style={{ marginBottom: 10 }}>
+          <h4>Chia chi phí {f.class === 'Tool' ? 'phân bổ' : 'khấu hao'} hằng tháng</h4>
+          <table className="grid" style={{ maxWidth: 560 }}><thead><tr><th>TK chi phí</th><th className="num">Tỷ lệ (%)</th><th /></tr></thead><tbody>
+            {splits.map((x, i) => <tr key={i}>
+              <td><AccountSelect accounts={accounts} value={x.accountId} onChange={v => setSplits(s => s.map((y, j) => (j === i ? { ...y, accountId: v } : y)))} ariaLabel="TK chi phí" /></td>
+              <td className="num"><input inputMode="decimal" aria-label="Tỷ lệ" value={x.pct} style={{ width: 80, textAlign: 'right' }}
+                onChange={e => setSplits(s => s.map((y, j) => (j === i ? { ...y, pct: e.target.value } : y)))} /></td>
+              <td><button disabled={splits.length <= 2} onClick={() => setSplits(s => s.filter((_, j) => j !== i))}>Xóa</button></td></tr>)}
+          </tbody><tfoot><tr><td>Cộng</td><td className={`num ${splitTotal === 10000 ? '' : 'warn'}`}>{bpToPercent(splitTotal)}%</td><td /></tr></tfoot></table>
+          <button style={{ marginTop: 6 }} onClick={() => setSplits(s => [...s, { accountId: '', pct: '' }])}>Thêm tài khoản</button>
+          <p className="muted">Mỗi tháng số khấu hao / phân bổ được chia theo tỷ lệ; phần làm tròn dồn vào dòng cuối nên tổng luôn khớp.</p>
+        </div>
+      )}
       <h4>Bút toán hình thành nguyên giá (phát sinh Nợ TK tài sản, đã ghi sổ)</h4>
       {f.assetAccountId && candidates.length === 0 && <p className="muted">Không có bút toán nào còn chưa gán trên tài khoản này.</p>}
-      {candidates.length > 0 && <table className="grid"><thead><tr><th></th><th>Chứng từ</th><th>Ngày</th><th>Diễn giải</th><th className="num">Số tiền</th><th className="num">Đã gán</th><th className="num">Gán cho thẻ này</th></tr></thead>
+      {candidates.length > 0 && <table className="grid"><thead><tr><th></th><th>Chứng từ</th><th>Ngày</th><th>Diễn giải</th><th>Nguồn</th><th className="num">Số tiền</th><th className="num">Đã gán</th><th className="num">Gán cho thẻ này</th></tr></thead>
         <tbody>{candidates.map(c => <tr key={c.journalLineId}>
-          <td><input type="checkbox" aria-label={`Chọn ${c.voucherNumber}`} checked={c.journalLineId in picked} onChange={e => setPicked(p => {
-            const n = { ...p }; if (e.target.checked) n[c.journalLineId] = remaining(c); else delete n[c.journalLineId]; return n })} /></td>
-          <td>{c.voucherNumber}</td><td>{formatDate(c.postingDate)}</td><td>{c.description}</td><td className="num">{formatMoney(c.lineAmount)}</td><td className="num">{formatMoney(c.assigned)}</td>
+          <td><input type="checkbox" aria-label={`Chọn ${c.voucherNumber}`} checked={c.journalLineId in picked} onChange={e => {
+            const on = e.target.checked
+            setPicked(p => { const n = { ...p }; if (on) n[c.journalLineId] = remaining(c); else delete n[c.journalLineId]; return n })
+            // Dòng từ phiếu xuất kho: điền sẵn tên, ngày đưa vào sử dụng và ghi chú nguồn nếu thẻ còn trống.
+            if (on && c.stockSource && !f.name)
+              setF(x => ({ ...x, name: /: (.+?) \(/.exec(c.stockSource ?? '')?.[1] ?? x.name, inServiceDate: c.postingDate, note: x.note || (c.stockSource ?? '') }))
+          }} /></td>
+          <td>{c.voucherNumber}</td><td>{formatDate(c.postingDate)}</td><td>{c.description}</td><td style={{ whiteSpace: 'normal' }}>{c.stockSource}</td><td className="num">{formatMoney(c.lineAmount)}</td><td className="num">{formatMoney(c.assigned)}</td>
           <td className="num">{c.journalLineId in picked && <input inputMode="decimal" value={picked[c.journalLineId]} aria-label="Số tiền gán"
             onChange={e => setPicked(p => ({ ...p, [c.journalLineId]: e.target.value }))} />}</td>
         </tr>)}</tbody></table>}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button className="primary" disabled={busy || !f.code || !f.name || !f.assetAccountId || !f.expenseAccountId} onClick={submit}>Lưu nháp</button>
+        <button className="primary" disabled={busy || !f.code || !f.name || !f.assetAccountId || (!splitOn && !f.expenseAccountId)} onClick={submit}>Lưu nháp</button>
         <button onClick={() => onDone()}>Hủy</button>
       </div>
     </section>

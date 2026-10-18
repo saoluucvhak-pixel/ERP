@@ -49,7 +49,7 @@ function PaymentOrders() {
           <label>Tài khoản chi<AccountSelect accounts={accounts} value={form.bankAccountId} onChange={v => setForm(f => ({ ...f, bankAccountId: v }))} filter={a => a.cashKind === 'Bank'} /></label>
           <label>Nhà cung cấp<PartnerSelect partners={partners} value={form.partnerId} onChange={v => setForm(f => ({ ...f, partnerId: v }))} /></label>
           <label>Số tiền<input className="num" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} onBlur={() => { const p = parseMoney(form.amount); if (p) setForm(f => ({ ...f, amount: formatMoney(p) })) }} /></label>
-          <label>Ngày đề nghị<DateInput value={formatDate(form.requestedDate)} onChange={e => setForm(f => ({ ...f, requestedDate: e.target.value }))} /></label>
+          <label>Ngày đề nghị<DateInput value={form.requestedDate} onChange={e => setForm(f => ({ ...f, requestedDate: e.target.value }))} /></label>
           <label>Số TK thụ hưởng<input value={form.beneficiaryAccountNo} onChange={e => setForm(f => ({ ...f, beneficiaryAccountNo: e.target.value }))} /></label>
           <label>Ngân hàng thụ hưởng<input value={form.beneficiaryBank} onChange={e => setForm(f => ({ ...f, beneficiaryBank: e.target.value }))} /></label>
           <label style={{ flex: 1, minWidth: 220 }}>Nội dung<input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></label>
@@ -147,8 +147,8 @@ function Reconciliation() {
       <details className="panel">
         <summary>Nhập sao kê (CSV: <code>yyyy-mm-dd;số tiền (+ vào / − ra);mã GD;nội dung</code>)</summary>
         <div className="form-row" style={{ marginTop: 8 }}>
-          <label>Từ ngày<DateInput value={formatDate(hdr.fromDate)} onChange={e => setHdr(h => ({ ...h, fromDate: e.target.value }))} /></label>
-          <label>Đến ngày<DateInput value={formatDate(hdr.toDate)} onChange={e => setHdr(h => ({ ...h, toDate: e.target.value }))} /></label>
+          <label>Từ ngày<DateInput value={hdr.fromDate} onChange={e => setHdr(h => ({ ...h, fromDate: e.target.value }))} /></label>
+          <label>Đến ngày<DateInput value={hdr.toDate} onChange={e => setHdr(h => ({ ...h, toDate: e.target.value }))} /></label>
           <label>Số dư đầu<input className="num" value={hdr.opening} onChange={e => setHdr(h => ({ ...h, opening: e.target.value }))} /></label>
           <label>Số dư cuối<input className="num" value={hdr.closing} onChange={e => setHdr(h => ({ ...h, closing: e.target.value }))} /></label>
           <label>Tên file<input value={hdr.sourceName} onChange={e => setHdr(h => ({ ...h, sourceName: e.target.value }))} /></label>

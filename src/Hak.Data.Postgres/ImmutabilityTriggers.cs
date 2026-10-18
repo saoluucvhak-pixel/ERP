@@ -165,6 +165,17 @@ internal static class ImmutabilityTriggers
         yield return "DROP FUNCTION IF EXISTS hak_depreciation_entries_void_once();";
     }
 
+    /// <summary>Phase 7: asset expense splits are part of the frozen card (append-only). Separate for the same reason as <see cref="AssetStatements"/>.</summary>
+    public static IEnumerable<string> AssetSplitStatements()
+    {
+        yield return "CREATE TRIGGER trg_asset_expense_splits_append_only BEFORE UPDATE OR DELETE ON asset_expense_splits FOR EACH ROW EXECUTE FUNCTION hak_ledger_immutable();";
+    }
+
+    public static IEnumerable<string> AssetSplitDownStatements()
+    {
+        yield return "DROP TRIGGER IF EXISTS trg_asset_expense_splits_append_only ON asset_expense_splits;";
+    }
+
     /// <summary>Phase 4 (loans). Separate for the same reason as <see cref="AssetStatements"/>.</summary>
     public static IEnumerable<string> LoanStatements()
     {

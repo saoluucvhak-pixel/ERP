@@ -65,6 +65,45 @@ namespace Hak.Data.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetExpenseSplit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<int>("BasisPoints")
+                        .HasColumnType("integer")
+                        .HasColumnName("basis_points");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expense_account_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_expense_splits");
+
+                    b.HasIndex("ExpenseAccountId")
+                        .HasDatabaseName("ix_asset_expense_splits_expense_account_id");
+
+                    b.HasIndex("AssetId", "ExpenseAccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asset_expense_splits_asset_id_expense_account_id");
+
+                    b.ToTable("asset_expense_splits", t =>
+                        {
+                            t.HasCheckConstraint("ck_asset_expense_splits_share", "basis_points BETWEEN 1 AND 10000");
+                        });
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4904,6 +4943,23 @@ namespace Hak.Data.Postgres.Migrations
                         .HasConstraintName("fk_asset_cost_sources_journal_lines_journal_line_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetExpenseSplit", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany("ExpenseSplits")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_expense_splits_long_term_assets_asset_id");
+
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_expense_splits_accounts_expense_account_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntry", b =>
                 {
                     b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
@@ -5669,6 +5725,8 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Assets.LongTermAsset", b =>
                 {
                     b.Navigation("CostSources");
+
+                    b.Navigation("ExpenseSplits");
                 });
 
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>

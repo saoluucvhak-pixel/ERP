@@ -59,6 +59,8 @@ export function AutoPosting({ go }: { go: (tab: 'roles' | 'stock' | 'approval') 
     { label: 'Kết chuyển cuối kỳ', ok: hasActiveClosing, detail: 'Chưa có bộ quy tắc kết chuyển đang hiệu lực — tạo và kích hoạt ở phần bên dưới' },
     { label: 'Phương pháp tính giá xuất kho', ok: noMethod.length === 0,
       detail: `Kho chưa chọn phương pháp: ${noMethod.map(w => w.code).join(', ')}`, fix: () => go('stock'), fixLabel: 'Chọn ở Kho & vật tư' },
+    { label: 'Tài khoản mặc định khi lập thẻ CCDC / TSCĐ (tùy chọn)', ok: missingRoles(['TOOL_COST_DEFAULT', 'TOOL_EXPENSE_DEFAULT']).length === 0,
+      detail: 'Chưa đặt tài khoản CCDC (242, 153…) và chi phí phân bổ mặc định — form thẻ mới sẽ để trống, chọn tay từng thẻ', fix: () => go('roles'), fixLabel: 'Gán vai trò TK' },
     { label: 'Cách tính khấu hao mặc định', ok: true, detail: '' },
     { label: 'Quy trình lập và duyệt', ok: distinct !== null, detail: '', fix: () => go('approval'), fixLabel: 'Đổi cách duyệt' },
   ]

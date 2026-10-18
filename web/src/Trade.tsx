@@ -79,9 +79,9 @@ export function TradeView() {
           <label>{kind === 'Sales' ? 'Khách hàng' : 'Nhà cung cấp'}<PartnerSelect partners={partners} value={head.partnerId} onChange={v => setHead(h => ({ ...h, partnerId: v }))} /></label>
           <label>Ký hiệu HĐ<input value={head.series} onChange={e => setHead(h => ({ ...h, series: e.target.value }))} /></label>
           <label>Số HĐ<input value={head.no} onChange={e => setHead(h => ({ ...h, no: e.target.value }))} /></label>
-          <label>Ngày hóa đơn<DateInput value={formatDate(head.invoiceDate)} onChange={e => setHead(h => ({ ...h, invoiceDate: e.target.value }))} /></label>
-          <label>Ngày hạch toán<DateInput value={formatDate(head.postingDate)} onChange={e => setHead(h => ({ ...h, postingDate: e.target.value }))} /></label>
-          <label>Hạn thanh toán<DateInput value={formatDate(head.dueDate)} onChange={e => setHead(h => ({ ...h, dueDate: e.target.value }))} /></label>
+          <label>Ngày hóa đơn<DateInput value={head.invoiceDate} onChange={e => setHead(h => ({ ...h, invoiceDate: e.target.value }))} /></label>
+          <label>Ngày hạch toán<DateInput value={head.postingDate} onChange={e => setHead(h => ({ ...h, postingDate: e.target.value }))} /></label>
+          <label>Hạn thanh toán<DateInput value={head.dueDate} onChange={e => setHead(h => ({ ...h, dueDate: e.target.value }))} /></label>
           <label>Nguyên tệ<select value={head.currency} onChange={e => setHead(h => ({ ...h, currency: e.target.value }))}><option value="">VND</option><option>USD</option><option>EUR</option><option>CNY</option><option>JPY</option></select></label>
           {head.currency && <label>Tỷ giá<input className="num" value={head.rate} onChange={e => setHead(h => ({ ...h, rate: e.target.value }))} /></label>}
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>

@@ -56,7 +56,7 @@ export function OrdersView() {
         <div className="form-row">
           <label>{kind === 'Sales' ? 'Khách hàng' : 'Nhà cung cấp'}<PartnerSelect partners={partners} value={head.partnerId} onChange={v => setHead(h => ({ ...h, partnerId: v }))} /></label>
           <label>Số hợp đồng<input value={head.contractNo} onChange={e => setHead(h => ({ ...h, contractNo: e.target.value }))} /></label>
-          <label>Ngày đơn<DateInput value={formatDate(head.orderDate)} onChange={e => setHead(h => ({ ...h, orderDate: e.target.value }))} /></label>
+          <label>Ngày đơn<DateInput value={head.orderDate} onChange={e => setHead(h => ({ ...h, orderDate: e.target.value }))} /></label>
           <label>Dung sai giao vượt %<input className="num" size={4} value={head.tolerance} onChange={e => setHead(h => ({ ...h, tolerance: e.target.value }))} /></label>
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>
           <button className="primary" style={{ alignSelf: 'flex-end' }} disabled={busy} onClick={save}>Lưu đơn nháp</button>

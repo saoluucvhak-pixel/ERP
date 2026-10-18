@@ -195,8 +195,8 @@ function NewLoan({ accounts, partners, onDone }: { accounts: ReturnType<typeof u
         <label>TK lãi phải trả <AccountSelect accounts={accounts} value={f.accruedInterestAccountId} onChange={v => set('accruedInterestAccountId', v)} ariaLabel="TK lãi phải trả" /></label>
         <label>Loại tiền (để trống = VND) <input value={f.currency} onChange={e => set('currency', e.target.value.toUpperCase())} maxLength={3} /></label>
         <label>Hạn mức / số tiền vay <input inputMode="decimal" value={f.contractAmount} onChange={e => set('contractAmount', e.target.value)} /></label>
-        <label>Ngày bắt đầu <DateInput value={formatDate(f.startDate)} onChange={e => set('startDate', e.target.value)} /></label>
-        <label>Ngày đáo hạn <DateInput value={formatDate(f.maturityDate)} onChange={e => set('maturityDate', e.target.value)} /></label>
+        <label>Ngày bắt đầu <DateInput value={f.startDate} onChange={e => set('startDate', e.target.value)} /></label>
+        <label>Ngày đáo hạn <DateInput value={f.maturityDate} onChange={e => set('maturityDate', e.target.value)} /></label>
         <label>Lãi suất %/năm <input inputMode="decimal" value={f.annualRatePercent} onChange={e => set('annualRatePercent', e.target.value)} /></label>
         <label>Cơ sở tính ngày <select value={f.dayCount} onChange={e => set('dayCount', e.target.value)}><option value="Actual365">Thực tế / 365</option><option value="Actual360">Thực tế / 360</option></select></label>
         <label>Tính lãi từ ngày (khế ước chuyển từ hệ thống cũ) <DateInput value={f.interestFrom} onChange={e => set('interestFrom', e.target.value)} /></label>

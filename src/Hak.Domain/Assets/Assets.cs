@@ -59,6 +59,8 @@ public sealed class LongTermAsset
     public Guid? ActivatedBy { get; set; }
     public long RowVersion { get; set; }
     public List<AssetCostSource> CostSources { get; set; } = [];
+    /// <summary>Optional split of the monthly expense over several accounts (e.g. 627 / 641 / 642). Empty = everything goes to <see cref="ExpenseAccountId"/>.</summary>
+    public List<AssetExpenseSplit> ExpenseSplits { get; set; } = [];
 
     /// <summary>Amount the schedule still has to depreciate from <see cref="ScheduleStartDate"/>.</summary>
     public decimal ScheduleBase => OriginalCost - ResidualValue - OpeningAccumulated;
@@ -73,6 +75,17 @@ public sealed class AssetCostSource
     public Guid AssetId { get; set; }
     public Guid JournalLineId { get; set; }
     public decimal Amount { get; set; }
+}
+
+/// <summary>Share of an asset's depreciation / allocation expense booked to one account. Shares of a card sum to 10000 basis points (100%). Frozen with the card.</summary>
+public sealed class AssetExpenseSplit
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid AssetId { get; set; }
+    public Guid ExpenseAccountId { get; set; }
+    /// <summary>1..10000 (100.00% = 10000).</summary>
+    public int BasisPoints { get; set; }
 }
 
 public enum DepreciationRunStatus { Active = 1, Reversed = 2 }

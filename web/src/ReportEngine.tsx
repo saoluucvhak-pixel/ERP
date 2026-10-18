@@ -102,18 +102,18 @@ function RunReport({ defs, onSnapshot }: { defs: DefInfo[]; onSnapshot: () => vo
       <section className="panel"><div className="form-row">
         <label style={{ flex: 1 }}>Mẫu <select value={p.definitionId} onChange={e => { setP(x => ({ ...x, definitionId: e.target.value })); setResult(null) }}>
           <option value="">—</option>{defs.map(d => <option key={d.id} value={d.id}>{d.code} v{d.version} – {d.name} ({statusVi(d)})</option>)}</select></label>
-        <label>Từ ngày <DateInput value={formatDate(p.fromDate)} onChange={e => setP(x => ({ ...x, fromDate: e.target.value }))} /></label>
-        <label>Đến ngày <DateInput value={formatDate(p.toDate)} onChange={e => setP(x => ({ ...x, toDate: e.target.value }))} /></label>
+        <label>Từ ngày <DateInput value={p.fromDate} onChange={e => setP(x => ({ ...x, fromDate: e.target.value }))} /></label>
+        <label>Đến ngày <DateInput value={p.toDate} onChange={e => setP(x => ({ ...x, toDate: e.target.value }))} /></label>
         <label><input type="checkbox" checked={p.compare} onChange={e => setP(x => ({ ...x, compare: e.target.checked }))} /> Cột so sánh</label>
         {p.compare && <>
-          <label>Từ <DateInput value={formatDate(p.compareFrom)} onChange={e => setP(x => ({ ...x, compareFrom: e.target.value }))} /></label>
-          <label>Đến <DateInput value={formatDate(p.compareTo)} onChange={e => setP(x => ({ ...x, compareTo: e.target.value }))} /></label></>}
+          <label>Từ <DateInput value={p.compareFrom} onChange={e => setP(x => ({ ...x, compareFrom: e.target.value }))} /></label>
+          <label>Đến <DateInput value={p.compareTo} onChange={e => setP(x => ({ ...x, compareTo: e.target.value }))} /></label></>}
         <button className="primary" disabled={busy || !p.definitionId} onClick={() => run(async () => { setInfo(''); setPicked(null); setResult(await post<Run>('/report-runs', body())) })}>Chạy</button>
       </div>
       {defs.length === 0 && <p className="muted">Chưa có mẫu nào — khai báo ở tab "Mẫu báo cáo".</p>}</section>
       {result && <section className="panel">
         <div className="toolbar">
-          <ExportButton fileName={`${result.code}-${formatDate(result.toDate)}`} sheet={result.code} columns={exportColumns(result)} rows={exportRows(result)} />
+          <ExportButton fileName={`${result.code}-${result.toDate}`} sheet={result.code} columns={exportColumns(result)} rows={exportRows(result)} />
           <label style={{ flex: 1 }}>Ghi chú khi chốt <input value={note} onChange={e => setNote(e.target.value)} placeholder="VD: số liệu trình ban giám đốc quý 3" /></label>
           <button disabled={busy} title="Lưu nguyên kết quả này (kèm mã băm) — chỉ kế toán trưởng" onClick={() => run(async () => {
             const s = await post<{ id: string; sha256: string }>('/report-runs/snapshots', { ...body(), note })

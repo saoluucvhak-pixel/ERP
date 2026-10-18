@@ -6,6 +6,7 @@ using Hak.Data;
 using Hak.Domain.Assets;
 using Hak.Domain.Catalog;
 using Hak.Domain.Common;
+using Hak.Domain.Inventory;
 using Hak.Domain.Organization;
 using Hak.Domain.Security;
 using Hak.Domain.Vouchers;
@@ -17,7 +18,11 @@ public sealed record AssetCostSourceInput(Guid JournalLineId, decimal Amount);
 
 public sealed record AssetInput(string Code, string Name, AssetClass Class, Guid AssetAccountId, Guid? AccumulatedAccountId, Guid ExpenseAccountId,
     ProrationPolicy Proration, decimal ResidualValue, int UsefulLifeMonths, DateOnly InServiceDate, IReadOnlyList<AssetCostSourceInput> CostSources,
-    decimal OpeningAccumulated = 0, int? RemainingLifeMonths = null, DateOnly? ScheduleStartDate = null, string? Note = null);
+    decimal OpeningAccumulated = 0, int? RemainingLifeMonths = null, DateOnly? ScheduleStartDate = null, string? Note = null,
+    IReadOnlyList<AssetSplitInput>? ExpenseSplits = null);
+
+/// <summary>One share of the monthly expense: account + basis points (10000 = 100%). Shares must sum to 10000.</summary>
+public sealed record AssetSplitInput(Guid ExpenseAccountId, int BasisPoints);
 
 public sealed record AssetRegisterRow(Guid Id, string Code, string Name, AssetClass Class, AssetStatus Status, string AssetAccountCode,
     DateOnly InServiceDate, DateOnly ScheduleStartDate, int UsefulLifeMonths, decimal OriginalCost, decimal Accumulated, decimal NetBookValue, DateOnly? DisposalDate);
@@ -31,7 +36,8 @@ public sealed record AssetDetail(LongTermAsset Asset, IReadOnlyList<AssetSourceR
 public sealed record AssetReconcileRow(Guid AccountId, string AccountCode, string Kind, decimal RegisterBalance, decimal LedgerBalance, decimal Difference);
 
 /// <summary>Posted journal line on an asset account that is not yet (fully) assigned to an asset card.</summary>
-public sealed record AssetCostCandidate(Guid JournalLineId, string VoucherNumber, DateOnly PostingDate, string AccountCode, string? Description, decimal LineAmount, decimal Assigned);
+public sealed record AssetCostCandidate(Guid JournalLineId, string VoucherNumber, DateOnly PostingDate, string AccountCode, string? Description, decimal LineAmount, decimal Assigned,
+    string? StockSource = null);
 
 /// <summary>
 /// Fixed assets and tools (master prompt: FA, TOOL). The register never books cost itself: an asset's cost is assigned from
@@ -81,11 +87,21 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
                 throw new DomainException(ErrorCodes.ValidationFailed, $"Tài khoản {assetAcc.Code} không dùng làm tài khoản tài sản (không phải tiền/công nợ).");
             if (input.AccumulatedAccountId is { } accId) await PostableAccountAsync(ctx, accId);
             await PostableAccountAsync(ctx, input.ExpenseAccountId);
+            var splits = input.ExpenseSplits ?? [];
+            if (splits.Count > 0)
+            {
+                if (splits.Count < 2) throw new DomainException(ErrorCodes.ValidationFailed, "Chia chi phí cần ít nhất hai tài khoản; một tài khoản thì chọn tài khoản chi phí như bình thường.");
+                if (splits.Any(x => x.BasisPoints is < 1 or > 10000) || splits.Sum(x => x.BasisPoints) != 10000)
+                    throw new DomainException(ErrorCodes.ValidationFailed, "Tỷ lệ chia chi phí của thẻ phải cộng đúng 100%.");
+                if (splits.Select(x => x.ExpenseAccountId).Distinct().Count() != splits.Count)
+                    throw new DomainException(ErrorCodes.ValidationFailed, "Mỗi tài khoản chi phí chỉ xuất hiện một lần trong phần chia.");
+                foreach (var x in splits) await PostableAccountAsync(ctx, x.ExpenseAccountId);
+            }
 
             var asset = new LongTermAsset
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Code = code, Name = input.Name.Trim(), Class = input.Class,
-                AssetAccountId = input.AssetAccountId, AccumulatedAccountId = input.AccumulatedAccountId, ExpenseAccountId = input.ExpenseAccountId,
+                AssetAccountId = input.AssetAccountId, AccumulatedAccountId = input.AccumulatedAccountId, ExpenseAccountId = splits.Count > 0 ? splits[0].ExpenseAccountId : input.ExpenseAccountId,
                 Proration = input.Proration, ResidualValue = input.ResidualValue, UsefulLifeMonths = input.UsefulLifeMonths,
                 InServiceDate = input.InServiceDate, OpeningAccumulated = input.OpeningAccumulated, RemainingLifeMonths = input.RemainingLifeMonths,
                 ScheduleStartDate = scheduleStart, Note = input.Note, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
@@ -95,6 +111,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
                 Id = Ids.New(), CompanyId = ctx.CompanyId, AssetId = asset.Id, JournalLineId = s.JournalLineId, Amount = s.Amount,
             }).ToList();
             asset.OriginalCost = asset.CostSources.Sum(s => s.Amount);
+            asset.ExpenseSplits = splits.Select(x => new AssetExpenseSplit { Id = Ids.New(), CompanyId = ctx.CompanyId, AssetId = asset.Id, ExpenseAccountId = x.ExpenseAccountId, BasisPoints = x.BasisPoints }).ToList();
             await CheckSourcesAsync(ctx, asset);
             db.LongTermAssets.Add(asset);
             await audit.AppendAsync(ctx.CompanyId, ctx, "asset.create", "asset", asset.Id.ToString(), input, asset.RowVersion);
@@ -193,7 +210,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             if (last is not null && last.PeriodEnd.AddDays(1) != period.StartDate)
                 throw new DomainException(ErrorCodes.DepreciationPending, $"Chưa chạy khấu hao kỳ trước (đã chạy đến {last.PeriodEnd:dd/MM/yyyy}); chạy theo thứ tự kỳ.");
 
-            var assets = await db.LongTermAssets.AsNoTracking()
+            var assets = await db.LongTermAssets.AsNoTracking().Include(a => a.ExpenseSplits)
                 .Where(a => a.CompanyId == ctx.CompanyId && a.Status == AssetStatus.Active && a.ScheduleStartDate <= period.EndDate)
                 .OrderBy(a => a.Code).ToListAsync();
             if (last is null && assets.FirstOrDefault(a => a.ScheduleStartDate < period.StartDate) is { } early)
@@ -222,7 +239,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
                     Amount = amount, CreatedAt = clock.UtcNow,
                 });
                 var label = $"{(a.Class == AssetClass.FixedAsset ? "Khấu hao" : "Phân bổ")} {a.Code} {period.StartDate:MM/yyyy}";
-                gl.Add(new VoucherLineInput(a.ExpenseAccountId, Side.Debit, amount, Description: label));
+                gl.AddRange(ExpenseDebitLines(a, amount, label, dp));
                 gl.Add(new VoucherLineInput(a.AccumulatedAccountId ?? a.AssetAccountId, Side.Credit, amount, Description: label));
                 result.Add(new { asset = a.Code, amount });
             }
@@ -313,7 +330,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var credit = asset.AccumulatedAccountId ?? asset.AssetAccountId;
             if (final > 0)
             {
-                gl.Add(new VoucherLineInput(asset.ExpenseAccountId, Side.Debit, final, Description: $"Khấu hao tháng ghi giảm {asset.Code}"));
+                gl.AddRange(ExpenseDebitLines(asset, final, $"Khấu hao tháng ghi giảm {asset.Code}", dp));
                 gl.Add(new VoucherLineInput(credit, Side.Credit, final, Description: $"Khấu hao tháng ghi giảm {asset.Code}"));
             }
             if (asset.Class == AssetClass.FixedAsset)
@@ -440,8 +457,26 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
                           join a in db.LongTermAssets on s.AssetId equals a.Id
                           where ids.Contains(s.JournalLineId) && (a.Status == AssetStatus.Active || a.Status == AssetStatus.Disposed)
                           select new { s.JournalLineId, s.Amount }).AsNoTracking().ToListAsync();
+        // Lines that come from a posted stock ISSUE (xuất kho tới tài khoản CCDC) say which document and items they are.
+        var voucherNumbers = lines.Select(l => l.VoucherNumber).Distinct().ToList();
+        var issues = await (from d in db.StockDocuments
+                            join v in db.Vouchers on d.VoucherId equals v.Id
+                            where d.CompanyId == ctx.CompanyId && d.Type == StockDocumentType.Issue && voucherNumbers.Contains(v.Number)
+                            select new { VoucherNumber = v.Number, d.Id, d.Number }).AsNoTracking().ToListAsync();
+        var issueIds = issues.Select(i => i.Id).ToList();
+        var issueLines = await (from l in db.StockDocumentLines
+                                join it in db.Items on l.ItemId equals it.Id
+                                where issueIds.Contains(l.DocumentId) && l.CounterAccountId == assetAccountId
+                                select new { l.DocumentId, it.Code, it.Name, l.Quantity }).AsNoTracking().ToListAsync();
+        string? SourceOf(string voucherNumber)
+        {
+            var doc = issues.FirstOrDefault(i => i.VoucherNumber == voucherNumber);
+            if (doc is null) return null;
+            var items = issueLines.Where(x => x.DocumentId == doc.Id).Select(x => $"{x.Name} ({x.Code}) × {x.Quantity:0.####}").ToList();
+            return items.Count == 0 ? $"Phiếu xuất kho {doc.Number}" : $"Phiếu xuất kho {doc.Number}: {string.Join("; ", items)}";
+        }
         return lines.Select(l => new AssetCostCandidate(l.Id, l.VoucherNumber, l.PostingDate, l.Code, l.Description, l.Amount,
-                used.Where(u => u.JournalLineId == l.Id).Sum(u => u.Amount)))
+                used.Where(u => u.JournalLineId == l.Id).Sum(u => u.Amount), SourceOf(l.VoucherNumber)))
             .Where(c => c.Assigned < c.LineAmount).ToList();
     }
 
@@ -493,9 +528,30 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
 
     // ------------------------------------------------------------------ helpers
 
+    /// <summary>
+    /// Debit line(s) for an asset's monthly expense: one line to the card's expense account, or one per split account. Shares are rounded
+    /// to the company's decimals and the LAST share takes the remainder, so the lines always add up to <paramref name="amount"/> exactly.
+    /// </summary>
+    internal static IEnumerable<VoucherLineInput> ExpenseDebitLines(LongTermAsset asset, decimal amount, string label, int decimals)
+    {
+        if (asset.ExpenseSplits.Count == 0)
+        {
+            yield return new VoucherLineInput(asset.ExpenseAccountId, Side.Debit, amount, Description: label);
+            yield break;
+        }
+        var shares = asset.ExpenseSplits.OrderBy(x => x.BasisPoints).ThenBy(x => x.Id).ToList();
+        var left = amount;
+        for (var i = 0; i < shares.Count; i++)
+        {
+            var part = i == shares.Count - 1 ? left : Math.Round(amount * shares[i].BasisPoints / 10000m, decimals, MidpointRounding.AwayFromZero);
+            left -= part;
+            if (part > 0) yield return new VoucherLineInput(shares[i].ExpenseAccountId, Side.Debit, part, Description: label);
+        }
+    }
+
     private async Task<LongTermAsset> LoadAsync(SessionContext ctx, Guid id, bool tracking)
     {
-        var q = db.LongTermAssets.Include(a => a.CostSources).Where(a => a.Id == id && a.CompanyId == ctx.CompanyId);
+        var q = db.LongTermAssets.Include(a => a.CostSources).Include(a => a.ExpenseSplits).Where(a => a.Id == id && a.CompanyId == ctx.CompanyId);
         if (!tracking) q = q.AsNoTracking();
         return await q.FirstOrDefaultAsync() ?? throw new DomainException(ErrorCodes.NotFound, "Tài sản không tồn tại.");
     }

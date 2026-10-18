@@ -91,8 +91,8 @@ function Regimes({ onChange }: { onChange: () => void }) {
         <label>Mã chế độ <input value={f.regimeCode} onChange={e => setF(x => ({ ...x, regimeCode: e.target.value.toUpperCase() }))} /></label>
         <label style={{ flex: 1 }}>Tên chế độ <input value={f.regimeName} onChange={e => setF(x => ({ ...x, regimeName: e.target.value }))} /></label>
         <label>Mã phiên bản <input value={f.versionCode} onChange={e => setF(x => ({ ...x, versionCode: e.target.value }))} /></label>
-        <label>Hiệu lực từ <DateInput value={formatDate(f.effectiveFrom)} onChange={e => setF(x => ({ ...x, effectiveFrom: e.target.value }))} /></label>
-        <label>đến <DateInput value={formatDate(f.effectiveTo)} onChange={e => setF(x => ({ ...x, effectiveTo: e.target.value }))} /></label>
+        <label>Hiệu lực từ <DateInput value={f.effectiveFrom} onChange={e => setF(x => ({ ...x, effectiveFrom: e.target.value }))} /></label>
+        <label>đến <DateInput value={f.effectiveTo} onChange={e => setF(x => ({ ...x, effectiveTo: e.target.value }))} /></label>
       </div>
       {sources.map((s, i) => <div className="form-row" key={i}>
         <label>Nhóm quy định <input value={s.ruleGroup} onChange={e => src(i, 'ruleGroup', e.target.value)} placeholder="VD: Hệ thống tài khoản" /></label>

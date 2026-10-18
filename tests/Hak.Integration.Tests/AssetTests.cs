@@ -2,6 +2,8 @@ using Hak.Application.Accounting;
 using Hak.Application.Assets;
 using Hak.Domain.Assets;
 using Hak.Domain.Common;
+using Hak.Application.Inventory;
+using Hak.Domain.Inventory;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
 
@@ -240,5 +242,68 @@ public class AssetTests
         Assert.Equal(ProrationPolicy.Daily, await s.Setup.GetDepreciationDefaultAsync(h.Preparer));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Setup.SetDepreciationDefaultAsync(h.Admin, (ProrationPolicy)99)));
         Assert.True(await s.Db.AuditLogs.AnyAsync(a => a.Action == "company.depreciation_default"));
+    }
+
+    [Fact]
+    public async Task ExpenseSplit_DepreciationLinesFollowTheShares_AndAlwaysAddUp()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        h.Acc["EXP2"] = (await s.Setup.CreateAccountAsync(h.Admin, "EXP2", "Chi phí bộ phận 2 (mã thử)")).Id;
+        var line = await BuyAsync(h, s, "PREPAID", 10_000_000, new(2026, 1, 10));
+        AssetInput Tool(string code, params AssetSplitInput[] splits)
+            => new(code, $"CCDC {code}", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 3, new(2026, 1, 10),
+                [new AssetCostSourceInput(line, 10_000_000)], ExpenseSplits: splits);
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.CreateAsync(h.Preparer, Tool("A", new AssetSplitInput(h.Acc["DEP_EXP"], 10000)))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.CreateAsync(h.Preparer, Tool("B", new AssetSplitInput(h.Acc["DEP_EXP"], 6000), new AssetSplitInput(h.Acc["LOSS"], 3000)))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.CreateAsync(h.Preparer, Tool("C", new AssetSplitInput(h.Acc["DEP_EXP"], 5000), new AssetSplitInput(h.Acc["DEP_EXP"], 5000)))));
+
+        var card = await ActiveAsync(h, s, Tool("D", new AssetSplitInput(h.Acc["DEP_EXP"], 5000), new AssetSplitInput(h.Acc["LOSS"], 3000), new AssetSplitInput(h.Acc["EXP2"], 2000)));
+        Assert.Equal(3, card.ExpenseSplits.Count);
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+
+        // 10.000.000 / 3 tháng = 3.333.333 (tháng 1): 20% = 666.667, 30% = 1.000.000, phần còn lại 1.666.666 về tài khoản chiếm tỷ lệ lớn nhất.
+        Assert.Equal(666_667m, await BalanceAsync(s, h.Acc["EXP2"]));
+        Assert.Equal(1_000_000m, await BalanceAsync(s, h.Acc["LOSS"]));
+        Assert.Equal(1_666_666m, await BalanceAsync(s, h.Acc["DEP_EXP"]));
+        Assert.Equal(6_666_667m, await BalanceAsync(s, h.Acc["PREPAID"]));
+    }
+
+    [Fact]
+    public async Task ToolFromStockIssue_ShowsDocumentAndItemsAsCostSource_AndBecomesACard()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        h.Acc["INV"] = (await s.Setup.CreateAccountAsync(h.Admin, "INV", "Hàng tồn kho (thử)")).Id;
+        var wh = (await s.Stock.CreateWarehouseAsync(h.Admin, "K1", "Kho 1")).Id;
+        await s.Stock.SetCostingPolicyAsync(h.Admin, wh, CostingMethod.MovingAverage, new(2026, 1, 1), "QĐ test");
+        var item = (await s.Stock.CreateItemAsync(h.Admin, "ONG", "Ống nhựa", "cái", "INV")).Id;
+        var receipt = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Receipt, wh, new(2026, 1, 5), new(2026, 1, 5), "Nhập kho",
+            [new StockLineInput(item, 10, 1_000_000m, h.Acc["AP"])], PartnerId: h.Partner["NCC01"]));
+        await s.Stock.PostDocumentAsync(h.Approver, receipt.Id);
+        var issue = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Issue, wh, new(2026, 1, 10), new(2026, 1, 10), "Xuất CCDC",
+            [new StockLineInput(item, 4, CounterAccountId: h.Acc["PREPAID"])]));
+        issue = await s.Stock.PostDocumentAsync(h.Approver, issue.Id);
+
+        var c = Assert.Single(await s.Assets.CostCandidatesAsync(h.Preparer, h.Acc["PREPAID"]));
+        Assert.Equal(400_000m, c.LineAmount);
+        Assert.Contains(issue.Number, c.StockSource);
+        Assert.Contains("Ống nhựa", c.StockSource);
+
+        await ActiveAsync(h, s, new AssetInput("CC1", "Ống nhựa", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 4, new(2026, 1, 10),
+            [new AssetCostSourceInput(c.JournalLineId, c.LineAmount)]));
+        Assert.Empty(await s.Assets.CostCandidatesAsync(h.Preparer, h.Acc["PREPAID"]));
+    }
+
+    [Fact]
+    public async Task DefaultAssetAccountRoles_AreOptionalAndCanBeMapped()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        Assert.All(new[] { "ASSET_COST_DEFAULT", "ASSET_ACCUMULATED_DEFAULT", "ASSET_EXPENSE_DEFAULT", "TOOL_COST_DEFAULT", "TOOL_EXPENSE_DEFAULT" },
+            code => Assert.True(Hak.Application.Rules.AccountRoles.Known.Single(r => r.Code == code).Optional));
+        await s.Rules.SetRoleMappingAsync(h.Admin, "TOOL_COST_DEFAULT", "PREPAID");
+        Assert.Equal(h.Acc["PREPAID"], await s.Db.AccountRoleMappings.Where(m => m.CompanyId == h.CompanyId && m.RoleCode == "TOOL_COST_DEFAULT").Select(m => m.AccountId).SingleAsync());
     }
 }

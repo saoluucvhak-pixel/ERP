@@ -81,6 +81,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<TaxDeclarationLine> TaxDeclarationLines => Set<TaxDeclarationLine>();
     public DbSet<LongTermAsset> LongTermAssets => Set<LongTermAsset>();
     public DbSet<AssetCostSource> AssetCostSources => Set<AssetCostSource>();
+    public DbSet<AssetExpenseSplit> AssetExpenseSplits => Set<AssetExpenseSplit>();
     public DbSet<DepreciationRun> DepreciationRuns => Set<DepreciationRun>();
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
     public DbSet<FxRevaluationRun> FxRevaluationRuns => Set<FxRevaluationRun>();
@@ -435,6 +436,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccumulatedAccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.CostSources).WithOne().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.ExpenseSplits).WithOne().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Code).HasMaxLength(30);
             e.Property(x => x.Name).HasMaxLength(250);
             e.Property(x => x.RowVersion).IsConcurrencyToken();
@@ -443,6 +445,12 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
                 t.HasCheckConstraint("ck_long_term_assets_amounts", "original_cost >= 0 AND residual_value >= 0 AND opening_accumulated >= 0");
                 t.HasCheckConstraint("ck_long_term_assets_life", "useful_life_months > 0 AND (remaining_life_months IS NULL OR remaining_life_months > 0)");
             });
+        });
+        b.Entity<AssetExpenseSplit>(e =>
+        {
+            e.HasIndex(x => new { x.AssetId, x.ExpenseAccountId }).IsUnique();
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_asset_expense_splits_share", "basis_points BETWEEN 1 AND 10000"));
         });
         b.Entity<AssetCostSource>(e =>
         {
