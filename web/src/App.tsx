@@ -58,7 +58,8 @@ const MODULES: { key: string; label: string; icon: string; title: string; items:
   { key: 'cash', label: 'Tiền mặt', icon: 'cash', title: 'NGHIỆP VỤ TIỀN MẶT', items: ['cash'], shortcuts: ['catalog'] },
   { key: 'bank', label: 'Tiền gửi', icon: 'bank', title: 'NGHIỆP VỤ TIỀN GỬI', items: ['bank', 'fx', 'loans'], shortcuts: ['catalog'] },
   { key: 'trade', label: 'Mua / Bán hàng', icon: 'cart', title: 'NGHIỆP VỤ MUA / BÁN HÀNG', items: ['orders', 'trade', 'arap'], shortcuts: ['catalog'] },
-  { key: 'stock', label: 'Kho', icon: 'stock', title: 'NGHIỆP VỤ KHO', items: ['stock', 'production'], shortcuts: ['setup'] },
+  { key: 'stock', label: 'Kho', icon: 'stock', title: 'NGHIỆP VỤ KHO', items: ['stock'], shortcuts: ['setup'] },
+  { key: 'cost', label: 'Giá thành', icon: 'gear', title: 'NGHIỆP VỤ GIÁ THÀNH', items: ['production'], shortcuts: ['setup'] },
   { key: 'assets', label: 'Tài sản / CCDC', icon: 'asset', title: 'NGHIỆP VỤ TÀI SẢN / CCDC', items: ['assets'], shortcuts: ['setup'] },
   { key: 'payroll', label: 'Tiền lương', icon: 'money', title: 'NGHIỆP VỤ TIỀN LƯƠNG', items: ['payroll'], shortcuts: ['catalog'] },
   { key: 'tax', label: 'Thuế', icon: 'tax', title: 'NGHIỆP VỤ THUẾ GTGT', items: ['vat'], shortcuts: ['catalog'] },
@@ -175,7 +176,8 @@ export default function App() {
             </div>
           )}
           <main className="main">
-            {!mod && <OverviewView company={company.name} modules={visible} go={goModule} />}
+            {!mod && <OverviewView company={company.name} modules={visible} go={goModule}
+              hidden={MODULES.filter(m => !visible.some(v => v.key === m.key)).map(m => ({ label: m.label, needs: [...new Set(m.items.flatMap(k => SCREEN_PERMS[k] ?? []))] }))} roles={company.roles ?? []} />}
             {mod && tab === 'process' && <ProcessView spec={processOf(mod, can)} go={goScreen} />}
             {mod && screen && screen.el()}
           </main>

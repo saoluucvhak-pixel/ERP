@@ -58,11 +58,12 @@ export function ProcessView({ spec, go }: { spec: ProcessSpec; go: (screen: stri
 }
 
 /** "Tổng quan": entry points only. Figures need server endpoints that do not exist yet, so none are invented here. */
-export function OverviewView({ company, modules, go, children }: { company: string; modules: { key: string; label: string; icon: string; items: string[] }[]; go: (module: string) => void; children?: ReactNode }) {
+export function OverviewView({ company, modules, go, hidden = [], roles = [], children }: { company: string; modules: { key: string; label: string; icon: string; items: string[] }[]; go: (module: string) => void;
+  hidden?: { label: string; needs: string[] }[]; roles?: string[]; children?: ReactNode }) {
   const hints: Record<string, string> = {
     general: 'Chứng từ, kỳ kế toán, sổ nhật ký', cash: 'Phiếu thu, phiếu chi, sổ quỹ', bank: 'Sao kê, lệnh thanh toán, vay, ngoại tệ',
     trade: 'Đơn hàng, hóa đơn, công nợ', stock: 'Nhập xuất tồn, tính giá xuất, giá thành', assets: 'Thẻ tài sản, khấu hao, phân bổ',
-    payroll: 'Nhận bảng lương, định khoản', tax: 'Thuế GTGT, đối chiếu 3 nguồn', reports: 'Cân đối phát sinh, sổ sách, BCTC theo mẫu',
+    payroll: 'Nhận bảng lương, định khoản', cost: 'Đối tượng giá thành, tính giá thành kỳ', tax: 'Thuế GTGT, đối chiếu 3 nguồn', reports: 'Cân đối phát sinh, sổ sách, BCTC theo mẫu',
     catalog: 'Đối tượng, tài khoản, thiết lập', system: 'Người dùng, vai trò, sao lưu, nhật ký',
   }
   return (
@@ -77,6 +78,13 @@ export function OverviewView({ company, modules, go, children }: { company: stri
           </button>
         ))}
       </div>
+      {hidden.length > 0 && (
+        <section className="card" style={{ marginTop: 16 }}>
+          <h3 style={{ margin: '0 0 6px' }}>Phân hệ chưa hiện</h3>
+          <p className="muted" style={{ margin: 0 }}>Tài khoản đang giữ vai trò <b>{roles.join(', ') || '—'}</b> nên chưa thấy: {hidden.map(h => h.label).join(', ')}.
+            Muốn dùng, nhờ quản trị viên cấp thêm chức năng (Hệ thống → Quản trị → Vai trò & chức năng, rồi cấp vai trò tại công ty).</p>
+        </section>
+      )}
       {children}
     </div>
   )
