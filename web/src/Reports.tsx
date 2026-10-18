@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { get, post, type OpenItem, type TrialBalanceRow } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, TYPE_VI, useAction, useCatalog, DateInput } from './common'
-import { formatMoney, today, formatDate } from './money'
+import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, TYPE_VI, useAction, useCatalog, DateInput } from './common'
+import { formatMoney, parseMoney, parseRate, today, formatDate } from './money'
 import { DataGrid } from './DataGrid'
 
 const firstOfMonth = () => today().slice(0, 8) + '01'
@@ -115,12 +115,21 @@ export function ReceivablesView() {
   const [partnerId, setPartnerId] = useState('')
   const [items, setItems] = useState<OpenItem[]>([])
   const [recon, setRecon] = useState<{ isReconciled: boolean; rows: unknown[] } | null>(null)
+  const [allocs, setAllocs] = useState<AllocationRow[]>([])
+  const [pickD, setPickD] = useState('')
+  const [pickC, setPickC] = useState('')
+  const [allocating, setAllocating] = useState(false)
+  const [voiding, setVoiding] = useState<AllocationRow | null>(null)
   const { busy, error, run } = useAction()
+  const debitItem = items.find(o => o.journalLineId === pickD)
+  const creditItem = items.find(o => o.journalLineId === pickC)
 
   const load = () => run(async () => {
     setAging(await get(`/reports/aging?accountId=${accountId}&asOf=${asOf}`))
     setRecon(await get(`/reports/subledger-reconciliation?asOf=${asOf}`))
     setItems(partnerId ? await get(`/settlement/open-items?accountId=${accountId}&partnerId=${partnerId}&asOf=${asOf}`) : [])
+    setAllocs(partnerId ? await get(`/settlement/allocations?accountId=${accountId}&partnerId=${partnerId}`) : [])
+    setPickD(''); setPickC('')
   })
   const auto = () => run(async () => { await post('/settlement/auto', { accountId, partnerId, date: asOf }); await load() })
 
@@ -157,9 +166,11 @@ export function ReceivablesView() {
       )}
       {items.length > 0 && (
         <div className="panel">
-          <strong>Chứng từ còn mở</strong>
+          <strong>Chứng từ còn mở</strong> <span className="muted">— chọn một dòng Nợ và một dòng Có rồi bấm "Phân bổ" để khớp tay</span>
           <DataGrid storageKey="hak.openitems" rows={items} rowKey={o => o.journalLineId}
+            rowClassName={o => ((o.side === 'Debit' ? pickD : pickC) === o.journalLineId ? 'selected' : '')}
             columns={[
+              { key: 'pick', label: '', type: 'text', noFilter: true, value: () => '' },
               { key: 'postingDate', label: 'Ngày', type: 'date', value: o => o.postingDate },
               { key: 'dueDate', label: 'Hạn', type: 'date', value: o => o.dueDate ?? '' },
               { key: 'voucher', label: 'Số CT', type: 'text', value: o => o.voucherNumber },
@@ -169,12 +180,97 @@ export function ReceivablesView() {
               { key: 'allocated', label: 'Đã phân bổ', type: 'number', sum: true, value: o => o.allocated },
               { key: 'open', label: 'Còn lại', type: 'number', sum: true, value: o => o.open },
             ]}
-            rowRender={o => (<><td>{formatDate(o.postingDate)}</td><td>{formatDate(o.dueDate)}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
-              <td>{o.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(o.amount)}</td><td className="num">{formatMoney(o.allocated)}</td><td className="num">{formatMoney(o.open)}</td></>)} />
+            rowRender={o => {
+              const picked = (o.side === 'Debit' ? pickD : pickC) === o.journalLineId
+              return (<><td><input type="checkbox" aria-label={`Chọn ${o.voucherNumber}`} checked={picked} disabled={o.open.startsWith('-') || o.open === '0'}
+                onChange={e => (o.side === 'Debit' ? setPickD : setPickC)(e.target.checked ? o.journalLineId : '')} /></td>
+                <td>{formatDate(o.postingDate)}</td><td>{formatDate(o.dueDate)}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
+                <td>{o.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(o.amount)}</td><td className="num">{formatMoney(o.allocated)}</td>
+                <td className="num">{formatMoney(o.open)}{o.foreignCurrency ? ` (${o.openForeign} ${o.foreignCurrency})` : ''}</td></>)
+            }} />
+          <div className="toolbar">
+            <button className="primary" disabled={busy || !pickD || !pickC} onClick={() => setAllocating(true)}>Phân bổ…</button>
+          </div>
         </div>
       )}
+      {allocating && debitItem && creditItem && <AllocateDialog debit={debitItem} credit={creditItem} asOf={asOf}
+        onClose={() => setAllocating(false)} onDone={() => { setAllocating(false); setPickD(''); setPickC(''); load() }} />}
+      {allocs.length > 0 && (
+        <div className="panel">
+          <strong>Lịch sử phân bổ của đối tượng</strong>
+          <table className="grid">
+            <thead><tr><th>Ngày</th><th>CT bên Nợ</th><th>CT bên Có</th><th className="num">Số tiền</th><th>Cách lập</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody>{allocs.map(a => (
+              <tr key={a.id} className={a.isActive ? undefined : 'muted'}>
+                <td>{formatDate(a.allocationDate)}</td><td>{a.debitVoucherNumber}</td><td>{a.creditVoucherNumber}</td>
+                <td className="num">{formatMoney(a.amount)}{a.foreignAmount ? ` (${a.foreignAmount})` : ''}</td>
+                <td>{ORIGIN_VI[a.origin] ?? a.origin}</td>
+                <td>{a.isActive ? 'Hiệu lực' : `Đã hủy: ${a.voidReason ?? ''}`}</td>
+                <td>{a.isActive && <button onClick={() => setVoiding(a)} disabled={busy}>Hủy phân bổ</button>}</td></tr>))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {voiding && <VoidAllocationDialog alloc={voiding} onClose={() => setVoiding(null)} onDone={() => { setVoiding(null); load() }} />}
     </>
   )
+}
+
+interface AllocationRow { id: string; allocationDate: string; debitVoucherNumber: string; creditVoucherNumber: string; amount: string; foreignAmount: string | null; origin: string; isActive: boolean; voidReason: string | null }
+
+const ORIGIN_VI: Record<string, string> = { VOUCHER: 'Theo chứng từ', MANUAL: 'Khớp tay', AUTO_FIFO: 'Tự động FIFO', REVERSAL: 'Đảo chứng từ' }
+
+const minMoney = (a: string, b: string) => (compareMoney(a, b) <= 0 ? a : b)
+/** Compares two non-negative decimal strings. */
+function compareMoney(a: string, b: string): number {
+  const [ai, af = ''] = a.split('.'), [bi, bf = ''] = b.split('.')
+  const n = Math.max(af.length, bf.length)
+  const x = BigInt(ai + af.padEnd(n, '0')), y = BigInt(bi + bf.padEnd(n, '0'))
+  return x < y ? -1 : x > y ? 1 : 0
+}
+
+function AllocateDialog({ debit, credit, asOf, onClose, onDone }: { debit: OpenItem; credit: OpenItem; asOf: string; onClose: () => void; onDone: () => void }) {
+  const foreign = debit.foreignCurrency ?? null
+  const mixed = (debit.foreignCurrency ?? null) !== (credit.foreignCurrency ?? null)
+  const [amount, setAmount] = useState(formatMoney(minMoney(debit.open, credit.open)))
+  const [foreignAmount, setForeignAmount] = useState('')
+  const later = debit.postingDate > credit.postingDate ? debit.postingDate : credit.postingDate
+  const [date, setDate] = useState(later > asOf ? later : asOf)
+  const { busy, error, setError, run } = useAction()
+  const save = () => run(async () => {
+    const amt = parseMoney(amount)
+    if (!amt || amt === '0') { setError(new Error('Nhập số tiền phân bổ lớn hơn 0.')); return }
+    const fa = foreign ? parseRate(foreignAmount) : null
+    if (foreign && !fa) { setError(new Error(`Nhập số nguyên tệ ${foreign} phân bổ.`)); return }
+    await post('/settlement/allocate', { lineA: debit.journalLineId, lineB: credit.journalLineId, amount: amt, date, foreignAmount: fa })
+    onDone()
+  })
+  return <Modal title="Phân bổ công nợ (khớp tay)" onClose={onClose} busy={busy} onSubmit={mixed ? undefined : save}
+    footer={<><button onClick={onClose} disabled={busy}>Hủy</button><button className="primary" disabled={busy || mixed} onClick={save}>Phân bổ</button></>}>
+    <ErrorBox error={error} />
+    {mixed && <div className="msg error">Hai khoản khác loại tiền ({debit.foreignCurrency ?? 'VND'} và {credit.foreignCurrency ?? 'VND'}): không khớp tay được vì phát sinh chênh lệch tỷ giá — dùng "Thu/chi ngoại tệ theo hóa đơn" ở màn hình Ngoại tệ.</div>}
+    <p>Bên Nợ: <b>{debit.voucherNumber}</b> ngày {debit.postingDate}, còn {formatMoney(debit.open)}<br />
+      Bên Có: <b>{credit.voucherNumber}</b> ngày {credit.postingDate}, còn {formatMoney(credit.open)}</p>
+    <div className="form-row">
+      <label>Số tiền<input value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" /></label>
+      {foreign && <label>Nguyên tệ ({foreign})<input value={foreignAmount} onChange={e => setForeignAmount(e.target.value)} inputMode="decimal" /></label>}
+      <label>Ngày phân bổ<DateInput value={date} onChange={e => setDate(e.target.value)} /></label>
+    </div>
+    <p className="muted">Không vượt số còn lại của mỗi bên; ngày phân bổ không trước ngày hạch toán của hai chứng từ và phải thuộc kỳ chưa khóa. Phân bổ không sinh bút toán, chỉ ghi nhận chứng từ nào thanh toán cho chứng từ nào.</p>
+  </Modal>
+}
+
+function VoidAllocationDialog({ alloc, onClose, onDone }: { alloc: AllocationRow; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState('')
+  const { busy, error, run } = useAction()
+  const save = () => run(async () => { await post(`/settlement/${alloc.id}/void`, { reason }); onDone() })
+  return <Modal title="Hủy phân bổ" onClose={onClose} busy={busy} onSubmit={reason.trim() ? save : undefined}
+    footer={<><button onClick={onClose} disabled={busy}>Không hủy</button><button className="primary" disabled={busy || !reason.trim()} onClick={save}>Hủy phân bổ</button></>}>
+    <ErrorBox error={error} />
+    <p>Phân bổ {formatMoney(alloc.amount)} giữa <b>{alloc.debitVoucherNumber}</b> và <b>{alloc.creditVoucherNumber}</b> ngày {alloc.allocationDate}.
+      Sau khi hủy, hai chứng từ trở lại trạng thái còn mở; bản ghi phân bổ và lý do hủy vẫn được lưu trong nhật ký.</p>
+    <label>Lý do hủy<input value={reason} onChange={e => setReason(e.target.value)} /></label>
+  </Modal>
 }
 
 interface JournalRow { postingDate: string; voucherType: string; voucherNumber: string; lineNo: number; accountCode: string; partnerCode: string | null; debit: string; credit: string; description: string | null }
