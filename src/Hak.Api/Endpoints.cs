@@ -17,6 +17,7 @@ public sealed record LoginRequest(string UserName, string Password, string? Devi
 public sealed record BootstrapRequest(string UserName, string FullName, string Password);
 public sealed record CreateUserRequest(string UserName, string FullName, string Password, bool IsSystemAdmin = false);
 public sealed record GrantRequest(Guid UserId, Guid CompanyId, string RoleCode);
+public sealed record RoleRequest(string Code, string Name, List<string> Permissions);
 public sealed record RegimeVersionRequest(string RegimeCode, string RegimeName, string VersionCode, DateOnly EffectiveFrom, DateOnly? EffectiveTo, List<LegalSourceInput> Sources);
 public sealed record VerifyRequest(string Note);
 public sealed record CompanyRequest(string Code, string Name, string? TaxCode, string FunctionalCurrency, Guid RegimeVersionId);
@@ -91,6 +92,11 @@ public static class Endpoints
             Results.Ok(new { (await s.CreateUserAsync(await AdminAsync(http), r.UserName, r.FullName, r.Password, r.IsSystemAdmin)).Id }));
         api.MapPost("/admin/grants", async (HttpContext http, GrantRequest r, SetupService s) =>
         { await s.GrantRoleAsync(await AdminAsync(http), r.UserId, r.CompanyId, r.RoleCode); return Results.NoContent(); });
+        api.MapGet("/admin/permission-catalog", async (HttpContext http, SetupService s) => Results.Ok(await s.PermissionCatalogAsync((await AdminAsync(http)))));
+        api.MapPost("/admin/roles", async (HttpContext http, RoleRequest r, SetupService s) =>
+        { await s.CreateRoleAsync(await AdminAsync(http), r.Code, r.Name, r.Permissions); return Results.NoContent(); });
+        api.MapPut("/admin/roles/{code}", async (HttpContext http, string code, RoleRequest r, SetupService s) =>
+        { await s.UpdateRoleAsync(await AdminAsync(http), code, r.Name, r.Permissions); return Results.NoContent(); });
         api.MapPost("/admin/regime-versions", async (HttpContext http, RegimeVersionRequest r, SetupService s) =>
             Results.Ok(new { (await s.CreateRegimeVersionAsync(await AdminAsync(http), r.RegimeCode, r.RegimeName, r.VersionCode, r.EffectiveFrom, r.EffectiveTo, r.Sources)).Id }));
         api.MapPost("/admin/regime-versions/{id:guid}/verify", async (HttpContext http, Guid id, VerifyRequest r, SetupService s) =>

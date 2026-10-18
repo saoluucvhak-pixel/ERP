@@ -28,7 +28,7 @@ export function Icon({ name, size = 20 }: { name: string; size?: number }) {
 export function ProcessView({ spec, go }: { spec: ProcessSpec; go: (screen: string) => void }) {
   return (
     <div className="process">
-      <div className="process-top">
+      <div className={spec.reports.length > 0 ? 'process-top' : 'process-top solo'}>
         <section className="card">
           <h3 className="card-title">{spec.title}</h3>
           <div className="tiles">
@@ -40,42 +40,40 @@ export function ProcessView({ spec, go }: { spec: ProcessSpec; go: (screen: stri
             ))}
           </div>
         </section>
-        <section className="card report-card">
+        {spec.reports.length > 0 && <section className="card report-card">
           <h3 className="card-title">BÁO CÁO</h3>
           <ul className="report-list">
             {spec.reports.map(r => <li key={r.screen + r.label}><button className="link" onClick={() => go(r.screen)}>{r.label}</button></li>)}
           </ul>
           <button className="link all-reports" onClick={() => go('reports')}>Tất cả báo cáo</button>
-        </section>
+        </section>}
       </div>
-      <section className="card shortcuts">
+      {spec.shortcuts.length > 0 && <section className="card shortcuts">
         {spec.shortcuts.map(s => (
           <button key={s.label} className="shortcut" onClick={() => go(s.screen)}><Icon name={s.icon} size={18} /><span>{s.label}</span></button>
         ))}
-      </section>
+      </section>}
     </div>
   )
 }
 
 /** "Tổng quan": entry points only. Figures need server endpoints that do not exist yet, so none are invented here. */
-export function OverviewView({ company, go, children }: { company: string; go: (module: string) => void; children?: ReactNode }) {
-  const cards: [string, string, string, string][] = [
-    ['Tiền mặt', 'cash', 'cash', 'Phiếu thu, phiếu chi, sổ quỹ'],
-    ['Tiền gửi', 'bank', 'bank', 'Sao kê, lệnh thanh toán, vay, ngoại tệ'],
-    ['Mua / Bán hàng', 'trade', 'cart', 'Đơn hàng, hóa đơn, công nợ'],
-    ['Kho', 'stock', 'stock', 'Nhập xuất tồn, tính giá xuất, giá thành'],
-    ['Tài sản / CCDC', 'assets', 'asset', 'Thẻ tài sản, khấu hao, phân bổ'],
-    ['Báo cáo', 'reports', 'chart', 'Cân đối phát sinh, sổ sách, BCTC theo mẫu'],
-  ]
+export function OverviewView({ company, modules, go, children }: { company: string; modules: { key: string; label: string; icon: string; items: string[] }[]; go: (module: string) => void; children?: ReactNode }) {
+  const hints: Record<string, string> = {
+    general: 'Chứng từ, kỳ kế toán, sổ nhật ký', cash: 'Phiếu thu, phiếu chi, sổ quỹ', bank: 'Sao kê, lệnh thanh toán, vay, ngoại tệ',
+    trade: 'Đơn hàng, hóa đơn, công nợ', stock: 'Nhập xuất tồn, tính giá xuất, giá thành', assets: 'Thẻ tài sản, khấu hao, phân bổ',
+    payroll: 'Nhận bảng lương, định khoản', tax: 'Thuế GTGT, đối chiếu 3 nguồn', reports: 'Cân đối phát sinh, sổ sách, BCTC theo mẫu',
+    catalog: 'Đối tượng, tài khoản, thiết lập', system: 'Người dùng, vai trò, sao lưu, nhật ký',
+  }
   return (
     <div className="overview">
       <section className="card welcome"><h3>Chào mừng đến {company}</h3><p className="muted">Chọn phân hệ ở thanh bên trái hoặc đi nhanh tới các nghiệp vụ thường dùng.</p></section>
       <h2 className="page-title">Tổng quan</h2>
       <div className="overview-grid">
-        {cards.map(([label, mod, icon, hint]) => (
-          <button key={mod} className="card ov-card" onClick={() => go(mod)}>
-            <span className="tile-icon"><Icon name={icon} size={30} /></span>
-            <b>{label}</b><span className="muted">{hint}</span>
+        {modules.map(m => (
+          <button key={m.key} className="card ov-card" onClick={() => go(m.key)}>
+            <span className="tile-icon"><Icon name={m.icon} size={30} /></span>
+            <b>{m.label}</b><span className="muted">{hints[m.key] ?? ''}</span>
           </button>
         ))}
       </div>

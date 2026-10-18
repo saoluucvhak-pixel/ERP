@@ -156,6 +156,63 @@ public sealed partial class SetupService
             .Select(r => new RoleRow(r.Code, r.Name, r.Permissions.Select(p => p.Permission).OrderBy(p => p, StringComparer.Ordinal).ToList())).ToList();
     }
 
+    /// <summary>Module → function catalogue the role editor offers (system administrators only).</summary>
+    public async Task<IReadOnlyList<PermissionModule>> PermissionCatalogAsync(Guid adminId)
+    {
+        await RequireSystemAdminAsync(adminId);
+        return PermissionCatalog.Modules;
+    }
+
+    /// <summary>Creates a custom role with exactly the chosen functions. Default roles cannot be created or changed this way.</summary>
+    public async Task CreateRoleAsync(Guid adminId, string code, string name, IReadOnlyCollection<string> permissions)
+    {
+        await RequireSystemAdminAsync(adminId);
+        code = code.Trim().ToUpperInvariant();
+        if (!CodePattern().IsMatch(code)) throw new DomainException(ErrorCodes.ValidationFailed, "Mã vai trò chỉ gồm chữ in hoa, số, dấu _ . - (tối đa 30 ký tự).");
+        if (string.IsNullOrWhiteSpace(name)) throw new DomainException(ErrorCodes.ValidationFailed, "Phải nhập tên vai trò.");
+        var perms = ValidatePermissions(permissions);
+        await db.InTransactionAsync(async () =>
+        {
+            if (RoleCatalog.Defaults.ContainsKey(code) || await db.Roles.AnyAsync(r => r.Code == code))
+                throw new DomainException(ErrorCodes.DuplicateCode, $"Mã vai trò {code} đã tồn tại.");
+            var role = new Role { Id = Ids.New(), Code = code, Name = name.Trim() };
+            role.Permissions = perms.Select(p => new RolePermission { RoleId = role.Id, Permission = p }).ToList();
+            db.Roles.Add(role);
+            await audit.AppendAsync(Guid.Empty, null, "role.create", "role", code, new { name = role.Name, permissions = perms }, userIdOverride: adminId);
+            await db.SaveChangesAsync();
+        });
+    }
+
+    /// <summary>Replaces the name and functions of a custom role. Takes effect on the next request of every user holding it.</summary>
+    public async Task UpdateRoleAsync(Guid adminId, string code, string name, IReadOnlyCollection<string> permissions)
+    {
+        await RequireSystemAdminAsync(adminId);
+        if (RoleCatalog.Defaults.ContainsKey(code))
+            throw new DomainException(ErrorCodes.ValidationFailed, "Vai trò mặc định không sửa được; tạo vai trò riêng từ danh mục quyền.");
+        if (string.IsNullOrWhiteSpace(name)) throw new DomainException(ErrorCodes.ValidationFailed, "Phải nhập tên vai trò.");
+        var perms = ValidatePermissions(permissions);
+        await db.InTransactionAsync(async () =>
+        {
+            var role = await db.Roles.Include(r => r.Permissions).FirstOrDefaultAsync(r => r.Code == code)
+                       ?? throw new DomainException(ErrorCodes.NotFound, $"Vai trò {code} không tồn tại.");
+            role.Name = name.Trim();
+            // Diff instead of clear-and-re-add: a deleted and a re-added row with the same (role, permission) key would clash in the change tracker.
+            foreach (var gone in role.Permissions.Where(p => !perms.Contains(p.Permission)).ToList()) role.Permissions.Remove(gone);
+            foreach (var p in perms.Except(role.Permissions.Select(x => x.Permission)).ToList()) role.Permissions.Add(new RolePermission { RoleId = role.Id, Permission = p });
+            await audit.AppendAsync(Guid.Empty, null, "role.update", "role", code, new { name = role.Name, permissions = perms }, userIdOverride: adminId);
+            await db.SaveChangesAsync();
+        });
+    }
+
+    private static List<string> ValidatePermissions(IReadOnlyCollection<string> permissions)
+    {
+        var perms = permissions.Distinct(StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal).ToList();
+        if (perms.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Chọn ít nhất một chức năng cho vai trò.");
+        var unknown = perms.Where(p => !PermissionCatalog.AllCodes.Contains(p)).ToList();
+        if (unknown.Count > 0) throw new DomainException(ErrorCodes.ValidationFailed, $"Quyền không hợp lệ: {string.Join(", ", unknown)}.");
+        return perms;
+    }
+
     public async Task RevokeRoleAsync(Guid adminId, Guid userId, Guid companyId, string roleCode, string reason)
     {
         await RequireSystemAdminAsync(adminId);

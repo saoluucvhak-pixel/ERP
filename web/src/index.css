@@ -171,3 +171,9 @@ kbd { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-si
 .modal > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); }
 .tree-toggle { width: 22px; padding: 0; border: none; background: none; color: var(--muted); }
 label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
+
+/* Role editor: one box per module with its functions */
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.perm-module { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.perm-module legend { padding: 0 6px; }
+.process-top.solo { grid-template-columns: 1fr; }

@@ -68,8 +68,17 @@ const MODULES: { key: string; label: string; icon: string; title: string; items:
   { key: 'system', label: 'Hệ thống', icon: 'gear', title: 'HỆ THỐNG', items: ['admin'], shortcuts: [] },
 ]
 const TILE_ICON: Record<string, string> = { cash: 'cash', bank: 'bank', fx: 'swap', loans: 'money', orders: 'doc', trade: 'cart', arap: 'list', stock: 'stock', production: 'gear', assets: 'asset', payroll: 'money', vat: 'tax', vouchers: 'doc', periods: 'book', journal: 'book', tb: 'chart', ledger: 'book', reports: 'chart', catalog: 'list', setup: 'gear', admin: 'gear' }
-function processOf(m: (typeof MODULES)[number]): ProcessSpec {
-  return { title: m.title, tiles: m.items.map(k => SC(k, TILE_ICON[k] ?? 'doc')), reports: REPORTS, shortcuts: m.shortcuts.map(k => SC(k, TILE_ICON[k] ?? 'list')) }
+/** Quyền (một trong các quyền) để thấy từng màn hình; rỗng = ai cũng thấy. Backend vẫn kiểm tra lại ở từng thao tác. */
+const SCREEN_PERMS: Record<string, string[]> = {
+  vouchers: ['voucher.view'], periods: ['voucher.view', 'period.lock'], cash: ['cash.document'], bank: ['bank.document', 'bank.reconcile'],
+  fx: ['report.view'], loans: ['loan.manage'], orders: ['invoice.document'], trade: ['invoice.document'], arap: ['report.view', 'settlement.manage'],
+  stock: ['stock.document'], production: ['report.view'], assets: ['asset.manage'], payroll: ['report.view'], vat: ['report.view'],
+  tb: ['report.view'], ledger: ['report.view'], journal: ['report.view'], reports: ['report.view'],
+  catalog: ['catalog.manage', 'voucher.view'], setup: ['config.manage', 'catalog.manage'], admin: [],
+}
+function processOf(m: (typeof MODULES)[number], can: (k: string) => boolean): ProcessSpec {
+  return { title: m.title, tiles: m.items.filter(can).map(k => SC(k, TILE_ICON[k] ?? 'doc')), reports: REPORTS.filter(r => can(r.screen)),
+    shortcuts: m.shortcuts.filter(can).map(k => SC(k, TILE_ICON[k] ?? 'list')) }
 }
 
 export default function App() {
@@ -117,11 +126,12 @@ export default function App() {
   }
 
   // A grant without voucher.view (e.g. only 'Administrator') cannot open the accounting screens: say so and how to fix it.
-  if (company.permissions && !company.permissions.includes('voucher.view')) {
+  const usable = new Set(Object.values(SCREEN_PERMS).flat())
+  if (company.permissions && !company.permissions.some(p => usable.has(p))) {
     return (
       <div className="login"><div className="panel">
         <h2>{company.code} – {company.name}</h2>
-        <div className="msg error">Tài khoản này tại công ty {company.code} chỉ có vai trò: <b>{(company.roles ?? []).join(', ') || '—'}</b>, chưa được xem chứng từ và sổ sách.
+        <div className="msg error">Tài khoản này tại công ty {company.code} chưa có chức năng kế toán nào, chỉ có vai trò: <b>{(company.roles ?? []).join(', ') || '—'}</b>, chưa được xem chứng từ và sổ sách.
           Vai trò &quot;Administrator&quot; chỉ dùng để quản trị; để làm kế toán cần cấp thêm vai trò <b>Kế toán trưởng</b> hoặc <b>Kế toán tổng hợp</b>.</div>
         <p className="muted">Cách cấp: Đổi công ty → Quản trị hệ thống → Người dùng &amp; phân quyền → Cấp vai trò tại công ty (chọn tài khoản, công ty {company.code}, vai trò Kế toán trưởng) → Cấp; sau đó đăng xuất rồi đăng nhập lại.</p>
         <button onClick={() => { session.setCompany(null); setCompanyId(null) }}>Đổi công ty</button>
@@ -129,10 +139,13 @@ export default function App() {
       </div></div>
     )
   }
-  const mod = MODULES.find(m => m.key === modKey)
+  const granted = company.permissions
+  const can = (k: string) => !granted || (SCREEN_PERMS[k] ?? []).length === 0 || (SCREEN_PERMS[k] ?? []).some(p => granted.includes(p))
+  const visible = MODULES.map(m => ({ ...m, items: m.items.filter(can) })).filter(m => m.items.length > 0)
+  const mod = visible.find(m => m.key === modKey)
   const goScreen = (k: string) => {
-    const m = MODULES.find(x => x.items.includes(k))!
-    setModKey(m.key); setTab(k)
+    const m = visible.find(x => x.items.includes(k))
+    if (m) { setModKey(m.key); setTab(k) }
   }
   const goModule = (k: string) => { setModKey(k); setTab('process') }
   const screen = SCREENS.find(s => s.key === tab)
@@ -152,7 +165,7 @@ export default function App() {
           <button className="quick-add" onClick={() => goScreen('vouchers')}><Icon name="plus" size={16} /> Thêm nhanh</button>
           <div className="sidebar-title">PHÂN HỆ</div>
           <button className={modKey === 'home' ? 'active' : ''} onClick={() => { setModKey('home'); setTab('process') }}><Icon name="grid" />Tổng quan</button>
-          {MODULES.map(m => <button key={m.key} className={m.key === modKey ? 'active' : ''} onClick={() => goModule(m.key)}><Icon name={m.icon} />{m.label}</button>)}
+          {visible.map(m => <button key={m.key} className={m.key === modKey ? 'active' : ''} onClick={() => goModule(m.key)}><Icon name={m.icon} />{m.label}</button>)}
         </nav>
         <div className="content" key={company.id}>
           {mod && (
@@ -162,8 +175,8 @@ export default function App() {
             </div>
           )}
           <main className="main">
-            {!mod && <OverviewView company={company.name} go={goModule} />}
-            {mod && tab === 'process' && <ProcessView spec={processOf(mod)} go={goScreen} />}
+            {!mod && <OverviewView company={company.name} modules={visible} go={goModule} />}
+            {mod && tab === 'process' && <ProcessView spec={processOf(mod, can)} go={goScreen} />}
             {mod && screen && screen.el()}
           </main>
         </div>

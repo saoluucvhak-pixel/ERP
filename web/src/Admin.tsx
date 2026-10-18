@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, useAction } from './common'
 import { formatMoney } from './money'
+import { RolesEditor } from './Roles'
 
 interface Me { id: string; userName: string; fullName: string; isSystemAdmin: boolean }
 interface Grant { companyId: string; companyCode: string; roleCode: string; roleName: string }
@@ -24,6 +25,7 @@ export function AdminView() {
       {me?.isSystemAdmin && <Regimes onChange={() => setRev(r => r + 1)} />}
       {me?.isSystemAdmin && <Companies reload={rev} onChange={() => setRev(r => r + 1)} />}
       {me?.isSystemAdmin && <Users me={me} reload={rev} />}
+      {me?.isSystemAdmin && <RolesEditor />}
       {me?.isSystemAdmin && <Backups />}
       <AuditLog />
     </>

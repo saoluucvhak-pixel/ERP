@@ -27,7 +27,7 @@ public sealed record SessionContext(
     }
 }
 
-/// <summary>Default role → permission sets for the 10 roles in master prompt §42. Editable later per installation.</summary>
+/// <summary>Default role → permission sets (master prompt §42). The three roles in daily use are ADMIN, GL_ACCOUNTANT and ACCOUNTANT; the others stay for existing installations. Default roles are read-only; administrators build custom roles from the permission catalogue (SetupService.CreateRoleAsync).</summary>
 public static class RoleCatalog
 {
     private static readonly string[] Viewer = [Permissions.VoucherView, Permissions.ReportView];
@@ -40,6 +40,8 @@ public static class RoleCatalog
                 Permissions.VoucherApprove, Permissions.VoucherPost, Permissions.VoucherReverse, Permissions.PeriodLock, Permissions.PeriodReopen,
                 Permissions.CatalogManage, Permissions.DataExport, Permissions.DataImport, Permissions.SensitiveView, Permissions.AuditView,
                 Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.PaymentOrderApprove, Permissions.BankReconcile, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage]),
+            ["ACCOUNTANT"] = ("Kế toán", [.. Viewer, Permissions.VoucherCreate, Permissions.VoucherEditDraft, Permissions.VoucherSubmit,
+                Permissions.CashDocument, Permissions.BankDocument, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.SettlementManage]),
             ["GL_ACCOUNTANT"] = ("Kế toán tổng hợp", [.. Viewer, Permissions.VoucherCreate, Permissions.VoucherEditDraft, Permissions.VoucherSubmit,
                 Permissions.VoucherPost, Permissions.CatalogManage, Permissions.DataExport, Permissions.DataImport,
                 Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.BankReconcile, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage]),
