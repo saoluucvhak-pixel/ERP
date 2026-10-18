@@ -1,5 +1,6 @@
 using Hak.Application.Common;
 using Hak.Application.Security;
+using Hak.Domain.Assets;
 using Hak.Domain.Common;
 using Hak.Domain.Regime;
 using Hak.Domain.Security;
@@ -173,6 +174,28 @@ public sealed partial class SetupService
             if (company.RequireDistinctApprover == requireDistinct) return;
             company.RequireDistinctApprover = requireDistinct;
             await audit.AppendAsync(ctx.CompanyId, ctx, "company.approval_policy", "company", company.Id.ToString(), new { requireDistinctApprover = requireDistinct });
+            await db.SaveChangesAsync();
+        });
+    }
+
+    /// <summary>Company-level accounting defaults shown on the "Hạch toán tự động" setup screen.</summary>
+    public async Task<ProrationPolicy> GetDepreciationDefaultAsync(SessionContext ctx)
+    {
+        ctx.Require(Permissions.VoucherView);
+        return await db.Companies.AsNoTracking().Where(c => c.Id == ctx.CompanyId).Select(c => c.DefaultDepreciationProration).FirstAsync();
+    }
+
+    /// <summary>Default for NEW asset / tool cards; existing cards keep the proration they were created with.</summary>
+    public async Task SetDepreciationDefaultAsync(SessionContext ctx, ProrationPolicy proration)
+    {
+        ctx.Require(Permissions.ConfigManage);
+        if (!Enum.IsDefined(proration)) throw new DomainException(ErrorCodes.ValidationFailed, "Cách tính tháng đầu/cuối không hợp lệ.");
+        await db.InTransactionAsync(async () =>
+        {
+            var company = await db.Companies.FirstAsync(c => c.Id == ctx.CompanyId);
+            if (company.DefaultDepreciationProration == proration) return;
+            company.DefaultDepreciationProration = proration;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "company.depreciation_default", "company", company.Id.ToString(), new { proration = proration.ToString() });
             await db.SaveChangesAsync();
         });
     }

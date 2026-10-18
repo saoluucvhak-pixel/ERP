@@ -228,4 +228,17 @@ public class AssetTests
         Assert.Contains("LEDGER_IMMUTABLE", (await Assert.ThrowsAnyAsync<Exception>(() =>
             s.Db.Database.ExecuteSqlRawAsync("UPDATE asset_cost_sources SET amount = 1"))).Message);
     }
+
+    [Fact]
+    public async Task DepreciationDefault_IsPerCompany_FullMonthUntilAdminChangesIt()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        Assert.Equal(ProrationPolicy.FullMonth, await s.Setup.GetDepreciationDefaultAsync(h.Preparer));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Setup.SetDepreciationDefaultAsync(h.Preparer, ProrationPolicy.Daily)));
+        await s.Setup.SetDepreciationDefaultAsync(h.Admin, ProrationPolicy.Daily);
+        Assert.Equal(ProrationPolicy.Daily, await s.Setup.GetDepreciationDefaultAsync(h.Preparer));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Setup.SetDepreciationDefaultAsync(h.Admin, (ProrationPolicy)99)));
+        Assert.True(await s.Db.AuditLogs.AnyAsync(a => a.Action == "company.depreciation_default"));
+    }
 }

@@ -13,6 +13,11 @@ namespace Hak.Application.Rules;
 
 public sealed record ClosingStepInput(string Description, string SourcePrefixes, string TargetAccountCode);
 
+public sealed record ClosingStepInfo(int Sequence, string Description, string SourcePrefixes, string TargetAccountCode);
+
+public sealed record ClosingRuleSetInfo(Guid Id, string Code, int Version, string Status, DateOnly EffectiveFrom, DateOnly? EffectiveTo, string? Description,
+    IReadOnlyList<ClosingStepInfo> Steps);
+
 /// <summary>
 /// GenerateClosingEntries (docs/03 §3). Produces one CLS Draft voucher per period from the active,
 /// versioned closing rule set. Idempotent: the voucher carries source HAK.CLOSING/&lt;period id&gt;, so a
@@ -52,6 +57,18 @@ public sealed class ClosingService(HakDbContext db, AccountingEngine engine, Aud
             await db.SaveChangesAsync();
             return set;
         });
+    }
+
+    /// <summary>All closing rule sets of the company (newest version first) with their steps, for the setup screen.</summary>
+    public async Task<IReadOnlyList<ClosingRuleSetInfo>> ListRuleSetsAsync(SessionContext ctx)
+    {
+        ctx.Require(Permissions.VoucherView);
+        var sets = await db.ClosingRuleSets.AsNoTracking().Include(r => r.Steps).Where(r => r.CompanyId == ctx.CompanyId)
+            .OrderBy(r => r.Code).ThenByDescending(r => r.Version).ToListAsync();
+        var accountIds = sets.SelectMany(r => r.Steps).Select(x => x.TargetAccountId).Distinct().ToList();
+        var codes = await db.Accounts.AsNoTracking().Where(a => accountIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Code);
+        return sets.Select(r => new ClosingRuleSetInfo(r.Id, r.Code, r.Version, r.Status.ToString(), r.EffectiveFrom, r.EffectiveTo, r.Description,
+            r.Steps.OrderBy(x => x.Sequence).Select(x => new ClosingStepInfo(x.Sequence, x.Description, x.SourcePrefixes, codes.GetValueOrDefault(x.TargetAccountId, "?"))).ToList())).ToList();
     }
 
     public async Task ActivateRuleSetAsync(SessionContext ctx, Guid ruleSetId)

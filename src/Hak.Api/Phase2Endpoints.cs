@@ -94,6 +94,7 @@ public static class Phase2Endpoints
             Results.Ok(await q.AccountLedgerAsync(await http.SessionAsync(), accountId, from, to, partnerId)));
 
         // ---- period-end closing ----
+        api.MapGet("/closing/rule-sets", async (HttpContext http, ClosingService s) => Results.Ok(await s.ListRuleSetsAsync(await http.SessionAsync())));
         api.MapPost("/closing/rule-sets", async (HttpContext http, ClosingRuleSetRequest r, ClosingService s) =>
         {
             var set = await s.CreateRuleSetAsync(await http.SessionAsync(), r.Code, r.EffectiveFrom, r.EffectiveTo, r.Steps, r.Description);

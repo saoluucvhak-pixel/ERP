@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, Modal, useAction, DateInput } from './common'
+import { AutoPosting } from './AutoPosting'
 import { ImportData } from './ImportData'
 import { formatDate } from './money'
 
-const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', approval: 'Quy trình duyệt', import: 'Nhập từ Excel/CSV' } as const
+const TABS = { accounts: 'Hệ thống tài khoản', auto: 'Hạch toán tự động', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', approval: 'Quy trình duyệt', import: 'Nhập từ Excel/CSV' } as const
 
 /** Thiết lập công ty: catalogue the modules depend on. Codes are the company's own (legal chart [CẦN XÁC MINH TT99]). */
 export function SetupView() {
@@ -15,6 +16,7 @@ export function SetupView() {
         {Object.entries(TABS).map(([k, v]) => <button key={k} className={tab === k ? 'primary' : ''} onClick={() => setTab(k as keyof typeof TABS)}>{v}</button>)}
       </div>
       {tab === 'accounts' && <Accounts />}
+      {tab === 'auto' && <AutoPosting go={setTab} />}
       {tab === 'roles' && <Roles />}
       {tab === 'stock' && <Stock />}
       {tab === 'years' && <Years />}

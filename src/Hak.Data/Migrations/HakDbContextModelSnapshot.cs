@@ -2354,6 +2354,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
+                    b.Property<int>("DefaultDepreciationProration")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_depreciation_proration");
+
                     b.Property<string>("FunctionalCurrency")
                         .IsRequired()
                         .HasMaxLength(3)

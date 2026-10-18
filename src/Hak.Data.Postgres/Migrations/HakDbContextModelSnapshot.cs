@@ -2383,6 +2383,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<int>("DefaultDepreciationProration")
+                        .HasColumnType("integer")
+                        .HasColumnName("default_depreciation_proration");
+
                     b.Property<string>("FunctionalCurrency")
                         .IsRequired()
                         .HasMaxLength(3)

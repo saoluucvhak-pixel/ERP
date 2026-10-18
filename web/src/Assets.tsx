@@ -180,6 +180,8 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [picked, setPicked] = useState<Record<string, string>>({})
   const { busy, error, run } = useAction()
+  // Cách tính tháng đầu/cuối mặc định của công ty (Thiết lập → Hạch toán tự động); thẻ vẫn đổi được.
+  useEffect(() => { get<{ proration: string }>('/settings/depreciation-default').then(d => setF(x => ({ ...x, proration: d.proration }))).catch(() => undefined) }, [])
   const set = (k: keyof typeof f, v: string | boolean) => setF(x => ({ ...x, [k]: v }))
 
   useEffect(() => {

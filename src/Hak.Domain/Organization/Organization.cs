@@ -1,3 +1,5 @@
+using Hak.Domain.Assets;
+
 namespace Hak.Domain.Organization;
 
 public sealed class Company
@@ -11,6 +13,8 @@ public sealed class Company
     public Guid RegimeVersionId { get; set; }
     /// <summary>Segregation of duties: approver must differ from creator.</summary>
     public bool RequireDistinctApprover { get; set; } = true;
+    /// <summary>Default for new asset / tool cards: depreciate whole months (FullMonth) or by days (Daily). Each card can still override it.</summary>
+    public ProrationPolicy DefaultDepreciationProration { get; set; } = ProrationPolicy.FullMonth;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
