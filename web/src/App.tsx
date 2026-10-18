@@ -46,13 +46,27 @@ const SCREENS = [
   { key: 'admin', label: 'Quản trị', el: () => <AdminView /> },
 ] as const
 
+const MODULES = [
+  { key: 'general', label: 'Tổng hợp', items: ['vouchers', 'periods'] },
+  { key: 'cash', label: 'Quỹ & Ngân hàng', items: ['cash', 'bank', 'fx', 'loans'] },
+  { key: 'trade', label: 'Mua / Bán hàng', items: ['orders', 'trade', 'arap'] },
+  { key: 'stock', label: 'Kho & Giá thành', items: ['stock', 'production'] },
+  { key: 'assets', label: 'Tài sản / CCDC', items: ['assets'] },
+  { key: 'payroll', label: 'Lương', items: ['payroll'] },
+  { key: 'tax', label: 'Thuế', items: ['vat'] },
+  { key: 'reports', label: 'Báo cáo', items: ['tb', 'ledger', 'journal', 'reports'] },
+  { key: 'catalog', label: 'Danh mục', items: ['catalog', 'setup'] },
+  { key: 'system', label: 'Hệ thống', items: ['admin'] },
+] as const
+type ScreenKey = (typeof SCREENS)[number]['key']
+
 export default function App() {
   const [token, setToken] = useState(session.token)
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [companyId, setCompanyId] = useState(session.companyId)
   const [isSystemAdmin, setIsSystemAdmin] = useState(false)
   const [systemAdmin, setSystemAdmin] = useState(false)
-  const [screen, setScreen] = useState<(typeof SCREENS)[number]['key']>('vouchers')
+  const [screen, setScreen] = useState<ScreenKey>('vouchers')
 
   useEffect(() => {
     if (!token) return
@@ -103,16 +117,34 @@ export default function App() {
     )
   }
   const current = SCREENS.find(s => s.key === screen)!
+  const mod = MODULES.find(m => (m.items as readonly string[]).includes(screen))!
+  const label = (k: string) => SCREENS.find(s => s.key === k)!.label
   return (
     <div className="shell">
-      <nav className="sidebar" aria-label="Phân hệ">
-        <h1>HAK Accounting</h1>
-        <div className="company">{company.code} – {company.name}</div>
-        {SCREENS.map(s => <button key={s.key} className={s.key === screen ? 'active' : ''} onClick={() => setScreen(s.key)}>{s.label}</button>)}
-        <button onClick={() => { session.setCompany(null); setCompanyId(null) }}>Đổi công ty</button>
-        <button onClick={logout}>Đăng xuất</button>
-      </nav>
-      <main className="main" key={company.id}>{current.el()}</main>
+      <header className="topbar">
+        <div className="brand"><span className="logo">H</span><span className="brand-name">HAK <b>Accounting</b></span></div>
+        <nav className="modules" aria-label="Phân hệ">
+          {MODULES.map(m => (
+            <button key={m.key} className={m.key === mod.key ? 'active' : ''} onClick={() => setScreen(m.items[0])}>{m.label}</button>
+          ))}
+        </nav>
+        <div className="topbar-right">
+          <button className="company-chip" title={`${company.name} — bấm để đổi công ty`} onClick={() => { session.setCompany(null); setCompanyId(null) }}>
+            <span className="muted-on-dark">Công ty</span> {company.code} ▾
+          </button>
+          <button className="ghost-dark" onClick={logout}>Đăng xuất</button>
+        </div>
+      </header>
+      <div className="body">
+        <nav className="sidebar" aria-label={mod.label}>
+          <div className="sidebar-title">{mod.label}</div>
+          {mod.items.map(k => <button key={k} className={k === screen ? 'active' : ''} onClick={() => setScreen(k)}>{label(k)}</button>)}
+        </nav>
+        <main className="main" key={company.id}>
+          <div className="crumb">{mod.label} <span>›</span> <b>{current.label}</b></div>
+          {current.el()}
+        </main>
+      </div>
     </div>
   )
 }
