@@ -1,6 +1,6 @@
 # STATUS — theo Definition of Done (master prompt §48)
 
-Cập nhật: 14/10/2026 (Giai đoạn 3 — Kho, tính giá xuất kho, MT/BDMT dăm gỗ, hóa đơn mua/bán). Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
+Cập nhật: 18/10/2026 (rà soát cấu trúc repo). Nội dung bảng bên dưới phản ánh đến đợt 16/10/2026 (Giai đoạn 4–6: TT99, Report Engine, ngoại tệ, vay, TSCĐ, lương, giá thành); chi tiết từng đợt xem mục "Đang làm dở" trong CLAUDE.md. Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
 
 Trạng thái: `NOT_STARTED` · `DESIGNED` · `IN_PROGRESS` (code + test, thiếu UI hoặc tài liệu) · `AWAITING_REAL_DATA_VALIDATION` (code + UI + test tự động đạt, chờ dữ liệu thực) · `DONE`
 

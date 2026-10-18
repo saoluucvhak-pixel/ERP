@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "hak-api",
-      "runtimeExecutable": "C:\\Users\\User\\AppData\\Local\\Microsoft\\dotnet\\dotnet.exe",
+      "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "src/Hak.Api", "--urls", "http://127.0.0.1:5080", "--Hak:Environment=Development"],
       "port": 5080
     },

@@ -17,3 +17,12 @@ artifacts/
 
 __pycache__/
 out/
+
+# Dữ liệu và bản cài của phần mềm khác (FAST/VFP) — không đưa vào repo
+*.dbf
+*.cdx
+*.fpt
+*.fxp
+*.zip
+*.rar
+*.bak
