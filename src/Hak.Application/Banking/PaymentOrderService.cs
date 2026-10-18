@@ -60,8 +60,11 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
         });
     }
 
-    public Task<PaymentOrder> ApproveAsync(SessionContext ctx, Guid id)
-        => TransitionAsync(ctx, id, Permissions.PaymentOrderApprove, "approve", po => po.Approve(ctx.UserId));
+    public async Task<PaymentOrder> ApproveAsync(SessionContext ctx, Guid id)
+    {
+        var distinct = await db.Companies.AsNoTracking().Where(c => c.Id == ctx.CompanyId).Select(c => c.RequireDistinctApprover).FirstAsync();
+        return await TransitionAsync(ctx, id, Permissions.PaymentOrderApprove, "approve", po => po.Approve(ctx.UserId, distinct));
+    }
 
     public Task<PaymentOrder> MarkSentAsync(SessionContext ctx, Guid id)
         => TransitionAsync(ctx, id, Permissions.BankDocument, "send", po => po.MarkSent(ctx.UserId, clock.UtcNow));

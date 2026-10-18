@@ -223,4 +223,23 @@ public class BankingTests
         Assert.Equal(ErrorCodes.MatchInvalid, (await Assert.ThrowsAsync<DomainException>(() =>
             s.StatementVouchers.CreateDraftAsync(h.Preparer, fee.Id, h.Acc["EXP"], null, null))).Code);
     }
+
+    [Fact]
+    public async Task ApprovalPolicy_OnePersonMayPrepareAndApprove_WhenTheCompanySwitchesDistinctApproverOff()
+    {
+        var (h, s) = await SetupAsync();
+        using var _h = h; using var _s = s;
+        var apLine = await SupplierInvoiceLineAsync(h, s, 5_000_000);
+        var preparerCanApprove = h.Preparer with { Permissions = new HashSet<string>(h.Preparer.Permissions) { "payment_order.approve" } };
+
+        Assert.True(await s.Setup.GetRequireDistinctApproverAsync(h.Preparer));
+        var first = await s.PaymentOrders.CreateAsync(h.Preparer, Order(h, 5_000_000, apLine));
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => s.PaymentOrders.ApproveAsync(preparerCanApprove, first.Id)));
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Setup.SetRequireDistinctApproverAsync(h.Preparer, false)));
+        await s.Setup.SetRequireDistinctApproverAsync(h.Admin, false);
+        Assert.False(await s.Setup.GetRequireDistinctApproverAsync(h.Preparer));
+        await s.PaymentOrders.ApproveAsync(preparerCanApprove, first.Id);
+        Assert.True(await s.Db.AuditLogs.AnyAsync(a => a.Action == "company.approval_policy"));
+    }
 }
