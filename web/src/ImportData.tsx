@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { get, post, type Account } from './api'
-import { ErrorBox, useAction } from './common'
+import { ErrorBox, useAction, DateInput } from './common'
 import { formatMoney, today } from './money'
 import { excelDate, headerKey, readSheetFile } from './sheetread'
 import { downloadXlsx } from './xlsx'
@@ -224,7 +224,7 @@ export function ImportData() {
         </div>
         <p className="muted">{k.help}</p>
         {dated && <div className="form-row">
-          <label>Ngày số dư (ngày ghi sổ) <input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+          <label>Ngày số dư (ngày ghi sổ) <DateInput value={date} onChange={e => setDate(e.target.value)} /></label>
           {kind === 'stock' && <label>TK trung gian (Có) <select value={counter} onChange={e => setCounter(e.target.value)}><option value="">—</option>
             {accounts.filter(a => a.isPostable && a.isActive && !a.requiresPartner).map(a => <option key={a.id} value={a.code}>{a.code} – {a.name}</option>)}</select></label>}
           <label style={{ flex: 1 }}>Diễn giải chứng từ <input value={description} onChange={e => setDescription(e.target.value)} placeholder={kind === 'stock' ? 'Tồn kho đầu kỳ' : 'Số dư đầu kỳ chuyển sang'} /></label>

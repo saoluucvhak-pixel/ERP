@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { get, post, type OpenItem, type TrialBalanceRow } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, TYPE_VI, useAction, useCatalog } from './common'
-import { addMoney, formatMoney, today } from './money'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, TYPE_VI, useAction, useCatalog, DateInput } from './common'
+import { addMoney, formatMoney, today, formatDate } from './money'
 
 const firstOfMonth = () => today().slice(0, 8) + '01'
 
@@ -20,8 +20,8 @@ export function TrialBalanceView() {
     <>
       <div className="toolbar">
         <h2>Bảng cân đối số phát sinh</h2>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <label><input type="checkbox" checked={rollup} onChange={e => setRollup(e.target.checked)} /> Cộng dồn TK tổng hợp</label>
         <button className="primary" onClick={load} disabled={busy}>Xem</button>
         <ExportButton fileName={`BCDPS_${from}_${to}`} sheet="BCĐPS" disabled={!data}
@@ -74,14 +74,14 @@ export function AccountLedgerView() {
         <h2>Sổ chi tiết tài khoản / Sổ quỹ</h2>
         <label>Tài khoản<AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} /></label>
         <label>Đối tượng<PartnerSelect partners={partners} value={partnerId} onChange={setPartnerId} /></label>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" onClick={load} disabled={busy || !accountId}>Xem</button>
         <ExportButton fileName={`So_chi_tiet_${data?.accountCode ?? ''}_${from}_${to}`} sheet={`Sổ TK ${data?.accountCode ?? ''}`} disabled={!data}
           columns={[{ header: 'Ngày' }, { header: 'Số CT' }, { header: 'Loại' }, { header: 'Diễn giải', width: 40 }, { header: 'TK đối ứng' },
             { header: 'Nợ', numeric: true }, { header: 'Có', numeric: true }, { header: 'Số dư (+Nợ / −Có)', numeric: true }]}
           rows={data ? [['', '', '', 'Số dư đầu kỳ', '', '', '', data.openingBalance],
-            ...data.rows.map(r => [r.postingDate, r.voucherNumber, TYPE_VI[r.voucherType] ?? r.voucherType, r.description, r.counterAccounts, r.debit, r.credit, r.runningBalance]),
+            ...data.rows.map(r => [formatDate(r.postingDate), r.voucherNumber, TYPE_VI[r.voucherType] ?? r.voucherType, r.description, r.counterAccounts, r.debit, r.credit, r.runningBalance]),
             ['', '', '', 'Cộng phát sinh / số dư cuối kỳ', '', data.totalDebit, data.totalCredit, data.closingBalance]] : []} />
       </div>
       <ErrorBox error={error} />
@@ -92,7 +92,7 @@ export function AccountLedgerView() {
             <tbody>
               <tr><td colSpan={7}><strong>Số dư đầu kỳ</strong></td><td className="num">{signed(data.openingBalance)}</td></tr>
               {data.rows.map((r, i) => (
-                <tr key={i}><td>{r.postingDate}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td><td>{r.description}</td><td>{r.counterAccounts}</td>
+                <tr key={i}><td>{formatDate(r.postingDate)}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td><td>{r.description}</td><td>{r.counterAccounts}</td>
                   <td className="num">{r.debit === '0' ? '' : formatMoney(r.debit)}</td><td className="num">{r.credit === '0' ? '' : formatMoney(r.credit)}</td><td className="num">{signed(r.runningBalance)}</td></tr>))}
             </tbody>
             <tfoot><tr><td colSpan={5}>Cộng phát sinh / Số dư cuối kỳ</td><td className="num">{formatMoney(data.totalDebit)}</td><td className="num">{formatMoney(data.totalCredit)}</td><td className="num">{signed(data.closingBalance)}</td></tr></tfoot>
@@ -129,7 +129,7 @@ export function ReceivablesView() {
         <h2>Công nợ</h2>
         <label>Tài khoản công nợ<AccountSelect accounts={openAccounts} value={accountId} onChange={setAccountId} /></label>
         <label>Đối tượng (chi tiết)<PartnerSelect partners={partners} value={partnerId} onChange={setPartnerId} /></label>
-        <label>Đến ngày<input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
         <button className="primary" onClick={load} disabled={busy || !accountId}>Xem</button>
         <button onClick={auto} disabled={busy || !accountId || !partnerId}>Tự động bù trừ (FIFO)</button>
         <ExportButton fileName={`Tuoi_no_${asOf}`} sheet="Tuổi nợ" disabled={!aging}
@@ -160,7 +160,7 @@ export function ReceivablesView() {
           <table className="grid">
             <thead><tr><th>Ngày</th><th>Hạn</th><th>Số CT</th><th>Loại</th><th>Chiều</th><th className="num">Số tiền</th><th className="num">Đã phân bổ</th><th className="num">Còn lại</th></tr></thead>
             <tbody>{items.map(o => (
-              <tr key={o.journalLineId}><td>{o.postingDate}</td><td>{o.dueDate}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
+              <tr key={o.journalLineId}><td>{formatDate(o.postingDate)}</td><td>{formatDate(o.dueDate)}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
                 <td>{o.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(o.amount)}</td><td className="num">{formatMoney(o.allocated)}</td><td className="num">{formatMoney(o.open)}</td></tr>))}
             </tbody>
           </table>
@@ -182,18 +182,18 @@ export function GeneralJournalView() {
     <>
       <div className="toolbar">
         <h2>Sổ Nhật ký chung</h2>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" disabled={busy} onClick={() => run(async () => setRows(await get<JournalRow[]>(`/reports/general-journal?from=${from}&to=${to}`)))}>Xem</button>
         <ExportButton fileName={`So_nhat_ky_chung_${from}_${to}`} sheet="Nhật ký chung" disabled={!rows}
           columns={[{ header: 'Ngày' }, { header: 'Số CT' }, { header: 'Loại' }, { header: 'Diễn giải', width: 40 }, { header: 'TK' }, { header: 'Đối tượng' },
             { header: 'Nợ', numeric: true }, { header: 'Có', numeric: true }]}
-          rows={(rows ?? []).map(r => [r.postingDate, r.voucherNumber, TYPE_VI[r.voucherType] ?? r.voucherType, r.description, r.accountCode, r.partnerCode, r.debit, r.credit])} />
+          rows={(rows ?? []).map(r => [formatDate(r.postingDate), r.voucherNumber, TYPE_VI[r.voucherType] ?? r.voucherType, r.description, r.accountCode, r.partnerCode, r.debit, r.credit])} />
       </div>
       <ErrorBox error={error} />
       {rows && <div className="scroll"><table className="grid">
         <thead><tr><th>Ngày</th><th>Số CT</th><th>Loại</th><th>Diễn giải</th><th>TK</th><th>Đối tượng</th><th className="num">Nợ</th><th className="num">Có</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={`${r.voucherNumber}-${r.lineNo}`}><td>{r.postingDate}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td>
+        <tbody>{rows.map(r => <tr key={`${r.voucherNumber}-${r.lineNo}`}><td>{formatDate(r.postingDate)}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td>
           <td>{r.description}</td><td>{r.accountCode}</td><td>{r.partnerCode}</td>
           <td className="num">{r.debit === '0' ? '' : formatMoney(r.debit)}</td><td className="num">{r.credit === '0' ? '' : formatMoney(r.credit)}</td></tr>)}
           {rows.length === 0 && <tr><td colSpan={8} className="muted">Không có bút toán trong khoảng ngày.</td></tr>}</tbody>

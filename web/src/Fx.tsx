@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type OpenItem } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, parseRate, today } from './money'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { formatMoney, parseMoney, parseRate, today, formatDate } from './money'
 
 interface BalanceRow {
   accountId: string; accountCode: string; partnerId: string | null; partnerCode: string | null; currency: string
@@ -42,7 +42,7 @@ export function FxView() {
     <>
       <div className="toolbar">
         <h2>Ngoại tệ — số dư và đánh giá lại cuối kỳ</h2>
-        <label>Tại ngày <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
+        <label>Tại ngày <DateInput value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
         <button onClick={() => load()}>Tải lại</button>
       </div>
       <p className="muted">Số dư theo từng tài khoản – đối tượng – loại tiền. Đánh giá lại áp dụng cho tiền, tiền gửi, vay… (không theo dõi công nợ chi tiết); chênh lệch ghi vào TK ánh xạ vai trò FX_REVALUATION. Tỷ giá áp cho số dư Nợ / số dư Có theo chính sách của doanh nghiệp [CẦN XÁC MINH căn cứ TT99].</p>
@@ -79,7 +79,7 @@ export function FxView() {
       <section className="panel">
         <h3>Các lần đánh giá lại</h3>
         <table className="grid"><thead><tr><th>Ngày</th><th>Nguồn tỷ giá</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{r.revaluationDate}</td><td>{r.rateSource}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{formatDate(r.revaluationDate)}</td><td>{r.rateSource}</td>
             <td>{r.status === 'Active' ? (r.voucherId ? 'Hiệu lực' : 'Hiệu lực (không phát sinh)') : 'Đã hủy'}</td>
             <td>{r.id === lastActive?.id && <button disabled={busy} onClick={() => {
               const reason = prompt('Lý do hủy lần đánh giá lại:')
@@ -143,7 +143,7 @@ function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) 
         <tbody>{items.map(i => <tr key={i.journalLineId}>
           <td><input type="checkbox" aria-label={`Chọn ${i.voucherNumber}`} checked={i.journalLineId in picked} onChange={e => { setPreview(null); setPicked(p => {
             const n = { ...p }; if (e.target.checked) n[i.journalLineId] = i.openForeign ?? ''; else delete n[i.journalLineId]; return n }) }} /></td>
-          <td>{i.voucherNumber}</td><td>{i.dueDate}</td><td>{i.foreignCurrency}</td>
+          <td>{i.voucherNumber}</td><td>{formatDate(i.dueDate)}</td><td>{i.foreignCurrency}</td>
           <td className="num">{formatMoney(i.openForeign)}</td><td className="num">{formatMoney(i.open)}</td>
           <td className="num">{i.journalLineId in picked && <input inputMode="decimal" aria-label="Nguyên tệ thanh toán" value={picked[i.journalLineId]}
             onChange={e => { setPreview(null); setPicked(p => ({ ...p, [i.journalLineId]: e.target.value })) }} />}</td>

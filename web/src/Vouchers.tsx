@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
-import { AccountSelect, CASHFLOW_VI, ErrorBox, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
-import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
+import { AccountSelect, CASHFLOW_VI, ErrorBox, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog, DateInput } from './common'
+import { addMoney, amountInWords, formatMoney, parseMoney, today, formatDate } from './money'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
 const emptyLine = (side: 'D' | 'C'): LineDraft => ({ accountId: '', side, amount: '', partnerId: '', description: '', cashFlowCode: '' })
@@ -61,8 +61,8 @@ export function VouchersView() {
     <>
       <div className="toolbar">
         <h2>Chứng từ kế toán</h2>
-        <label>Từ ngày<input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(0) }} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(0) }} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => { setFrom(e.target.value); setPage(0) }} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => { setTo(e.target.value); setPage(0) }} /></label>
         <label>Trạng thái
           <select value={status} onChange={e => { setStatus(e.target.value); setPage(0) }}>
             <option value="">Tất cả</option>
@@ -96,7 +96,7 @@ export function VouchersView() {
         <div className="panel">
           <div className="toolbar">
             <strong>{v.number}</strong> <span className={`badge ${v.status}`}>{STATUS_VI[v.status]}</span>
-            <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {v.postingDate} · {v.description}</span>
+            <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {formatDate(v.postingDate)} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
             {v.status === 'Draft' && !['CR', 'CP', 'BR', 'BP'].includes(v.voucherType) && <button onClick={() => setEditing(v)}>Sửa</button>}
             <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
@@ -132,7 +132,7 @@ export function VouchersView() {
               <tr key={x.id} className={x.id === v?.id ? 'selected' : ''} onClick={() => setSelected(x)} style={{ cursor: 'pointer' }}>
                 <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Chọn ${x.number}`} checked={checked.has(x.id)}
                   onChange={e => setChecked(c => { const n = new Set(c); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} /></td>
-                <td>{x.postingDate}</td><td>{x.number}</td><td>{TYPE_VI[x.voucherType] ?? x.voucherType}</td><td>{x.description}</td>
+                <td>{formatDate(x.postingDate)}</td><td>{x.number}</td><td>{TYPE_VI[x.voucherType] ?? x.voucherType}</td><td>{x.description}</td>
                 <td className="num">{formatMoney(x.totalDebit)}</td><td><span className={`badge ${x.status}`}>{STATUS_VI[x.status]}</span></td>
               </tr>
             ))}
@@ -259,8 +259,8 @@ function VoucherForm({ voucher, onDone }: { voucher: Voucher | null; onDone: () 
               {['GJ', 'ADJ', 'ALC', 'OPB', 'CLS', 'FXR'].map(t => <option key={t} value={t}>{t} – {TYPE_VI[t]}</option>)}
             </select>
           </label>
-          <label>Ngày chứng từ<input type="date" value={voucherDate} onChange={e => setVoucherDate(e.target.value)} /></label>
-          <label>Ngày hạch toán<input type="date" value={postingDate} onChange={e => setPostingDate(e.target.value)} /></label>
+          <label>Ngày chứng từ<DateInput value={voucherDate} onChange={e => setVoucherDate(e.target.value)} /></label>
+          <label>Ngày hạch toán<DateInput value={postingDate} onChange={e => setPostingDate(e.target.value)} /></label>
           <label style={{ flex: 1, minWidth: 240 }}>Diễn giải<input value={description} onChange={e => setDescription(e.target.value)} /></label>
         </div>
         <table className="grid">

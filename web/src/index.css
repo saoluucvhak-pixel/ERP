@@ -177,3 +177,12 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .perm-module { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
 .perm-module legend { padding: 0 6px; }
 .process-top.solo { grid-template-columns: 1fr; }
+
+/* Ô nhập ngày dd/MM/yyyy */
+.date-input { position: relative; display: inline-flex; align-items: stretch; }
+.date-input > input[type=text] { width: 118px; padding-right: 30px; font-variant-numeric: tabular-nums; }
+.date-input.bad > input[type=text] { border-color: var(--danger); }
+.date-input .cal { position: absolute; right: 1px; top: 1px; bottom: 1px; width: 28px; padding: 0; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; }
+.date-input .cal:hover:not(:disabled) { color: var(--accent); border: 0; }
+.date-input .native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.grid .date-input > input[type=text] { width: 104px; }

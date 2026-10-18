@@ -99,3 +99,36 @@ export function amountInWords(value: string, unit = 'đồng'): string {
   text = (neg ? 'âm ' : '') + text + (unit ? ' ' + unit : '')
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
+/** "2026-10-18" → "18/10/2026" (Việt Nam). Chuỗi không phải ngày được trả về nguyên văn. */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(value)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : value
+}
+
+/** Thời điểm UTC từ máy chủ → "18/10/2026 14:05" theo giờ máy. */
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** "18/10/2026", "18-10-26", "181026" … → "2026-10-18"; null nếu không phải ngày hợp lệ. Năm 2 chữ số hiểu là 20xx. */
+export function parseDate(input: string): string | null {
+  const s = input.trim()
+  if (s === '') return null
+  let d: string, m: string, y: string
+  const sep = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2}|\d{4})$/.exec(s)
+  const flat = /^(\d{2})(\d{2})(\d{4})$/.exec(s)
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (sep) [, d, m, y] = sep
+  else if (flat) [, d, m, y] = flat
+  else if (iso) [, y, m, d] = iso
+  else return null
+  if (y.length === 2) y = '20' + y
+  const dt = new Date(Number(y), Number(m) - 1, Number(d))
+  if (dt.getFullYear() !== Number(y) || dt.getMonth() !== Number(m) - 1 || dt.getDate() !== Number(d)) return null
+  return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+}

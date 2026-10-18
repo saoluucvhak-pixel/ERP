@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { formatMoney, parseMoney, today, formatDate } from './money'
 
 export interface Order { id: string; number: string; kind: string; partnerId: string; contractNo: string | null; orderDate: string; description: string; overDeliveryTolerancePercent: string; status: string; statusReason: string | null; lines: { lineNo: number; itemId: string; quantity: string; basis: string; unitPrice: string; vatRate: string | null }[] }
 interface Item { id: string; code: string; name: string; unit: string; tracksDryness: boolean }
@@ -56,7 +56,7 @@ export function OrdersView() {
         <div className="form-row">
           <label>{kind === 'Sales' ? 'Khách hàng' : 'Nhà cung cấp'}<PartnerSelect partners={partners} value={head.partnerId} onChange={v => setHead(h => ({ ...h, partnerId: v }))} /></label>
           <label>Số hợp đồng<input value={head.contractNo} onChange={e => setHead(h => ({ ...h, contractNo: e.target.value }))} /></label>
-          <label>Ngày đơn<input type="date" value={head.orderDate} onChange={e => setHead(h => ({ ...h, orderDate: e.target.value }))} /></label>
+          <label>Ngày đơn<DateInput value={formatDate(head.orderDate)} onChange={e => setHead(h => ({ ...h, orderDate: e.target.value }))} /></label>
           <label>Dung sai giao vượt %<input className="num" size={4} value={head.tolerance} onChange={e => setHead(h => ({ ...h, tolerance: e.target.value }))} /></label>
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>
           <button className="primary" style={{ alignSelf: 'flex-end' }} disabled={busy} onClick={save}>Lưu đơn nháp</button>
@@ -94,7 +94,7 @@ export function OrdersView() {
         <table className="grid">
           <thead><tr><th>Số đơn</th><th>Ngày</th><th>Đối tượng</th><th>Hợp đồng</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{list.map(o => (
-            <tr key={o.id}><td>{o.number}</td><td>{o.orderDate}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
+            <tr key={o.id}><td>{o.number}</td><td>{formatDate(o.orderDate)}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
               <td><span className="badge">{STATUS_VI[o.status] ?? o.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => run(async () => setDetail(await get<Fulfil>(`/orders/${o.id}/fulfilment`)))}>Tiến độ</button>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, postRaw } from './api'
-import { ErrorBox, ExportButton, STATUS_VI, useAction } from './common'
-import { formatMoney, today } from './money'
+import { ErrorBox, ExportButton, STATUS_VI, useAction, DateInput } from './common'
+import { formatMoney, today, formatDate } from './money'
 
 interface Totals { employees: number; gross: string; socialInsurance: string; healthInsurance: string; unemploymentInsurance: string; personalIncomeTax: string; otherDeduction: string; net: string; employerContributions: string }
 interface ImportResult {
@@ -43,8 +43,8 @@ export function PayrollView() {
     <>
       <div className="toolbar">
         <h2>Lương — nhận bảng lương từ phần mềm tính lương</h2>
-        <label>Từ <input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến <input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ <DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến <DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button onClick={() => load()}>Tải lại</button>
       </div>
       <p className="muted">File JSON theo schema payroll 1.0, có chữ ký của phần mềm lương. HAK không tự tính bảo hiểm / thuế TNCN; chỉ kiểm tra lương gộp − khấu trừ = thực lĩnh, nhân viên có trong danh mục, rồi lập chứng từ nháp theo các vai trò TK PAYROLL_*.</p>
@@ -72,7 +72,7 @@ export function PayrollView() {
       <section className="panel">
         <h3>Bảng lương đã nhận</h3>
         <table className="grid"><thead><tr><th>Bảng lương</th><th>Phiên bản</th><th>Kỳ</th><th>Ngày hạch toán</th><th>Chứng từ</th><th>Trạng thái</th><th className="num">Số NV</th><th className="num">Lương gộp</th><th className="num">Thực lĩnh</th></tr></thead>
-          <tbody>{sheets.map(s => <tr key={s.id}><td title={s.description}>{s.sourceId}</td><td>{s.sourceVersion}</td><td>{s.periodFrom} – {s.periodTo}</td><td>{s.postingDate}</td>
+          <tbody>{sheets.map(s => <tr key={s.id}><td title={s.description}>{s.sourceId}</td><td>{s.sourceVersion}</td><td>{formatDate(s.periodFrom)} – {formatDate(s.periodTo)}</td><td>{formatDate(s.postingDate)}</td>
             <td>{s.voucherNumber}</td><td>{STATUS_VI[s.voucherStatus] ?? s.voucherStatus}</td><td className="num">{s.employees}</td><td className="num">{formatMoney(s.gross)}</td><td className="num">{formatMoney(s.net)}</td></tr>)}
             {sheets.length === 0 && <tr><td colSpan={9} className="muted">Chưa có bảng lương trong khoảng ngày.</td></tr>}</tbody></table>
       </section>

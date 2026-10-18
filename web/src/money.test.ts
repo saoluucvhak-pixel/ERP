@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addMoney, amountInWords, formatMoney, parseMoney, parseRate, today } from './money.ts'
+import { addMoney, amountInWords, formatDate, formatDateTime, formatMoney, parseDate, parseMoney, parseRate, today } from './money.ts'
 
 test('formatMoney groups with dots and uses comma decimals, never via Number', () => {
   assert.equal(formatMoney('1234567'), '1.234.567')
@@ -58,4 +58,28 @@ test('amountInWords reads Vietnamese money', () => {
   assert.equal(amountInWords('2000000000000'), 'Hai nghìn tỷ đồng')
   assert.equal(amountInWords('-30'), 'Âm ba mươi đồng')
   assert.equal(amountInWords('12.50', 'đô la Mỹ'), 'Mười hai phẩy năm đô la Mỹ')
+})
+test('formatDate shows dd/MM/yyyy and leaves non-dates alone', () => {
+  assert.equal(formatDate('2026-10-18'), '18/10/2026')
+  assert.equal(formatDate('2026-10-18T05:30:00Z'), '18/10/2026')
+  assert.equal(formatDate(''), '')
+  assert.equal(formatDate(null), '')
+  assert.equal(formatDate('Quý 3'), 'Quý 3')
+})
+
+test('parseDate accepts Vietnamese day-first input and rejects impossible dates', () => {
+  assert.equal(parseDate('18/10/2026'), '2026-10-18')
+  assert.equal(parseDate('1/2/2026'), '2026-02-01')
+  assert.equal(parseDate('18-10-26'), '2026-10-18')
+  assert.equal(parseDate('18102026'), '2026-10-18')
+  assert.equal(parseDate('2026-10-18'), '2026-10-18')
+  assert.equal(parseDate('29/02/2026'), null)
+  assert.equal(parseDate('31/04/2026'), null)
+  assert.equal(parseDate('13/13/2026'), null)
+  assert.equal(parseDate(''), null)
+})
+
+test('formatDateTime renders local day-first time', () => {
+  assert.match(formatDateTime('2026-10-18T05:30:00'), /^18\/10\/2026 \d{2}:\d{2}$/)
+  assert.equal(formatDateTime('khong-phai-ngay'), 'khong-phai-ngay')
 })

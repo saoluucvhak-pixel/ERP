@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post, type OpenItem, type Voucher } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, TYPE_VI, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, PartnerSelect, TYPE_VI, useAction, useCatalog, DateInput } from './common'
+import { formatMoney, parseMoney, today, formatDate } from './money'
 
 const EVENTS: Record<string, { value: string; label: string; needsPartner: boolean; needsCounter: boolean }[]> = {
   CR: [{ value: 'CUSTOMER_RECEIPT', label: 'Thu tiền khách hàng', needsPartner: true, needsCounter: false }],
@@ -73,7 +73,7 @@ export function CashDocsView() {
               {EVENTS[type].map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
             </select>
           </label>
-          <label>Ngày<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+          <label>Ngày<DateInput value={date} onChange={e => setDate(e.target.value)} /></label>
           <label>{cashKind === 'Cash' ? 'Quỹ' : 'Tài khoản ngân hàng'}
             <AccountSelect accounts={accounts} value={mainAccountId} onChange={setMainAccountId} filter={a => a.cashKind === cashKind} />
           </label>
@@ -96,7 +96,7 @@ export function CashDocsView() {
                     upd(i, { settle: e.target.value, amount: item && !l.amount ? formatMoney(item.open) : l.amount })
                   }}>
                     <option value="">(ứng trước / chưa phân bổ)</option>
-                    {openItems.map(o => <option key={o.journalLineId} value={o.journalLineId}>{o.voucherNumber} · {o.postingDate} · còn {formatMoney(o.open)}</option>)}
+                    {openItems.map(o => <option key={o.journalLineId} value={o.journalLineId}>{o.voucherNumber} · {formatDate(o.postingDate)} · còn {formatMoney(o.open)}</option>)}
                   </select></td>}
                 <td><input aria-label="Diễn giải dòng" value={l.description} onChange={e => upd(i, { description: e.target.value })} /></td>
                 <td><button aria-label="Xóa dòng" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}>✕</button></td>

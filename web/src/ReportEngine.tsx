@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, ExportButton, useAction } from './common'
-import { formatMoney, today } from './money'
+import { ErrorBox, ExportButton, useAction, DateInput } from './common'
+import { formatMoney, today, formatDate, formatDateTime } from './money'
 
 interface DefInfo { id: string; code: string; version: number; name: string; category: string; legalReference: string | null; status: 'Draft' | 'Verified'
   verificationNote: string | null; verifiedAt: string | null; lineCount: number; snapshots: number; createdAt: string }
@@ -49,8 +49,8 @@ function ResultTable({ r, onPick, picked }: { r: Run; onPick?: (l: RunLine) => v
   return (
     <>
       {!r.verified && <div className="msg error">MẪU CHƯA XÁC MINH — số liệu chỉ để kiểm tra nội bộ, không dùng nộp cơ quan nhà nước.</div>}
-      <p><b>{r.companyName}</b> · {r.name} ({r.code} v{r.version}{r.legalReference ? ` · ${r.legalReference}` : ''}) · kỳ {r.fromDate} → {r.toDate}
-        {compare && <> · so sánh {r.compareFrom} → {r.compareTo}</>}</p>
+      <p><b>{r.companyName}</b> · {r.name} ({r.code} v{r.version}{r.legalReference ? ` · ${r.legalReference}` : ''}) · kỳ {formatDate(r.fromDate)} → {formatDate(r.toDate)}
+        {compare && <> · so sánh {formatDate(r.compareFrom)} → {formatDate(r.compareTo)}</>}</p>
       <div className="scroll"><table className="grid">
         <thead><tr><th>Chỉ tiêu</th><th>Mã số</th><th>Thuyết minh</th>{valueHeaders(r).map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
         <tbody>{r.lines.map(l => <tr key={l.lineNo} onClick={() => onPick?.(l)} style={{ cursor: onPick && hasValue(l) ? 'pointer' : undefined,
@@ -102,18 +102,18 @@ function RunReport({ defs, onSnapshot }: { defs: DefInfo[]; onSnapshot: () => vo
       <section className="panel"><div className="form-row">
         <label style={{ flex: 1 }}>Mẫu <select value={p.definitionId} onChange={e => { setP(x => ({ ...x, definitionId: e.target.value })); setResult(null) }}>
           <option value="">—</option>{defs.map(d => <option key={d.id} value={d.id}>{d.code} v{d.version} – {d.name} ({statusVi(d)})</option>)}</select></label>
-        <label>Từ ngày <input type="date" value={p.fromDate} onChange={e => setP(x => ({ ...x, fromDate: e.target.value }))} /></label>
-        <label>Đến ngày <input type="date" value={p.toDate} onChange={e => setP(x => ({ ...x, toDate: e.target.value }))} /></label>
+        <label>Từ ngày <DateInput value={formatDate(p.fromDate)} onChange={e => setP(x => ({ ...x, fromDate: e.target.value }))} /></label>
+        <label>Đến ngày <DateInput value={formatDate(p.toDate)} onChange={e => setP(x => ({ ...x, toDate: e.target.value }))} /></label>
         <label><input type="checkbox" checked={p.compare} onChange={e => setP(x => ({ ...x, compare: e.target.checked }))} /> Cột so sánh</label>
         {p.compare && <>
-          <label>Từ <input type="date" value={p.compareFrom} onChange={e => setP(x => ({ ...x, compareFrom: e.target.value }))} /></label>
-          <label>Đến <input type="date" value={p.compareTo} onChange={e => setP(x => ({ ...x, compareTo: e.target.value }))} /></label></>}
+          <label>Từ <DateInput value={formatDate(p.compareFrom)} onChange={e => setP(x => ({ ...x, compareFrom: e.target.value }))} /></label>
+          <label>Đến <DateInput value={formatDate(p.compareTo)} onChange={e => setP(x => ({ ...x, compareTo: e.target.value }))} /></label></>}
         <button className="primary" disabled={busy || !p.definitionId} onClick={() => run(async () => { setInfo(''); setPicked(null); setResult(await post<Run>('/report-runs', body())) })}>Chạy</button>
       </div>
       {defs.length === 0 && <p className="muted">Chưa có mẫu nào — khai báo ở tab "Mẫu báo cáo".</p>}</section>
       {result && <section className="panel">
         <div className="toolbar">
-          <ExportButton fileName={`${result.code}-${result.toDate}`} sheet={result.code} columns={exportColumns(result)} rows={exportRows(result)} />
+          <ExportButton fileName={`${result.code}-${formatDate(result.toDate)}`} sheet={result.code} columns={exportColumns(result)} rows={exportRows(result)} />
           <label style={{ flex: 1 }}>Ghi chú khi chốt <input value={note} onChange={e => setNote(e.target.value)} placeholder="VD: số liệu trình ban giám đốc quý 3" /></label>
           <button disabled={busy} title="Lưu nguyên kết quả này (kèm mã băm) — chỉ kế toán trưởng" onClick={() => run(async () => {
             const s = await post<{ id: string; sha256: string }>('/report-runs/snapshots', { ...body(), note })
@@ -160,7 +160,7 @@ function Definitions({ defs, reload, onEdit }: { defs: DefInfo[]; reload: () => 
           <tbody>{defs.map(d => <tr key={d.id}>
             <td>{d.code}</td><td>{d.version}</td><td>{d.name}{d.legalReference && <div className="muted">{d.legalReference}</div>}</td><td>{d.category}</td>
             <td>{d.lineCount}</td><td>{d.snapshots}</td>
-            <td>{d.status === 'Verified' ? <span title={d.verificationNote ?? ''}>Đã xác minh {d.verifiedAt?.slice(0, 10)}</span>
+            <td>{d.status === 'Verified' ? <span title={d.verificationNote ?? ''}>Đã xác minh {formatDate(d.verifiedAt)}</span>
               : <div className="form-row"><span className="muted">Nháp</span>
                 <input aria-label={`Nội dung xác minh ${d.code}`} placeholder="Đối chiếu với…, người chịu trách nhiệm" value={notes[d.id] ?? ''}
                   onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))} />
@@ -252,9 +252,9 @@ function Snapshots() {
       <ErrorBox error={error} />
       <section className="panel"><table className="grid">
         <thead><tr><th>Thời điểm chốt</th><th>Mẫu</th><th>Kỳ</th><th>Người chốt</th><th>Ghi chú</th><th>Mã băm</th><th /></tr></thead>
-        <tbody>{list.map(s => <tr key={s.id}><td>{s.createdAt.replace('T', ' ').slice(0, 16)}</td>
+        <tbody>{list.map(s => <tr key={s.id}><td>{formatDateTime(s.createdAt)}</td>
           <td>{s.definitionCode} v{s.definitionVersion}{s.definitionVerified ? '' : ' (chưa xác minh)'}</td>
-          <td>{s.fromDate} → {s.toDate}{s.compareFrom && <div className="muted">so sánh {s.compareFrom} → {s.compareTo}</div>}</td>
+          <td>{formatDate(s.fromDate)} → {formatDate(s.toDate)}{s.compareFrom && <div className="muted">so sánh {formatDate(s.compareFrom)} → {formatDate(s.compareTo)}</div>}</td>
           <td>{s.createdBy}</td><td>{s.note}</td><td><code>{s.sha256.slice(0, 12)}…</code></td>
           <td><button onClick={() => run(async () => setShown(await get(`/report-runs/snapshots/${s.id}`)))}>Xem</button></td></tr>)}</tbody></table>
         {list.length === 0 && <p className="muted">Chưa chốt kết quả nào.</p>}</section>

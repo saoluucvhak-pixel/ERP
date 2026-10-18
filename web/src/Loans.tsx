@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, parseRate, today } from './money'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { formatMoney, parseMoney, parseRate, today, formatDate } from './money'
 
 interface LoanRow {
   id: string; code: string; description: string; lenderCode: string; accountCode: string; currency: string | null
@@ -57,7 +57,7 @@ export function LoansView() {
     <>
       <div className="toolbar">
         <h2>Vay — khế ước, giải ngân, trả nợ, lãi vay</h2>
-        <label>Tại ngày <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
+        <label>Tại ngày <DateInput value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
         <button onClick={() => load()}>Tải lại</button>
         <button className="primary" onClick={() => setCreating(true)}>Thêm khế ước</button>
         <ExportButton fileName={'So_vay_' + asOf} sheet="Sổ theo dõi vay" columns={[{ header: 'Khế ước' }, { header: 'Nội dung', width: 30 }, { header: 'Bên cho vay' }, { header: 'TK' }, { header: 'Tiền' }, { header: 'Trạng thái' },
@@ -79,7 +79,7 @@ export function LoansView() {
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}</span>{r.dueWithin12Months && <span className="muted"> · đến hạn ≤ 12 tháng</span>}</td>
             <td className="num">{formatMoney(r.contractAmount)}</td><td className="num">{formatMoney(r.drawn)}</td><td className="num">{formatMoney(r.repaid)}</td>
             <td className="num">{formatMoney(r.outstanding)}{r.outstandingForeign != null && <div className="muted">{formatMoney(r.outstandingForeign)} {r.currency}</div>}</td>
-            <td className="num">{formatMoney(r.currentRatePercent)}</td><td>{r.maturityDate}</td><td className="num">{formatMoney(r.interestAccrued)}</td>
+            <td className="num">{formatMoney(r.currentRatePercent)}</td><td>{formatDate(r.maturityDate)}</td><td className="num">{formatMoney(r.interestAccrued)}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               {r.status === 'Draft' && <>
                 <button disabled={busy} onClick={() => act(() => post(`/loans/${r.id}/activate`), `Đã duyệt khế ước ${r.code}.`)}>Duyệt</button>
@@ -103,7 +103,7 @@ export function LoansView() {
             <tbody>{linking.items.map(c => <tr key={c.journalLineId}>
               <td><input type="checkbox" aria-label={`Chọn ${c.voucherNumber}`} checked={linking.picked.includes(c.journalLineId)}
                 onChange={e => setLinking(l => l && ({ ...l, picked: e.target.checked ? [...l.picked, c.journalLineId] : l.picked.filter(x => x !== c.journalLineId) }))} /></td>
-              <td>{c.voucherNumber}</td><td>{c.postingDate}</td><td>{c.side}</td><td className="num">{formatMoney(c.amount)}</td><td className="num">{formatMoney(c.foreignAmount)}</td><td>{c.description}</td>
+              <td>{c.voucherNumber}</td><td>{formatDate(c.postingDate)}</td><td>{c.side}</td><td className="num">{formatMoney(c.amount)}</td><td className="num">{formatMoney(c.foreignAmount)}</td><td>{c.description}</td>
             </tr>)}</tbody></table>}
           <button className="primary" disabled={busy || linking.picked.length === 0} onClick={() => act(async () => {
             await post(`/loans/${linking.loan.id}/links`, { journalLineIds: linking.picked }); setLinking(null)
@@ -121,7 +121,7 @@ export function LoansView() {
         <div className="form-row">
           <select value={periodId || nextPeriod?.id || ''} onChange={e => setPeriodId(e.target.value)} aria-label="Kỳ trích lãi">
             <option value="">— chọn kỳ —</option>
-            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}</option>)}
+            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{formatDate(p.startDate).slice(3)}</option>)}
           </select>
           {foreignCurrencies.map(c => <label key={c}>Tỷ giá {c} <input inputMode="decimal" value={fxRates[c] ?? ''} onChange={e => setFxRates(x => ({ ...x, [c]: e.target.value }))} /></label>)}
           <button className="primary" disabled={busy} onClick={accrue}>Trích lãi</button>
@@ -157,7 +157,7 @@ function RateForm({ loan, busy, onSubmit, onCancel }: { loan: LoanRow; busy: boo
     <section className="panel">
       <h3>Lãi suất mới cho {loan.code}</h3>
       <div className="form-row">
-        <label>Hiệu lực từ <input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+        <label>Hiệu lực từ <DateInput value={date} onChange={e => setDate(e.target.value)} /></label>
         <label>Lãi suất %/năm <input inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} /></label>
         <label>Căn cứ <input value={note} onChange={e => setNote(e.target.value)} placeholder="Phụ lục / thông báo lãi suất số…" /></label>
       </div>
@@ -195,11 +195,11 @@ function NewLoan({ accounts, partners, onDone }: { accounts: ReturnType<typeof u
         <label>TK lãi phải trả <AccountSelect accounts={accounts} value={f.accruedInterestAccountId} onChange={v => set('accruedInterestAccountId', v)} ariaLabel="TK lãi phải trả" /></label>
         <label>Loại tiền (để trống = VND) <input value={f.currency} onChange={e => set('currency', e.target.value.toUpperCase())} maxLength={3} /></label>
         <label>Hạn mức / số tiền vay <input inputMode="decimal" value={f.contractAmount} onChange={e => set('contractAmount', e.target.value)} /></label>
-        <label>Ngày bắt đầu <input type="date" value={f.startDate} onChange={e => set('startDate', e.target.value)} /></label>
-        <label>Ngày đáo hạn <input type="date" value={f.maturityDate} onChange={e => set('maturityDate', e.target.value)} /></label>
+        <label>Ngày bắt đầu <DateInput value={formatDate(f.startDate)} onChange={e => set('startDate', e.target.value)} /></label>
+        <label>Ngày đáo hạn <DateInput value={formatDate(f.maturityDate)} onChange={e => set('maturityDate', e.target.value)} /></label>
         <label>Lãi suất %/năm <input inputMode="decimal" value={f.annualRatePercent} onChange={e => set('annualRatePercent', e.target.value)} /></label>
         <label>Cơ sở tính ngày <select value={f.dayCount} onChange={e => set('dayCount', e.target.value)}><option value="Actual365">Thực tế / 365</option><option value="Actual360">Thực tế / 360</option></select></label>
-        <label>Tính lãi từ ngày (khế ước chuyển từ hệ thống cũ) <input type="date" value={f.interestFrom} onChange={e => set('interestFrom', e.target.value)} /></label>
+        <label>Tính lãi từ ngày (khế ước chuyển từ hệ thống cũ) <DateInput value={f.interestFrom} onChange={e => set('interestFrom', e.target.value)} /></label>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="primary" disabled={busy || !f.code || !f.lenderId || !f.principalAccountId || !f.maturityDate} onClick={submit}>Lưu nháp</button>

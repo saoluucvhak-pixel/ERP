@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, get, post, session } from './api'
-import { ErrorBox, useAction } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { ErrorBox, useAction, DateInput } from './common'
+import { formatMoney, parseMoney, today, formatDate } from './money'
 
 const DIFF_VI: Record<string, string> = {
   MissingInBooks: 'Có HĐĐT, chưa ghi sổ', MissingEInvoice: 'Có trong sổ, không có HĐĐT', AmountDifference: 'Lệch tiền hàng', VatDifference: 'Lệch thuế',
@@ -40,8 +40,8 @@ function Reconciliation() {
   return (
     <>
       <div className="toolbar">
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" disabled={busy} onClick={load}>Đối chiếu</button>
       </div>
       <ErrorBox error={error} />
@@ -71,14 +71,14 @@ function Listing() {
     <>
       <div className="toolbar">
         <label>Loại<select value={direction} onChange={e => setDirection(e.target.value as typeof direction)}><option value="Input">Đầu vào</option><option value="Output">Đầu ra</option></select></label>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" disabled={busy} onClick={load}>Xem</button>
       </div>
       <ErrorBox error={error} />
       {rows && <div className="scroll"><table className="grid">
         <thead><tr><th>Ký hiệu/Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>MST</th><th>Tên</th><th>Thuế suất</th><th className="num">Tiền hàng</th><th className="num">Thuế</th></tr></thead>
-        <tbody>{rows.flatMap(r => r.byRate.map(b => <tr key={r.invoiceId + b.rate}><td>{r.series}/{r.invoiceNo}{r.purpose !== 'Normal' ? ` (${r.purpose})` : ''}</td><td>{r.invoiceDate}</td><td>{r.postingDate}</td>
+        <tbody>{rows.flatMap(r => r.byRate.map(b => <tr key={r.invoiceId + b.rate}><td>{r.series}/{r.invoiceNo}{r.purpose !== 'Normal' ? ` (${r.purpose})` : ''}</td><td>{formatDate(r.invoiceDate)}</td><td>{formatDate(r.postingDate)}</td>
           <td>{r.counterpartyTaxCode ?? <span className="muted">thiếu MST</span>}</td><td>{r.counterpartyName}</td><td>{b.rate === 'KCT' ? 'KCT' : b.rate + '%'}</td><td className="num">{formatMoney(b.amount)}</td><td className="num">{formatMoney(b.vat)}</td></tr>))}</tbody>
       </table></div>}
     </>
@@ -137,8 +137,8 @@ function Declarations() {
       <div className="panel">
         <p className="muted">Nhập số liệu đã kê khai theo mẫu tờ khai đang dùng (mã & tên chỉ tiêu do kế toán nhập — hệ thống không mô phỏng mẫu tờ khai). Chỉ tiêu có “so với” sẽ được đối chiếu với sổ.</p>
         <div className="form-row">
-          <label>Kỳ từ<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-          <label>đến<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+          <label>Kỳ từ<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+          <label>đến<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
           <button className="primary" style={{ alignSelf: 'flex-end' }} disabled={busy} onClick={save}>Lưu</button>
         </div>
         <table className="grid">
@@ -155,7 +155,7 @@ function Declarations() {
       </div>
       <table className="grid">
         <thead><tr><th>Kỳ</th><th>Trạng thái</th><th>Chỉ tiêu</th><th /></tr></thead>
-        <tbody>{list.map(d => <tr key={d.id}><td>{d.periodFrom} → {d.periodTo}</td><td>{d.status === 'Filed' ? `Đã nộp (${d.filingReference})` : 'Nháp'}</td>
+        <tbody>{list.map(d => <tr key={d.id}><td>{formatDate(d.periodFrom)} → {formatDate(d.periodTo)}</td><td>{d.status === 'Filed' ? `Đã nộp (${d.filingReference})` : 'Nháp'}</td>
           <td style={{ whiteSpace: 'normal' }}>{d.lines.map(l => `${l.indicatorCode}: ${formatMoney(l.declaredAmount)}`).join('; ')}</td>
           <td>{d.status !== 'Filed' && <button onClick={() => { const ref = prompt('Mã giao dịch / số tham chiếu nộp tờ khai:'); if (ref) run(async () => { await post(`/vat/declarations/${d.id}/filed`, { filingReference: ref, filedDate: today() }); await load() }) }}>Đánh dấu đã nộp</button>}</td></tr>)}</tbody>
       </table>

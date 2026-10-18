@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ApiError, get, type Account, type Partner } from './api'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
+import { formatDate, parseDate } from './money'
 
 /** "Xuất Excel" for any report table: exact decimal values, typed numeric columns. */
 export function ExportButton({ fileName, sheet, columns, rows, disabled }: { fileName: string; sheet: string; columns: Column[]; rows: Cell[][]; disabled?: boolean }) {
@@ -132,4 +133,44 @@ export const TYPE_VI: Record<string, string> = {
   CR: 'Phiếu thu', CP: 'Phiếu chi', BR: 'Báo Có', BP: 'Báo Nợ',
   IR: 'Nhập kho', II: 'Xuất kho', IC: 'Tính giá xuất kho', PI: 'Hóa đơn mua', SI: 'Hóa đơn bán',
   DEP: 'Khấu hao / phân bổ', FAD: 'Ghi giảm tài sản', LIA: 'Trích lãi vay',
+}
+
+
+/**
+ * Ô nhập ngày theo kiểu Việt Nam (dd/MM/yyyy), không phụ thuộc ngôn ngữ của trình duyệt. Giá trị trao đổi vẫn là "yyyy-mm-dd" (hoặc rỗng).
+ * Gõ số tự chèn dấu "/"; rời ô mà ngày sai thì trả về giá trị trước đó. Nút lịch mở bộ chọn ngày của trình duyệt.
+ */
+export function DateInput({ value, onChange, disabled, 'aria-label': ariaLabel, className }:
+  { value: string; onChange: (e: { target: { value: string } }) => void; disabled?: boolean; 'aria-label'?: string; className?: string }) {
+  const [text, setText] = useState(formatDate(value))
+  const [bad, setBad] = useState(false)
+  const picker = useRef<HTMLInputElement>(null)
+  useEffect(() => { setText(formatDate(value)); setBad(false) }, [value])
+  const type = (raw: string) => {
+    const digits = raw.replace(/[^\d]/g, '').slice(0, 8)
+    const masked = digits.length > 4 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}` : digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits
+    setText(raw.length < text.length ? raw : masked)   // xóa lùi thì giữ nguyên chuỗi đang sửa
+    if (digits.length === 8) {
+      const iso = parseDate(masked)
+      setBad(iso === null)
+      if (iso !== null && iso !== value) onChange({ target: { value: iso } })
+    } else setBad(false)
+  }
+  const commit = () => {
+    if (text.trim() === '') { setBad(false); if (value !== '') onChange({ target: { value: '' } }); return }
+    const iso = parseDate(text)
+    if (iso === null) { setText(formatDate(value)); setBad(false); return }
+    setText(formatDate(iso)); setBad(false)
+    if (iso !== value) onChange({ target: { value: iso } })
+  }
+  return (
+    <span className={`date-input${bad ? ' bad' : ''}${className ? ' ' + className : ''}`}>
+      <input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" maxLength={10} disabled={disabled} aria-label={ariaLabel} aria-invalid={bad || undefined}
+        value={text} onChange={e => type(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit() }} />
+      <button type="button" className="cal" tabIndex={-1} disabled={disabled} aria-label="Chọn ngày" onClick={() => picker.current?.showPicker?.()}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+      </button>
+      <input ref={picker} type="date" className="native" tabIndex={-1} aria-hidden value={value} onChange={e => onChange({ target: { value: e.target.value } })} />
+    </span>
+  )
 }

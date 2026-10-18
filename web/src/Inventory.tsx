@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { formatMoney, parseMoney, today, formatDate } from './money'
 import type { Order } from './Orders'
 
 interface Warehouse { id: string; code: string; name: string; policies: { method: string; effectiveFrom: string }[] }
@@ -89,7 +89,7 @@ function StockDocs() {
           <label>Loại phiếu<select value={type} onChange={e => setType(e.target.value as typeof type)}>{Object.entries(TYPE_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label>{type === 'Transfer' ? 'Kho xuất' : 'Kho'}<select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}><option value="">— chọn —</option>{warehouses.map(w => <option key={w.id} value={w.id}>{whLabel(w)}</option>)}</select></label>
           {type === 'Transfer' && <label>Kho nhận<select value={toWarehouseId} onChange={e => setToWarehouseId(e.target.value)}><option value="">— chọn —</option>{warehouses.map(w => <option key={w.id} value={w.id}>{whLabel(w)}</option>)}</select></label>}
-          <label>Ngày<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+          <label>Ngày<DateInput value={date} onChange={e => setDate(e.target.value)} /></label>
           {type !== 'Transfer' && <label>Đối tượng<PartnerSelect partners={partners} value={partnerId} onChange={setPartnerId} /></label>}
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={description} onChange={e => setDescription(e.target.value)} /></label>
           <button className="primary" onClick={save} disabled={busy} style={{ alignSelf: 'flex-end' }}>Lưu nháp</button>
@@ -113,7 +113,7 @@ function StockDocs() {
         <table className="grid">
           <thead><tr><th>Ngày</th><th>Số</th><th>Loại</th><th>Kho</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{list.map(d => (
-            <tr key={d.id}><td>{d.postingDate}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
+            <tr key={d.id}><td>{formatDate(d.postingDate)}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
                 {d.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
@@ -147,8 +147,8 @@ function Summary() {
   return (
     <>
       <div className="toolbar">
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" onClick={load} disabled={busy}>Xem</button>
         <ExportButton fileName={'NXT_' + from + '_' + to} sheet="Nhập xuất tồn" disabled={!rows}
           columns={[{ header: 'Kho' }, { header: 'Mã vật tư' }, { header: 'Tên vật tư', width: 30 }, { header: 'ĐVT' }, ...['Tồn đầu SL', 'Tồn đầu GT', 'Nhập SL', 'Nhập GT', 'Xuất SL', 'Xuất GT', 'Tồn cuối SL', 'Tồn cuối GT', 'Chờ tính giá'].map(h => ({ header: h, numeric: true }))]}
@@ -182,14 +182,14 @@ function StockCard() {
       <div className="toolbar">
         <label>Kho<select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}><option value="">— chọn —</option>{warehouses.map(w => <option key={w.id} value={w.id}>{w.code}</option>)}</select></label>
         <label>Vật tư<select value={itemId} onChange={e => setItemId(e.target.value)}><option value="">— chọn —</option>{items.map(i => <option key={i.id} value={i.id}>{i.code} – {i.name}</option>)}</select></label>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" onClick={load} disabled={busy || !warehouseId || !itemId}>Xem</button>
       </div>
       <ErrorBox error={error} />
       {rows && <table className="grid">
         <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Diễn giải</th><th className="num">Nhập</th><th className="num">Xuất</th><th className="num">Giá trị</th><th className="num">Tồn SL</th><th className="num">Tồn GT</th></tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i}><td>{r.date}</td><td>{r.documentNumber}</td><td>{r.description}</td>
+        <tbody>{rows.map((r, i) => <tr key={i}><td>{formatDate(r.date)}</td><td>{r.documentNumber}</td><td>{r.description}</td>
           <td className="num">{r.inQty === '0' ? '' : formatMoney(r.inQty)}</td><td className="num">{r.outQty === '0' ? '' : formatMoney(r.outQty)}</td>
           <td className="num">{r.value == null ? <span className="muted">chờ tính giá</span> : formatMoney(r.value)}</td>
           <td className="num">{formatMoney(r.balanceQty)}</td><td className="num">{r.balanceValue == null ? '—' : formatMoney(r.balanceValue)}</td></tr>)}</tbody>
@@ -217,7 +217,7 @@ function Costing() {
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="toolbar">
         <label>Kho (bình quân cuối tháng)<select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}><option value="">— chọn —</option>{monthly.map(w => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}</select></label>
-        <label>Kỳ<select value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">— chọn —</option>{periods.map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
+        <label>Kỳ<select value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">— chọn —</option>{periods.map(p => <option key={p.id} value={p.id}>{formatDate(p.startDate).slice(3)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
         <button className="primary" disabled={busy || !warehouseId || !periodId} onClick={() => run(async () => { await post('/costing-runs', { warehouseId, periodId }); setInfo('Đã tính giá và ghi sổ giá vốn xuất kho của kỳ.'); await load() })}>Tính giá</button>
       </div>
       <table className="grid">
@@ -295,8 +295,8 @@ function Bdmt() {
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="toolbar">
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<DateInput value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={to} onChange={e => setTo(e.target.value)} /></label>
         <button onClick={() => load()} disabled={busy}>Xem</button>
         <span className="muted">BDMT = MT × độ khô % ÷ 100 · không tự hạch toán chênh lệch BDMT</span>
       </div>
@@ -314,12 +314,12 @@ function Bdmt() {
         <table className="grid">
           <thead><tr><th>Ngày</th><th>Phiếu</th><th>Vật tư</th><th className="num">MT trên phiếu</th><th>Loại đo</th><th>Độ khô %</th><th>MT theo chứng thư</th><th>Số chứng thư / phiếu đo</th><th>Đơn vị giám định</th><th>Ngày</th><th /></tr></thead>
           <tbody>{pending.map(p => (
-            <tr key={key(p)}><td>{p.postingDate}</td><td>{p.documentNumber}/{p.lineNo}</td><td>{p.itemCode}</td><td className="num">{formatMoney(p.quantity)}</td><td>{KIND_VI[p.expectedKind]}</td>
+            <tr key={key(p)}><td>{formatDate(p.postingDate)}</td><td>{p.documentNumber}/{p.lineNo}</td><td>{p.itemCode}</td><td className="num">{formatMoney(p.quantity)}</td><td>{KIND_VI[p.expectedKind]}</td>
               <td><input className="num" aria-label="Độ khô %" size={6} value={f(p).dryness} onChange={e => setF(p, { dryness: e.target.value })} /></td>
               <td><input className="num" aria-label="MT theo chứng thư" size={8} placeholder="= phiếu" value={f(p).mt} onChange={e => setF(p, { mt: e.target.value })} /></td>
               <td><input aria-label="Số chứng thư" value={f(p).evidenceNo} onChange={e => setF(p, { evidenceNo: e.target.value })} placeholder={p.expectedKind === 'Shipment' ? 'Chứng thư (bắt buộc)' : 'Phiếu đo'} /></td>
               <td><input aria-label="Đơn vị giám định" value={f(p).issuer} onChange={e => setF(p, { issuer: e.target.value })} /></td>
-              <td><input type="date" aria-label="Ngày chứng từ" value={f(p).date} onChange={e => setF(p, { date: e.target.value })} /></td>
+              <td><DateInput aria-label="Ngày chứng từ" value={f(p).date} onChange={e => setF(p, { date: e.target.value })} /></td>
               <td><button className="primary" disabled={busy} onClick={() => save(p)}>Ghi nhận</button></td></tr>))}
             {pending.length === 0 && <tr><td colSpan={11} className="muted">Không có dòng chờ kết quả đo.</td></tr>}
           </tbody>

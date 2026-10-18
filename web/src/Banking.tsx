@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { addMoney, formatMoney, parseMoney, today, formatDate } from './money'
 
 interface PaymentOrder { id: string; number: string; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
 
@@ -49,7 +49,7 @@ function PaymentOrders() {
           <label>Tài khoản chi<AccountSelect accounts={accounts} value={form.bankAccountId} onChange={v => setForm(f => ({ ...f, bankAccountId: v }))} filter={a => a.cashKind === 'Bank'} /></label>
           <label>Nhà cung cấp<PartnerSelect partners={partners} value={form.partnerId} onChange={v => setForm(f => ({ ...f, partnerId: v }))} /></label>
           <label>Số tiền<input className="num" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} onBlur={() => { const p = parseMoney(form.amount); if (p) setForm(f => ({ ...f, amount: formatMoney(p) })) }} /></label>
-          <label>Ngày đề nghị<input type="date" value={form.requestedDate} onChange={e => setForm(f => ({ ...f, requestedDate: e.target.value }))} /></label>
+          <label>Ngày đề nghị<DateInput value={formatDate(form.requestedDate)} onChange={e => setForm(f => ({ ...f, requestedDate: e.target.value }))} /></label>
           <label>Số TK thụ hưởng<input value={form.beneficiaryAccountNo} onChange={e => setForm(f => ({ ...f, beneficiaryAccountNo: e.target.value }))} /></label>
           <label>Ngân hàng thụ hưởng<input value={form.beneficiaryBank} onChange={e => setForm(f => ({ ...f, beneficiaryBank: e.target.value }))} /></label>
           <label style={{ flex: 1, minWidth: 220 }}>Nội dung<input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></label>
@@ -61,7 +61,7 @@ function PaymentOrders() {
           <thead><tr><th>Số</th><th>Ngày</th><th>NCC</th><th>Nội dung</th><th className="num">Số tiền</th><th>Trạng thái</th><th>Mã GD NH</th><th>Thao tác</th></tr></thead>
           <tbody>{list.map(p => (
             <tr key={p.id}>
-              <td>{p.number}</td><td>{p.requestedDate}</td><td>{partnerName(p.partnerId)}</td><td>{p.description}</td>
+              <td>{p.number}</td><td>{formatDate(p.requestedDate)}</td><td>{partnerName(p.partnerId)}</td><td>{p.description}</td>
               <td className="num">{formatMoney(p.amount)}</td><td><span className="badge">{PO_STATUS[p.status] ?? p.status}</span></td><td>{p.bankReference}</td>
               <td style={{ display: 'flex', gap: 4 }}>
                 {p.status === 'Created' && <button onClick={() => act(() => post(`/payment-orders/${p.id}/approve`), `Đã duyệt ${p.number}.`)}>Duyệt</button>}
@@ -141,14 +141,14 @@ function Reconciliation() {
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="toolbar">
         <label>Tài khoản ngân hàng<AccountSelect accounts={accounts} value={bankAccountId} onChange={setBankAccountId} filter={a => a.cashKind === 'Bank'} /></label>
-        <label>Đến ngày<input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
+        <label>Đến ngày<DateInput value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
         <button className="primary" onClick={load} disabled={busy || !bankAccountId}>Xem đối chiếu</button>
       </div>
       <details className="panel">
         <summary>Nhập sao kê (CSV: <code>yyyy-mm-dd;số tiền (+ vào / − ra);mã GD;nội dung</code>)</summary>
         <div className="form-row" style={{ marginTop: 8 }}>
-          <label>Từ ngày<input type="date" value={hdr.fromDate} onChange={e => setHdr(h => ({ ...h, fromDate: e.target.value }))} /></label>
-          <label>Đến ngày<input type="date" value={hdr.toDate} onChange={e => setHdr(h => ({ ...h, toDate: e.target.value }))} /></label>
+          <label>Từ ngày<DateInput value={formatDate(hdr.fromDate)} onChange={e => setHdr(h => ({ ...h, fromDate: e.target.value }))} /></label>
+          <label>Đến ngày<DateInput value={formatDate(hdr.toDate)} onChange={e => setHdr(h => ({ ...h, toDate: e.target.value }))} /></label>
           <label>Số dư đầu<input className="num" value={hdr.opening} onChange={e => setHdr(h => ({ ...h, opening: e.target.value }))} /></label>
           <label>Số dư cuối<input className="num" value={hdr.closing} onChange={e => setHdr(h => ({ ...h, closing: e.target.value }))} /></label>
           <label>Tên file<input value={hdr.sourceName} onChange={e => setHdr(h => ({ ...h, sourceName: e.target.value }))} /></label>
@@ -170,7 +170,7 @@ function Reconciliation() {
                 <tr key={l.id}><td>{l.transactionDate}</td><td>{l.bankReference}</td><td>{l.description}</td><td className="num">{formatMoney(l.amount)}</td>
                   <td>{l.candidates.length === 0 ? <span className="muted">Chưa có bút toán tương ứng </span> : l.candidates.map(c => (
                     <button key={c.journalLineId} onClick={() => run(async () => { await post('/bank-reconciliation/confirm', { statementLineId: l.id, journalLineId: c.journalLineId }); await load() })}>
-                      Khớp {c.voucherNumber} ({c.postingDate}, điểm {c.score})</button>))}
+                      Khớp {c.voucherNumber} ({formatDate(c.postingDate)}, điểm {c.score})</button>))}
                     <button onClick={() => run(async () => {
                       const s = await get<{ accountId: string | null; reason: string }>(`/bank-statement-lines/${l.id}/suggestion`)
                       setDraft({ lineId: l.id, accountId: s.accountId ?? '', description: l.description, reason: s.reason })
@@ -191,7 +191,7 @@ function Reconciliation() {
             <strong>Bút toán chỉ có trên sổ ({report.bookOnly.length})</strong>
             <table className="grid">
               <thead><tr><th>Ngày</th><th>Số CT</th><th>Diễn giải</th><th className="num">Số tiền</th></tr></thead>
-              <tbody>{report.bookOnly.map(b => <tr key={b.journalLineId}><td>{b.postingDate}</td><td>{b.voucherNumber}</td><td>{b.description}</td><td className="num">{formatMoney(b.signedAmount)}</td></tr>)}</tbody>
+              <tbody>{report.bookOnly.map(b => <tr key={b.journalLineId}><td>{formatDate(b.postingDate)}</td><td>{b.voucherNumber}</td><td>{b.description}</td><td className="num">{formatMoney(b.signedAmount)}</td></tr>)}</tbody>
             </table>
           </div>
           <div className="panel">

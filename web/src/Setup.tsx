@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
-import { AccountSelect, ErrorBox, Modal, useAction } from './common'
+import { AccountSelect, ErrorBox, Modal, useAction, DateInput } from './common'
 import { ImportData } from './ImportData'
+import { formatDate } from './money'
 
 const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', approval: 'Quy trình duyệt', import: 'Nhập từ Excel/CSV' } as const
 
@@ -258,7 +259,7 @@ function Stock() {
       <section className="panel">
         <h3>Kho</h3>
         <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>Phương pháp tính giá xuất kho (hiệu lực từ)</th></tr></thead>
-          <tbody>{whs.map(w => <tr key={w.id}><td>{w.code}</td><td>{w.name}</td><td>{w.policies.map(p => `${METHOD_VI[p.method] ?? p.method} (từ ${p.effectiveFrom})`).join('; ') || <span className="muted">chưa thiết lập — chưa nhập xuất được</span>}</td></tr>)}</tbody></table>
+          <tbody>{whs.map(w => <tr key={w.id}><td>{w.code}</td><td>{w.name}</td><td>{w.policies.map(p => `${METHOD_VI[p.method] ?? p.method} (từ ${formatDate(p.effectiveFrom)})`).join('; ') || <span className="muted">chưa thiết lập — chưa nhập xuất được</span>}</td></tr>)}</tbody></table>
         <div className="form-row" style={{ marginTop: 8 }}>
           <label>Mã kho <input value={wh.code} onChange={e => setWh(x => ({ ...x, code: e.target.value.toUpperCase() }))} /></label>
           <label>Tên kho <input value={wh.name} onChange={e => setWh(x => ({ ...x, name: e.target.value }))} /></label>
@@ -267,7 +268,7 @@ function Stock() {
         <div className="form-row">
           <label>Kho <select value={policy.warehouseId} onChange={e => setPolicy(p => ({ ...p, warehouseId: e.target.value }))}><option value="">—</option>{whs.map(w => <option key={w.id} value={w.id}>{w.code}</option>)}</select></label>
           <label>Phương pháp <select value={policy.method} onChange={e => setPolicy(p => ({ ...p, method: e.target.value }))}>{Object.entries(METHOD_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-          <label>Hiệu lực từ (ngày đầu năm tài chính) <input type="date" value={policy.effectiveFrom} onChange={e => setPolicy(p => ({ ...p, effectiveFrom: e.target.value }))} /></label>
+          <label>Hiệu lực từ (ngày đầu năm tài chính) <DateInput value={formatDate(policy.effectiveFrom)} onChange={e => setPolicy(p => ({ ...p, effectiveFrom: e.target.value }))} /></label>
           <label>Căn cứ / quyết định <input value={policy.note} onChange={e => setPolicy(p => ({ ...p, note: e.target.value }))} /></label>
           <button disabled={busy || !policy.warehouseId || !policy.effectiveFrom || !policy.note} onClick={() => act(() => post('/warehouses/costing-policy', policy), 'Đã đặt phương pháp tính giá.')}>Đặt phương pháp</button>
         </div>
@@ -308,8 +309,8 @@ function Years() {
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="form-row">
         <label>Mã năm <input value={y.code} onChange={e => setY(x => ({ ...x, code: e.target.value }))} placeholder="2027" /></label>
-        <label>Từ ngày <input type="date" value={y.startDate} onChange={e => setY(x => ({ ...x, startDate: e.target.value }))} /></label>
-        <label>Đến ngày <input type="date" value={y.endDate} onChange={e => setY(x => ({ ...x, endDate: e.target.value }))} /></label>
+        <label>Từ ngày <DateInput value={formatDate(y.startDate)} onChange={e => setY(x => ({ ...x, startDate: e.target.value }))} /></label>
+        <label>Đến ngày <DateInput value={formatDate(y.endDate)} onChange={e => setY(x => ({ ...x, endDate: e.target.value }))} /></label>
         <button disabled={busy || !y.code || !y.startDate || !y.endDate} onClick={() => run(async () => { await post('/fiscal-years', y); setInfo(`Đã mở năm tài chính ${y.code}.`); setY({ code: '', startDate: '', endDate: '' }) })}>Mở năm</button>
       </div>
     </section>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { formatMoney, parseMoney, today, formatDate } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
@@ -30,12 +30,12 @@ export function TradeView() {
     const un = await get<Uninvoiced[]>(`/reports/uninvoiced?kind=${kind}&asOf=${today()}`)
     const c: Candidate[] = un.map(u => ({
       key: `${u.stockDocumentId}:${u.lineNo}`, docId: u.stockDocumentId, lineNo: u.lineNo, bdmt: u.bdmt,
-      remaining: u.quantity, label: `${u.stockDocumentNumber}/${u.lineNo} · ${u.postingDate} · ${u.itemCode} ${formatMoney(u.quantity)}${u.bdmt ? ` · ${formatMoney(u.bdmt)} BDMT` : ' · chưa có BDMT'}`,
+      remaining: u.quantity, label: `${u.stockDocumentNumber}/${u.lineNo} · ${formatDate(u.postingDate)} · ${u.itemCode} ${formatMoney(u.quantity)}${u.bdmt ? ` · ${formatMoney(u.bdmt)} BDMT` : ' · chưa có BDMT'}`,
     }))
     if (kind === 'Purchase') {
       const drafts = (await get<StockDoc[]>('/stock-documents')).filter(d => d.type === 'Receipt' && d.status === 'Draft')
       for (const d of drafts) for (const l of d.lines)
-        c.push({ key: `${d.id}:${l.lineNo}`, docId: d.id, lineNo: l.lineNo, bdmt: null, remaining: l.quantity, label: `${d.number}/${l.lineNo} · ${d.postingDate} · phiếu nhập NHÁP ${formatMoney(l.quantity)} (ghi sổ cùng hóa đơn)` })
+        c.push({ key: `${d.id}:${l.lineNo}`, docId: d.id, lineNo: l.lineNo, bdmt: null, remaining: l.quantity, label: `${d.number}/${l.lineNo} · ${formatDate(d.postingDate)} · phiếu nhập NHÁP ${formatMoney(l.quantity)} (ghi sổ cùng hóa đơn)` })
     }
     setCandidates(c)
   }), [run, kind])
@@ -79,9 +79,9 @@ export function TradeView() {
           <label>{kind === 'Sales' ? 'Khách hàng' : 'Nhà cung cấp'}<PartnerSelect partners={partners} value={head.partnerId} onChange={v => setHead(h => ({ ...h, partnerId: v }))} /></label>
           <label>Ký hiệu HĐ<input value={head.series} onChange={e => setHead(h => ({ ...h, series: e.target.value }))} /></label>
           <label>Số HĐ<input value={head.no} onChange={e => setHead(h => ({ ...h, no: e.target.value }))} /></label>
-          <label>Ngày hóa đơn<input type="date" value={head.invoiceDate} onChange={e => setHead(h => ({ ...h, invoiceDate: e.target.value }))} /></label>
-          <label>Ngày hạch toán<input type="date" value={head.postingDate} onChange={e => setHead(h => ({ ...h, postingDate: e.target.value }))} /></label>
-          <label>Hạn thanh toán<input type="date" value={head.dueDate} onChange={e => setHead(h => ({ ...h, dueDate: e.target.value }))} /></label>
+          <label>Ngày hóa đơn<DateInput value={formatDate(head.invoiceDate)} onChange={e => setHead(h => ({ ...h, invoiceDate: e.target.value }))} /></label>
+          <label>Ngày hạch toán<DateInput value={formatDate(head.postingDate)} onChange={e => setHead(h => ({ ...h, postingDate: e.target.value }))} /></label>
+          <label>Hạn thanh toán<DateInput value={formatDate(head.dueDate)} onChange={e => setHead(h => ({ ...h, dueDate: e.target.value }))} /></label>
           <label>Nguyên tệ<select value={head.currency} onChange={e => setHead(h => ({ ...h, currency: e.target.value }))}><option value="">VND</option><option>USD</option><option>EUR</option><option>CNY</option><option>JPY</option></select></label>
           {head.currency && <label>Tỷ giá<input className="num" value={head.rate} onChange={e => setHead(h => ({ ...h, rate: e.target.value }))} /></label>}
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>
@@ -113,7 +113,7 @@ export function TradeView() {
         <table className="grid">
           <thead><tr><th>Số</th><th>Ký hiệu / Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Đối tượng</th><th className="num">Tiền hàng (VND)</th><th className="num">Thuế</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{list.map(i => (
-            <tr key={i.id}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{i.invoiceDate}</td><td>{i.postingDate}</td>
+            <tr key={i.id}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
@@ -190,11 +190,11 @@ function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) 
       <div className="form-row">
         <label>Loại<select value={purpose} onChange={e => setPurpose(e.target.value as typeof purpose)}><option value="Return">{purchase ? 'Hàng mua trả lại' : 'Hàng bán bị trả lại'}</option><option value="Discount">{purchase ? 'Giảm giá hàng mua' : 'Giảm giá / chiết khấu'}</option><option value="Increase">Điều chỉnh tăng</option></select></label>
         <label>Dòng HĐ gốc<input className="num" size={3} value={lineNo} onChange={e => setLineNo(e.target.value)} /></label>
-        <label>Ngày<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+        <label>Ngày<DateInput value={date} onChange={e => setDate(e.target.value)} /></label>
         {purpose === 'Return' ? <>
           <label>SL trả lại (MT)<input className="num" value={qty} onChange={e => setQty(e.target.value)} /></label>
           <button style={{ alignSelf: 'flex-end' }} disabled={busy} onClick={makeReceipt}>{purchase ? '1. Lập phiếu xuất trả NCC' : '1. Lập phiếu nhập trả lại'}</button>
-          <label>{purchase ? 'Phiếu xuất trả' : 'Phiếu nhập trả lại'}<select value={receiptId} onChange={e => setReceiptId(e.target.value)}><option value="">— chọn —</option>{receipts.map(r => <option key={r.id} value={r.id}>{r.number} · {r.postingDate}</option>)}</select></label>
+          <label>{purchase ? 'Phiếu xuất trả' : 'Phiếu nhập trả lại'}<select value={receiptId} onChange={e => setReceiptId(e.target.value)}><option value="">— chọn —</option>{receipts.map(r => <option key={r.id} value={r.id}>{r.number} · {formatDate(r.postingDate)}</option>)}</select></label>
         </> : <label>Số tiền ({invoice.currency ?? 'VND'})<input className="num" value={amount} onChange={e => setAmount(e.target.value)} /></label>}
         <label>Ký hiệu HĐ<input value={series} onChange={e => setSeries(e.target.value)} /></label>
         <label>Số HĐ điều chỉnh<input value={no} onChange={e => setNo(e.target.value)} /></label>

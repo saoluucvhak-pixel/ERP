@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog, DateInput } from './common'
+import { addMoney, formatMoney, parseMoney, today, formatDate } from './money'
 
 interface RegisterRow {
   id: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; status: 'Draft' | 'Active' | 'Disposed' | 'Cancelled'
@@ -55,12 +55,12 @@ export function AssetsView() {
     <>
       <div className="toolbar">
         <h2>Tài sản cố định & công cụ dụng cụ</h2>
-        <label>Tại ngày <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
+        <label>Tại ngày <DateInput value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
         <button onClick={() => load()}>Tải lại</button>
         <button className="primary" onClick={() => { setCreating(true); setDetail(null) }}>Thêm thẻ tài sản</button>
         <ExportButton fileName={'So_TSCD_' + asOf} sheet="Sổ tài sản" columns={[{ header: 'Mã' }, { header: 'Tên', width: 30 }, { header: 'Loại' }, { header: 'Trạng thái' }, { header: 'TK' }, { header: 'Ngày sử dụng' },
           { header: 'Số tháng', numeric: true }, { header: 'Nguyên giá', numeric: true }, { header: 'Hao mòn / đã phân bổ', numeric: true }, { header: 'Còn lại', numeric: true }, { header: 'Ngày ghi giảm' }]}
-          rows={rows.map(r => [r.code, r.name, CLASS_VI[r.class], STATUS_VI[r.status], r.assetAccountCode, r.inServiceDate, String(r.usefulLifeMonths), r.originalCost, r.accumulated, r.netBookValue, r.disposalDate])} />
+          rows={rows.map(r => [r.code, r.name, CLASS_VI[r.class], STATUS_VI[r.status], r.assetAccountCode, formatDate(r.inServiceDate), String(r.usefulLifeMonths), r.originalCost, r.accumulated, r.netBookValue, r.disposalDate])} />
       </div>
       <p className="muted">Nguyên giá lấy từ bút toán đã ghi sổ (hóa đơn mua, chứng từ, số dư đầu) nên sổ tài sản luôn khớp sổ cái. Phương pháp đường thẳng; cách tính tháng đầu/cuối là cấu hình [CẦN XÁC MINH căn cứ pháp lý].</p>
       <ErrorBox error={error} />
@@ -75,7 +75,7 @@ export function AssetsView() {
           <tr key={r.id}>
             <td>{r.code}</td><td>{r.name}</td><td>{CLASS_VI[r.class]}</td>
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${r.disposalDate}` : ''}</span></td>
-            <td>{r.assetAccountCode}</td><td>{r.inServiceDate}</td><td>{r.usefulLifeMonths}</td>
+            <td>{r.assetAccountCode}</td><td>{formatDate(r.inServiceDate)}</td><td>{r.usefulLifeMonths}</td>
             <td className="num">{formatMoney(r.originalCost)}</td><td className="num">{formatMoney(r.accumulated)}</td><td className="num">{formatMoney(r.netBookValue)}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => run(async () => setDetail(await get<Detail>(`/assets/${r.id}`)))}>Chi tiết</button>
@@ -106,7 +106,7 @@ export function AssetsView() {
             {detail.asset.remainingLifeMonths ? `; chuyển từ hệ thống cũ: hao mòn đầu ${formatMoney(detail.asset.openingAccumulated)}, còn ${detail.asset.remainingLifeMonths} tháng` : ''}</p>
           <h4>Nguồn nguyên giá</h4>
           <table className="grid"><thead><tr><th>Chứng từ</th><th>Ngày</th><th>TK</th><th className="num">Dòng bút toán</th><th className="num">Gán cho tài sản</th></tr></thead>
-            <tbody>{detail.sources.map(x => <tr key={x.journalLineId}><td>{x.voucherNumber}</td><td>{x.postingDate}</td><td>{x.accountCode}</td>
+            <tbody>{detail.sources.map(x => <tr key={x.journalLineId}><td>{x.voucherNumber}</td><td>{formatDate(x.postingDate)}</td><td>{x.accountCode}</td>
               <td className="num">{formatMoney(x.lineAmount)}</td><td className="num">{formatMoney(x.amount)}</td></tr>)}</tbody></table>
           <h4>Kế hoạch khấu hao / phân bổ</h4>
           <table className="grid"><thead><tr><th>Tháng</th><th className="num">Kế hoạch</th><th className="num">Lũy kế</th><th className="num">Đã ghi sổ</th></tr></thead>
@@ -121,7 +121,7 @@ export function AssetsView() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <select value={periodId || nextPeriod?.id || ''} onChange={e => setPeriodId(e.target.value)} aria-label="Kỳ khấu hao">
             <option value="">— chọn kỳ —</option>
-            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}</option>)}
+            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{formatDate(p.startDate).slice(3)}</option>)}
           </select>
           <button className="primary" disabled={busy || !(periodId || nextPeriod)} onClick={() => {
             const id = periodId || nextPeriod!.id
@@ -160,7 +160,7 @@ function Dispose({ row, accounts, busy, onSubmit, onCancel }: {
     <section className="panel">
       <h3>Ghi giảm {row.code} – {row.name}</h3>
       <p className="muted">Hệ thống ghi khấu hao của tháng ghi giảm theo cách tính tháng đã chọn, xóa nguyên giá và hao mòn; giá trị còn lại ghi vào TK chọn dưới đây. Tiền thu thanh lý lập hóa đơn bán riêng.</p>
-      <label>Ngày ghi giảm <input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+      <label>Ngày ghi giảm <DateInput value={date} onChange={e => setDate(e.target.value)} /></label>
       <label>TK nhận giá trị còn lại <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} ariaLabel="TK giá trị còn lại" /></label>
       <label>Căn cứ / diễn giải <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Biên bản thanh lý số…" /></label>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -215,7 +215,7 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
         <label>TK tài sản <AccountSelect accounts={accounts} value={f.assetAccountId} onChange={v => set('assetAccountId', v)} filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK tài sản" /></label>
         {f.class === 'FixedAsset' && <label>TK hao mòn <AccountSelect accounts={accounts} value={f.accumulatedAccountId} onChange={v => set('accumulatedAccountId', v)} ariaLabel="TK hao mòn" /></label>}
         <label>TK chi phí <AccountSelect accounts={accounts} value={f.expenseAccountId} onChange={v => set('expenseAccountId', v)} ariaLabel="TK chi phí" /></label>
-        <label>Ngày đưa vào sử dụng <input type="date" value={f.inServiceDate} onChange={e => set('inServiceDate', e.target.value)} /></label>
+        <label>Ngày đưa vào sử dụng <DateInput value={formatDate(f.inServiceDate)} onChange={e => set('inServiceDate', e.target.value)} /></label>
         <label>Thời gian sử dụng (tháng) <input inputMode="numeric" value={f.usefulLifeMonths} onChange={e => set('usefulLifeMonths', e.target.value)} /></label>
         <label>Giá trị thu hồi ước tính <input inputMode="decimal" value={f.residualValue} onChange={e => set('residualValue', e.target.value)} /></label>
         <label>Tính tháng đầu/cuối <select value={f.proration} onChange={e => set('proration', e.target.value)}>
@@ -224,7 +224,7 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
         {f.takenOver && <>
           <label>Hao mòn lũy kế đến ngày chuyển <input inputMode="decimal" value={f.openingAccumulated} onChange={e => set('openingAccumulated', e.target.value)} /></label>
           <label>Số tháng còn lại <input inputMode="numeric" value={f.remainingLifeMonths} onChange={e => set('remainingLifeMonths', e.target.value)} /></label>
-          <label>Bắt đầu khấu hao trên hệ thống mới <input type="date" value={f.scheduleStartDate} onChange={e => set('scheduleStartDate', e.target.value)} /></label>
+          <label>Bắt đầu khấu hao trên hệ thống mới <DateInput value={f.scheduleStartDate} onChange={e => set('scheduleStartDate', e.target.value)} /></label>
         </>}
       </div>
       <h4>Bút toán hình thành nguyên giá (phát sinh Nợ TK tài sản, đã ghi sổ)</h4>
@@ -233,7 +233,7 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
         <tbody>{candidates.map(c => <tr key={c.journalLineId}>
           <td><input type="checkbox" aria-label={`Chọn ${c.voucherNumber}`} checked={c.journalLineId in picked} onChange={e => setPicked(p => {
             const n = { ...p }; if (e.target.checked) n[c.journalLineId] = remaining(c); else delete n[c.journalLineId]; return n })} /></td>
-          <td>{c.voucherNumber}</td><td>{c.postingDate}</td><td>{c.description}</td><td className="num">{formatMoney(c.lineAmount)}</td><td className="num">{formatMoney(c.assigned)}</td>
+          <td>{c.voucherNumber}</td><td>{formatDate(c.postingDate)}</td><td>{c.description}</td><td className="num">{formatMoney(c.lineAmount)}</td><td className="num">{formatMoney(c.assigned)}</td>
           <td className="num">{c.journalLineId in picked && <input inputMode="decimal" value={picked[c.journalLineId]} aria-label="Số tiền gán"
             onChange={e => setPicked(p => ({ ...p, [c.journalLineId]: e.target.value }))} />}</td>
         </tr>)}</tbody></table>}

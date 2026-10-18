@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, useAction } from './common'
-import { formatMoney } from './money'
+import { ErrorBox, useAction, DateInput } from './common'
+import { formatMoney, formatDate, formatDateTime } from './money'
 import { RolesEditor } from './Roles'
 
 interface Me { id: string; userName: string; fullName: string; isSystemAdmin: boolean }
@@ -76,10 +76,10 @@ function Regimes({ onChange }: { onChange: () => void }) {
       {info && !error && <div className="msg ok">{info}</div>}
       <table className="grid"><thead><tr><th>Chế độ</th><th>Phiên bản</th><th>Hiệu lực</th><th>Căn cứ</th><th>Trạng thái</th></tr></thead>
         <tbody>{list.map(r => <tr key={r.id}>
-          <td>{r.regime} – {r.regimeName}</td><td>{r.version}</td><td>{r.effectiveFrom}{r.effectiveTo ? ` → ${r.effectiveTo}` : ''}</td>
+          <td>{r.regime} – {r.regimeName}</td><td>{r.version}</td><td>{formatDate(r.effectiveFrom)}{r.effectiveTo ? ` → ${formatDate(r.effectiveTo)}` : ''}</td>
           <td>{r.sources.map((s, i) => <div key={i}>{s.ruleGroup}: {s.documentNo}{s.article ? `, ${s.article}` : ''}{s.issuedDate ? ` (${s.issuedDate})` : ''}</div>)}</td>
           <td>{r.status === 'Verified'
-            ? <span>Đã xác minh {r.verifiedAt?.slice(0, 10)} — {r.verificationNote}</span>
+            ? <span>Đã xác minh {formatDate(r.verifiedAt)} — {r.verificationNote}</span>
             : <div className="form-row"><span className="muted">CHƯA xác minh</span>
               <input aria-label={`Nội dung xác minh ${r.version}`} placeholder="Người đối chiếu, văn bản gốc, phạm vi" value={notes[r.id] ?? ''}
                 onChange={e => setNotes(n => ({ ...n, [r.id]: e.target.value }))} style={{ minWidth: 260 }} />
@@ -91,13 +91,13 @@ function Regimes({ onChange }: { onChange: () => void }) {
         <label>Mã chế độ <input value={f.regimeCode} onChange={e => setF(x => ({ ...x, regimeCode: e.target.value.toUpperCase() }))} /></label>
         <label style={{ flex: 1 }}>Tên chế độ <input value={f.regimeName} onChange={e => setF(x => ({ ...x, regimeName: e.target.value }))} /></label>
         <label>Mã phiên bản <input value={f.versionCode} onChange={e => setF(x => ({ ...x, versionCode: e.target.value }))} /></label>
-        <label>Hiệu lực từ <input type="date" value={f.effectiveFrom} onChange={e => setF(x => ({ ...x, effectiveFrom: e.target.value }))} /></label>
-        <label>đến <input type="date" value={f.effectiveTo} onChange={e => setF(x => ({ ...x, effectiveTo: e.target.value }))} /></label>
+        <label>Hiệu lực từ <DateInput value={formatDate(f.effectiveFrom)} onChange={e => setF(x => ({ ...x, effectiveFrom: e.target.value }))} /></label>
+        <label>đến <DateInput value={formatDate(f.effectiveTo)} onChange={e => setF(x => ({ ...x, effectiveTo: e.target.value }))} /></label>
       </div>
       {sources.map((s, i) => <div className="form-row" key={i}>
         <label>Nhóm quy định <input value={s.ruleGroup} onChange={e => src(i, 'ruleGroup', e.target.value)} placeholder="VD: Hệ thống tài khoản" /></label>
         <label>Số văn bản <input value={s.documentNo} onChange={e => src(i, 'documentNo', e.target.value)} /></label>
-        <label>Ngày ban hành <input type="date" value={s.issuedDate ?? ''} onChange={e => src(i, 'issuedDate', e.target.value)} /></label>
+        <label>Ngày ban hành <DateInput value={s.issuedDate ?? ''} onChange={e => src(i, 'issuedDate', e.target.value)} /></label>
         <label>Điều / phụ lục <input value={s.article ?? ''} onChange={e => src(i, 'article', e.target.value)} /></label>
         <label style={{ flex: 1 }}>Đường dẫn văn bản <input value={s.url ?? ''} onChange={e => src(i, 'url', e.target.value)} /></label>
         {sources.length > 1 && <button onClick={() => setSources(x => x.filter((_, j) => j !== i))}>Bỏ</button>}
@@ -142,7 +142,7 @@ function Companies({ reload, onChange }: { reload: number; onChange: () => void 
         <label>Mã số thuế <input value={f.taxCode} onChange={e => setF(x => ({ ...x, taxCode: e.target.value }))} /></label>
         <label>Đồng tiền hạch toán <select value={f.functionalCurrency} onChange={e => setF(x => ({ ...x, functionalCurrency: e.target.value }))}><option>VND</option><option>USD</option></select></label>
         <label>Chế độ kế toán <select value={f.regimeVersionId} onChange={e => setF(x => ({ ...x, regimeVersionId: e.target.value }))}><option value="">—</option>
-          {regimes.map(r => <option key={r.id} value={r.id}>{r.regime} {r.version} (từ {r.effectiveFrom}{r.status === 'Verified' ? ', đã xác minh' : ', CHƯA xác minh'})</option>)}</select></label>
+          {regimes.map(r => <option key={r.id} value={r.id}>{r.regime} {r.version} (từ {formatDate(r.effectiveFrom)}{r.status === 'Verified' ? ', đã xác minh' : ', CHƯA xác minh'})</option>)}</select></label>
         <button disabled={busy || !f.code || !f.name || !f.regimeVersionId} onClick={() => run(async () => {
           await post('/admin/companies', { ...f, taxCode: f.taxCode || null }); setInfo(`Đã tạo công ty ${f.code}. Cấp vai trò cho người dùng ở phần dưới.`)
           setF({ code: '', name: '', taxCode: '', functionalCurrency: 'VND', regimeVersionId: '' }); await load(); onChange()
@@ -237,7 +237,7 @@ function Backups() {
         })}>Sao lưu ngay</button>
       </div>
       <table className="grid"><thead><tr><th>File</th><th>Thời điểm</th><th className="num">Dung lượng</th><th>Ghi chú</th><th /></tr></thead>
-        <tbody>{list.map(b => <tr key={b.fileName}><td>{b.fileName}</td><td>{new Date(b.createdAt).toLocaleString()}</td><td className="num">{formatMoney(String(b.size))}</td><td>{b.note}</td>
+        <tbody>{list.map(b => <tr key={b.fileName}><td>{b.fileName}</td><td>{formatDateTime(b.createdAt)}</td><td className="num">{formatMoney(String(b.size))}</td><td>{b.note}</td>
           <td style={{ display: 'flex', gap: 6 }}><button disabled={busy} onClick={() => check(b.fileName, false)}>Kiểm tra</button>
             <button disabled={busy} onClick={() => check(b.fileName, true)}>Khôi phục ra file mới</button></td></tr>)}</tbody></table>
       {result && <div className={`msg ${result.isValid ? 'ok' : 'error'}`}>
@@ -272,8 +272,8 @@ function AuditLog() {
       <h3>Nhật ký kiểm toán (công ty đang chọn)</h3>
       <ErrorBox error={error} />
       <div className="form-row">
-        <label>Từ <input type="date" value={filter.from} onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} /></label>
-        <label>Đến <input type="date" value={filter.to} onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} /></label>
+        <label>Từ <DateInput value={filter.from} onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} /></label>
+        <label>Đến <DateInput value={filter.to} onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} /></label>
         <label>Hành động bắt đầu bằng <input value={filter.action} onChange={e => setFilter(f => ({ ...f, action: e.target.value }))} placeholder="voucher.post, loan., …" /></label>
         <button disabled={busy} onClick={() => load(0)}>Lọc</button>
         <button disabled={busy} onClick={() => run(async () => {
@@ -283,7 +283,7 @@ function AuditLog() {
       </div>
       {chain && <div className={`msg ${chain.startsWith('Chuỗi băm nhật ký nguyên') ? 'ok' : 'error'}`}>{chain}</div>}
       <div className="scroll"><table className="grid"><thead><tr><th>#</th><th>Thời điểm</th><th>Người dùng</th><th>Máy</th><th>Hành động</th><th>Đối tượng</th><th>Kết quả</th><th>Dữ liệu</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={r.seq}><td>{r.seq}</td><td>{new Date(r.at).toLocaleString()}</td><td>{r.userName}</td><td>{r.device}</td><td>{r.action}</td>
+        <tbody>{rows.map(r => <tr key={r.seq}><td>{r.seq}</td><td>{formatDateTime(r.at)}</td><td>{r.userName}</td><td>{r.device}</td><td>{r.action}</td>
           <td>{r.entityType}{r.entityId ? ` ${r.entityId.slice(0, 8)}` : ''}</td><td>{r.result}</td>
           <td title={r.dataJson ?? ''} style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.dataJson}</td></tr>)}</tbody></table></div>
       <div className="form-row" style={{ marginTop: 6 }}>
