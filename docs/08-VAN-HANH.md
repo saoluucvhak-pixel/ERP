@@ -52,7 +52,7 @@ Production + PostgreSQL: chương trình **từ chối khởi động** nếu `S
 2. Mở giao diện: khi CSDL chưa có người dùng, màn hình đăng nhập chuyển sang **Lần chạy đầu** → tạo quản trị hệ thống (mật khẩu ≥ 10 ký tự). Chỉ làm được một lần.
 3. **Quản trị → Chế độ kế toán**: khai báo phiên bản (mã, hiệu lực, ít nhất một căn cứ pháp lý). Phiên bản mới luôn **CHƯA xác minh**; chỉ bấm *Xác minh* sau khi đã đối chiếu văn bản gốc và ghi rõ người ký.
 4. **Quản trị → Công ty**: tạo công ty (đồng tiền hạch toán, chế độ kế toán).
-5. **Quản trị → Người dùng**: tạo người dùng, cấp vai trò theo công ty. Nguyên tắc: người lập chứng từ khác người duyệt/ghi sổ.
+5. **Quản trị → Người dùng**: tạo người dùng, cấp vai trò theo công ty. Có 3 loại vai trò: *Quản trị* (cài đặt, cấp quyền, nhật ký), *Người duy trì dữ liệu* (danh mục, nhập/xuất, chỉ xem chứng từ), *Người lập / duyệt* (nghiệp vụ). Người lập và người duyệt là một hay hai người do công ty chọn ở **Thiết lập → Lập & duyệt** (mặc định: phải là hai người khác nhau; tắt phải ghi lý do, có nhật ký).
 6. Đăng nhập vào công ty → **Thiết lập**:
    - Năm tài chính (tạo kỳ tháng);
    - Hệ thống tài khoản — nhập hàng loạt ở tab *Nhập từ Excel/CSV* (tải tệp mẫu, *Kiểm tra*, rồi *Nhập*); sau đó **mở TK chi tiết trước khi hạch toán** ở tab *Hệ thống tài khoản* (dạng cây): nút **+ TK con** trên TK cần chi tiết (vd 331 → 3311 phải trả người bán, 3318 hàng về chưa có hóa đơn; 112 → 1121 theo từng ngân hàng). TK cha tự chuyển thành TK tổng hợp; khi TK cha đã có bút toán hoặc đã gắn vai trò thì không chuyển được — phần mềm báo lý do;

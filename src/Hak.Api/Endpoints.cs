@@ -27,6 +27,7 @@ public sealed record PartnerRequest(string Code, string Name, PartnerRoles Roles
 public sealed record LineRequest(Guid AccountId, string Side, decimal Amount, Guid? PartnerId, string? ForeignCurrency, decimal? ForeignAmount, decimal? ExchangeRate, string? Description, string? CashFlowCode = null);
 public sealed record VoucherRequest(string VoucherType, DateOnly VoucherDate, DateOnly PostingDate, string Description, List<LineRequest> Lines, Guid? BranchId = null);
 public sealed record ReasonRequest(string Reason);
+public sealed record ApprovalPolicyRequest(bool RequireDistinctApprover, string? Reason = null);
 public sealed record ReverseRequest(DateOnly ReversalDate, string Reason);
 
 public sealed record LineDto(int LineNo, Guid AccountId, string Side, decimal Amount, Guid? PartnerId, string? ForeignCurrency, decimal? ForeignAmount, decimal? ExchangeRate, string? Description, string? CashFlowCode = null);
@@ -104,6 +105,10 @@ public static class Endpoints
             var fy = await s.CreateFiscalYearAsync(await http.SessionAsync(), r.Code, r.StartDate, r.EndDate);
             return Results.Ok(new { fy.Id, periods = fy.Periods.OrderBy(p => p.PeriodNo).Select(p => new { p.Id, p.PeriodNo, p.StartDate, p.EndDate, status = p.Status.ToString() }) });
         });
+        api.MapGet("/company/approval-policy", async (HttpContext http, SetupService s) =>
+            Results.Ok(new { requireDistinctApprover = await s.GetApprovalPolicyAsync(await http.SessionAsync()) }));
+        api.MapPut("/company/approval-policy", async (HttpContext http, ApprovalPolicyRequest r, SetupService s) =>
+        { await s.SetApprovalPolicyAsync(await http.SessionAsync(), r.RequireDistinctApprover, r.Reason); return Results.NoContent(); });
         api.MapGet("/periods", async (HttpContext http, HakDbContext db) =>
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);

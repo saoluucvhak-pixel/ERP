@@ -35,7 +35,7 @@ const regime = (await call('POST', '/admin/regime-versions', {
 const company = (await call('POST', '/admin/companies', { code: 'DEV01', name: 'Công ty dữ liệu thử', taxCode: '0101234567', functionalCurrency: 'VND', regimeVersionId: regime }, admin)).id
 const ketoan = (await call('POST', '/admin/users', { userName: 'ketoan', fullName: 'Kế toán (dev)', password: creds.ketoan }, admin)).id
 const ktt = (await call('POST', '/admin/users', { userName: 'ktt', fullName: 'Kế toán trưởng (dev)', password: creds.ktt }, admin)).id
-for (const [userId, roleCode] of [[ketoan, 'GL_ACCOUNTANT'], [ktt, 'CHIEF_ACCOUNTANT'], [ktt, 'ADMIN']])
+for (const [userId, roleCode] of [[ketoan, 'ACCOUNTANT'], [ktt, 'ACCOUNTANT'], [ktt, 'ADMIN']])
   await call('POST', '/admin/grants', { userId, companyId: company, roleCode }, admin)
 
 const k = (await call('POST', '/auth/login', { userName: 'ktt', password: creds.ktt })).token

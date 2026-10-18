@@ -61,13 +61,17 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
     }
 
     public Task<PaymentOrder> ApproveAsync(SessionContext ctx, Guid id)
-        => TransitionAsync(ctx, id, Permissions.PaymentOrderApprove, "approve", po => po.Approve(ctx.UserId));
+        => TransitionAsync(ctx, id, Permissions.PaymentOrderApprove, "approve", async po =>
+        {
+            var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
+            po.Approve(ctx.UserId, company.RequireDistinctApprover);
+        });
 
     public Task<PaymentOrder> MarkSentAsync(SessionContext ctx, Guid id)
-        => TransitionAsync(ctx, id, Permissions.BankDocument, "send", po => po.MarkSent(ctx.UserId, clock.UtcNow));
+        => TransitionAsync(ctx, id, Permissions.BankDocument, "send", po => { po.MarkSent(ctx.UserId, clock.UtcNow); return Task.CompletedTask; });
 
     public Task<PaymentOrder> CancelAsync(SessionContext ctx, Guid id, string reason)
-        => TransitionAsync(ctx, id, Permissions.BankDocument, "cancel", po => po.Cancel(reason));
+        => TransitionAsync(ctx, id, Permissions.BankDocument, "cancel", po => { po.Cancel(reason); return Task.CompletedTask; });
 
     /// <summary>
     /// Records the bank's execution and generates the BP Draft voucher (via the posting rule for the order's
@@ -121,14 +125,14 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
         return v;
     }
 
-    private async Task<PaymentOrder> TransitionAsync(SessionContext ctx, Guid id, string permission, string action, Action<PaymentOrder> apply)
+    private async Task<PaymentOrder> TransitionAsync(SessionContext ctx, Guid id, string permission, string action, Func<PaymentOrder, Task> apply)
     {
         ctx.Require(permission);
         return await db.InTransactionAsync(async () =>
         {
             var po = await LoadAsync(ctx, id);
             var from = po.Status;
-            apply(po);
+            await apply(po);
             po.RowVersion++;
             await audit.AppendAsync(ctx.CompanyId, ctx, $"payment_order.{action}", "payment_order", po.Id.ToString(), new { po.Number, from, to = po.Status, po.CancelReason }, po.RowVersion);
             await db.SaveChangesAsync();

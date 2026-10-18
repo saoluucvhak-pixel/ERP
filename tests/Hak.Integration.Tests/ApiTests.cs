@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Hak.Integration.Tests;
 
@@ -57,6 +58,8 @@ public class ApiTests
                 b.UseSetting("ConnectionStrings:Hak", pg.ConnectionString);
             }
         });
+        using (var seed = f.Services.CreateScope())   // this flow keeps using the finer per-function roles
+            await seed.ServiceProvider.GetRequiredService<Hak.Application.Setup.SetupService>().SeedLegacyRolesAsync();
         var anon = f.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/accounts")).StatusCode);
 

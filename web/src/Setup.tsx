@@ -3,7 +3,7 @@ import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, Modal, useAction } from './common'
 import { ImportData } from './ImportData'
 
-const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', import: 'Nhập từ Excel/CSV' } as const
+const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', approval: 'Lập & duyệt', import: 'Nhập từ Excel/CSV' } as const
 
 /** Thiết lập công ty: catalogue the modules depend on. Codes are the company's own (legal chart [CẦN XÁC MINH TT99]). */
 export function SetupView() {
@@ -17,6 +17,7 @@ export function SetupView() {
       {tab === 'roles' && <Roles />}
       {tab === 'stock' && <Stock />}
       {tab === 'years' && <Years />}
+      {tab === 'approval' && <ApprovalPolicy />}
       {tab === 'import' && <ImportData />}
     </>
   )
@@ -311,6 +312,40 @@ function Years() {
         <label>Đến ngày <input type="date" value={y.endDate} onChange={e => setY(x => ({ ...x, endDate: e.target.value }))} /></label>
         <button disabled={busy || !y.code || !y.startDate || !y.endDate} onClick={() => run(async () => { await post('/fiscal-years', y); setInfo(`Đã mở năm tài chính ${y.code}.`); setY({ code: '', startDate: '', endDate: '' }) })}>Mở năm</button>
       </div>
+    </section>
+  )
+}
+
+/** Công tắc theo công ty: người lập chứng từ có được tự duyệt / ghi sổ chứng từ của mình không. */
+function ApprovalPolicy() {
+  const [distinct, setDistinct] = useState<boolean | null>(null)
+  const [reason, setReason] = useState('')
+  const [info, setInfo] = useState('')
+  const { busy, error, run } = useAction()
+  const load = useCallback(() => run(async () => { setDistinct((await get<{ requireDistinctApprover: boolean }>('/company/approval-policy')).requireDistinctApprover) }), [run])
+  useEffect(() => { load() }, [load])
+  const save = (value: boolean) => run(async () => {
+    await put('/company/approval-policy', { requireDistinctApprover: value, reason: value ? null : reason })
+    setInfo(value ? 'Đã bật: người lập và người duyệt phải là hai người khác nhau.' : 'Đã tắt: một người được vừa lập vừa duyệt / ghi sổ.')
+    setReason(''); await load()
+  })
+  return (
+    <section className="panel">
+      <h3>Lập và duyệt</h3>
+      <p className="muted">Áp dụng cho chứng từ kế toán, hóa đơn, đơn hàng, phiếu kho, tài sản, khoản vay, lệnh chi và xác minh mẫu báo cáo của công ty đang chọn. Hai chế độ dùng chung một vai trò "Người lập / duyệt"; công tắc này quyết định một người có được làm cả hai bước hay không. Mọi thay đổi được ghi nhật ký.</p>
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+      {distinct === null ? <span className="muted">Đang tải…</span> : (
+        <>
+          <p><strong>Hiện tại:</strong> {distinct ? 'Tách người lập và người duyệt (khuyến nghị)' : 'Một người được vừa lập vừa duyệt'}</p>
+          {distinct ? (
+            <div className="form-row">
+              <label>Lý do cho phép một người làm cả hai <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ví dụ: công ty chỉ có một kế toán" /></label>
+              <button disabled={busy || !reason.trim()} onClick={() => save(false)}>Cho phép một người lập và duyệt</button>
+            </div>
+          ) : <button className="primary" disabled={busy} onClick={() => save(true)}>Bắt buộc tách người lập và người duyệt</button>}
+        </>
+      )}
     </section>
   )
 }

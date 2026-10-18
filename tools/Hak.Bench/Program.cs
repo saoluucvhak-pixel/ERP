@@ -72,8 +72,8 @@ try
             [new LegalSourceInput("BENCH", "BENCH-FIXTURE", null, null, null)]);
         companyId = (await setup.CreateCompanyAsync(adminId, "BENCH01", "Công ty đo hiệu năng", null, "VND", ver.Id)).Id;
         await setup.GrantRoleAsync(adminId, adminId, companyId, "ADMIN");
-        await setup.GrantRoleAsync(adminId, prepId, companyId, "GL_ACCOUNTANT");
-        await setup.GrantRoleAsync(adminId, apprId, companyId, "CHIEF_ACCOUNTANT");
+        await setup.GrantRoleAsync(adminId, prepId, companyId, "ACCOUNTANT");
+        await setup.GrantRoleAsync(adminId, apprId, companyId, "ACCOUNTANT");
         admin = await auth.ResolveContextAsync(adminId, companyId);
         prep = await auth.ResolveContextAsync(prepId, companyId);
         appr = await auth.ResolveContextAsync(apprId, companyId);

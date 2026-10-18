@@ -261,4 +261,15 @@ public class ReportEngineTests
         var d2 = await s.Reports.SaveDraftAsync(h.Preparer, broken);
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Reports.SnapshotAsync(h.Approver, d2.Id, new(2026, 1, 1), new(2026, 12, 31), null, null, "x")));
     }
+
+    [Fact]
+    public async Task Template_MakerMayVerifyOwnTemplate_OnlyWhenTheCompanyAllowsOnePersonToPrepareAndApprove()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var def = await s.Reports.SaveDraftAsync(h.Approver, Template);
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => s.Reports.VerifyAsync(h.Approver, def.Id, "tự xác minh")));
+        await s.Setup.SetApprovalPolicyAsync(h.Admin, false, "Công ty chỉ có một kế toán");
+        await s.Reports.VerifyAsync(h.Approver, def.Id, "Đối chiếu mẫu thử nội bộ — kiểm thử");
+    }
 }

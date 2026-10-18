@@ -162,7 +162,9 @@ public sealed class ReportService(HakDbContext db, AuditService audit, IClock cl
             var d = await db.ReportDefinitions.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == ctx.CompanyId)
                     ?? throw new DomainException(ErrorCodes.NotFound, "Mẫu báo cáo không tồn tại.");
             if (d.Status != ReportDefinitionStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, "Mẫu đã được xác minh.");
-            if (d.CreatedBy == ctx.UserId) throw new DomainException(ErrorCodes.SodViolation, "Người soạn mẫu không được tự xác minh mẫu của mình.");
+            var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
+            if (company.RequireDistinctApprover && d.CreatedBy == ctx.UserId)
+                throw new DomainException(ErrorCodes.SodViolation, "Người soạn mẫu không được tự xác minh mẫu của mình.");
             d.Status = ReportDefinitionStatus.Verified;
             d.VerificationNote = note.Trim();
             d.VerifiedBy = ctx.UserId;

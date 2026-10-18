@@ -223,4 +223,16 @@ public class BankingTests
         Assert.Equal(ErrorCodes.MatchInvalid, (await Assert.ThrowsAsync<DomainException>(() =>
             s.StatementVouchers.CreateDraftAsync(h.Preparer, fee.Id, h.Acc["EXP"], null, null))).Code);
     }
+
+    [Fact]
+    public async Task PaymentOrder_MakerMayApproveOwnOrder_OnlyWhenTheCompanyAllowsOnePersonToPrepareAndApprove()
+    {
+        var (h, s) = await SetupAsync();
+        using var _h = h; using var _s = s;
+        var po = await s.PaymentOrders.CreateAsync(h.Preparer, Order(h, 5_000_000));
+        var preparerAsApprover = h.Preparer with { Permissions = new HashSet<string>(h.Preparer.Permissions) { "payment_order.approve" } };
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => s.PaymentOrders.ApproveAsync(preparerAsApprover, po.Id)));
+        await s.Setup.SetApprovalPolicyAsync(h.Admin, false, "Công ty chỉ có một kế toán");
+        Assert.Equal(PaymentOrderStatus.Approved, (await s.PaymentOrders.ApproveAsync(preparerAsApprover, po.Id)).Status);
+    }
 }

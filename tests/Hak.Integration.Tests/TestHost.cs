@@ -191,6 +191,7 @@ public sealed class TestHost : IDisposable
         using var s = h.NewScope();
         HakDb.Migrate(s.Db);
         await s.Setup.EnsureReferenceDataAsync();
+        await s.Setup.SeedLegacyRolesAsync();   // the fixtures below keep using the finer per-function roles
 
         h.AdminId = (await s.Setup.BootstrapAdminAsync("admin", "Quản trị", Password)).Id;
         h.PreparerId = (await s.Setup.CreateUserAsync(h.AdminId, "lap", "Kế toán tổng hợp", Password)).Id;

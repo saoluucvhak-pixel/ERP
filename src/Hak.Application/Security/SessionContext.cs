@@ -27,19 +27,43 @@ public sealed record SessionContext(
     }
 }
 
-/// <summary>Default role → permission sets for the 10 roles in master prompt §42. Editable later per installation.</summary>
+/// <summary>
+/// Default roles. Three kinds of people use the software: whoever maintains the master data, whoever prepares and approves
+/// documents, and the administrator. Whether preparing and approving may be one person or must be two is a per-company switch
+/// (<c>Company.RequireDistinctApprover</c>), not a role split, so the same role works for both set-ups.
+/// </summary>
 public static class RoleCatalog
 {
+    public const string Admin = "ADMIN";
+    public const string DataKeeper = "DATA_KEEPER";
+    public const string Accountant = "ACCOUNTANT";
+
     private static readonly string[] Viewer = [Permissions.VoucherView, Permissions.ReportView];
 
     public static readonly IReadOnlyDictionary<string, (string Name, string[] Perms)> Defaults =
         new Dictionary<string, (string, string[])>
         {
-            ["ADMIN"] = ("Administrator", [Permissions.ConfigManage, Permissions.CatalogManage, Permissions.AuditView, Permissions.DataExport, Permissions.DataImport]),
-            ["CHIEF_ACCOUNTANT"] = ("Kế toán trưởng", [.. Viewer, Permissions.VoucherCreate, Permissions.VoucherEditDraft, Permissions.VoucherSubmit,
+            // Settings, users' access to the company, audit trail. No accounting rights implicitly.
+            [Admin] = ("Quản trị", [Permissions.ConfigManage, Permissions.CatalogManage, Permissions.AuditView, Permissions.DataExport, Permissions.DataImport]),
+            // Maintains catalogues (accounts, partners, items, warehouses) and imports/exports data; cannot touch vouchers.
+            [DataKeeper] = ("Người duy trì dữ liệu", [.. Viewer, Permissions.CatalogManage, Permissions.DataImport, Permissions.DataExport]),
+            // Prepares, submits, approves, posts and reverses documents; locks periods; verifies report templates.
+            [Accountant] = ("Người lập / duyệt", [.. Viewer, Permissions.VoucherCreate, Permissions.VoucherEditDraft, Permissions.VoucherSubmit,
                 Permissions.VoucherApprove, Permissions.VoucherPost, Permissions.VoucherReverse, Permissions.PeriodLock, Permissions.PeriodReopen,
                 Permissions.CatalogManage, Permissions.DataExport, Permissions.DataImport, Permissions.SensitiveView, Permissions.AuditView,
-                Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.PaymentOrderApprove, Permissions.BankReconcile, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage]),
+                Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.PaymentOrderApprove, Permissions.BankReconcile,
+                Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage]),
+        };
+
+    /// <summary>
+    /// The finer 9-role set used before the 3-role simplification. Never created on a new installation; databases that still have
+    /// these roles keep them (and their permissions are topped up on upgrade). <c>SetupService.SeedLegacyRolesAsync</c>
+    /// recreates them for installations that want per-function roles.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, (string Name, string[] Perms)> Legacy =
+        new Dictionary<string, (string, string[])>
+        {
+            ["CHIEF_ACCOUNTANT"] = ("Kế toán trưởng", [.. Defaults[Accountant].Perms]),
             ["GL_ACCOUNTANT"] = ("Kế toán tổng hợp", [.. Viewer, Permissions.VoucherCreate, Permissions.VoucherEditDraft, Permissions.VoucherSubmit,
                 Permissions.VoucherPost, Permissions.CatalogManage, Permissions.DataExport, Permissions.DataImport,
                 Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.BankReconcile, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage]),

@@ -30,13 +30,32 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
                 db.Currencies.Add(new Currency { Code = code, Name = name, DecimalPlaces = dp });
 
         // Default roles: created on first run; on upgrades the permissions added to the catalogue since (asset.manage,
-        // loan.manage…) are granted to the existing default roles. Nothing is ever removed automatically.
+        // loan.manage…) are granted to the existing roles. Nothing is ever removed automatically. The pre-simplification
+        // roles (RoleCatalog.Legacy) are not created here, only topped up where a database still has them.
         var added = new List<object>();
-        foreach (var (code, (name, perms)) in RoleCatalog.Defaults)
+        await SyncRolesAsync(RoleCatalog.Defaults, createMissing: true, added);
+        await SyncRolesAsync(RoleCatalog.Legacy, createMissing: false, added);
+        if (added.Count > 0) await audit.AppendAsync(Guid.Empty, null, "role.sync_defaults", "role", null, new { added });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Recreates the finer per-function roles (kế toán trưởng, thủ quỹ, kiểm toán nội bộ…) for installations that want them.</summary>
+    public async Task SeedLegacyRolesAsync()
+    {
+        var added = new List<object>();
+        await SyncRolesAsync(RoleCatalog.Legacy, createMissing: true, added);
+        if (added.Count > 0) await audit.AppendAsync(Guid.Empty, null, "role.sync_defaults", "role", null, new { added });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SyncRolesAsync(IReadOnlyDictionary<string, (string Name, string[] Perms)> catalogue, bool createMissing, List<object> added)
+    {
+        foreach (var (code, (name, perms)) in catalogue)
         {
             var role = await db.Roles.Include(r => r.Permissions).FirstOrDefaultAsync(r => r.Code == code);
             if (role is null)
             {
+                if (!createMissing) continue;
                 role = new Role { Id = Ids.New(), Code = code, Name = name };
                 role.Permissions = perms.Distinct().Select(p => new RolePermission { RoleId = role.Id, Permission = p }).ToList();
                 db.Roles.Add(role);
@@ -46,8 +65,6 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
             foreach (var p in missing) role.Permissions.Add(new RolePermission { RoleId = role.Id, Permission = p });
             if (missing.Count > 0) added.Add(new { role = code, permissions = missing });
         }
-        if (added.Count > 0) await audit.AppendAsync(Guid.Empty, null, "role.sync_defaults", "role", null, new { added });
-        await db.SaveChangesAsync();
     }
 
     /// <summary>Creates the first administrator. Refused once any user exists.</summary>
@@ -215,6 +232,36 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
             await audit.AppendAsync(companyId, null, "company.update", "company", c.Id.ToString(), new { old, c.Name, c.TaxCode }, c.RowVersion, userIdOverride: adminId);
             await db.SaveChangesAsync();
             return c;
+        });
+    }
+
+    /// <summary>Whether this company requires the approver/poster to be a different person from the preparer.</summary>
+    public async Task<bool> GetApprovalPolicyAsync(SessionContext ctx)
+    {
+        if (!ctx.Permissions.Contains(Permissions.ConfigManage)) ctx.Require(Permissions.VoucherView);
+        return (await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId)).RequireDistinctApprover;
+    }
+
+    /// <summary>
+    /// Per-company switch: true = preparer and approver must be two people (default); false = one person may do both.
+    /// Applies to vouchers, invoices, orders, stock documents, assets, loans, payment orders and report-template verification.
+    /// Turning separation off needs a recorded reason.
+    /// </summary>
+    public async Task SetApprovalPolicyAsync(SessionContext ctx, bool requireDistinctApprover, string? reason)
+    {
+        ctx.Require(Permissions.ConfigManage);
+        if (!requireDistinctApprover && string.IsNullOrWhiteSpace(reason))
+            throw new DomainException(ErrorCodes.ReasonRequired, "Ghi rõ lý do cho phép một người vừa lập vừa duyệt.");
+        await db.InTransactionAsync(async () =>
+        {
+            var c = await db.Companies.FirstOrDefaultAsync(x => x.Id == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Công ty không tồn tại.");
+            if (c.RequireDistinctApprover == requireDistinctApprover) return;
+            var old = c.RequireDistinctApprover;
+            c.RequireDistinctApprover = requireDistinctApprover;
+            c.RowVersion++;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "company.approval_policy", "company", c.Id.ToString(),
+                new { old, requireDistinctApprover, reason = reason?.Trim() }, c.RowVersion);
+            await db.SaveChangesAsync();
         });
     }
 
