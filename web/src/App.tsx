@@ -19,6 +19,7 @@ import { TradeView } from './Trade'
 import { VatView } from './Vat'
 import { AccountLedgerView, GeneralJournalView, ReceivablesView, TrialBalanceView } from './Reports'
 import { VouchersView } from './Vouchers'
+import { Icon, OverviewView, ProcessView, type ProcessSpec } from './Home'
 
 interface Company { id: string; code: string; name: string; roles?: string[]; permissions?: string[] }
 
@@ -46,19 +47,30 @@ const SCREENS = [
   { key: 'admin', label: 'Quản trị', el: () => <AdminView /> },
 ] as const
 
-const MODULES = [
-  { key: 'general', label: 'Tổng hợp', items: ['vouchers', 'periods'] },
-  { key: 'cash', label: 'Quỹ & Ngân hàng', items: ['cash', 'bank', 'fx', 'loans'] },
-  { key: 'trade', label: 'Mua / Bán hàng', items: ['orders', 'trade', 'arap'] },
-  { key: 'stock', label: 'Kho & Giá thành', items: ['stock', 'production'] },
-  { key: 'assets', label: 'Tài sản / CCDC', items: ['assets'] },
-  { key: 'payroll', label: 'Lương', items: ['payroll'] },
-  { key: 'tax', label: 'Thuế', items: ['vat'] },
-  { key: 'reports', label: 'Báo cáo', items: ['tb', 'ledger', 'journal', 'reports'] },
-  { key: 'catalog', label: 'Danh mục', items: ['catalog', 'setup'] },
-  { key: 'system', label: 'Hệ thống', items: ['admin'] },
-] as const
-type ScreenKey = (typeof SCREENS)[number]['key']
+const SC = (k: string, icon: string) => ({ label: SCREENS.find(s => s.key === k)!.label, screen: k, icon })
+const REPORTS = [
+  { label: 'Bảng cân đối số phát sinh', screen: 'tb' },
+  { label: 'Sổ chi tiết tài khoản / Sổ quỹ', screen: 'ledger' },
+  { label: 'Sổ Nhật ký chung', screen: 'journal' },
+  { label: 'Báo cáo tài chính theo mẫu', screen: 'reports' },
+]
+const MODULES: { key: string; label: string; icon: string; title: string; items: string[]; shortcuts: string[] }[] = [
+  { key: 'cash', label: 'Tiền mặt', icon: 'cash', title: 'NGHIỆP VỤ TIỀN MẶT', items: ['cash'], shortcuts: ['catalog'] },
+  { key: 'bank', label: 'Tiền gửi', icon: 'bank', title: 'NGHIỆP VỤ TIỀN GỬI', items: ['bank', 'fx', 'loans'], shortcuts: ['catalog'] },
+  { key: 'trade', label: 'Mua / Bán hàng', icon: 'cart', title: 'NGHIỆP VỤ MUA / BÁN HÀNG', items: ['orders', 'trade', 'arap'], shortcuts: ['catalog'] },
+  { key: 'stock', label: 'Kho', icon: 'stock', title: 'NGHIỆP VỤ KHO', items: ['stock', 'production'], shortcuts: ['setup'] },
+  { key: 'assets', label: 'Tài sản / CCDC', icon: 'asset', title: 'NGHIỆP VỤ TÀI SẢN / CCDC', items: ['assets'], shortcuts: ['setup'] },
+  { key: 'payroll', label: 'Tiền lương', icon: 'money', title: 'NGHIỆP VỤ TIỀN LƯƠNG', items: ['payroll'], shortcuts: ['catalog'] },
+  { key: 'tax', label: 'Thuế', icon: 'tax', title: 'NGHIỆP VỤ THUẾ GTGT', items: ['vat'], shortcuts: ['catalog'] },
+  { key: 'general', label: 'Tổng hợp', icon: 'book', title: 'NGHIỆP VỤ TỔNG HỢP', items: ['vouchers', 'periods', 'journal'], shortcuts: ['setup'] },
+  { key: 'reports', label: 'Báo cáo', icon: 'chart', title: 'BÁO CÁO', items: ['tb', 'ledger', 'journal', 'reports'], shortcuts: [] },
+  { key: 'catalog', label: 'Danh mục', icon: 'list', title: 'DANH MỤC & THIẾT LẬP', items: ['catalog', 'setup'], shortcuts: [] },
+  { key: 'system', label: 'Hệ thống', icon: 'gear', title: 'HỆ THỐNG', items: ['admin'], shortcuts: [] },
+]
+const TILE_ICON: Record<string, string> = { cash: 'cash', bank: 'bank', fx: 'swap', loans: 'money', orders: 'doc', trade: 'cart', arap: 'list', stock: 'stock', production: 'gear', assets: 'asset', payroll: 'money', vat: 'tax', vouchers: 'doc', periods: 'book', journal: 'book', tb: 'chart', ledger: 'book', reports: 'chart', catalog: 'list', setup: 'gear', admin: 'gear' }
+function processOf(m: (typeof MODULES)[number]): ProcessSpec {
+  return { title: m.title, tiles: m.items.map(k => SC(k, TILE_ICON[k] ?? 'doc')), reports: REPORTS, shortcuts: m.shortcuts.map(k => SC(k, TILE_ICON[k] ?? 'list')) }
+}
 
 export default function App() {
   const [token, setToken] = useState(session.token)
@@ -66,7 +78,8 @@ export default function App() {
   const [companyId, setCompanyId] = useState(session.companyId)
   const [isSystemAdmin, setIsSystemAdmin] = useState(false)
   const [systemAdmin, setSystemAdmin] = useState(false)
-  const [screen, setScreen] = useState<ScreenKey>('vouchers')
+  const [modKey, setModKey] = useState('home')
+  const [tab, setTab] = useState('process')
 
   useEffect(() => {
     if (!token) return
@@ -116,34 +129,44 @@ export default function App() {
       </div></div>
     )
   }
-  const current = SCREENS.find(s => s.key === screen)!
-  const mod = MODULES.find(m => (m.items as readonly string[]).includes(screen))!
-  const label = (k: string) => SCREENS.find(s => s.key === k)!.label
+  const mod = MODULES.find(m => m.key === modKey)
+  const goScreen = (k: string) => {
+    const m = MODULES.find(x => x.items.includes(k))!
+    setModKey(m.key); setTab(k)
+  }
+  const goModule = (k: string) => { setModKey(k); setTab('process') }
+  const screen = SCREENS.find(s => s.key === tab)
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand"><span className="logo">H</span><span className="brand-name">HAK <b>Accounting</b></span></div>
-        <nav className="modules" aria-label="Phân hệ">
-          {MODULES.map(m => (
-            <button key={m.key} className={m.key === mod.key ? 'active' : ''} onClick={() => setScreen(m.items[0])}>{m.label}</button>
-          ))}
-        </nav>
+        <div className="brand"><span className="logo"><Icon name="grid" size={18} /></span><span className="brand-name">Kế toán</span></div>
+        <button className="company-chip" title="Bấm để đổi công ty" onClick={() => { session.setCompany(null); setCompanyId(null) }}>{company.name} ▾</button>
+        <span className="year-chip"><i /> Dữ liệu kế toán {new Date().getFullYear()}</span>
         <div className="topbar-right">
-          <button className="company-chip" title={`${company.name} — bấm để đổi công ty`} onClick={() => { session.setCompany(null); setCompanyId(null) }}>
-            <span className="muted-on-dark">Công ty</span> {company.code} ▾
-          </button>
-          <button className="ghost-dark" onClick={logout}>Đăng xuất</button>
+          <span className="who" title={(company.roles ?? []).join(', ')}>{(company.roles ?? []).join(', ') || 'Người dùng'}</span>
+          <button onClick={logout}>Đăng xuất</button>
         </div>
       </header>
       <div className="body">
-        <nav className="sidebar" aria-label={mod.label}>
-          <div className="sidebar-title">{mod.label}</div>
-          {mod.items.map(k => <button key={k} className={k === screen ? 'active' : ''} onClick={() => setScreen(k)}>{label(k)}</button>)}
+        <nav className="sidebar" aria-label="Phân hệ">
+          <button className="quick-add" onClick={() => goScreen('vouchers')}><Icon name="plus" size={16} /> Thêm nhanh</button>
+          <div className="sidebar-title">PHÂN HỆ</div>
+          <button className={modKey === 'home' ? 'active' : ''} onClick={() => { setModKey('home'); setTab('process') }}><Icon name="grid" />Tổng quan</button>
+          {MODULES.map(m => <button key={m.key} className={m.key === modKey ? 'active' : ''} onClick={() => goModule(m.key)}><Icon name={m.icon} />{m.label}</button>)}
         </nav>
-        <main className="main" key={company.id}>
-          <div className="crumb">{mod.label} <span>›</span> <b>{current.label}</b></div>
-          {current.el()}
-        </main>
+        <div className="content" key={company.id}>
+          {mod && (
+            <div className="tabs" role="tablist">
+              <button role="tab" className={tab === 'process' ? 'active' : ''} onClick={() => setTab('process')}>Quy trình</button>
+              {mod.items.map(k => <button key={k} role="tab" className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>{SCREENS.find(s => s.key === k)!.label}</button>)}
+            </div>
+          )}
+          <main className="main">
+            {!mod && <OverviewView company={company.name} go={goModule} />}
+            {mod && tab === 'process' && <ProcessView spec={processOf(mod)} go={goScreen} />}
+            {mod && screen && screen.el()}
+          </main>
+        </div>
       </div>
     </div>
   )
