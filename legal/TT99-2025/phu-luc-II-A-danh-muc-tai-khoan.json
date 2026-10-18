@@ -1,0 +1,1658 @@
+[
+ {
+  "stt": "01",
+  "code": "111",
+  "name": "Tiền mặt",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "02",
+  "code": "112",
+  "name": "Tiền gửi không kỳ hạn",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "03",
+  "code": "113",
+  "name": "Tiền đang chuyển",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "04",
+  "code": "121",
+  "name": "Chứng khoán kinh doanh",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "05",
+  "code": "128",
+  "name": "Đầu tư nắm giữ đến ngày đáo hạn",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "1281",
+  "name": "Tiền gửi có kỳ hạn",
+  "parent": "128",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1282",
+  "name": "Trái phiếu",
+  "parent": "128",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1283",
+  "name": "Cho vay",
+  "parent": "128",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1288",
+  "name": "Các khoản đầu tư khác nắm giữ đến ngày đáo hạn",
+  "parent": "128",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "06",
+  "code": "131",
+  "name": "Phải thu của khách hàng",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "07",
+  "code": "133",
+  "name": "Thuế GTGT được khấu trừ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "1331",
+  "name": "Thuế GTGT được khấu trừ của hàng hóa, dịch vụ",
+  "parent": "133",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1332",
+  "name": "Thuế GTGT được khấu trừ của TSCĐ",
+  "parent": "133",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "08",
+  "code": "136",
+  "name": "Phải thu nội bộ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "1361",
+  "name": "Vốn kinh doanh ở đơn vị trực thuộc",
+  "parent": "136",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1362",
+  "name": "Phải thu nội bộ về chênh lệch tỷ giá",
+  "parent": "136",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1363",
+  "name": "Phải thu nội bộ về chi phí đi vay đủ điều kiện được vốn hóa",
+  "parent": "136",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1368",
+  "name": "Phải thu nội bộ khác",
+  "parent": "136",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "09",
+  "code": "138",
+  "name": "Phải thu khác",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "1381",
+  "name": "Tài sản thiếu chờ xử lý",
+  "parent": "138",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1383",
+  "name": "Thuế TTĐB của hàng nhập khẩu",
+  "parent": "138",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "1388",
+  "name": "Phải thu khác",
+  "parent": "138",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "10",
+  "code": "141",
+  "name": "Tạm ứng",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "11",
+  "code": "151",
+  "name": "Hàng mua đang đi đường",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "12",
+  "code": "152",
+  "name": "Nguyên liệu, vật liệu",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "13",
+  "code": "153",
+  "name": "Công cụ, dụng cụ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "14",
+  "code": "154",
+  "name": "Chi phí sản xuất, kinh doanh dở dang",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "15",
+  "code": "155",
+  "name": "Sản phẩm",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "16",
+  "code": "156",
+  "name": "Hàng hóa",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "17",
+  "code": "157",
+  "name": "Hàng gửi đi bán",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "18",
+  "code": "158",
+  "name": "Nguyên liệu, vật tư tại kho bảo thuế",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "19",
+  "code": "171",
+  "name": "Giao dịch mua, bán lại trái phiếu chính phủ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "20",
+  "code": "211",
+  "name": "Tài sản cố định hữu hình",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "21",
+  "code": "212",
+  "name": "Tài sản cố định thuê tài chính",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "22",
+  "code": "213",
+  "name": "Tài sản cố định vô hình",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "23",
+  "code": "214",
+  "name": "Hao mòn tài sản cố định",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "2141",
+  "name": "Hao mòn TSCĐ hữu hình",
+  "parent": "214",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2142",
+  "name": "Hao mòn TSCĐ thuê tài chính",
+  "parent": "214",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2143",
+  "name": "Hao mòn TSCĐ vô hình",
+  "parent": "214",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2147",
+  "name": "Hao mòn BĐSĐT",
+  "parent": "214",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "24",
+  "code": "215",
+  "name": "Tài sản sinh học",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "2151",
+  "name": "Súc vật nuôi cho sản phẩm định kỳ",
+  "parent": "215",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "21511",
+  "name": "Súc vật nuôi cho sản phẩm định kỳ chưa đạt đến giai đoạn trưởng thành",
+  "parent": "2151",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "21512",
+  "name": "Súc vật nuôi cho sản phẩm định kỳ đạt đến giai đoạn trưởng thành",
+  "parent": "2151",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "215121",
+  "name": "Nguyên giá",
+  "parent": "21512",
+  "level": 4,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "215122",
+  "name": "Giá trị khấu hao lũy kế",
+  "parent": "21512",
+  "level": 4,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2152",
+  "name": "Súc vật nuôi lấy sản phẩm một lần",
+  "parent": "215",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2153",
+  "name": "Cây trồng theo mùa vụ hoặc lấy sản phẩm một lần",
+  "parent": "215",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "25",
+  "code": "217",
+  "name": "Bất động sản đầu tư",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "26",
+  "code": "221",
+  "name": "Đầu tư vào công ty con",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "27",
+  "code": "222",
+  "name": "Đầu tư vào công ty liên doanh, liên kết",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "28",
+  "code": "228",
+  "name": "Đầu tư khác",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "2281",
+  "name": "Đầu tư góp vốn vào đơn vị khác",
+  "parent": "228",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2288",
+  "name": "Đầu tư khác",
+  "parent": "228",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "29",
+  "code": "229",
+  "name": "Dự phòng tổn thất tài sản",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "2291",
+  "name": "Dự phòng giảm giá chứng khoán kinh doanh",
+  "parent": "229",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2292",
+  "name": "Dự phòng tổn thất đầu tư vào đơn vị khác",
+  "parent": "229",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2293",
+  "name": "Dự phòng phải thu khó đòi",
+  "parent": "229",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2294",
+  "name": "Dự phòng giảm giá hàng tồn kho",
+  "parent": "229",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2295",
+  "name": "Dự phòng tổn thất tài sản sinh học",
+  "parent": "229",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "30",
+  "code": "241",
+  "name": "Xây dựng cơ bản dở dang",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "2411",
+  "name": "Mua sắm TSCĐ",
+  "parent": "241",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2412",
+  "name": "Xây dựng cơ bản",
+  "parent": "241",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2413",
+  "name": "Sửa chữa, bảo dưỡng định kỳ TSCĐ",
+  "parent": "241",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "2414",
+  "name": "Nâng cấp, cải tạo TSCĐ",
+  "parent": "241",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "31",
+  "code": "242",
+  "name": "Chi phí chờ phân bổ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "32",
+  "code": "243",
+  "name": "Tài sản thuế thu nhập hoãn lại",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "33",
+  "code": "244",
+  "name": "Ký quỹ, ký cược",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN TÀI SẢN",
+  "postable": true
+ },
+ {
+  "stt": "34",
+  "code": "331",
+  "name": "Phải trả cho người bán",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "35",
+  "code": "332",
+  "name": "Phải trả cổ tức, lợi nhuận",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "36",
+  "code": "333",
+  "name": "Thuế và các khoản phải nộp Nhà nước",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3331",
+  "name": "Thuế giá trị gia tăng phải nộp",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "33311",
+  "name": "Thuế GTGT đầu ra",
+  "parent": "3331",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "33312",
+  "name": "Thuế GTGT hàng nhập khẩu",
+  "parent": "3331",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3332",
+  "name": "Thuế tiêu thụ đặc biệt",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3333",
+  "name": "Thuế xuất, nhập khẩu",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3334",
+  "name": "Thuế thu nhập doanh nghiệp",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3335",
+  "name": "Thuế thu nhập cá nhân",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3336",
+  "name": "Thuế tài nguyên",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3337",
+  "name": "Thuế nhà đất, tiền thuê đất",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3338",
+  "name": "Thuế bảo vệ môi trường và các loại thuế khác",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "33381",
+  "name": "Thuế bảo vệ môi trường",
+  "parent": "3338",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "33382",
+  "name": "Các loại thuế khác",
+  "parent": "3338",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3339",
+  "name": "Phí, lệ phí và các khoản phải nộp khác",
+  "parent": "333",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "37",
+  "code": "334",
+  "name": "Phải trả người lao động",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "38",
+  "code": "335",
+  "name": "Chi phí phải trả",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "39",
+  "code": "336",
+  "name": "Phải trả nội bộ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3361",
+  "name": "Phải trả nội bộ về vốn kinh doanh",
+  "parent": "336",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3362",
+  "name": "Phải trả nội bộ về chênh lệch tỷ giá",
+  "parent": "336",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3363",
+  "name": "Phải trả nội bộ về chi phí đi vay đủ điều kiện được vốn hóa",
+  "parent": "336",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3368",
+  "name": "Phải trả nội bộ khác",
+  "parent": "336",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "40",
+  "code": "337",
+  "name": "Thanh toán theo tiến độ hợp đồng xây dựng",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "41",
+  "code": "338",
+  "name": "Phải trả, phải nộp khác",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3381",
+  "name": "Tài sản thừa chờ giải quyết",
+  "parent": "338",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3382",
+  "name": "Kinh phí công đoàn",
+  "parent": "338",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3383",
+  "name": "Bảo hiểm xã hội",
+  "parent": "338",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3384",
+  "name": "Bảo hiểm y tế",
+  "parent": "338",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3386",
+  "name": "Bảo hiểm thất nghiệp",
+  "parent": "338",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3387",
+  "name": "Doanh thu chờ phân bổ",
+  "parent": "338",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3388",
+  "name": "Phải trả, phải nộp khác",
+  "parent": "338",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "42",
+  "code": "341",
+  "name": "Vay và nợ thuê tài chính",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3411",
+  "name": "Các khoản đi vay",
+  "parent": "341",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3412",
+  "name": "Nợ thuê tài chính",
+  "parent": "341",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "43",
+  "code": "343",
+  "name": "Trái phiếu phát hành",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3431",
+  "name": "Trái phiếu thường",
+  "parent": "343",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3432",
+  "name": "Trái phiếu chuyển đổi",
+  "parent": "343",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "44",
+  "code": "344",
+  "name": "Nhận ký quỹ, ký cược",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "45",
+  "code": "347",
+  "name": "Thuế thu nhập hoãn lại phải trả",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "46",
+  "code": "352",
+  "name": "Dự phòng phải trả",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3521",
+  "name": "Dự phòng bảo hành sản phẩm, hàng hóa",
+  "parent": "352",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3522",
+  "name": "Dự phòng bảo hành công trình xây dựng",
+  "parent": "352",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3523",
+  "name": "Dự phòng tái cơ cấu doanh nghiệp",
+  "parent": "352",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3525",
+  "name": "Dự phòng phải trả khác",
+  "parent": "352",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "47",
+  "code": "353",
+  "name": "Quỹ khen thưởng, phúc lợi",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3531",
+  "name": "Quỹ khen thưởng",
+  "parent": "353",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3532",
+  "name": "Quỹ phúc lợi",
+  "parent": "353",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3533",
+  "name": "Quỹ phúc lợi đã hình thành TSCĐ",
+  "parent": "353",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3534",
+  "name": "Quỹ thưởng ban quản lý điều hành công ty",
+  "parent": "353",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "48",
+  "code": "356",
+  "name": "Quỹ phát triển khoa học và công nghệ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "3561",
+  "name": "Quỹ phát triển khoa học và công nghệ",
+  "parent": "356",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "3562",
+  "name": "Quỹ phát triển khoa học và công nghệ đã hình thành tài sản",
+  "parent": "356",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "49",
+  "code": "357",
+  "name": "Quỹ bình ổn giá",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN NỢ PHẢI TRẢ",
+  "postable": true
+ },
+ {
+  "stt": "50",
+  "code": "411",
+  "name": "Vốn đầu tư của chủ sở hữu",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "4111",
+  "name": "Vốn góp của chủ sở hữu",
+  "parent": "411",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "41111",
+  "name": "Cổ phiếu phổ thông có quyền biểu quyết",
+  "parent": "4111",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "41112",
+  "name": "Cổ phiếu ưu đãi",
+  "parent": "4111",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "4112",
+  "name": "Thặng dư vốn",
+  "parent": "411",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "4113",
+  "name": "Quyền chọn chuyển đổi trái phiếu",
+  "parent": "411",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "4118",
+  "name": "Vốn khác",
+  "parent": "411",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "51",
+  "code": "412",
+  "name": "Chênh lệch đánh giá lại tài sản",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "52",
+  "code": "413",
+  "name": "Chênh lệch tỷ giá hối đoái",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "53",
+  "code": "414",
+  "name": "Quỹ đầu tư phát triển",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "54",
+  "code": "418",
+  "name": "Các quỹ khác thuộc vốn chủ sở hữu",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "55",
+  "code": "419",
+  "name": "Cổ phiếu mua lại của chính mình",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "56",
+  "code": "421",
+  "name": "Lợi nhuận sau thuế chưa phân phối",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "4211",
+  "name": "Lợi nhuận sau thuế chưa phân phối lũy kế đến cuối năm trước",
+  "parent": "421",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "4212",
+  "name": "Lợi nhuận sau thuế chưa phân phối năm nay",
+  "parent": "421",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN VỐN CHỦ SỞ HỮU",
+  "postable": true
+ },
+ {
+  "stt": "57",
+  "code": "511",
+  "name": "Doanh thu bán hàng và cung cấp dịch vụ",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN DOANH THU",
+  "postable": true
+ },
+ {
+  "stt": "58",
+  "code": "515",
+  "name": "Doanh thu hoạt động tài chính",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN DOANH THU",
+  "postable": true
+ },
+ {
+  "stt": "59",
+  "code": "521",
+  "name": "Các khoản giảm trừ doanh thu",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN DOANH THU",
+  "postable": true
+ },
+ {
+  "stt": "60",
+  "code": "621",
+  "name": "Chi phí nguyên liệu, vật liệu trực tiếp",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "61",
+  "code": "622",
+  "name": "Chi phí nhân công trực tiếp",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "62",
+  "code": "623",
+  "name": "Chi phí sử dụng máy thi công",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "6231",
+  "name": "Chi phí nhân công",
+  "parent": "623",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6232",
+  "name": "Chi phí vật liệu",
+  "parent": "623",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6233",
+  "name": "Chi phí dụng cụ sản xuất",
+  "parent": "623",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6234",
+  "name": "Chi phí khấu hao máy thi công",
+  "parent": "623",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6237",
+  "name": "Chi phí dịch vụ mua ngoài",
+  "parent": "623",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6238",
+  "name": "Chi phí bằng tiền khác",
+  "parent": "623",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "63",
+  "code": "627",
+  "name": "Chi phí sản xuất chung",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "6271",
+  "name": "Chi phí nhân viên phân xưởng",
+  "parent": "627",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6272",
+  "name": "Chi phí vật liệu",
+  "parent": "627",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6273",
+  "name": "Chi phí dụng cụ sản xuất",
+  "parent": "627",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6274",
+  "name": "Chi phí khấu hao TSCĐ",
+  "parent": "627",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6275",
+  "name": "Thuế, phí, lệ phí",
+  "parent": "627",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6277",
+  "name": "Chi phí dịch vụ mua ngoài",
+  "parent": "627",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6278",
+  "name": "Chi phí bằng tiền khác",
+  "parent": "627",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "64",
+  "code": "632",
+  "name": "Giá vốn hàng bán",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "65",
+  "code": "635",
+  "name": "Chi phí tài chính",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "66",
+  "code": "641",
+  "name": "Chi phí bán hàng",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "6411",
+  "name": "Chi phí nhân viên",
+  "parent": "641",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6412",
+  "name": "Chi phí vật liệu, bao bì",
+  "parent": "641",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6413",
+  "name": "Chi phí dụng cụ, đồ dùng",
+  "parent": "641",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6414",
+  "name": "Chi phí khấu hao TSCĐ",
+  "parent": "641",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6415",
+  "name": "Thuế, phí, lệ phí",
+  "parent": "641",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6417",
+  "name": "Chi phí dịch vụ mua ngoài",
+  "parent": "641",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6418",
+  "name": "Chi phí bằng tiền khác",
+  "parent": "641",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "67",
+  "code": "642",
+  "name": "Chi phí quản lý doanh nghiệp",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "6421",
+  "name": "Chi phí nhân viên quản lý",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6422",
+  "name": "Chi phí vật liệu quản lý",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6423",
+  "name": "Chi phí đồ dùng văn phòng",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6424",
+  "name": "Chi phí khấu hao TSCĐ",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6425",
+  "name": "Thuế, phí và lệ phí",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6426",
+  "name": "Chi phí dự phòng",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6427",
+  "name": "Chi phí dịch vụ mua ngoài",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "6428",
+  "name": "Chi phí bằng tiền khác",
+  "parent": "642",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ SẢN XUẤT, KINH DOANH",
+  "postable": true
+ },
+ {
+  "stt": "68",
+  "code": "711",
+  "name": "Thu nhập khác",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN THU NHẬP KHÁC",
+  "postable": true
+ },
+ {
+  "stt": "69",
+  "code": "811",
+  "name": "Chi phí khác",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ KHÁC",
+  "postable": true
+ },
+ {
+  "stt": "70",
+  "code": "821",
+  "name": "Chi phí thuế thu nhập doanh nghiệp",
+  "parent": "",
+  "level": 1,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ KHÁC",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "8211",
+  "name": "Chi phí thuế TNDN hiện hành",
+  "parent": "821",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ KHÁC",
+  "postable": false
+ },
+ {
+  "stt": "",
+  "code": "82111",
+  "name": "Chi phí thuế thu nhập doanh nghiệp hiện hành theo quy định của Luật thuế thu nhập doanh nghiệp",
+  "parent": "8211",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ KHÁC",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "82112",
+  "name": "Chi phí thuế thu nhập doanh nghiệp bổ sung theo quy định về thuế tối thiểu toàn cầu",
+  "parent": "8211",
+  "level": 3,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ KHÁC",
+  "postable": true
+ },
+ {
+  "stt": "",
+  "code": "8212",
+  "name": "Chi phí thuế TNDN hoãn lại",
+  "parent": "821",
+  "level": 2,
+  "group": "LOẠI TÀI KHOẢN CHI PHÍ KHÁC",
+  "postable": true
+ },
+ {
+  "stt": "71",
+  "code": "911",
+  "name": "Xác định kết quả kinh doanh",
+  "parent": "",
+  "level": 1,
+  "group": "TÀI KHOẢN XÁC ĐỊNH KẾT QUẢ KINH DOANH",
+  "postable": true
+ }
+]

@@ -1,0 +1,97 @@
+{
+ "code": "B09-DN-V27",
+ "name": "Thuyết minh BCTC — V.27a Biến động vốn chủ sở hữu",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 09 - DN, Phụ lục IV TT 99/2025/TT-BTC (Công báo 1577+1578); hướng dẫn lập: Phần E (Công báo 1581+1582); mục V.27a; lãi/lỗ trong năm = lợi nhuận sau thuế tính như Mã 60 B02-DN",
+ "columns": [
+  "Vốn góp của chủ sở hữu",
+  "Thặng dư vốn",
+  "Quyền chọn chuyển đổi trái phiếu",
+  "Vốn khác của chủ sở hữu",
+  "Chênh lệch đánh giá lại tài sản",
+  "Chênh lệch tỷ giá hối đoái",
+  "LNST chưa phân phối và các quỹ",
+  "Các khoản mục khác",
+  "Cộng"
+ ],
+ "lines": [
+  {
+   "code": "V27A",
+   "name": "27.a) Bảng đối chiếu biến động của vốn chủ sở hữu (năm báo cáo; chạy mẫu cho năm trước để lấy phần năm trước)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V27A.0",
+   "name": "Số dư đầu năm",
+   "formula": "-OPEN_NET(4111*) | -OPEN_NET(4112*) | -OPEN_NET(4113*) | -OPEN_NET(4118*) | -OPEN_NET(412*) | -OPEN_NET(413*) | -OPEN_NET(421*, 414*, 418*) | -OPEN_NET(419*) | -OPEN_NET(411*, 412*, 413*, 414*, 418*, 419*, 421*)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V27A.1",
+   "name": "- Tăng vốn trong năm",
+   "formula": "PS_C(4111*) | PS_C(4112*) | PS_C(4113*) | PS_C(4118*) |  |  |  |  | PS_C(411*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V27A.2",
+   "name": "- Lãi trong năm",
+   "formula": " |  |  |  |  |  | MAX0(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*)) |  | MAX0(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*))",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V27A.3",
+   "name": "- Tăng khác",
+   "formula": " |  |  |  | PS_C(412*) | PS_C(413*) | PS_C(421*, 414*, 418*) - MAX0(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*)) | PS_C(419*) | PS_C(412*, 413*, 414*, 418*, 419*, 421*) - MAX0(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*))",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V27A.4",
+   "name": "- Giảm vốn trong năm",
+   "formula": "PS_D(4111*) | PS_D(4112*) | PS_D(4113*) | PS_D(4118*) |  |  |  |  | PS_D(411*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V27A.5",
+   "name": "- Lỗ trong năm",
+   "formula": " |  |  |  |  |  | MAX0(-(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*))) |  | MAX0(-(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*)))",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V27A.6",
+   "name": "- Giảm khác",
+   "formula": " |  |  |  | PS_D(412*) | PS_D(413*) | PS_D(421*, 414*, 418*) - MAX0(-(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*))) | PS_D(419*) | PS_D(412*, 413*, 414*, 418*, 419*, 421*) - MAX0(-(NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*, 821*)))",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V27A.9",
+   "name": "Số dư cuối năm",
+   "formula": "-BAL_NET(4111*) | -BAL_NET(4112*) | -BAL_NET(4113*) | -BAL_NET(4118*) | -BAL_NET(412*) | -BAL_NET(413*) | -BAL_NET(421*, 414*, 418*) | -BAL_NET(419*) | -BAL_NET(411*, 412*, 413*, 414*, 418*, 419*, 421*)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  }
+ ],
+ "checks": [
+  {
+   "rule": "LINE(V27A.9) = LINE(V27A.0) + LINE(V27A.1) + LINE(V27A.2) + LINE(V27A.3) - LINE(V27A.4) - LINE(V27A.5) - LINE(V27A.6)",
+   "message": "Số dư đầu năm + tăng − giảm = Số dư cuối năm"
+  }
+ ]
+}

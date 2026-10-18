@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hak:schemas:e-invoice-import:1.0",
+  "title": "HAK e-invoice import v1.0",
+  "description": "Danh sách hóa đơn điện tử (đầu vào/đầu ra) chuyển từ dữ liệu tải về hệ thống HĐĐT sang dạng trung tính để đối chiếu. Cấu trúc XML gốc của HĐĐT không được mô phỏng ở đây [CẦN XÁC MINH định dạng hiện hành]. Số tiền là chuỗi thập phân VND.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sourceName", "invoices"],
+  "properties": {
+    "sourceName": { "type": "string", "minLength": 1 },
+    "invoices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["direction", "sellerTaxCode", "sellerName", "series", "number", "issueDate", "amountBeforeVat", "vatAmount", "totalPayment", "status"],
+        "properties": {
+          "direction": { "enum": ["Input", "Output"] },
+          "sellerTaxCode": { "type": "string", "pattern": "^[0-9]{10}(-[0-9]{3})?$" },
+          "sellerName": { "type": "string" },
+          "buyerTaxCode": { "type": ["string", "null"] },
+          "buyerName": { "type": ["string", "null"] },
+          "series": { "type": "string", "minLength": 1 },
+          "number": { "type": "string", "minLength": 1 },
+          "issueDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "currency": { "type": ["string", "null"] },
+          "exchangeRate": { "type": ["string", "null"] },
+          "amountBeforeVat": { "$ref": "#/$defs/money" },
+          "vatAmount": { "$ref": "#/$defs/money" },
+          "totalPayment": { "$ref": "#/$defs/money" },
+          "status": { "enum": ["Original", "Replacement", "Adjustment", "Replaced", "Cancelled"] },
+          "relatedSeries": { "type": ["string", "null"] },
+          "relatedNumber": { "type": ["string", "null"] },
+          "lookupCode": { "type": ["string", "null"] },
+          "rates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["amountBeforeVat", "vatAmount"],
+              "properties": {
+                "vatRate": { "type": ["string", "null"] },
+                "amountBeforeVat": { "$ref": "#/$defs/money" },
+                "vatAmount": { "$ref": "#/$defs/money" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": { "money": { "type": "string", "pattern": "^-?(0|[1-9][0-9]{0,13})(\\.[0-9]{1,4})?$" } }
+}

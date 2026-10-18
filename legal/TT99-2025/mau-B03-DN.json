@@ -1,0 +1,254 @@
+{
+ "code": "B03-DN",
+ "name": "Báo cáo lưu chuyển tiền tệ (theo phương pháp trực tiếp)",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 03 - DN (phương pháp trực tiếp), Phụ lục IV TT 99/2025/TT-BTC; hướng dẫn lập: Phần D (Công báo 1581+1582)",
+ "lines": [
+  {
+   "code": "H001",
+   "name": "I. Lưu chuyển tiền từ hoạt động kinh doanh",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "01",
+   "name": "1. Tiền thu từ bán hàng, cung cấp dịch vụ và doanh thu khác",
+   "formula": "CF(01)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 01 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "02",
+   "name": "2. Tiền chi trả cho người cung cấp hàng hóa và dịch vụ",
+   "formula": "CF(02)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 02 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "03",
+   "name": "3. Tiền chi trả cho người lao động",
+   "formula": "CF(03)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 03 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "04",
+   "name": "4. Chi phí đi vay đã trả",
+   "formula": "CF(04)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 04 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "05",
+   "name": "5. Thuế thu nhập doanh nghiệp đã nộp",
+   "formula": "CF(05)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 05 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "06",
+   "name": "6. Tiền thu khác từ hoạt động kinh doanh",
+   "formula": "CF(06)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 06 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "07",
+   "name": "7. Tiền chi khác cho hoạt động kinh doanh",
+   "formula": "CF(07)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 07 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "20",
+   "name": "Lưu chuyển tiền thuần từ hoạt động kinh doanh",
+   "formula": "LINE(01) + LINE(02) + LINE(03) + LINE(04) + LINE(05) + LINE(06) + LINE(07)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "H010",
+   "name": "II. Lưu chuyển tiền từ hoạt động đầu tư",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "21",
+   "name": "1. Tiền chi để mua sắm, xây dựng TSCĐ và các tài sản dài hạn khác",
+   "formula": "CF(21)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 21 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "22",
+   "name": "2. Tiền thu từ thanh lý, nhượng bán TSCĐ và các tài sản dài hạn khác",
+   "formula": "CF(22)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 22 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "23",
+   "name": "3. Tiền chi cho vay, mua các công cụ nợ của đơn vị khác",
+   "formula": "CF(23)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 23 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "24",
+   "name": "4. Tiền thu hồi cho vay, bán lại các công cụ nợ của đơn vị khác",
+   "formula": "CF(24)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 24 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "25",
+   "name": "5. Tiền chi đầu tư góp vốn vào đơn vị khác",
+   "formula": "CF(25)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 25 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "26",
+   "name": "6. Tiền thu hồi đầu tư góp vốn vào đơn vị khác",
+   "formula": "CF(26)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 26 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "27",
+   "name": "7. Tiền thu lãi cho vay, cổ tức và lợi nhuận được chia",
+   "formula": "CF(27)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 27 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "30",
+   "name": "Lưu chuyển tiền thuần từ hoạt động đầu tư",
+   "formula": "LINE(21) + LINE(22) + LINE(23) + LINE(24) + LINE(25) + LINE(26) + LINE(27)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "H019",
+   "name": "III. Lưu chuyển tiền từ hoạt động tài chính",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "31",
+   "name": "1. Tiền thu từ phát hành cổ phiếu, nhận vốn góp của chủ sở hữu",
+   "formula": "CF(31)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 31 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "32",
+   "name": "2. Tiền trả lại vốn góp cho các chủ sở hữu, mua lại cổ phiếu đã phát hành",
+   "formula": "CF(32)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 32 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "33",
+   "name": "3. Tiền thu từ đi vay",
+   "formula": "CF(33)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 33 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "34",
+   "name": "4. Tiền trả nợ gốc vay",
+   "formula": "CF(34)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 34 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "35",
+   "name": "5. Tiền trả nợ gốc thuê tài chính",
+   "formula": "CF(35)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 35 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "36",
+   "name": "6. Cổ tức, lợi nhuận đã trả cho chủ sở hữu",
+   "formula": "CF(36)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 36 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "40",
+   "name": "Lưu chuyển tiền thuần từ hoạt động tài chính",
+   "formula": "LINE(31) + LINE(32) + LINE(33) + LINE(34) + LINE(35) + LINE(36)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "50",
+   "name": "Lưu chuyển tiền thuần trong kỳ (50 = 20 + 30 + 40)",
+   "formula": "LINE(20) + LINE(30) + LINE(40)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "60",
+   "name": "Tiền và tương đương tiền đầu kỳ",
+   "formula": "OPEN_D(111*[!HCSD], 112*[!HCSD], 113*[!HCSD], 1281*[TDT,!HCSD], 1288*[TDT,!HCSD])",
+   "indent": 1,
+   "bold": false,
+   "note": "Bằng Mã số 110 cột đầu kỳ của Báo cáo tình hình tài chính"
+  },
+  {
+   "code": "61",
+   "name": "Ảnh hưởng của thay đổi tỷ giá hối đoái quy đổi ngoại tệ",
+   "formula": "CF(61)",
+   "indent": 1,
+   "bold": false,
+   "note": "Luồng tiền mã 61 (dòng tiền 111/112/113 và tương đương tiền; phân loại theo mã chọn trên chứng từ, nhãn CFxx của TK đối ứng, hoặc mặc định theo TK đối ứng)"
+  },
+  {
+   "code": "70",
+   "name": "Tiền và tương đương tiền cuối kỳ (70 = 50 + 60 + 61)",
+   "formula": "LINE(50) + LINE(60) + LINE(61)",
+   "indent": 0,
+   "bold": true,
+   "note": "Bằng Mã số 110 cột cuối kỳ của Báo cáo tình hình tài chính"
+  }
+ ],
+ "checks": [
+  {
+   "rule": "LINE(70) = BAL_D(111*[!HCSD], 112*[!HCSD], 113*[!HCSD], 1281*[TDT,!HCSD], 1288*[TDT,!HCSD])",
+   "message": "Tiền và tương đương tiền cuối kỳ (70) = số dư cuối kỳ tiền và tương đương tiền (Mã 110 trên B01-DN). Nếu lệch: TK 111/112/113 phải khai báo Loại tiền; khoản tương đương tiền gắn nhãn TDT"
+  }
+ ]
+}

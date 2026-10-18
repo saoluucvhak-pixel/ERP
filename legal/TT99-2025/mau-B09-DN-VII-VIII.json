@@ -1,0 +1,538 @@
+{
+ "code": "B09-DN-VII",
+ "name": "Thuyết minh BCTC — VII, VIII. Thông tin bổ sung cho Báo cáo kết quả hoạt động kinh doanh và Báo cáo lưu chuyển tiền tệ",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 09 - DN, Phụ lục IV TT 99/2025/TT-BTC (Công báo 1577+1578); hướng dẫn lập: Phần E (Công báo 1581+1582); mục VII, VIII; chạy kèm kỳ so sánh để có cột Năm trước",
+ "columns": null,
+ "lines": [
+  {
+   "code": "VII1",
+   "name": "VII.1. Tổng doanh thu bán hàng và cung cấp dịch vụ",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII1.1",
+   "name": "- Doanh thu bán sản phẩm, hàng hóa (trừ doanh thu bán, thanh lý bất động sản đầu tư)",
+   "formula": "NET_C(511*[!DV,!XD,!TCTG,!BDSDT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII1.2",
+   "name": "- Doanh thu cung cấp dịch vụ (trừ dịch vụ xây dựng)",
+   "formula": "NET_C(511*[DV])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII1.3",
+   "name": "- Doanh thu dịch vụ xây dựng",
+   "formula": "NET_C(511*[XD])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII1.4",
+   "name": "- Doanh thu trợ cấp, trợ giá",
+   "formula": "NET_C(511*[TCTG])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII1.9",
+   "name": "Cộng",
+   "formula": "LINE(VII1.1) + LINE(VII1.2) + LINE(VII1.3) + LINE(VII1.4)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII2",
+   "name": "VII.2. Các khoản giảm trừ doanh thu",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII2.1",
+   "name": "- Khoản chiết khấu thương mại",
+   "formula": "NET_D(521*[CKTM])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII2.2",
+   "name": "- Khoản giảm giá hàng bán",
+   "formula": "NET_D(521*[GGHB])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII2.3",
+   "name": "- Khoản doanh thu hàng bán bị trả lại",
+   "formula": "NET_D(521*[HBTL])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII2.4",
+   "name": "- Chưa phân loại (TK 521 chưa gắn nhãn)",
+   "formula": "NET_D(521*[!CKTM,!GGHB,!HBTL])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII2.9",
+   "name": "Cộng",
+   "formula": "LINE(VII2.1) + LINE(VII2.2) + LINE(VII2.3) + LINE(VII2.4)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII3",
+   "name": "VII.3. Giá vốn hàng bán",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII3.1",
+   "name": "- Giá vốn của sản phẩm, hàng hóa đã bán (trừ giá trị còn lại và chi phí bán, thanh lý bất động sản đầu tư)",
+   "formula": "NET_D(632*[!DV,!BDSDT,!DPHTK])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII3.2",
+   "name": "- Giá vốn của dịch vụ đã cung cấp (bao gồm cả dịch vụ xây dựng)",
+   "formula": "NET_D(632*[DV])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII3.6",
+   "name": "- Dự phòng giảm giá hàng tồn kho, dự phòng giảm giá tài sản sinh học",
+   "formula": "NET_D(632*[DPHTK])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII3.9",
+   "name": "Cộng",
+   "formula": "LINE(VII3.1) + LINE(VII3.2) + LINE(VII3.6)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII4",
+   "name": "VII.4. Lãi/lỗ của hoạt động bán, thanh lý BĐSĐT",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII4.1",
+   "name": "- Doanh thu bán, thanh lý BĐSĐT",
+   "formula": "NET_C(511*[BDSDT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII4.2",
+   "name": "- Giá trị còn lại và chi phí bán, thanh lý BĐSĐT",
+   "formula": "NET_D(632*[BDSDT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII4.9",
+   "name": "Lãi/lỗ của hoạt động bán, thanh lý BĐSĐT",
+   "formula": "LINE(VII4.1) - LINE(VII4.2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII5",
+   "name": "VII.5. Doanh thu hoạt động tài chính",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII5.1",
+   "name": "- Lãi tiền gửi, tiền cho vay",
+   "formula": "NET_C(515*[LTG])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII5.2",
+   "name": "- Lãi do bán, thanh lý các khoản đầu tư tài chính",
+   "formula": "NET_C(515*[LBDT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII5.3",
+   "name": "- Cổ tức, lợi nhuận được chia bằng tiền hoặc tài sản phi tiền tệ",
+   "formula": "NET_C(515*[CTLN])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII5.4",
+   "name": "- Lãi chênh lệch tỷ giá",
+   "formula": "NET_C(515*[TG]) + NET_C(515*[DGL])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII5.5",
+   "name": "- Lãi bán hàng trả chậm, trả góp",
+   "formula": "NET_C(515*[TTC])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII5.6",
+   "name": "- Chiết khấu thanh toán được hưởng",
+   "formula": "NET_C(515*[CKTT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII5.7",
+   "name": "- Doanh thu hoạt động tài chính khác",
+   "formula": "NET_C(515*[!LTG,!LBDT,!CTLN,!TG,!DGL,!TTC,!CKTT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII5.9",
+   "name": "Cộng",
+   "formula": "LINE(VII5.1) + LINE(VII5.2) + LINE(VII5.3) + LINE(VII5.4) + LINE(VII5.5) + LINE(VII5.6) + LINE(VII5.7)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII6",
+   "name": "VII.6. Chi phí tài chính",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII6.1",
+   "name": "- Chi phí đi vay",
+   "formula": "NET_D(635*[LV])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII6.2",
+   "name": "- Lỗ do bán, thanh lý các khoản đầu tư tài chính",
+   "formula": "NET_D(635*[LBDT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII6.3",
+   "name": "- Lỗ chênh lệch tỷ giá",
+   "formula": "NET_D(635*[TG]) + NET_D(635*[DGL])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII6.4",
+   "name": "- Lãi mua hàng trả chậm, trả góp",
+   "formula": "NET_D(635*[TTC])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII6.5",
+   "name": "- Chiết khấu thanh toán phải trả",
+   "formula": "NET_D(635*[CKTT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII6.6",
+   "name": "- Dự phòng giảm giá chứng khoán kinh doanh và dự phòng tổn thất đầu tư vào đơn vị khác",
+   "formula": "NET_D(635*[DPDT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII6.8",
+   "name": "- Chi phí tài chính khác",
+   "formula": "NET_D(635*[!LV,!LBDT,!TG,!DGL,!TTC,!CKTT,!DPDT])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII6.9",
+   "name": "Cộng",
+   "formula": "LINE(VII6.1) + LINE(VII6.2) + LINE(VII6.3) + LINE(VII6.4) + LINE(VII6.5) + LINE(VII6.6) + LINE(VII6.8)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII7",
+   "name": "VII.7. Thu nhập khác",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII7.1",
+   "name": "- Thanh lý, nhượng bán TSCĐ",
+   "formula": "NET_C(711*[TLTS])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII7.6",
+   "name": "- Các khoản khác",
+   "formula": "NET_C(711*[!TLTS])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII7.9",
+   "name": "Cộng",
+   "formula": "LINE(VII7.1) + LINE(VII7.6)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII8",
+   "name": "VII.8. Chi phí khác",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII8.1",
+   "name": "- Giá trị còn lại TSCĐ và chi phí thanh lý, nhượng bán TSCĐ",
+   "formula": "NET_D(811*[TLTS])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII8.4",
+   "name": "- Các khoản chi phí khác",
+   "formula": "NET_D(811*[!TLTS])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII8.9",
+   "name": "Cộng",
+   "formula": "LINE(VII8.1) + LINE(VII8.4)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII9",
+   "name": "VII.9. Chi phí bán hàng và chi phí quản lý doanh nghiệp",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII9.A",
+   "name": "a) Các khoản chi phí quản lý doanh nghiệp phát sinh trong kỳ",
+   "formula": "PS_D(642*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII9.B",
+   "name": "b) Các khoản chi phí bán hàng phát sinh trong kỳ",
+   "formula": "PS_D(641*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII9.C",
+   "name": "c) Các khoản ghi giảm chi phí bán hàng và chi phí quản lý doanh nghiệp",
+   "formula": "PS_D(641*, 642*) - NET_D(641*, 642*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII10",
+   "name": "VII.10. Chi phí sản xuất, kinh doanh theo yếu tố (phát sinh Nợ TK chi phí, trừ bút toán đảo)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII10.1",
+   "name": "- Chi phí nguyên liệu, vật liệu",
+   "formula": "PS_D(621*, 6232*, 6272*, 6412*, 6422*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII10.2",
+   "name": "- Chi phí nhân công",
+   "formula": "PS_D(622*, 6231*, 6271*, 6411*, 6421*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII10.3",
+   "name": "- Chi phí khấu hao tài sản cố định",
+   "formula": "PS_D(6234*, 6274*, 6414*, 6424*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII10.4",
+   "name": "- Chi phí dịch vụ mua ngoài",
+   "formula": "PS_D(6237*, 6277*, 6417*, 6427*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII10.5",
+   "name": "- Chi phí khác bằng tiền",
+   "formula": "PS_D(6233*, 6238*, 6273*, 6275*, 6278*, 6413*, 6415*, 6418*, 6423*, 6425*, 6426*, 6428*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII10.9",
+   "name": "Cộng",
+   "formula": "LINE(VII10.1) + LINE(VII10.2) + LINE(VII10.3) + LINE(VII10.4) + LINE(VII10.5)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII11",
+   "name": "VII.11. Chi phí thuế thu nhập doanh nghiệp",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VII11.1",
+   "name": "- Lợi nhuận kế toán trước thuế",
+   "formula": "NET_C(511*, 515*, 711*) - NET_D(521*, 632*, 635*, 641*, 642*, 811*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII11.7",
+   "name": "Chi phí thuế TNDN hiện hành",
+   "formula": "NET_D(8211*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII11.8",
+   "name": "Chi phí thuế TNDN hoãn lại",
+   "formula": "NET_D(8212*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VII11.9",
+   "name": "Chi phí thuế TNDN",
+   "formula": "LINE(VII11.7) + LINE(VII11.8)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VIII",
+   "name": "VIII. Thông tin bổ sung cho các khoản mục trình bày trong Báo cáo lưu chuyển tiền tệ",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "VIII3",
+   "name": "3. Số tiền đi vay thực thu trong kỳ",
+   "formula": "CF(33)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "VIII4",
+   "name": "4. Số tiền đã thực trả gốc vay trong kỳ",
+   "formula": "-CF(34)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  }
+ ],
+ "checks": []
+}

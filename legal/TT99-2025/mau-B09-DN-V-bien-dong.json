@@ -1,0 +1,119 @@
+{
+ "code": "B09-DN-V-BD",
+ "name": "Thuyết minh BCTC — V. Biến động vay, dự phòng phải trả, bất động sản đầu tư",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 09 - DN, Phụ lục IV TT 99/2025/TT-BTC (Công báo 1577+1578); hướng dẫn lập: Phần E (Công báo 1581+1582); mục V.13, V.16, V.25 (chuyển ngắn hạn ↔ dài hạn thể hiện ở cột tăng/giảm)",
+ "columns": [
+  "Đầu năm",
+  "Tăng trong năm",
+  "Giảm trong năm",
+  "Cuối năm"
+ ],
+ "lines": [
+  {
+   "code": "V16",
+   "name": "16. Vay và nợ thuê tài chính",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V16.A",
+   "name": "a) Vay ngắn hạn",
+   "formula": "OPEN_C(3411*[!DH]) | PS_C(3411*[!DH]) | PS_D(3411*[!DH]) | BAL_C(3411*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V16.B",
+   "name": "b) Vay dài hạn",
+   "formula": "OPEN_C(3411*[DH]) | PS_C(3411*[DH]) | PS_D(3411*[DH]) | BAL_C(3411*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V16.D",
+   "name": "d) Các khoản nợ thuê tài chính",
+   "formula": "OPEN_C(3412*) | PS_C(3412*) | PS_D(3412*) | BAL_C(3412*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V16.9",
+   "name": "Cộng",
+   "formula": "LINE(V16.A) + LINE(V16.B) + LINE(V16.D)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V25",
+   "name": "25. Dự phòng phải trả",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V25.A",
+   "name": "a) Ngắn hạn",
+   "formula": "OPEN_C(352*[!DH]) | PS_C(352*[!DH]) | PS_D(352*[!DH]) | BAL_C(352*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V25.B",
+   "name": "b) Dài hạn",
+   "formula": "OPEN_C(352*[DH]) | PS_C(352*[DH]) | PS_D(352*[DH]) | BAL_C(352*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V25.9",
+   "name": "Cộng",
+   "formula": "LINE(V25.A) + LINE(V25.B)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V13",
+   "name": "13. Bất động sản đầu tư",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V13.1",
+   "name": "Nguyên giá",
+   "formula": "OPEN_D(217*) | PS_D(217*) | PS_C(217*) | BAL_D(217*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V13.2",
+   "name": "Giá trị hao mòn lũy kế",
+   "formula": "OPEN_C(2147*) | PS_C(2147*) | PS_D(2147*) | BAL_C(2147*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V13.3",
+   "name": "Giá trị còn lại",
+   "formula": "LINE(V13.1) - LINE(V13.2) | | | LINE(V13.1) - LINE(V13.2)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  }
+ ],
+ "checks": []
+}

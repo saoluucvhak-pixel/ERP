@@ -1,0 +1,741 @@
+{
+ "code": "B09-DN-V",
+ "name": "Thuyết minh BCTC — V. Số dư các khoản mục trên Báo cáo tình hình tài chính",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 09 - DN, Phụ lục IV TT 99/2025/TT-BTC (Công báo 1577+1578); hướng dẫn lập: Phần E (Công báo 1581+1582); mục V.1–V.27 phần số dư",
+ "columns": [
+  "Cuối năm",
+  "Đầu năm"
+ ],
+ "lines": [
+  {
+   "code": "V1",
+   "name": "1. Tiền và các khoản tương đương tiền (không bị hạn chế sử dụng)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V1.1",
+   "name": "- Tiền mặt",
+   "formula": "BAL_D(111*[!HCSD]) | OPEN_D(111*[!HCSD])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V1.2",
+   "name": "- Tiền gửi không kỳ hạn",
+   "formula": "BAL_D(112*[!HCSD]) | OPEN_D(112*[!HCSD])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V1.3",
+   "name": "- Tiền đang chuyển",
+   "formula": "BAL_D(113*[!HCSD]) | OPEN_D(113*[!HCSD])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V1.4",
+   "name": "- Tương đương tiền",
+   "formula": "BAL_D(1281*[TDT,!HCSD], 1288*[TDT,!HCSD]) | OPEN_D(1281*[TDT,!HCSD], 1288*[TDT,!HCSD])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V1.9",
+   "name": "Cộng",
+   "formula": "LINE(V1.1) + LINE(V1.2) + LINE(V1.3) + LINE(V1.4)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V2",
+   "name": "2. Các khoản đầu tư tài chính (giá gốc; giá trị hợp lý, giá trị có thể thu hồi: thuyết minh)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V2.A",
+   "name": "a) Chứng khoán kinh doanh — giá gốc",
+   "formula": "BAL_D(121*) | OPEN_D(121*)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V2.A1",
+   "name": "   Giá trị dự phòng",
+   "formula": "BAL_C(2291*) | OPEN_C(2291*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.B",
+   "name": "b) Đầu tư nắm giữ đến ngày đáo hạn — giá gốc",
+   "formula": "LINE(V2.B1) + LINE(V2.B2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V2.B1",
+   "name": "- Ngắn hạn",
+   "formula": "BAL_D(128*[!TDT,!DH]) | OPEN_D(128*[!TDT,!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.B2",
+   "name": "- Dài hạn",
+   "formula": "BAL_D(128*[DH,!TDT]) | OPEN_D(128*[DH,!TDT])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.B3",
+   "name": "+ Tiền gửi có kỳ hạn",
+   "formula": "BAL_D(1281*[!TDT]) | OPEN_D(1281*[!TDT])",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.B4",
+   "name": "+ Trái phiếu",
+   "formula": "BAL_D(1282*) | OPEN_D(1282*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.B5",
+   "name": "+ Cho vay",
+   "formula": "BAL_D(1283*) | OPEN_D(1283*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.B6",
+   "name": "+ Các khoản đầu tư khác",
+   "formula": "BAL_D(1288*[!TDT]) | OPEN_D(1288*[!TDT])",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.B7",
+   "name": "   Giá trị dự phòng",
+   "formula": "BAL_C(2292*[HTM]) | OPEN_C(2292*[HTM])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.C",
+   "name": "c) Đầu tư góp vốn vào đơn vị khác — giá gốc",
+   "formula": "LINE(V2.C1) + LINE(V2.C2) + LINE(V2.C3)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V2.C1",
+   "name": "- Đầu tư vào công ty con",
+   "formula": "BAL_D(221*) | OPEN_D(221*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.C2",
+   "name": "- Đầu tư vào công ty liên doanh, liên kết",
+   "formula": "BAL_D(222*) | OPEN_D(222*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.C3",
+   "name": "- Đầu tư vào đơn vị khác",
+   "formula": "BAL_D(2281*) | OPEN_D(2281*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V2.C4",
+   "name": "   Giá trị dự phòng",
+   "formula": "BAL_C(2292*[!HTM]) | OPEN_C(2292*[!HTM])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V3",
+   "name": "3. Phải thu của khách hàng (giá trị ghi sổ)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V3.1",
+   "name": "a) Phải thu của khách hàng ngắn hạn",
+   "formula": "GROSS_D(131*[!DH]) | OPEN_GROSS_D(131*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V3.2",
+   "name": "b) Phải thu của khách hàng dài hạn",
+   "formula": "GROSS_D(131*[DH]) | OPEN_GROSS_D(131*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V3.9",
+   "name": "Cộng",
+   "formula": "LINE(V3.1) + LINE(V3.2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V3.D",
+   "name": "   Giá trị dự phòng phải thu khó đòi (2293)",
+   "formula": "BAL_C(2293*) | OPEN_C(2293*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V4",
+   "name": "4. Phải thu khác (giá trị ghi sổ)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V4.A",
+   "name": "a) Ngắn hạn",
+   "formula": "LINE(V4.A1) + LINE(V4.A2) + LINE(V4.A3)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V4.A1",
+   "name": "- Phải thu của người lao động (tạm ứng, 334 dư Nợ)",
+   "formula": "GROSS_D(141*[!DH], 334*[!DH]) | OPEN_GROSS_D(141*[!DH], 334*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V4.A2",
+   "name": "- Ký cược, ký quỹ",
+   "formula": "GROSS_D(244*[!DH]) | OPEN_GROSS_D(244*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V4.A3",
+   "name": "- Phải thu khác (1388, 338 dư Nợ)",
+   "formula": "GROSS_D(1388*[!DH], 338*[!DH]) | OPEN_GROSS_D(1388*[!DH], 338*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V4.B",
+   "name": "b) Dài hạn",
+   "formula": "GROSS_D(1388*[DH], 334*[DH], 338*[DH], 141*[DH], 244*[DH]) | OPEN_GROSS_D(1388*[DH], 334*[DH], 338*[DH], 141*[DH], 244*[DH])",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V4.9",
+   "name": "Cộng",
+   "formula": "LINE(V4.A) + LINE(V4.B)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V5",
+   "name": "5. Tài sản thiếu chờ xử lý",
+   "formula": "BAL_D(1381*) | OPEN_D(1381*)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V7",
+   "name": "7. Hàng tồn kho (giá gốc)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V7.1",
+   "name": "- Hàng mua đang đi đường",
+   "formula": "BAL_D(151*) | OPEN_D(151*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.2",
+   "name": "- Nguyên liệu, vật liệu",
+   "formula": "BAL_D(152*) | OPEN_D(152*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.3",
+   "name": "- Công cụ, dụng cụ",
+   "formula": "BAL_D(153*) | OPEN_D(153*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.4",
+   "name": "- Chi phí sản xuất kinh doanh dở dang",
+   "formula": "BAL_D(154*[!DH]) | OPEN_D(154*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.5",
+   "name": "- Sản phẩm",
+   "formula": "BAL_D(155*) | OPEN_D(155*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.6",
+   "name": "- Hàng hóa",
+   "formula": "BAL_D(156*) | OPEN_D(156*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.7",
+   "name": "- Hàng gửi đi bán",
+   "formula": "BAL_D(157*) | OPEN_D(157*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.8",
+   "name": "- Nguyên liệu, vật tư tại kho bảo thuế",
+   "formula": "BAL_D(158*) | OPEN_D(158*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V7.9",
+   "name": "Cộng giá gốc",
+   "formula": "LINE(V7.1) + LINE(V7.2) + LINE(V7.3) + LINE(V7.4) + LINE(V7.5) + LINE(V7.6) + LINE(V7.7) + LINE(V7.8)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V7.D",
+   "name": "   Dự phòng giảm giá hàng tồn kho (2294)",
+   "formula": "BAL_C(2294*) | OPEN_C(2294*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V8",
+   "name": "8. Tài sản dở dang dài hạn",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V8.A",
+   "name": "a) Chi phí sản xuất, kinh doanh dở dang dài hạn",
+   "formula": "BAL_D(154*[DH]) | OPEN_D(154*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V8.B",
+   "name": "b) Xây dựng cơ bản dở dang",
+   "formula": "LINE(V8.B1) + LINE(V8.B2) + LINE(V8.B3) + LINE(V8.B4)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V8.B1",
+   "name": "- Mua sắm",
+   "formula": "BAL_D(2411*) | OPEN_D(2411*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V8.B2",
+   "name": "- XDCB",
+   "formula": "BAL_D(2412*) | OPEN_D(2412*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V8.B3",
+   "name": "- Sửa chữa, bảo dưỡng định kỳ",
+   "formula": "BAL_D(2413*) | OPEN_D(2413*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V8.B4",
+   "name": "- Nâng cấp cải tạo TSCĐ",
+   "formula": "BAL_D(2414*) | OPEN_D(2414*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V8.9",
+   "name": "Cộng",
+   "formula": "LINE(V8.A) + LINE(V8.B)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V14",
+   "name": "14. Chi phí chờ phân bổ",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V14.1",
+   "name": "a) Ngắn hạn",
+   "formula": "BAL_D(242*[!DH]) | OPEN_D(242*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V14.2",
+   "name": "b) Dài hạn",
+   "formula": "BAL_D(242*[DH]) | OPEN_D(242*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V14.9",
+   "name": "Cộng",
+   "formula": "LINE(V14.1) + LINE(V14.2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V17",
+   "name": "17. Phải trả người bán",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V17.1",
+   "name": "a) Phải trả người bán ngắn hạn",
+   "formula": "GROSS_C(331*[!DH]) | OPEN_GROSS_C(331*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V17.2",
+   "name": "b) Phải trả người bán dài hạn",
+   "formula": "GROSS_C(331*[DH]) | OPEN_GROSS_C(331*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V17.9",
+   "name": "Cộng",
+   "formula": "LINE(V17.1) + LINE(V17.2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V18",
+   "name": "18. Phải trả về cổ tức, lợi nhuận",
+   "formula": "BAL_C(332*) | OPEN_C(332*)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V20",
+   "name": "20. Chi phí phải trả",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V20.1",
+   "name": "a) Ngắn hạn",
+   "formula": "BAL_C(335*[!DH]) | OPEN_C(335*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V20.2",
+   "name": "b) Dài hạn",
+   "formula": "BAL_C(335*[DH]) | OPEN_C(335*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V20.9",
+   "name": "Cộng",
+   "formula": "LINE(V20.1) + LINE(V20.2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V21",
+   "name": "21. Phải trả khác",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V21.A",
+   "name": "a) Ngắn hạn",
+   "formula": "LINE(V21.A1) + LINE(V21.A2) + LINE(V21.A3) + LINE(V21.A4) + LINE(V21.A5) + LINE(V21.A6) + LINE(V21.A7)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V21.A1",
+   "name": "- Tài sản thừa chờ giải quyết",
+   "formula": "BAL_C(3381*[!DH]) | OPEN_C(3381*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.A2",
+   "name": "- Kinh phí công đoàn",
+   "formula": "BAL_C(3382*[!DH]) | OPEN_C(3382*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.A3",
+   "name": "- Bảo hiểm xã hội",
+   "formula": "BAL_C(3383*[!DH]) | OPEN_C(3383*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.A4",
+   "name": "- Bảo hiểm y tế",
+   "formula": "BAL_C(3384*[!DH]) | OPEN_C(3384*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.A5",
+   "name": "- Bảo hiểm thất nghiệp",
+   "formula": "BAL_C(3386*[!DH]) | OPEN_C(3386*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.A6",
+   "name": "- Nhận ký quỹ, ký cược ngắn hạn",
+   "formula": "GROSS_C(344*[!DH]) | OPEN_GROSS_C(344*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.A7",
+   "name": "- Các khoản phải trả, phải nộp khác",
+   "formula": "GROSS_C(3388*[!DH], 138*[!DH]) | OPEN_GROSS_C(3388*[!DH], 138*[!DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.B",
+   "name": "b) Dài hạn",
+   "formula": "LINE(V21.B1) + LINE(V21.B2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V21.B1",
+   "name": "- Nhận ký quỹ, ký cược dài hạn",
+   "formula": "GROSS_C(344*[DH]) | OPEN_GROSS_C(344*[DH])",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V21.B2",
+   "name": "- Các khoản phải trả, phải nộp khác",
+   "formula": "GROSS_C(338*[DH], !3387*) | OPEN_GROSS_C(338*[DH], !3387*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V22",
+   "name": "22. Doanh thu chờ phân bổ",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V22.1",
+   "name": "a) Ngắn hạn",
+   "formula": "BAL_C(3387*[!DH]) | OPEN_C(3387*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V22.2",
+   "name": "b) Dài hạn",
+   "formula": "BAL_C(3387*[DH]) | OPEN_C(3387*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V22.9",
+   "name": "Cộng",
+   "formula": "LINE(V22.1) + LINE(V22.2)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V23",
+   "name": "23. Trái phiếu phát hành",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V23.1",
+   "name": "23.1. Trái phiếu thường",
+   "formula": "BAL_C(3431*) | OPEN_C(3431*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V23.2",
+   "name": "23.2. Trái phiếu chuyển đổi",
+   "formula": "BAL_C(3432*) | OPEN_C(3432*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V26",
+   "name": "26. Tài sản thuế thu nhập hoãn lại và thuế thu nhập hoãn lại phải trả",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V26.A",
+   "name": "a) Tài sản thuế thu nhập hoãn lại",
+   "formula": "BAL_D(243*) | OPEN_D(243*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V26.B",
+   "name": "b) Thuế thu nhập hoãn lại phải trả",
+   "formula": "BAL_C(347*) | OPEN_C(347*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V27B",
+   "name": "27.b) Chi tiết vốn góp của chủ sở hữu",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V27B.9",
+   "name": "Vốn góp của chủ sở hữu (4111) — tách vốn công ty mẹ / đối tượng khác trong thuyết minh",
+   "formula": "BAL_C(4111*) | OPEN_C(4111*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  }
+ ],
+ "checks": []
+}

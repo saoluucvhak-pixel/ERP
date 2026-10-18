@@ -1,0 +1,177 @@
+{
+ "code": "B02-DN",
+ "name": "Báo cáo kết quả hoạt động kinh doanh",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 02 - DN, Phụ lục IV TT 99/2025/TT-BTC; hướng dẫn lập: Phần C mục 3 (Công báo 1579+1580, 1581+1582)",
+ "lines": [
+  {
+   "code": "01",
+   "name": "1. Doanh thu bán hàng và cung cấp dịch vụ",
+   "formula": "NET_C(511*[!BDSDT])",
+   "indent": 1,
+   "bold": false,
+   "note": "Phát sinh Có 511 (không gồm bán, thanh lý BĐSĐT; trừ thuế gián thu ghi giảm 511), không tính bút toán kết chuyển"
+  },
+  {
+   "code": "02",
+   "name": "2. Các khoản giảm trừ doanh thu",
+   "formula": "NET_D(521*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Các khoản giảm trừ doanh thu phát sinh trong kỳ (521)"
+  },
+  {
+   "code": "10",
+   "name": "3. Doanh thu thuần về bán hàng và cung cấp dịch vụ (10 = 01 - 02)",
+   "formula": "LINE(01) - LINE(02)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "11",
+   "name": "4. Giá vốn hàng bán",
+   "formula": "NET_D(632*[!BDSDT])",
+   "indent": 1,
+   "bold": false,
+   "note": "Giá vốn 632 phát sinh trong kỳ (không gồm BĐSĐT thanh lý)"
+  },
+  {
+   "code": "20",
+   "name": "5. Lợi nhuận gộp về bán hàng và cung cấp dịch vụ (20 = 10 - 11)",
+   "formula": "LINE(10) - LINE(11)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "21",
+   "name": "6. Lãi/lỗ của hoạt động bán, thanh lý bất động sản đầu tư",
+   "formula": "NET_C(511*[BDSDT]) - NET_D(632*[BDSDT])",
+   "indent": 1,
+   "bold": false,
+   "note": "Doanh thu bán, thanh lý BĐSĐT − giá trị còn lại, chi phí (TK chi tiết nhãn BDSDT)"
+  },
+  {
+   "code": "22",
+   "name": "7. Doanh thu hoạt động tài chính",
+   "formula": "NET_C(515*[!DGL]) + MAX0(NET_C(515*[DGL]) - NET_D(635*[DGL]))",
+   "indent": 1,
+   "bold": false,
+   "note": "Doanh thu tài chính; chênh lệch tỷ giá đánh giá lại cuối kỳ trình bày thuần (nhãn DGL)"
+  },
+  {
+   "code": "23",
+   "name": "8. Chi phí tài chính",
+   "formula": "NET_D(635*[!DGL]) + MAX0(NET_D(635*[DGL]) - NET_C(515*[DGL]))",
+   "indent": 1,
+   "bold": false,
+   "note": "Chi phí tài chính; lỗ thuần đánh giá lại tỷ giá"
+  },
+  {
+   "code": "24",
+   "name": "- Trong đó: Chi phí đi vay",
+   "formula": "NET_D(635*[LV])",
+   "indent": 2,
+   "bold": false,
+   "note": "Chi phí đi vay trong 635 (TK chi tiết nhãn LV)"
+  },
+  {
+   "code": "25",
+   "name": "9. Chi phí bán hàng",
+   "formula": "NET_D(641*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Chi phí bán hàng"
+  },
+  {
+   "code": "26",
+   "name": "10. Chi phí quản lý doanh nghiệp",
+   "formula": "NET_D(642*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Chi phí quản lý doanh nghiệp"
+  },
+  {
+   "code": "30",
+   "name": "11. Lợi nhuận thuần từ hoạt động kinh doanh {30 = 20 + 21 + 22 - (23 + 25 + 26)}",
+   "formula": "LINE(20) + LINE(21) + LINE(22) - (LINE(23) + LINE(25) + LINE(26))",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "31",
+   "name": "12. Thu nhập khác",
+   "formula": "NET_C(711*[!TLTS]) + MAX0(NET_C(711*[TLTS]) - NET_D(811*[TLTS]))",
+   "indent": 1,
+   "bold": false,
+   "note": "Thu nhập khác; thanh lý, nhượng bán TSCĐ trình bày thuần (nhãn TLTS)"
+  },
+  {
+   "code": "32",
+   "name": "13. Chi phí khác",
+   "formula": "NET_D(811*[!TLTS]) + MAX0(NET_D(811*[TLTS]) - NET_C(711*[TLTS]))",
+   "indent": 1,
+   "bold": false,
+   "note": "Chi phí khác; lỗ thuần thanh lý TSCĐ"
+  },
+  {
+   "code": "40",
+   "name": "14. Lợi nhuận khác (40 = 31 - 32)",
+   "formula": "LINE(31) - LINE(32)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "50",
+   "name": "15. Tổng lợi nhuận kế toán trước thuế (50 = 30 + 40)",
+   "formula": "LINE(30) + LINE(40)",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "51",
+   "name": "16. Chi phí thuế TNDN hiện hành",
+   "formula": "NET_D(8211*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Chi phí thuế TNDN hiện hành (8211); thu nhập ghi âm"
+  },
+  {
+   "code": "52",
+   "name": "17. Chi phí thuế TNDN hoãn lại",
+   "formula": "NET_D(8212*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Chi phí thuế TNDN hoãn lại (8212); thu nhập ghi âm"
+  },
+  {
+   "code": "60",
+   "name": "18. Lợi nhuận sau thuế thu nhập doanh nghiệp (60 = 50 - 51 - 52)",
+   "formula": "LINE(50) - (LINE(51) + LINE(52))",
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "70",
+   "name": "19. Lãi cơ bản trên cổ phiếu (*)",
+   "formula": null,
+   "indent": 1,
+   "bold": false,
+   "note": "Lãi cơ bản trên cổ phiếu — công ty cổ phần tự tính theo hướng dẫn mục 3.20 (Công báo 1581+1582)"
+  },
+  {
+   "code": "71",
+   "name": "20. Lãi suy giảm trên cổ phiếu (*)",
+   "formula": null,
+   "indent": 1,
+   "bold": false,
+   "note": "Lãi suy giảm trên cổ phiếu — tự tính theo hướng dẫn mục 3.21"
+  }
+ ],
+ "checks": []
+}

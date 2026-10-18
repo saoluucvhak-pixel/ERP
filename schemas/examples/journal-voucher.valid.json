@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "package_id": "PAYROLL01-2026-03-0001",
+  "event_id": "evt-7f3c2a10",
+  "source_system": "PAYROLL01",
+  "company_code": "HAK01",
+  "branch_code": null,
+  "created_at": "2026-04-01T09:00:00+07:00",
+  "document_type": "journal-voucher",
+  "source_id": "payroll-2026-03",
+  "source_version": "1",
+  "payload": {
+    "vouchers": [
+      {
+        "source_id": "PR-2026-03-OFFICE",
+        "source_version": "1",
+        "voucher_type": "GJ",
+        "voucher_date": "2026-03-31",
+        "posting_date": "2026-03-31",
+        "description": "Chi phí lương tháng 03/2026 - bộ phận văn phòng",
+        "lines": [
+          { "account_code": "EXP", "side": "D", "amount": "125000000", "description": "Lương và phụ cấp" },
+          { "account_code": "PAYABLE-EMP", "side": "C", "amount": "125000000" }
+        ]
+      },
+      {
+        "source_id": "PR-2026-03-USD-BONUS",
+        "source_version": "1",
+        "voucher_type": "GJ",
+        "voucher_date": "2026-03-31",
+        "posting_date": "2026-03-31",
+        "description": "Thưởng chuyên gia bằng USD",
+        "lines": [
+          { "account_code": "EXP", "side": "D", "amount": "31290540", "foreign_currency": "USD", "foreign_amount": "1234.56", "exchange_rate": "25345.5" },
+          { "account_code": "PAYABLE-EMP", "side": "C", "amount": "31290540", "partner_code": "NV0001" }
+        ]
+      }
+    ]
+  },
+  "checksum": { "algorithm": "SHA-256", "value": "0000000000000000000000000000000000000000000000000000000000000000" },
+  "auth": { "method": "HMAC-SHA256", "key_id": "k1", "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" }
+}

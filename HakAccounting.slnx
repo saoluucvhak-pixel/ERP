@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Hak.Api/Hak.Api.csproj" />
+    <Project Path="src/Hak.Application/Hak.Application.csproj" />
+    <Project Path="src/Hak.Data.Postgres/Hak.Data.Postgres.csproj" />
+    <Project Path="src/Hak.Data/Hak.Data.csproj" />
+    <Project Path="src/Hak.Domain/Hak.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Hak.Bench/Hak.Bench.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Hak.Domain.Tests/Hak.Domain.Tests.csproj" />
+    <Project Path="tests/Hak.Integration.Tests/Hak.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

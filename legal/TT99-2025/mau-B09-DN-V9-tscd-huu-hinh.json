@@ -1,0 +1,186 @@
+{
+ "code": "B09-DN-V9",
+ "name": "Thuyết minh BCTC — V.9 Tăng, giảm tài sản cố định hữu hình",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 09 - DN, Phụ lục IV TT 99/2025/TT-BTC (Công báo 1577+1578); hướng dẫn lập: Phần E (Công báo 1581+1582); cột theo nhóm: TK chi tiết 211 và 2141 gắn nhãn NHA / MAY / PTVT / CLN / KHAC",
+ "columns": [
+  "Nhà cửa, vật kiến trúc",
+  "Máy móc, thiết bị",
+  "Phương tiện vận tải, truyền dẫn",
+  "Cây lâu năm cho sản phẩm định kỳ",
+  "TSCĐ hữu hình khác",
+  "Tổng cộng"
+ ],
+ "lines": [
+  {
+   "code": "V9",
+   "name": "9. Tăng, giảm tài sản cố định hữu hình",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V9.NG",
+   "name": "Nguyên giá",
+   "formula": null,
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V9.NG0",
+   "name": "Số dư đầu năm",
+   "formula": "OPEN_D(211*[NHA]) | OPEN_D(211*[MAY]) | OPEN_D(211*[PTVT]) | OPEN_D(211*[CLN]) | OPEN_D(211*[KHAC]) | OPEN_D(211*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.NGT1",
+   "name": "- Mua trong năm",
+   "formula": "MOV_D(211*[NHA] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) | MOV_D(211*[MAY] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) | MOV_D(211*[PTVT] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) | MOV_D(211*[CLN] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) | MOV_D(211*[KHAC] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) | MOV_D(211* ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.NGT2",
+   "name": "- Đầu tư XDCB hoàn thành",
+   "formula": "MOV_D(211*[NHA] ; 241*) | MOV_D(211*[MAY] ; 241*) | MOV_D(211*[PTVT] ; 241*) | MOV_D(211*[CLN] ; 241*) | MOV_D(211*[KHAC] ; 241*) | MOV_D(211* ; 241*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.NGT3",
+   "name": "- Tăng khác",
+   "formula": "PS_D(211*[NHA]) - MOV_D(211*[NHA] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) - MOV_D(211*[NHA] ; 241*) | PS_D(211*[MAY]) - MOV_D(211*[MAY] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) - MOV_D(211*[MAY] ; 241*) | PS_D(211*[PTVT]) - MOV_D(211*[PTVT] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) - MOV_D(211*[PTVT] ; 241*) | PS_D(211*[CLN]) - MOV_D(211*[CLN] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) - MOV_D(211*[CLN] ; 241*) | PS_D(211*[KHAC]) - MOV_D(211*[KHAC] ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) - MOV_D(211*[KHAC] ; 241*) | PS_D(211*) - MOV_D(211* ; 331*, 111*, 112*, 113*, 141*, 3388*, 341*) - MOV_D(211* ; 241*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.NGG1",
+   "name": "- Chuyển sang bất động sản đầu tư",
+   "formula": "MOV_C(211*[NHA] ; 217*) | MOV_C(211*[MAY] ; 217*) | MOV_C(211*[PTVT] ; 217*) | MOV_C(211*[CLN] ; 217*) | MOV_C(211*[KHAC] ; 217*) | MOV_C(211* ; 217*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.NGG2",
+   "name": "- Thanh lý, nhượng bán",
+   "formula": "VT_C(211*[NHA] ; FAD) | VT_C(211*[MAY] ; FAD) | VT_C(211*[PTVT] ; FAD) | VT_C(211*[CLN] ; FAD) | VT_C(211*[KHAC] ; FAD) | VT_C(211* ; FAD)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.NGG3",
+   "name": "- Giảm khác",
+   "formula": "PS_C(211*[NHA]) - MOV_C(211*[NHA] ; 217*) - VT_C(211*[NHA] ; FAD) | PS_C(211*[MAY]) - MOV_C(211*[MAY] ; 217*) - VT_C(211*[MAY] ; FAD) | PS_C(211*[PTVT]) - MOV_C(211*[PTVT] ; 217*) - VT_C(211*[PTVT] ; FAD) | PS_C(211*[CLN]) - MOV_C(211*[CLN] ; 217*) - VT_C(211*[CLN] ; FAD) | PS_C(211*[KHAC]) - MOV_C(211*[KHAC] ; 217*) - VT_C(211*[KHAC] ; FAD) | PS_C(211*) - MOV_C(211* ; 217*) - VT_C(211* ; FAD)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.NG9",
+   "name": "Số dư cuối năm",
+   "formula": "BAL_D(211*[NHA]) | BAL_D(211*[MAY]) | BAL_D(211*[PTVT]) | BAL_D(211*[CLN]) | BAL_D(211*[KHAC]) | BAL_D(211*)",
+   "indent": 2,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V9.HM",
+   "name": "Giá trị hao mòn lũy kế",
+   "formula": null,
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V9.HM0",
+   "name": "Số dư đầu năm",
+   "formula": "OPEN_C(2141*[NHA]) | OPEN_C(2141*[MAY]) | OPEN_C(2141*[PTVT]) | OPEN_C(2141*[CLN]) | OPEN_C(2141*[KHAC]) | OPEN_C(2141*)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.HMT1",
+   "name": "- Khấu hao trong năm",
+   "formula": "PS_C(2141*[NHA]) | PS_C(2141*[MAY]) | PS_C(2141*[PTVT]) | PS_C(2141*[CLN]) | PS_C(2141*[KHAC]) | PS_C(2141*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.HMG1",
+   "name": "- Chuyển sang bất động sản đầu tư",
+   "formula": "MOV_D(2141*[NHA] ; 2147*) | MOV_D(2141*[MAY] ; 2147*) | MOV_D(2141*[PTVT] ; 2147*) | MOV_D(2141*[CLN] ; 2147*) | MOV_D(2141*[KHAC] ; 2147*) | MOV_D(2141* ; 2147*)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.HMG2",
+   "name": "- Thanh lý, nhượng bán",
+   "formula": "VT_D(2141*[NHA] ; FAD) | VT_D(2141*[MAY] ; FAD) | VT_D(2141*[PTVT] ; FAD) | VT_D(2141*[CLN] ; FAD) | VT_D(2141*[KHAC] ; FAD) | VT_D(2141* ; FAD)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.HMG3",
+   "name": "- Giảm khác",
+   "formula": "PS_D(2141*[NHA]) - MOV_D(2141*[NHA] ; 2147*) - VT_D(2141*[NHA] ; FAD) | PS_D(2141*[MAY]) - MOV_D(2141*[MAY] ; 2147*) - VT_D(2141*[MAY] ; FAD) | PS_D(2141*[PTVT]) - MOV_D(2141*[PTVT] ; 2147*) - VT_D(2141*[PTVT] ; FAD) | PS_D(2141*[CLN]) - MOV_D(2141*[CLN] ; 2147*) - VT_D(2141*[CLN] ; FAD) | PS_D(2141*[KHAC]) - MOV_D(2141*[KHAC] ; 2147*) - VT_D(2141*[KHAC] ; FAD) | PS_D(2141*) - MOV_D(2141* ; 2147*) - VT_D(2141* ; FAD)",
+   "indent": 3,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.HM9",
+   "name": "Số dư cuối năm",
+   "formula": "BAL_C(2141*[NHA]) | BAL_C(2141*[MAY]) | BAL_C(2141*[PTVT]) | BAL_C(2141*[CLN]) | BAL_C(2141*[KHAC]) | BAL_C(2141*)",
+   "indent": 2,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V9.CL",
+   "name": "Giá trị còn lại",
+   "formula": null,
+   "indent": 1,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V9.CL0",
+   "name": "- Tại ngày đầu năm",
+   "formula": "LINE(V9.NG0) - LINE(V9.HM0)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V9.CL9",
+   "name": "- Tại ngày cuối năm",
+   "formula": "LINE(V9.NG9) - LINE(V9.HM9)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  }
+ ],
+ "checks": [
+  {
+   "rule": "LINE(V9.NG9) = LINE(V9.NG0) + LINE(V9.NGT1) + LINE(V9.NGT2) + LINE(V9.NGT3) - LINE(V9.NGG1) - LINE(V9.NGG2) - LINE(V9.NGG3)",
+   "message": "Nguyên giá: đầu năm + tăng − giảm = cuối năm"
+  },
+  {
+   "rule": "LINE(V9.HM9) = LINE(V9.HM0) + LINE(V9.HMT1) - LINE(V9.HMG1) - LINE(V9.HMG2) - LINE(V9.HMG3)",
+   "message": "Hao mòn: đầu năm + tăng − giảm = cuối năm"
+  }
+ ]
+}

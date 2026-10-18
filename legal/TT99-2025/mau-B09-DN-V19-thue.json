@@ -1,0 +1,103 @@
+{
+ "code": "B09-DN-V19",
+ "name": "Thuyết minh BCTC — V.19 Thuế và các khoản phải nộp nhà nước",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 09 - DN, Phụ lục IV TT 99/2025/TT-BTC (Công báo 1577+1578); hướng dẫn lập: Phần E (Công báo 1581+1582); mục V.19; trình bày thuần theo từng loại thuế; đã nộp = phát sinh Nợ 333 đối ứng TK tiền, phải nộp = phần còn lại của biến động",
+ "columns": [
+  "Đầu năm",
+  "Số phải nộp trong năm",
+  "Số đã thực nộp trong năm",
+  "Cuối năm"
+ ],
+ "lines": [
+  {
+   "code": "V19",
+   "name": "19. Thuế và các khoản phải nộp nhà nước (số dương: phải nộp; số âm: phải thu)",
+   "formula": null,
+   "indent": 0,
+   "bold": true,
+   "note": null
+  },
+  {
+   "code": "V19.3331",
+   "name": "- Thuế giá trị gia tăng",
+   "formula": "-OPEN_NET(3331*) | OPEN_NET(3331*) - BAL_NET(3331*) + MOV_D(3331* ; 111*, 112*, 113*) - MOV_C(3331* ; 111*, 112*, 113*) | MOV_D(3331* ; 111*, 112*, 113*) - MOV_C(3331* ; 111*, 112*, 113*) | -BAL_NET(3331*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3332",
+   "name": "- Thuế tiêu thụ đặc biệt",
+   "formula": "-OPEN_NET(3332*) | OPEN_NET(3332*) - BAL_NET(3332*) + MOV_D(3332* ; 111*, 112*, 113*) - MOV_C(3332* ; 111*, 112*, 113*) | MOV_D(3332* ; 111*, 112*, 113*) - MOV_C(3332* ; 111*, 112*, 113*) | -BAL_NET(3332*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3333",
+   "name": "- Thuế xuất, nhập khẩu",
+   "formula": "-OPEN_NET(3333*) | OPEN_NET(3333*) - BAL_NET(3333*) + MOV_D(3333* ; 111*, 112*, 113*) - MOV_C(3333* ; 111*, 112*, 113*) | MOV_D(3333* ; 111*, 112*, 113*) - MOV_C(3333* ; 111*, 112*, 113*) | -BAL_NET(3333*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3334",
+   "name": "- Thuế thu nhập doanh nghiệp",
+   "formula": "-OPEN_NET(3334*) | OPEN_NET(3334*) - BAL_NET(3334*) + MOV_D(3334* ; 111*, 112*, 113*) - MOV_C(3334* ; 111*, 112*, 113*) | MOV_D(3334* ; 111*, 112*, 113*) - MOV_C(3334* ; 111*, 112*, 113*) | -BAL_NET(3334*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3335",
+   "name": "- Thuế thu nhập cá nhân",
+   "formula": "-OPEN_NET(3335*) | OPEN_NET(3335*) - BAL_NET(3335*) + MOV_D(3335* ; 111*, 112*, 113*) - MOV_C(3335* ; 111*, 112*, 113*) | MOV_D(3335* ; 111*, 112*, 113*) - MOV_C(3335* ; 111*, 112*, 113*) | -BAL_NET(3335*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3336",
+   "name": "- Thuế tài nguyên",
+   "formula": "-OPEN_NET(3336*) | OPEN_NET(3336*) - BAL_NET(3336*) + MOV_D(3336* ; 111*, 112*, 113*) - MOV_C(3336* ; 111*, 112*, 113*) | MOV_D(3336* ; 111*, 112*, 113*) - MOV_C(3336* ; 111*, 112*, 113*) | -BAL_NET(3336*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3337",
+   "name": "- Thuế nhà đất, tiền thuê đất",
+   "formula": "-OPEN_NET(3337*) | OPEN_NET(3337*) - BAL_NET(3337*) + MOV_D(3337* ; 111*, 112*, 113*) - MOV_C(3337* ; 111*, 112*, 113*) | MOV_D(3337* ; 111*, 112*, 113*) - MOV_C(3337* ; 111*, 112*, 113*) | -BAL_NET(3337*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3338",
+   "name": "- Thuế bảo vệ môi trường và các loại thuế khác",
+   "formula": "-OPEN_NET(3338*) | OPEN_NET(3338*) - BAL_NET(3338*) + MOV_D(3338* ; 111*, 112*, 113*) - MOV_C(3338* ; 111*, 112*, 113*) | MOV_D(3338* ; 111*, 112*, 113*) - MOV_C(3338* ; 111*, 112*, 113*) | -BAL_NET(3338*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.3339",
+   "name": "- Phí, lệ phí và các khoản phải nộp khác",
+   "formula": "-OPEN_NET(3339*) | OPEN_NET(3339*) - BAL_NET(3339*) + MOV_D(3339* ; 111*, 112*, 113*) - MOV_C(3339* ; 111*, 112*, 113*) | MOV_D(3339* ; 111*, 112*, 113*) - MOV_C(3339* ; 111*, 112*, 113*) | -BAL_NET(3339*)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "V19.9",
+   "name": "Cộng",
+   "formula": "LINE(V19.3331) + LINE(V19.3332) + LINE(V19.3333) + LINE(V19.3334) + LINE(V19.3335) + LINE(V19.3336) + LINE(V19.3337) + LINE(V19.3338) + LINE(V19.3339)",
+   "indent": 1,
+   "bold": true,
+   "note": null
+  }
+ ],
+ "checks": []
+}

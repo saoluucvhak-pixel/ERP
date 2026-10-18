@@ -1,0 +1,1022 @@
+{
+ "code": "B01-DN",
+ "name": "Báo cáo tình hình tài chính",
+ "category": "BCTC",
+ "legalReference": "Mẫu số B 01 - DN, Phụ lục IV TT 99/2025/TT-BTC; hướng dẫn lập: Phần B mục 1.4 (Công báo 1579+1580)",
+ "lines": [
+  {
+   "code": "100",
+   "name": "A - TÀI SẢN NGẮN HẠN",
+   "formula": "LINE(110) + LINE(120) + LINE(130) + LINE(140) + LINE(150) + LINE(160)",
+   "indent": 0,
+   "bold": true,
+   "note": "B.1.4.a"
+  },
+  {
+   "code": "110",
+   "name": "I. Tiền và các khoản tương đương tiền",
+   "formula": "LINE(111) + LINE(112)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "111",
+   "name": "1. Tiền",
+   "formula": "BAL_D(111*[!HCSD], 112*[!HCSD], 113*[!HCSD])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 111, 112, 113 không bị hạn chế sử dụng"
+  },
+  {
+   "code": "112",
+   "name": "2. Các khoản tương đương tiền",
+   "formula": "BAL_D(1281*[TDT,!HCSD], 1288*[TDT,!HCSD])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 1281, 1288 chi tiết khoản tương đương tiền (nhãn TDT)"
+  },
+  {
+   "code": "120",
+   "name": "II. Đầu tư tài chính ngắn hạn",
+   "formula": "LINE(121) + LINE(122) + LINE(123) + LINE(124) + LINE(125) + LINE(126)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "121",
+   "name": "1. Chứng khoán kinh doanh",
+   "formula": "BAL_D(121*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 121"
+  },
+  {
+   "code": "122",
+   "name": "2. Dự phòng giảm giá chứng khoán kinh doanh (*)",
+   "formula": "-BAL_C(2291*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2291, ghi âm"
+  },
+  {
+   "code": "123",
+   "name": "3. Đầu tư nắm giữ đến ngày đáo hạn ngắn hạn",
+   "formula": "BAL_D(128*[!TDT,!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 1281–1288 kỳ hạn còn lại ≤ 12 tháng, không phải tương đương tiền"
+  },
+  {
+   "code": "124",
+   "name": "4. Dự phòng đầu tư nắm giữ đến ngày đáo hạn ngắn hạn (*)",
+   "formula": "-BAL_C(2292*[HTM,!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2292 chi tiết dự phòng đầu tư nắm giữ đến ngày đáo hạn ngắn hạn (nhãn HTM), ghi âm"
+  },
+  {
+   "code": "125",
+   "name": "5. Đầu tư ngắn hạn khác",
+   "formula": "BAL_D(2281*[BCC,!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 2281 chi tiết hợp đồng BCC ≤ 12 tháng (nhãn BCC)"
+  },
+  {
+   "code": "126",
+   "name": "6. Dự phòng tổn thất các khoản đầu tư ngắn hạn khác (*)",
+   "formula": "-BAL_C(2292*[BCC,!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2292 chi tiết dự phòng BCC ngắn hạn, ghi âm"
+  },
+  {
+   "code": "130",
+   "name": "III. Các khoản phải thu ngắn hạn",
+   "formula": "LINE(131) + LINE(132) + LINE(133) + LINE(134) + LINE(135) + LINE(136) + LINE(137)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "131",
+   "name": "1. Phải thu ngắn hạn của khách hàng",
+   "formula": "GROSS_D(131*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Tổng dư Nợ chi tiết 131 theo từng khách hàng"
+  },
+  {
+   "code": "132",
+   "name": "2. Trả trước cho người bán ngắn hạn",
+   "formula": "GROSS_D(331*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Tổng dư Nợ chi tiết 331 theo từng người bán"
+  },
+  {
+   "code": "133",
+   "name": "3. Phải thu nội bộ ngắn hạn",
+   "formula": "GROSS_D(1362*[!DH], 1363*[!DH], 1368*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 1362, 1363, 1368"
+  },
+  {
+   "code": "134",
+   "name": "4. Phải thu theo tiến độ hợp đồng xây dựng",
+   "formula": "GROSS_D(337*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 337"
+  },
+  {
+   "code": "135",
+   "name": "5. Phải thu ngắn hạn khác",
+   "formula": "GROSS_D(1388*[!DH], 334*[!DH], 338*[!DH], 141*[!DH], 244*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 1388, 334, 338, 141, 244"
+  },
+  {
+   "code": "136",
+   "name": "6. Dự phòng phải thu ngắn hạn khó đòi (*)",
+   "formula": "-BAL_C(2293*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2293 chi tiết dự phòng ngắn hạn, ghi âm"
+  },
+  {
+   "code": "137",
+   "name": "7. Tài sản thiếu chờ xử lý",
+   "formula": "BAL_D(1381*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 1381"
+  },
+  {
+   "code": "140",
+   "name": "IV. Hàng tồn kho",
+   "formula": "LINE(141) + LINE(142)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "141",
+   "name": "1. Hàng tồn kho",
+   "formula": "BAL_D(151*, 152*, 153*[!DH], 154*[!DH], 155*, 156*, 157*, 158*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 151–158 (trừ 154, 153 dài hạn — nhãn DH)"
+  },
+  {
+   "code": "142",
+   "name": "2. Dự phòng giảm giá hàng tồn kho (*)",
+   "formula": "-BAL_C(2294*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2294 chi tiết cho hàng tồn kho Mã 141, ghi âm"
+  },
+  {
+   "code": "150",
+   "name": "V. Tài sản sinh học ngắn hạn",
+   "formula": "LINE(151) + LINE(152) + LINE(153)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "151",
+   "name": "Súc vật nuôi lấy sản phẩm một lần ngắn hạn",
+   "formula": "BAL_D(2152*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 2152 ngắn hạn"
+  },
+  {
+   "code": "152",
+   "name": "2. Cây trồng theo mùa vụ hoặc lấy sản phẩm một lần ngắn hạn",
+   "formula": "BAL_D(2153*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 2153 ngắn hạn"
+  },
+  {
+   "code": "153",
+   "name": "3. Dự phòng tổn thất tài sản sinh học ngắn hạn (*)",
+   "formula": "-BAL_C(2295*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 2295 ngắn hạn, ghi âm"
+  },
+  {
+   "code": "160",
+   "name": "VI. Tài sản ngắn hạn khác",
+   "formula": "LINE(161) + LINE(162) + LINE(163) + LINE(164) + LINE(165)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "161",
+   "name": "1. Chi phí chờ phân bổ ngắn hạn",
+   "formula": "BAL_D(242*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 242 phân bổ ≤ 12 tháng"
+  },
+  {
+   "code": "162",
+   "name": "2. Thuế GTGT được khấu trừ",
+   "formula": "BAL_D(133*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 133"
+  },
+  {
+   "code": "163",
+   "name": "3. Thuế và các khoản khác phải thu Nhà nước",
+   "formula": "GROSS_D(1383*, 333*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 1383, 333"
+  },
+  {
+   "code": "164",
+   "name": "4. Giao dịch mua bán lại trái phiếu Chính phủ",
+   "formula": "BAL_D(171*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 171"
+  },
+  {
+   "code": "165",
+   "name": "5. Tài sản ngắn hạn khác",
+   "formula": "BAL_D(2288*[!DH]) + BAL_D(111*[HCSD,!DH], 112*[HCSD,!DH], 113*[HCSD,!DH], 128*[TDT,HCSD,!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 2288 + tiền, tương đương tiền bị hạn chế sử dụng ngắn hạn (nhãn HCSD)"
+  },
+  {
+   "code": "200",
+   "name": "B - TÀI SẢN DÀI HẠN",
+   "formula": "LINE(210) + LINE(220) + LINE(230) + LINE(240) + LINE(250) + LINE(260) + LINE(270)",
+   "indent": 0,
+   "bold": true,
+   "note": "B.1.4.b"
+  },
+  {
+   "code": "210",
+   "name": "I. Các khoản phải thu dài hạn",
+   "formula": "LINE(211) + LINE(212) + LINE(213) + LINE(214) + LINE(215) + LINE(216)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "211",
+   "name": "1. Phải thu dài hạn của khách hàng",
+   "formula": "GROSS_D(131*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 131 dài hạn"
+  },
+  {
+   "code": "212",
+   "name": "2. Trả trước cho người bán dài hạn",
+   "formula": "GROSS_D(331*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 331 dài hạn"
+  },
+  {
+   "code": "213",
+   "name": "3. Vốn kinh doanh ở đơn vị trực thuộc",
+   "formula": "BAL_D(1361*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 1361"
+  },
+  {
+   "code": "214",
+   "name": "4. Phải thu nội bộ dài hạn",
+   "formula": "GROSS_D(1362*[DH], 1363*[DH], 1368*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 1362, 1363, 1368 dài hạn"
+  },
+  {
+   "code": "215",
+   "name": "5. Phải thu dài hạn khác",
+   "formula": "GROSS_D(1388*[DH], 334*[DH], 338*[DH], 141*[DH], 244*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 1388, 334, 338, 141, 244 dài hạn"
+  },
+  {
+   "code": "216",
+   "name": "6. Dự phòng phải thu dài hạn khó đòi (*)",
+   "formula": "-BAL_C(2293*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2293 chi tiết dài hạn, ghi âm"
+  },
+  {
+   "code": "220",
+   "name": "II. Tài sản cố định",
+   "formula": "LINE(221) + LINE(224) + LINE(227)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "221",
+   "name": "1. Tài sản cố định hữu hình",
+   "formula": "LINE(222) + LINE(223)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "222",
+   "name": "- Nguyên giá",
+   "formula": "BAL_D(211*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Nợ 211"
+  },
+  {
+   "code": "223",
+   "name": "- Giá trị hao mòn lũy kế (*)",
+   "formula": "-BAL_C(2141*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Có 2141, ghi âm"
+  },
+  {
+   "code": "224",
+   "name": "2. Tài sản cố định thuê tài chính",
+   "formula": "LINE(225) + LINE(226)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "225",
+   "name": "- Nguyên giá",
+   "formula": "BAL_D(212*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Nợ 212"
+  },
+  {
+   "code": "226",
+   "name": "- Giá trị hao mòn lũy kế (*)",
+   "formula": "-BAL_C(2142*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Có 2142, ghi âm"
+  },
+  {
+   "code": "227",
+   "name": "3. Tài sản cố định vô hình",
+   "formula": "LINE(228) + LINE(229)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "228",
+   "name": "- Nguyên giá",
+   "formula": "BAL_D(213*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Nợ 213"
+  },
+  {
+   "code": "229",
+   "name": "- Giá trị hao mòn lũy kế (*)",
+   "formula": "-BAL_C(2143*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Có 2143, ghi âm"
+  },
+  {
+   "code": "230",
+   "name": "III. Tài sản sinh học dài hạn",
+   "formula": "LINE(231) + LINE(236) + LINE(237) + LINE(238)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "231",
+   "name": "1. Súc vật nuôi cho sản phẩm định kỳ",
+   "formula": "LINE(232) + LINE(233)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "232",
+   "name": "a) Súc vật nuôi cho sản phẩm định kỳ chưa đến giai đoạn trưởng thành",
+   "formula": "BAL_D(21511*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Nợ 21511"
+  },
+  {
+   "code": "233",
+   "name": "b) Súc vật nuôi cho sản phẩm định kỳ đến giai đoạn trưởng thành",
+   "formula": "LINE(234) + LINE(235)",
+   "indent": 2,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "234",
+   "name": "- Nguyên giá",
+   "formula": "BAL_D(215121*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Nợ 215121"
+  },
+  {
+   "code": "235",
+   "name": "- Giá trị khấu hao lũy kế (*)",
+   "formula": "-BAL_C(215122*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Có 215122, ghi âm"
+  },
+  {
+   "code": "236",
+   "name": "2. Súc vật nuôi lấy sản phẩm một lần dài hạn",
+   "formula": "BAL_D(2152*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 2152 dài hạn"
+  },
+  {
+   "code": "237",
+   "name": "3. Cây trồng theo mùa vụ hoặc lấy sản phẩm một lần dài hạn",
+   "formula": "BAL_D(2153*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 2153 dài hạn"
+  },
+  {
+   "code": "238",
+   "name": "4. Dự phòng tổn thất tài sản sinh học dài hạn (*)",
+   "formula": "-BAL_C(2295*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 2295 dài hạn, ghi âm"
+  },
+  {
+   "code": "240",
+   "name": "IV. Bất động sản đầu tư",
+   "formula": "LINE(241) + LINE(242)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "241",
+   "name": "- Nguyên giá",
+   "formula": "BAL_D(217*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Nợ 217"
+  },
+  {
+   "code": "242",
+   "name": "- Giá trị hao mòn lũy kế (*)",
+   "formula": "-BAL_C(2147*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Có 2147, ghi âm"
+  },
+  {
+   "code": "250",
+   "name": "V. Tài sản dở dang dài hạn",
+   "formula": "LINE(251) + LINE(252)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "251",
+   "name": "1. Chi phí sản xuất, kinh doanh dở dang dài hạn",
+   "formula": "BAL_D(154*[DH]) - BAL_C(2294*[DH,SXDD])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 154 dài hạn − dự phòng tương ứng (2294 nhãn DH,SXDD)"
+  },
+  {
+   "code": "252",
+   "name": "2. Chi phí xây dựng cơ bản dở dang",
+   "formula": "BAL_D(241*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 241"
+  },
+  {
+   "code": "260",
+   "name": "VI. Đầu tư tài chính dài hạn",
+   "formula": "LINE(261) + LINE(262) + LINE(263) + LINE(264) + LINE(265) + LINE(266)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "261",
+   "name": "1. Đầu tư vào công ty con",
+   "formula": "BAL_D(221*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 221"
+  },
+  {
+   "code": "262",
+   "name": "2. Đầu tư vào công ty liên doanh, liên kết",
+   "formula": "BAL_D(222*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 222"
+  },
+  {
+   "code": "263",
+   "name": "3. Đầu tư góp vốn vào đơn vị khác",
+   "formula": "BAL_D(2281*) - LINE(125)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 2281 trừ phần BCC ngắn hạn đã ở Mã 125"
+  },
+  {
+   "code": "264",
+   "name": "4. Dự phòng tổn thất đầu tư vào đơn vị khác dài hạn (*)",
+   "formula": "-BAL_C(2292*[!HTM]) + BAL_C(2292*[BCC,!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2292 (trừ dự phòng HTM và BCC ngắn hạn), ghi âm"
+  },
+  {
+   "code": "265",
+   "name": "5. Đầu tư nắm giữ đến ngày đáo hạn dài hạn",
+   "formula": "BAL_D(128*[DH,!TDT])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 1281–1288 kỳ hạn còn lại > 12 tháng"
+  },
+  {
+   "code": "266",
+   "name": "6. Dự phòng đầu tư nắm giữ đến ngày đáo hạn dài hạn (*)",
+   "formula": "-BAL_C(2292*[HTM,DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 2292 chi tiết dự phòng HTM dài hạn, ghi âm"
+  },
+  {
+   "code": "270",
+   "name": "VII. Tài sản dài hạn khác",
+   "formula": "LINE(271) + LINE(272) + LINE(273) + LINE(274)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "271",
+   "name": "1. Chi phí chờ phân bổ dài hạn",
+   "formula": "BAL_D(242*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ chi tiết 242 dài hạn"
+  },
+  {
+   "code": "272",
+   "name": "2. Tài sản thuế thu nhập hoãn lại",
+   "formula": "BAL_D(243*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 243"
+  },
+  {
+   "code": "273",
+   "name": "3. Thiết bị, vật tư, phụ tùng thay thế dài hạn",
+   "formula": "BAL_D(153*[DH]) - BAL_C(2294*[DH,!SXDD])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 153 phụ tùng dự trữ dài hạn − dự phòng tương ứng"
+  },
+  {
+   "code": "274",
+   "name": "4. Tài sản dài hạn khác",
+   "formula": "BAL_D(2288*[DH]) + BAL_D(111*[HCSD,DH], 112*[HCSD,DH], 113*[HCSD,DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 2288 dài hạn + tiền bị hạn chế sử dụng dài hạn"
+  },
+  {
+   "code": "280",
+   "name": "TỔNG CỘNG TÀI SẢN (280 = 100 + 200)",
+   "formula": "LINE(100) + LINE(200)",
+   "indent": 0,
+   "bold": true,
+   "note": "B.1.4.c"
+  },
+  {
+   "code": "300",
+   "name": "C - NỢ PHẢI TRẢ",
+   "formula": "LINE(310) + LINE(330)",
+   "indent": 0,
+   "bold": true,
+   "note": "B.1.4.d"
+  },
+  {
+   "code": "310",
+   "name": "I. Nợ ngắn hạn",
+   "formula": "LINE(311) + LINE(312) + LINE(313) + LINE(314) + LINE(315) + LINE(316) + LINE(317) + LINE(318) + LINE(319) + LINE(320) + LINE(321) + LINE(322) + LINE(323) + LINE(324) + LINE(325)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "311",
+   "name": "1. Phải trả người bán ngắn hạn",
+   "formula": "GROSS_C(331*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 331 theo từng người bán"
+  },
+  {
+   "code": "312",
+   "name": "2. Người mua trả tiền trước ngắn hạn",
+   "formula": "GROSS_C(131*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 131 theo từng khách hàng"
+  },
+  {
+   "code": "313",
+   "name": "3. Phải trả cổ tức, lợi nhuận",
+   "formula": "BAL_C(332*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 332"
+  },
+  {
+   "code": "314",
+   "name": "4. Thuế và các khoản phải nộp Nhà nước ngắn hạn",
+   "formula": "GROSS_C(333*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 333"
+  },
+  {
+   "code": "315",
+   "name": "5. Phải trả người lao động",
+   "formula": "GROSS_C(334*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 334"
+  },
+  {
+   "code": "316",
+   "name": "6. Chi phí phải trả ngắn hạn",
+   "formula": "BAL_C(335*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 335 ngắn hạn"
+  },
+  {
+   "code": "317",
+   "name": "7. Phải trả nội bộ ngắn hạn",
+   "formula": "GROSS_C(3362*[!DH], 3363*[!DH], 3368*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 3362, 3363, 3368"
+  },
+  {
+   "code": "318",
+   "name": "8. Phải trả theo tiến độ hợp đồng xây dựng ngắn hạn",
+   "formula": "GROSS_C(337*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 337"
+  },
+  {
+   "code": "319",
+   "name": "9. Doanh thu chờ phân bổ ngắn hạn",
+   "formula": "BAL_C(3387*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 3387 ngắn hạn"
+  },
+  {
+   "code": "320",
+   "name": "10. Phải trả ngắn hạn khác",
+   "formula": "GROSS_C(338*[!DH], !3387*, 138*[!DH], 344*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 338 (trừ 3387 đã ở Mã 319), 138, 344"
+  },
+  {
+   "code": "321",
+   "name": "11. Vay và nợ thuê tài chính ngắn hạn",
+   "formula": "GROSS_C(341*[!DH], 3431*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 341, 343 phải trả ≤ 12 tháng"
+  },
+  {
+   "code": "322",
+   "name": "12. Dự phòng phải trả ngắn hạn",
+   "formula": "BAL_C(352*[!DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 352 ngắn hạn"
+  },
+  {
+   "code": "323",
+   "name": "13. Quỹ khen thưởng, phúc lợi",
+   "formula": "BAL_C(353*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 353"
+  },
+  {
+   "code": "324",
+   "name": "14. Quỹ bình ổn giá",
+   "formula": "BAL_C(357*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 357"
+  },
+  {
+   "code": "325",
+   "name": "15. Giao dịch mua bán lại trái phiếu Chính phủ",
+   "formula": "BAL_C(171*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 171"
+  },
+  {
+   "code": "330",
+   "name": "II. Nợ dài hạn",
+   "formula": "LINE(331) + LINE(332) + LINE(333) + LINE(334) + LINE(335) + LINE(336) + LINE(337) + LINE(338) + LINE(339) + LINE(340) + LINE(341) + LINE(342) + LINE(343) + LINE(344)",
+   "indent": 1,
+   "bold": false,
+   "note": null
+  },
+  {
+   "code": "331",
+   "name": "1. Phải trả người bán dài hạn",
+   "formula": "GROSS_C(331*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 331 dài hạn"
+  },
+  {
+   "code": "332",
+   "name": "2. Người mua trả tiền trước dài hạn",
+   "formula": "GROSS_C(131*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 131 dài hạn"
+  },
+  {
+   "code": "333",
+   "name": "3. Thuế và các khoản phải nộp Nhà nước dài hạn",
+   "formula": "GROSS_C(333*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 333 dài hạn"
+  },
+  {
+   "code": "334",
+   "name": "4. Chi phí phải trả dài hạn",
+   "formula": "BAL_C(335*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 335 dài hạn"
+  },
+  {
+   "code": "335",
+   "name": "5. Phải trả nội bộ về vốn kinh doanh",
+   "formula": "BAL_C(3361*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 3361"
+  },
+  {
+   "code": "336",
+   "name": "6. Phải trả nội bộ dài hạn",
+   "formula": "GROSS_C(3362*[DH], 3363*[DH], 3368*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 3362, 3363, 3368 dài hạn"
+  },
+  {
+   "code": "337",
+   "name": "7. Doanh thu chờ phân bổ dài hạn",
+   "formula": "BAL_C(3387*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 3387 dài hạn"
+  },
+  {
+   "code": "338",
+   "name": "8. Phải trả dài hạn khác",
+   "formula": "GROSS_C(338*[DH], !3387*, 344*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 338, 344 dài hạn"
+  },
+  {
+   "code": "339",
+   "name": "9. Vay và nợ thuê tài chính dài hạn",
+   "formula": "GROSS_C(341*[DH], 3431*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 341, 3431 dài hạn"
+  },
+  {
+   "code": "340",
+   "name": "10. Trái phiếu chuyển đổi",
+   "formula": "BAL_C(3432*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 3432"
+  },
+  {
+   "code": "341",
+   "name": "11. Cổ phiếu ưu đãi",
+   "formula": "BAL_C(41112*[NO])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 41112 cổ phiếu ưu đãi phân loại là nợ (nhãn NO)"
+  },
+  {
+   "code": "342",
+   "name": "12. Thuế thu nhập hoãn lại phải trả",
+   "formula": "BAL_C(347*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 347"
+  },
+  {
+   "code": "343",
+   "name": "13. Dự phòng phải trả dài hạn",
+   "formula": "BAL_C(352*[DH])",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có chi tiết 352 dài hạn"
+  },
+  {
+   "code": "344",
+   "name": "14. Quỹ phát triển khoa học và công nghệ",
+   "formula": "BAL_C(356*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 356"
+  },
+  {
+   "code": "400",
+   "name": "D - VỐN CHỦ SỞ HỮU",
+   "formula": "LINE(411) + LINE(412) + LINE(413) + LINE(414) + LINE(415) + LINE(416) + LINE(417) + LINE(418) + LINE(419) + LINE(420)",
+   "indent": 0,
+   "bold": true,
+   "note": "B.1.4.g"
+  },
+  {
+   "code": "411",
+   "name": "1. Vốn góp của chủ sở hữu",
+   "formula": "BAL_C(4111*) - LINE(341)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 4111 (công ty cổ phần: = 411a + 411b)"
+  },
+  {
+   "code": "411A",
+   "name": "- Cổ phiếu phổ thông có quyền biểu quyết",
+   "formula": "BAL_C(41111*)",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Có 41111"
+  },
+  {
+   "code": "411B",
+   "name": "- Cổ phiếu ưu đãi",
+   "formula": "BAL_C(41112*[!NO])",
+   "indent": 2,
+   "bold": false,
+   "note": "Dư Có chi tiết 41112 phân loại là vốn"
+  },
+  {
+   "code": "412",
+   "name": "2. Thặng dư vốn",
+   "formula": "-BAL_NET(4112*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 4112; dư Nợ ghi âm"
+  },
+  {
+   "code": "413",
+   "name": "3. Quyền chọn chuyển đổi trái phiếu",
+   "formula": "BAL_C(4113*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 4113"
+  },
+  {
+   "code": "414",
+   "name": "4. Vốn khác của chủ sở hữu",
+   "formula": "BAL_C(4118*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 4118"
+  },
+  {
+   "code": "415",
+   "name": "5. Cổ phiếu mua lại của chính mình (*)",
+   "formula": "-BAL_D(419*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Nợ 419, ghi âm"
+  },
+  {
+   "code": "416",
+   "name": "6. Chênh lệch đánh giá lại tài sản",
+   "formula": "-BAL_NET(412*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 412; dư Nợ ghi âm"
+  },
+  {
+   "code": "417",
+   "name": "7. Chênh lệch tỷ giá hối đoái",
+   "formula": "-BAL_NET(413*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 413; dư Nợ ghi âm"
+  },
+  {
+   "code": "418",
+   "name": "8. Quỹ đầu tư phát triển",
+   "formula": "BAL_C(414*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 414"
+  },
+  {
+   "code": "419",
+   "name": "9. Quỹ khác thuộc vốn chủ sở hữu",
+   "formula": "BAL_C(418*)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 418"
+  },
+  {
+   "code": "420",
+   "name": "10. Lợi nhuận sau thuế chưa phân phối",
+   "formula": "LINE(420A) + LINE(420B)",
+   "indent": 1,
+   "bold": false,
+   "note": "Dư Có 421; dư Nợ ghi âm"
+  },
+  {
+   "code": "420A",
+   "name": "- LNST chưa phân phối lũy kế đến cuối kỳ trước",
+   "formula": "-BAL_NET(4211*)",
+   "indent": 2,
+   "bold": false,
+   "note": "BCTC năm: dư Có 4211"
+  },
+  {
+   "code": "420B",
+   "name": "- LNST chưa phân phối kỳ này",
+   "formula": "-BAL_NET(4212*)",
+   "indent": 2,
+   "bold": false,
+   "note": "BCTC năm: dư Có 4212"
+  },
+  {
+   "code": "440",
+   "name": "TỔNG CỘNG NGUỒN VỐN (440 = 300 + 400)",
+   "formula": "LINE(300) + LINE(400)",
+   "indent": 0,
+   "bold": true,
+   "note": "B.1.4.h"
+  }
+ ],
+ "checks": [
+  {
+   "rule": "LINE(280) = LINE(440)",
+   "message": "Tổng cộng tài sản (280) = Tổng cộng nguồn vốn (440) — nếu lệch: kiểm tra đã kết chuyển kết quả chưa, TK nào có số dư chưa được chỉ tiêu nào lấy"
+  }
+ ]
+}

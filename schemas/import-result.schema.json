@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hak:schemas:import-result:1.0",
+  "title": "HAK import result v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "package_id", "mode", "status", "counts", "items"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "package_id": { "type": "string" },
+    "mode": { "enum": ["DRY_RUN", "COMMIT"] },
+    "status": { "enum": ["OK", "HAS_ERRORS", "COMMITTED", "REJECTED"] },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "valid", "created", "duplicate", "conflict", "invalid"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "valid": { "type": "integer", "minimum": 0 },
+        "created": { "type": "integer", "minimum": 0 },
+        "duplicate": { "type": "integer", "minimum": 0 },
+        "conflict": { "type": "integer", "minimum": 0 },
+        "invalid": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "outcome", "errors"],
+        "properties": {
+          "source_id": { "type": "string" },
+          "outcome": { "enum": ["VALID", "CREATED", "DUPLICATE_IDENTICAL", "CONFLICT", "INVALID"] },
+          "voucher_id": { "type": ["string", "null"] },
+          "voucher_number": { "type": ["string", "null"] },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message"],
+              "properties": {
+                "code": { "type": "string" },
+                "message": { "type": "string" },
+                "line": { "type": ["integer", "null"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
