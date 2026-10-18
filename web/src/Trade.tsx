@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
 import { formatMoney, parseMoney, today, formatDate } from './money'
+import { DataGrid } from './DataGrid'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
@@ -109,11 +110,19 @@ export function TradeView() {
         </div>
       </div>
       {adjusting && <Adjust invoice={adjusting} onDone={msg => { setAdjusting(null); if (msg) setInfo(msg); load() }} />}
-      <div className="scroll">
-        <table className="grid">
-          <thead><tr><th>Số</th><th>Ký hiệu / Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Đối tượng</th><th className="num">Tiền hàng (VND)</th><th className="num">Thuế</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{list.map(i => (
-            <tr key={i.id}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
+      <DataGrid storageKey="hak.invoices" rows={list} rowKey={i => i.id} empty="Chưa có hóa đơn."
+        columns={[
+          { key: 'number', label: 'Số', type: 'text', value: (i: Invoice) => i.number },
+          { key: 'inv', label: 'Ký hiệu / Số HĐ', type: 'text', value: (i: Invoice) => `${i.invoiceSeries}/${i.invoiceNo}` },
+          { key: 'invoiceDate', label: 'Ngày HĐ', type: 'date', value: (i: Invoice) => i.invoiceDate },
+          { key: 'postingDate', label: 'Ngày HT', type: 'date', value: (i: Invoice) => i.postingDate },
+          { key: 'partner', label: 'Đối tượng', type: 'select', value: (i: Invoice) => partners.find(p => p.id === i.partnerId)?.code ?? '' },
+          { key: 'total', label: 'Tiền hàng (VND)', type: 'number', sum: true, value: (i: Invoice) => i.total },
+          { key: 'vat', label: 'Thuế', type: 'number', sum: true, value: (i: Invoice) => i.vat },
+          { key: 'status', label: 'Trạng thái', type: 'select', value: (i: Invoice) => i.status, display: (i: Invoice) => STATUS_VI[i.status] ?? i.status },
+          { key: 'actions', label: '', type: 'text', value: () => '', noFilter: true, headerRender: () => '' },
+        ]}
+        rowRender={i => (<><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
@@ -132,11 +141,7 @@ export function TradeView() {
                   const reason = prompt('Lý do đảo hóa đơn:'); if (!reason) return
                   const d = prompt('Ngày đảo (yyyy-mm-dd):', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`)
                 }}>Đảo</button>}
-              </td></tr>))}
-            {list.length === 0 && <tr><td colSpan={9} className="muted">Chưa có hóa đơn.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+              </td></>)} />
     </>
   )
 }

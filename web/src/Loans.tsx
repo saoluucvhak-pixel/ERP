@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, DateInput } from './common'
 import { formatMoney, parseMoney, parseRate, today, formatDate } from './money'
+import { DataGrid } from './DataGrid'
 
 interface LoanRow {
   id: string; code: string; description: string; lenderCode: string; accountCode: string; currency: string | null
@@ -70,11 +71,23 @@ export function LoansView() {
 
       {creating && <NewLoan accounts={accounts} partners={partners} onDone={msg => { setCreating(false); if (msg) { setInfo(msg); load() } }} />}
 
-      <div className="scroll"><table className="grid">
-        <thead><tr><th>Khế ước</th><th>Bên cho vay</th><th>TK</th><th>Tiền</th><th>Trạng thái</th><th className="num">Hạn mức</th><th className="num">Đã giải ngân</th>
-          <th className="num">Đã trả</th><th className="num">Dư nợ</th><th className="num">Lãi suất %</th><th>Đáo hạn</th><th className="num">Lãi đã trích</th><th>Thao tác</th></tr></thead>
-        <tbody>{rows.map(r => (
-          <tr key={r.id}>
+      <DataGrid storageKey="hak.loans" rows={rows} rowKey={r => r.id} empty="Chưa có khế ước vay."
+        columns={[
+          { key: 'code', label: 'Khế ước', type: 'text', value: (r: LoanRow) => r.code },
+          { key: 'lender', label: 'Bên cho vay', type: 'select', value: (r: LoanRow) => r.lenderCode },
+          { key: 'account', label: 'TK', type: 'select', value: (r: LoanRow) => r.accountCode },
+          { key: 'currency', label: 'Tiền', type: 'select', value: (r: LoanRow) => r.currency ?? 'VND' },
+          { key: 'status', label: 'Trạng thái', type: 'select', value: (r: LoanRow) => r.status, display: (r: LoanRow) => STATUS_VI[r.status] },
+          { key: 'contract', label: 'Hạn mức', type: 'number', sum: true, value: (r: LoanRow) => r.contractAmount },
+          { key: 'drawn', label: 'Đã giải ngân', type: 'number', sum: true, value: (r: LoanRow) => r.drawn },
+          { key: 'repaid', label: 'Đã trả', type: 'number', sum: true, value: (r: LoanRow) => r.repaid },
+          { key: 'outstanding', label: 'Dư nợ', type: 'number', sum: true, value: (r: LoanRow) => r.outstanding },
+          { key: 'rate', label: 'Lãi suất %', type: 'number', value: (r: LoanRow) => r.currentRatePercent },
+          { key: 'maturity', label: 'Đáo hạn', type: 'date', value: (r: LoanRow) => r.maturityDate },
+          { key: 'interest', label: 'Lãi đã trích', type: 'number', sum: true, value: (r: LoanRow) => r.interestAccrued },
+          { key: 'actions', label: 'Thao tác', type: 'text', value: () => '', noFilter: true, headerRender: () => 'Thao tác' },
+        ]}
+        rowRender={r => (<>
             <td title={r.description}>{r.code}</td><td>{r.lenderCode}</td><td>{r.accountCode}</td><td>{r.currency ?? 'VND'}</td>
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}</span>{r.dueWithin12Months && <span className="muted"> · đến hạn ≤ 12 tháng</span>}</td>
             <td className="num">{formatMoney(r.contractAmount)}</td><td className="num">{formatMoney(r.drawn)}</td><td className="num">{formatMoney(r.repaid)}</td>
@@ -91,9 +104,7 @@ export function LoansView() {
                 <button disabled={busy} onClick={() => confirm(`Tất toán khế ước ${r.code}?`) && act(() => post(`/loans/${r.id}/close`), `Đã tất toán ${r.code}.`)}>Tất toán</button>
               </>}
             </td>
-          </tr>))}
-        </tbody>
-      </table></div>
+          </>)} />
 
       {linking && (
         <section className="panel">

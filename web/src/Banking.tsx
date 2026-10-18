@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
 import { addMoney, formatMoney, parseMoney, today, formatDate } from './money'
+import { DataGrid } from './DataGrid'
 
 interface PaymentOrder { id: string; number: string; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
 
@@ -56,11 +57,18 @@ function PaymentOrders() {
           <button className="primary" onClick={create} disabled={busy} style={{ alignSelf: 'flex-end' }}>Lập lệnh</button>
         </div>
       </div>
-      <div className="scroll">
-        <table className="grid">
-          <thead><tr><th>Số</th><th>Ngày</th><th>NCC</th><th>Nội dung</th><th className="num">Số tiền</th><th>Trạng thái</th><th>Mã GD NH</th><th>Thao tác</th></tr></thead>
-          <tbody>{list.map(p => (
-            <tr key={p.id}>
+      <DataGrid storageKey="hak.paymentorders" rows={list} rowKey={p => p.id} empty="Chưa có lệnh chi."
+        columns={[
+          { key: 'number', label: 'Số', type: 'text', value: (p: PaymentOrder) => p.number },
+          { key: 'requestedDate', label: 'Ngày', type: 'date', value: (p: PaymentOrder) => p.requestedDate },
+          { key: 'partner', label: 'NCC', type: 'select', value: (p: PaymentOrder) => partnerName(p.partnerId) },
+          { key: 'description', label: 'Nội dung', type: 'text', value: (p: PaymentOrder) => p.description },
+          { key: 'amount', label: 'Số tiền', type: 'number', sum: true, value: (p: PaymentOrder) => p.amount },
+          { key: 'status', label: 'Trạng thái', type: 'select', value: (p: PaymentOrder) => p.status, display: (p: PaymentOrder) => PO_STATUS[p.status] ?? p.status },
+          { key: 'bankReference', label: 'Mã GD NH', type: 'text', value: (p: PaymentOrder) => p.bankReference ?? '' },
+          { key: 'actions', label: 'Thao tác', type: 'text', value: () => '', noFilter: true, headerRender: () => 'Thao tác' },
+        ]}
+        rowRender={p => (<>
               <td>{p.number}</td><td>{formatDate(p.requestedDate)}</td><td>{partnerName(p.partnerId)}</td><td>{p.description}</td>
               <td className="num">{formatMoney(p.amount)}</td><td><span className="badge">{PO_STATUS[p.status] ?? p.status}</span></td><td>{p.bankReference}</td>
               <td style={{ display: 'flex', gap: 4 }}>
@@ -77,11 +85,7 @@ function PaymentOrders() {
                   const reason = prompt('Lý do hủy lệnh:'); if (reason) act(() => post(`/payment-orders/${p.id}/cancel`, { reason }), `Đã hủy ${p.number}.`)
                 }}>Hủy</button>}
               </td>
-            </tr>))}
-            {list.length === 0 && <tr><td colSpan={8} className="muted">Chưa có lệnh thanh toán.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+            </>)} />
     </>
   )
 }

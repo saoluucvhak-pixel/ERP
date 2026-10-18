@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { get, post, type OpenItem, type TrialBalanceRow } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, TYPE_VI, useAction, useCatalog, DateInput } from './common'
-import { addMoney, formatMoney, today, formatDate } from './money'
+import { formatMoney, today, formatDate } from './money'
+import { DataGrid } from './DataGrid'
 
 const firstOfMonth = () => today().slice(0, 8) + '01'
 
@@ -157,13 +158,19 @@ export function ReceivablesView() {
       {items.length > 0 && (
         <div className="panel">
           <strong>Chứng từ còn mở</strong>
-          <table className="grid">
-            <thead><tr><th>Ngày</th><th>Hạn</th><th>Số CT</th><th>Loại</th><th>Chiều</th><th className="num">Số tiền</th><th className="num">Đã phân bổ</th><th className="num">Còn lại</th></tr></thead>
-            <tbody>{items.map(o => (
-              <tr key={o.journalLineId}><td>{formatDate(o.postingDate)}</td><td>{formatDate(o.dueDate)}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
-                <td>{o.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(o.amount)}</td><td className="num">{formatMoney(o.allocated)}</td><td className="num">{formatMoney(o.open)}</td></tr>))}
-            </tbody>
-          </table>
+          <DataGrid storageKey="hak.openitems" rows={items} rowKey={o => o.journalLineId}
+            columns={[
+              { key: 'postingDate', label: 'Ngày', type: 'date', value: o => o.postingDate },
+              { key: 'dueDate', label: 'Hạn', type: 'date', value: o => o.dueDate ?? '' },
+              { key: 'voucher', label: 'Số CT', type: 'text', value: o => o.voucherNumber },
+              { key: 'type', label: 'Loại', type: 'select', value: o => o.voucherType, display: o => TYPE_VI[o.voucherType] ?? o.voucherType },
+              { key: 'side', label: 'Chiều', type: 'select', value: o => o.side, display: o => (o.side === 'Debit' ? 'Nợ' : 'Có') },
+              { key: 'amount', label: 'Số tiền', type: 'number', sum: true, value: o => o.amount },
+              { key: 'allocated', label: 'Đã phân bổ', type: 'number', sum: true, value: o => o.allocated },
+              { key: 'open', label: 'Còn lại', type: 'number', sum: true, value: o => o.open },
+            ]}
+            rowRender={o => (<><td>{formatDate(o.postingDate)}</td><td>{formatDate(o.dueDate)}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
+              <td>{o.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(o.amount)}</td><td className="num">{formatMoney(o.allocated)}</td><td className="num">{formatMoney(o.open)}</td></>)} />
         </div>
       )}
     </>
@@ -191,14 +198,20 @@ export function GeneralJournalView() {
           rows={(rows ?? []).map(r => [formatDate(r.postingDate), r.voucherNumber, TYPE_VI[r.voucherType] ?? r.voucherType, r.description, r.accountCode, r.partnerCode, r.debit, r.credit])} />
       </div>
       <ErrorBox error={error} />
-      {rows && <div className="scroll"><table className="grid">
-        <thead><tr><th>Ngày</th><th>Số CT</th><th>Loại</th><th>Diễn giải</th><th>TK</th><th>Đối tượng</th><th className="num">Nợ</th><th className="num">Có</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={`${r.voucherNumber}-${r.lineNo}`}><td>{formatDate(r.postingDate)}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td>
+      {rows && <DataGrid storageKey="hak.journal" rows={rows} rowKey={r => `${r.voucherNumber}-${r.lineNo}`} empty="Không có bút toán trong khoảng ngày."
+        columns={[
+          { key: 'postingDate', label: 'Ngày', type: 'date', value: r => r.postingDate },
+          { key: 'voucher', label: 'Số CT', type: 'text', value: r => r.voucherNumber },
+          { key: 'type', label: 'Loại', type: 'select', value: r => r.voucherType, display: r => TYPE_VI[r.voucherType] ?? r.voucherType },
+          { key: 'description', label: 'Diễn giải', type: 'text', value: r => r.description ?? '' },
+          { key: 'account', label: 'TK', type: 'select', value: r => r.accountCode },
+          { key: 'partner', label: 'Đối tượng', type: 'select', value: r => r.partnerCode ?? '' },
+          { key: 'debit', label: 'Nợ', type: 'number', sum: true, value: r => r.debit },
+          { key: 'credit', label: 'Có', type: 'number', sum: true, value: r => r.credit },
+        ]}
+        rowRender={r => (<><td>{formatDate(r.postingDate)}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td>
           <td>{r.description}</td><td>{r.accountCode}</td><td>{r.partnerCode}</td>
-          <td className="num">{r.debit === '0' ? '' : formatMoney(r.debit)}</td><td className="num">{r.credit === '0' ? '' : formatMoney(r.credit)}</td></tr>)}
-          {rows.length === 0 && <tr><td colSpan={8} className="muted">Không có bút toán trong khoảng ngày.</td></tr>}</tbody>
-        <tfoot><tr><td colSpan={6}>Cộng</td><td className="num">{formatMoney(addMoney(rows.map(r => r.debit)))}</td><td className="num">{formatMoney(addMoney(rows.map(r => r.credit)))}</td></tr></tfoot>
-      </table></div>}
+          <td className="num">{r.debit === '0' ? '' : formatMoney(r.debit)}</td><td className="num">{r.credit === '0' ? '' : formatMoney(r.credit)}</td></>)} />}
     </>
   )
 }

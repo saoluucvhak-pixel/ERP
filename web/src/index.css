@@ -186,3 +186,15 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .date-input .cal:hover:not(:disabled) { color: var(--accent); border: 0; }
 .date-input .native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .grid .date-input > input[type=text] { width: 104px; }
+
+/* Bộ lọc thông minh (DataGrid) */
+.dg-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.dg-search { min-width: 240px; flex: 0 1 300px; }
+.dg-count { margin-left: auto; }
+.dg-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--accent); border-radius: 12px; padding: 2px 4px 2px 10px; font-size: 12px; }
+.chip button { border: 0; background: transparent; padding: 0 6px; color: inherit; font-size: 14px; }
+.dg-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 8px; }
+.dg-cond { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dg-th { border: 0; background: transparent; padding: 0; font: inherit; font-weight: 600; color: inherit; white-space: nowrap; }
+.dg-th:hover:not(:disabled) { color: var(--accent); border: 0; }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
 import { formatMoney, parseMoney, today, formatDate } from './money'
+import { DataGrid } from './DataGrid'
 
 export interface Order { id: string; number: string; kind: string; partnerId: string; contractNo: string | null; orderDate: string; description: string; overDeliveryTolerancePercent: string; status: string; statusReason: string | null; lines: { lineNo: number; itemId: string; quantity: string; basis: string; unitPrice: string; vatRate: string | null }[] }
 interface Item { id: string; code: string; name: string; unit: string; tracksDryness: boolean }
@@ -90,22 +91,24 @@ export function OrdersView() {
           </table>
         </div>
       )}
-      <div className="scroll">
-        <table className="grid">
-          <thead><tr><th>Số đơn</th><th>Ngày</th><th>Đối tượng</th><th>Hợp đồng</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{list.map(o => (
-            <tr key={o.id}><td>{o.number}</td><td>{formatDate(o.orderDate)}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
+      <DataGrid storageKey="hak.orders" rows={list} rowKey={o => o.id} empty="Chưa có đơn hàng."
+        columns={[
+          { key: 'number', label: 'Số đơn', type: 'text', value: (o: Order) => o.number },
+          { key: 'orderDate', label: 'Ngày', type: 'date', value: (o: Order) => o.orderDate },
+          { key: 'partner', label: 'Đối tượng', type: 'select', value: (o: Order) => partners.find(p => p.id === o.partnerId)?.code ?? '' },
+          { key: 'contractNo', label: 'Hợp đồng', type: 'text', value: (o: Order) => o.contractNo ?? '' },
+          { key: 'description', label: 'Diễn giải', type: 'text', value: (o: Order) => o.description },
+          { key: 'status', label: 'Trạng thái', type: 'select', value: (o: Order) => o.status, display: (o: Order) => STATUS_VI[o.status] ?? o.status },
+          { key: 'actions', label: '', type: 'text', value: () => '', noFilter: true, headerRender: () => '' },
+        ]}
+        rowRender={o => (<><td>{o.number}</td><td>{formatDate(o.orderDate)}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
               <td><span className="badge">{STATUS_VI[o.status] ?? o.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => run(async () => setDetail(await get<Fulfil>(`/orders/${o.id}/fulfilment`)))}>Tiến độ</button>
                 {o.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/orders/${o.id}/confirm`), `Đã xác nhận ${o.number}.`)}>Xác nhận</button>}
                 {o.status === 'Confirmed' && <button onClick={() => { const r = prompt('Lý do đóng đơn:'); if (r) act(() => post(`/orders/${o.id}/close`, { reason: r }), `Đã đóng ${o.number}.`) }}>Đóng đơn</button>}
                 {(o.status === 'Draft' || o.status === 'Confirmed') && <button className="danger" onClick={() => { const r = prompt('Lý do hủy đơn:'); if (r) act(() => post(`/orders/${o.id}/cancel`, { reason: r }), `Đã hủy ${o.number}.`) }}>Hủy</button>}
-              </td></tr>))}
-            {list.length === 0 && <tr><td colSpan={7} className="muted">Chưa có đơn hàng.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+              </td></>)} />
     </>
   )
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog, DateInput } from './common'
 import { addMoney, formatMoney, parseMoney, today, formatDate } from './money'
+import { DataGrid } from './DataGrid'
 
 interface RegisterRow {
   id: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; status: 'Draft' | 'Active' | 'Disposed' | 'Cancelled'
@@ -68,11 +69,21 @@ export function AssetsView() {
 
       {creating && <NewAsset accounts={accounts} onDone={msg => { setCreating(false); if (msg) { setInfo(msg); load() } }} />}
 
-      <table className="grid">
-        <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>TK</th><th>Ngày sử dụng</th><th>Tháng</th>
-          <th className="num">Nguyên giá</th><th className="num">Hao mòn / đã phân bổ</th><th className="num">Còn lại</th><th>Thao tác</th></tr></thead>
-        <tbody>{rows.map(r => (
-          <tr key={r.id}>
+      <DataGrid storageKey="hak.assets" rows={rows} rowKey={r => r.id} empty="Chưa có tài sản / CCDC."
+        columns={[
+          { key: 'code', label: 'Mã', type: 'text', value: (r: RegisterRow) => r.code },
+          { key: 'name', label: 'Tên', type: 'text', value: (r: RegisterRow) => r.name },
+          { key: 'class', label: 'Loại', type: 'select', value: (r: RegisterRow) => r.class, display: (r: RegisterRow) => CLASS_VI[r.class] },
+          { key: 'status', label: 'Trạng thái', type: 'select', value: (r: RegisterRow) => r.status, display: (r: RegisterRow) => STATUS_VI[r.status] },
+          { key: 'account', label: 'TK', type: 'select', value: (r: RegisterRow) => r.assetAccountCode },
+          { key: 'inService', label: 'Ngày sử dụng', type: 'date', value: (r: RegisterRow) => r.inServiceDate },
+          { key: 'months', label: 'Tháng', type: 'number', value: (r: RegisterRow) => String(r.usefulLifeMonths) },
+          { key: 'cost', label: 'Nguyên giá', type: 'number', sum: true, value: (r: RegisterRow) => r.originalCost },
+          { key: 'accumulated', label: 'Hao mòn / đã phân bổ', type: 'number', sum: true, value: (r: RegisterRow) => r.accumulated },
+          { key: 'nbv', label: 'Còn lại', type: 'number', sum: true, value: (r: RegisterRow) => r.netBookValue },
+          { key: 'actions', label: 'Thao tác', type: 'text', value: () => '', noFilter: true, headerRender: () => 'Thao tác' },
+        ]}
+        rowRender={r => (<>
             <td>{r.code}</td><td>{r.name}</td><td>{CLASS_VI[r.class]}</td>
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${r.disposalDate}` : ''}</span></td>
             <td>{r.assetAccountCode}</td><td>{formatDate(r.inServiceDate)}</td><td>{r.usefulLifeMonths}</td>
@@ -89,9 +100,7 @@ export function AssetsView() {
                 if (reason) act(() => post(`/assets/${r.id}/dispose/reverse`, { reason }), `Đã hủy ghi giảm ${r.code}.`)
               }}>Hủy ghi giảm</button>}
             </td>
-          </tr>))}
-        </tbody>
-      </table>
+          </>)} />
 
       {disposing && <Dispose row={disposing} accounts={accounts} busy={busy}
         onSubmit={(date, residualAccountId, description) => act(async () => {

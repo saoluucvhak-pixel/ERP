@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addMoney, amountInWords, formatDate, formatDateTime, formatMoney, parseDate, parseMoney, parseRate, today } from './money.ts'
+import { addMoney, amountInWords, compareMoney, formatDate, formatDateTime, formatMoney, parseDate, parseMoney, parseRate, today } from './money.ts'
 
 test('formatMoney groups with dots and uses comma decimals, never via Number', () => {
   assert.equal(formatMoney('1234567'), '1.234.567')
@@ -82,4 +82,13 @@ test('parseDate accepts Vietnamese day-first input and rejects impossible dates'
 test('formatDateTime renders local day-first time', () => {
   assert.match(formatDateTime('2026-10-18T05:30:00'), /^18\/10\/2026 \d{2}:\d{2}$/)
   assert.equal(formatDateTime('khong-phai-ngay'), 'khong-phai-ngay')
+})
+
+test('compareMoney compares exactly, including negatives and fractions', () => {
+  assert.equal(compareMoney('10', '9'), 1)
+  assert.equal(compareMoney('9.9999', '10'), -1)
+  assert.equal(compareMoney('-5', '3'), -1)
+  assert.equal(compareMoney('1000000000000000000.0001', '1000000000000000000'), 1)
+  assert.equal(compareMoney('2.50', '2.5'), 0)
+  assert.equal(compareMoney(null, '0'), 0)
 })

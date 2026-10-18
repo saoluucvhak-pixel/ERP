@@ -132,3 +132,16 @@ export function parseDate(input: string): string | null {
   if (dt.getFullYear() !== Number(y) || dt.getMonth() !== Number(m) - 1 || dt.getDate() !== Number(d)) return null
   return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
 }
+
+/** Exact comparison of decimal strings (up to 4 fraction digits) via BigInt; non-numeric input sorts as 0. */
+export function compareMoney(a: string | null | undefined, b: string | null | undefined): number {
+  const scaled = (v: string | null | undefined): bigint => {
+    if (!v || !DEC.test(v)) return 0n
+    const neg = v.startsWith('-')
+    const [i, f = ''] = (neg ? v.slice(1) : v).split('.')
+    const n = BigInt(i) * 10000n + BigInt((f + '0000').slice(0, 4))
+    return neg ? -n : n
+  }
+  const x = scaled(a), y = scaled(b)
+  return x < y ? -1 : x > y ? 1 : 0
+}

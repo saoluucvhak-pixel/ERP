@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog, DateInput } from './common'
 import { addMoney, amountInWords, formatMoney, parseMoney, today, formatDate } from './money'
+import { DataGrid } from './DataGrid'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
 const emptyLine = (side: 'D' | 'C'): LineDraft => ({ accountId: '', side, amount: '', partnerId: '', description: '', cashFlowCode: '' })
@@ -122,24 +123,24 @@ export function VouchersView() {
           <VoucherPrint voucher={v} />
         </div>
       )}
-      <div className="scroll">
-        <table className="grid">
-          <thead><tr><th><input type="checkbox" aria-label="Chọn tất cả chứng từ trên trang" checked={list.length > 0 && list.every(x => checked.has(x.id))}
-            onChange={e => setChecked(e.target.checked ? new Set(list.map(x => x.id)) : new Set())} /></th>
-            <th>Ngày HT</th><th>Số</th><th>Loại</th><th>Diễn giải</th><th className="num">Số tiền</th><th>Trạng thái</th></tr></thead>
-          <tbody>
-            {list.map(x => (
-              <tr key={x.id} className={x.id === v?.id ? 'selected' : ''} onClick={() => setSelected(x)} style={{ cursor: 'pointer' }}>
-                <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Chọn ${x.number}`} checked={checked.has(x.id)}
-                  onChange={e => setChecked(c => { const n = new Set(c); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} /></td>
-                <td>{formatDate(x.postingDate)}</td><td>{x.number}</td><td>{TYPE_VI[x.voucherType] ?? x.voucherType}</td><td>{x.description}</td>
-                <td className="num">{formatMoney(x.totalDebit)}</td><td><span className={`badge ${x.status}`}>{STATUS_VI[x.status]}</span></td>
-              </tr>
-            ))}
-            {list.length === 0 && <tr><td colSpan={7} className="muted">Không có chứng từ trong khoảng đã chọn.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid storageKey="hak.vouchers" rows={list} rowKey={x => x.id} onRowClick={setSelected} rowClassName={x => (x.id === v?.id ? 'selected' : '')}
+        empty="Không có chứng từ trong khoảng đã chọn." note="lọc trong trang đang xem"
+        columns={[
+          { key: 'check', label: '', type: 'text', value: () => '', noFilter: true, headerRender: () => (
+            <input type="checkbox" aria-label="Chọn tất cả chứng từ trên trang" checked={list.length > 0 && list.every(x => checked.has(x.id))}
+              onChange={e => setChecked(e.target.checked ? new Set(list.map(x => x.id)) : new Set())} />) },
+          { key: 'postingDate', label: 'Ngày HT', type: 'date', value: x => x.postingDate },
+          { key: 'number', label: 'Số', type: 'text', value: x => x.number },
+          { key: 'type', label: 'Loại', type: 'select', value: x => x.voucherType, display: x => TYPE_VI[x.voucherType] ?? x.voucherType },
+          { key: 'description', label: 'Diễn giải', type: 'text', value: x => x.description },
+          { key: 'amount', label: 'Số tiền', type: 'number', sum: true, value: x => x.totalDebit },
+          { key: 'status', label: 'Trạng thái', type: 'select', value: x => x.status, display: x => STATUS_VI[x.status] ?? x.status },
+        ]}
+        rowRender={x => (<>
+          <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Chọn ${x.number}`} checked={checked.has(x.id)}
+            onChange={e => setChecked(c => { const n = new Set(c); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} /></td>
+          <td>{formatDate(x.postingDate)}</td><td>{x.number}</td><td>{TYPE_VI[x.voucherType] ?? x.voucherType}</td><td>{x.description}</td>
+          <td className="num">{formatMoney(x.totalDebit)}</td><td><span className={`badge ${x.status}`}>{STATUS_VI[x.status]}</span></td></>)} />
       <div className="toolbar">
         <span className="muted">{total === 0 ? '' : `Dòng ${page * PAGE + 1}–${page * PAGE + list.length} / ${total}`}</span>
         <button disabled={busy || page === 0} onClick={() => setPage(p => p - 1)}>← Trang trước</button>

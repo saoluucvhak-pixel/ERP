@@ -3,6 +3,7 @@ import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, DateInput } from './common'
 import { formatMoney, parseMoney, today, formatDate } from './money'
 import type { Order } from './Orders'
+import { DataGrid } from './DataGrid'
 
 interface Warehouse { id: string; code: string; name: string; policies: { method: string; effectiveFrom: string }[] }
 interface Item { id: string; code: string; name: string; unit: string }
@@ -109,11 +110,17 @@ function StockDocs() {
         <button style={{ marginTop: 8 }} onClick={() => setLines(ls => [...ls, { itemId: '', quantity: '', amount: '', counterAccountId: '', orderLine: '' }])}>+ Thêm dòng</button>
         <p className="muted">Giá xuất kho do hệ thống tính theo phương pháp của kho; kho bình quân cuối tháng chỉ có giá trị sau khi chạy “Tính giá cuối tháng”.</p>
       </div>
-      <div className="scroll">
-        <table className="grid">
-          <thead><tr><th>Ngày</th><th>Số</th><th>Loại</th><th>Kho</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{list.map(d => (
-            <tr key={d.id}><td>{formatDate(d.postingDate)}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
+      <DataGrid storageKey="hak.stockdocs" rows={list} rowKey={d => d.id} empty="Chưa có phiếu kho."
+        columns={[
+          { key: 'postingDate', label: 'Ngày', type: 'date', value: (d: StockDoc) => d.postingDate },
+          { key: 'number', label: 'Số', type: 'text', value: (d: StockDoc) => d.number },
+          { key: 'type', label: 'Loại', type: 'select', value: (d: StockDoc) => d.type, display: (d: StockDoc) => TYPE_VI[d.type] },
+          { key: 'warehouse', label: 'Kho', type: 'select', value: (d: StockDoc) => wh(d.warehouseId) },
+          { key: 'description', label: 'Diễn giải', type: 'text', value: (d: StockDoc) => d.description },
+          { key: 'status', label: 'Trạng thái', type: 'select', value: (d: StockDoc) => d.status, display: (d: StockDoc) => STATUS_VI[d.status] ?? d.status },
+          { key: 'actions', label: '', type: 'text', value: () => '', noFilter: true, headerRender: () => '' },
+        ]}
+        rowRender={d => (<><td>{formatDate(d.postingDate)}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
                 {d.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
@@ -122,11 +129,7 @@ function StockDocs() {
                   const reason = prompt('Lý do đảo phiếu:'); if (!reason) return
                   const dt = prompt('Ngày đảo (yyyy-mm-dd):', d.postingDate); if (dt) act(() => post(`/stock-documents/${d.id}/reverse`, { reversalDate: dt, reason }), `Đã đảo ${d.number}.`)
                 }}>Đảo</button>}
-              </td></tr>))}
-            {list.length === 0 && <tr><td colSpan={7} className="muted">Chưa có phiếu kho.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+              </td></>)} />
     </>
   )
 }
