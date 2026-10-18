@@ -3,6 +3,8 @@ using Hak.Application.Trade;
 using Hak.Domain.Common;
 using Hak.Domain.Tax;
 using Hak.Domain.Trade;
+using Hak.Domain.Vouchers;
+using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Integration.Tests;
 
@@ -126,6 +128,35 @@ public class VatTests
 
         await fx.Vat.MarkFiledAsync(fx.H.Admin, decl.Id, "11320260300001", D(4, 20));
         Assert.Equal(ErrorCodes.LedgerImmutable, await CodeOf(() => fx.Vat.SaveDeclarationAsync(fx.H.Admin, D(3, 1), D(3, 31), [new DeclarationLineInput("X", "x", 1)])));
+    }
+
+    [Fact]
+    public async Task PeriodEndOffset_DebitsOutputVat_CreditsInputVat_ForTheSmallerBalance_AndIsOncePerPeriod()
+    {
+        using var fx = await SetupAsync();
+        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine, fx.S.Audit);
+        var period = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(3, 1));
+        await Book(fx, InvoiceKind.Purchase, fx.Sup, "1C26TAA", "0000901", 10_000_000, 10, D(3, 5));    // input VAT 1.000.000
+        await Book(fx, InvoiceKind.Sales, fx.Cus, "1C26TBB", "0000902", 20_000_000, 8, D(3, 10));        // output VAT 1.600.000
+
+        var preview = await offset.PreviewAsync(fx.H.Auditor, period.Id);
+        Assert.Equal((1_000_000m, 1_600_000m, 1_000_000m, 600_000m, 0m), (preview.InputBalance, preview.OutputBalance, preview.OffsetAmount, preview.NetPayable, preview.CarryForward));
+        Assert.Contains(preview.Lines, l => l.AccountCode == "VATOUT" && l.Side == Side.Debit && l.Amount == 1_000_000m);
+        Assert.Contains(preview.Lines, l => l.AccountCode == "VATIN" && l.Side == Side.Credit && l.Amount == 1_000_000m);
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => offset.GenerateAsync(fx.H.Auditor, period.Id)));
+        var voucher = await offset.GenerateAsync(fx.H.Preparer, period.Id);
+        Assert.Equal(VoucherStatus.Draft, voucher.Status);
+        Assert.Equal(D(3, 31), voucher.PostingDate);
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => offset.GenerateAsync(fx.H.Preparer, period.Id)));
+
+        await fx.S.Engine.SubmitAsync(fx.H.Preparer, voucher.Id);
+        await fx.S.Engine.ApproveAsync(fx.H.Approver, voucher.Id);
+        await fx.S.Engine.PostAsync(fx.H.Approver, voucher.Id);
+
+        var after = await offset.PreviewAsync(fx.H.Auditor, period.Id);
+        Assert.Equal((0m, 600_000m, 0m), (after.InputBalance, after.OutputBalance, after.OffsetAmount));
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => offset.GenerateAsync(fx.H.Preparer, period.Id)));
     }
 
     [Fact]

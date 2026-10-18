@@ -66,6 +66,7 @@ builder.Services.AddScoped<DrynessService>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<VatService>();
+builder.Services.AddScoped<VatOffsetService>();
 builder.Services.AddScoped<Hak.Application.Assets.AssetService>();
 builder.Services.AddScoped<Hak.Application.Fx.FxService>();
 builder.Services.AddScoped<Hak.Application.Fx.FxPaymentService>();
