@@ -1,7 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { get, post, put } from './api'
+import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, useAction } from './common'
-import type { Account } from './common'
 import { formatMoney, parseMoney, today } from './money'
 
 type Status = 'Draft' | 'PendingApproval' | 'Approved' | 'InProgress' | 'Testing' | 'Completed' | 'Closed' | 'Rejected' | 'Cancelled'
