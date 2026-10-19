@@ -664,4 +664,63 @@ public class TradeTests
         Assert.Equal((500_000m, "KH01"), (coll.Total, Assert.Single(coll.ByPartner).PartnerCode));
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.CreateDispatchAsync(h.Auditor, new(order.Id, fx.Wh, D(3, 6), null, null, [new(1, 1)]))));
     }
+
+    [Fact]
+    public async Task PurchaseMatch_InspectionAndPriceMismatch_BlockAcceptance_UnlessAcknowledgedWithReason()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var orders = Orders(fx);
+        var inspections = new Hak.Application.Cycles.GoodsInspectionService(s.Db, s.Audit, h.Clock);
+        var match = new Hak.Application.Cycles.PurchaseMatchService(s.Db);
+
+        // Order 100 kg at 50,000; receipt linked to the order line; invoice at the order price.
+        var order = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Purchase, h.Partner["NCC01"], D(3, 1), "Mua phụ gia", [new OrderLineInput(fx.Add, 100, 50_000)]));
+        await orders.ConfirmAsync(h.Approver, order.Id);
+        var receipt = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 2), D(3, 2), "Nhập theo đơn",
+            [new StockLineInput(fx.Add, 100, 0, fx.A("GRNI"), OrderId: order.Id, OrderLineNo: 1)], PartnerId: h.Partner["NCC01"]));
+        var inv = await fx.Inv.CreateAsync(h.Preparer, Purchase(fx, "0000400", new InvoiceLineInput(50_000, receipt.Id, 1, VatRate: 10)));
+        await fx.Inv.PostAsync(h.Approver, inv.Id);
+
+        // No inspection yet: information only, not blocking; the receipt is listed as pending inspection.
+        var m0 = await match.MatchAsync(h.Auditor, inv.Id);
+        Assert.True(m0.Matched);
+        Assert.Contains(m0.Flags, f => f.Code == "NO_INSPECTION" && !f.Blocking);
+        Assert.Equal(receipt.Id, Assert.Single(await inspections.ReceiptsAsync(h.Auditor, onlyPending: true), r => r.StockDocumentId == receipt.Id).StockDocumentId);
+
+        // Inspection accepts 90 of 100 kg: invoice for 100 now exceeds what was accepted.
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => inspections.CreateAsync(h.Auditor, new(receipt.Id, D(3, 2), "Ban kiểm nghiệm", null))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => inspections.CreateAsync(h.Preparer, new(receipt.Id, D(3, 2), "Ban kiểm nghiệm", null, [new(1, 101)]))));
+        var bb = await inspections.CreateAsync(h.Preparer, new(receipt.Id, D(3, 2), "Ban kiểm nghiệm số 1", "10 kg ẩm", [new(1, 90, "10 kg không đạt")]));
+        Assert.StartsWith("BBKN2026-", bb.Number);
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => inspections.CreateAsync(h.Preparer, new(receipt.Id, D(3, 2), "Ban khác", null))));
+        var row = Assert.Single(await inspections.ReceiptsAsync(h.Auditor), r => r.StockDocumentId == receipt.Id);
+        Assert.Equal((100m, 90m, 10m), (row.Inspection!.Lines[0].ReceivedQty, row.Inspection.Lines[0].AcceptedQty, row.Inspection.Lines[0].RejectedQty));
+
+        var m1 = await match.MatchAsync(h.Auditor, inv.Id);
+        Assert.False(m1.Matched);
+        Assert.Equal(("OVER_ACCEPTED", 100m, 90m), (m1.Flags.Single(f => f.Blocking).Code, m1.Lines[0].InvoicedQty, m1.Lines[0].AcceptedQty));
+        Assert.Equal(1, Assert.Single(await new Hak.Application.Cycles.PaymentAcceptanceService(s.Db, s.PaymentOrders, s.Settlement, s.Audit, h.Clock).PayableQueueAsync(h.Auditor, D(3, 31))).MismatchCount);
+
+        // Acceptance is refused; acknowledging needs a reason, is audited, and then goes through.
+        Assert.Equal(ErrorCodes.PaymentMatchFailed, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "ok")));
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "  ", acknowledgeMismatch: true)));
+        var acc = await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "Đã thỏa thuận với NCC trả 10 kg ẩm bằng giảm giá kỳ sau", acknowledgeMismatch: true);
+        Assert.Equal(Hak.Domain.Cycles.PaymentAcceptanceStatus.Pending, acc.Status);
+        Assert.Contains(s.Db.AuditLogs.AsNoTracking().Where(a => a.Action == "payment_acceptance.accept").Select(a => a.DataJson).ToList(), j => j!.Contains("mismatchAcknowledged\":true") || j.Contains("\"mismatchAcknowledged\":true"));
+
+        // Cancelling the inspection lets it be redone; a price different from the order is also blocking.
+        await inspections.CancelAsync(h.Preparer, bb.Id, "Lập lại");
+        Assert.True((await match.MatchAsync(h.Auditor, inv.Id)).Matched);
+        var order2 = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Purchase, h.Partner["NCC01"], D(3, 3), "Mua phụ gia lô 2", [new OrderLineInput(fx.Add, 10, 40_000)]));
+        await orders.ConfirmAsync(h.Approver, order2.Id);
+        var receipt2 = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 4), D(3, 4), "Nhập lô 2",
+            [new StockLineInput(fx.Add, 10, 0, fx.A("GRNI"), OrderId: order2.Id, OrderLineNo: 1)], PartnerId: h.Partner["NCC01"]));
+        var inv2 = await fx.Inv.CreateAsync(h.Preparer, Purchase(fx, "0000401", new InvoiceLineInput(50_000, receipt2.Id, 1, VatRate: 10)));
+        await fx.Inv.PostAsync(h.Approver, inv2.Id);
+        var m2 = await match.MatchAsync(h.Auditor, inv2.Id);
+        Assert.Equal(("PRICE_DIFF", 50_000m, 40_000m), (m2.Flags.Single(f => f.Blocking).Code, m2.Lines[0].UnitPrice, m2.Lines[0].OrderPrice));
+        Assert.Equal(ErrorCodes.PaymentMatchFailed, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv2.Id, null)));
+    }
 }

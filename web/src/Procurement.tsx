@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, post } from './api'
-import { AccountSelect, ErrorBox, ExportButton, navStore, useAction, useCatalog } from './common'
-import { formatMoney, today } from './money'
+import { ApiError, get, post } from './api'
+import { AccountSelect, ErrorBox, ExportButton, navStore, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
+import { addMoney, formatMoney, parseMoney, today } from './money'
 
 interface QueueRow { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; dueDate: string | null; partnerId: string; partnerCode: string; partnerName: string
-  total: string; open: string; hasReceiptLink: boolean; fromOrder: boolean; acceptanceId: string | null; stage: string }
+  total: string; open: string; hasReceiptLink: boolean; fromOrder: boolean; acceptanceId: string | null; stage: string; mismatchCount: number; matchNotes: string[] | null }
+interface InspLine { stockLineNo: number; itemCode: string; itemName: string; unit: string; receivedQty: string; acceptedQty: string; rejectedQty: string; note: string | null }
+interface Inspection { id: string; number: string; inspectionDate: string; inspector: string; conclusion: string | null; lines: InspLine[] }
+interface ReceiptRow { stockDocumentId: string; stockNumber: string; documentDate: string; status: string; partnerName: string; description: string; totalQty: string; inspection: Inspection | null }
 interface ReorderRow { itemId: string; code: string; name: string; unit: string; onHand: string; minStock: string; suggestedQty: string }
 interface InboxRow { acceptanceId: string; invoiceNumber: string; invoiceSeries: string; invoiceNo: string; partnerName: string; amount: string; open: string; dueDate: string | null; stage: string
   paymentOrderNumber: string | null; acceptedAt: string; note: string | null; closeReason: string | null }
@@ -18,7 +21,7 @@ const STAGE_VI: Record<string, string> = {
 const STEPS: { label: string; journal: boolean; screen?: string; note?: string }[] = [
   { label: 'Yêu cầu mua hàng', journal: false },
   { label: 'Đơn mua', journal: false, screen: 'orders' },
-  { label: 'Nhận hàng, nhập kho', journal: true, screen: 'stock' },
+  { label: 'Nhận hàng, kiểm nghiệm, nhập kho', journal: true, screen: 'stock' },
   { label: 'Hóa đơn mua', journal: true, screen: 'trade' },
   { label: 'Chấp nhận thanh toán', journal: false },
   { label: 'Lệnh thanh toán', journal: false, screen: 'bank' },
@@ -31,6 +34,10 @@ export function ProcurementView() {
   const [queue, setQueue] = useState<QueueRow[]>([])
   const [inbox, setInbox] = useState<InboxRow[]>([])
   const [reorder, setReorder] = useState<ReorderRow[]>([])
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([])
+  const [inspecting, setInspecting] = useState<{ r: ReceiptRow; inspector: string; conclusion: string; accepted: Record<number, string> } | null>(null)
+  const [printBb, setPrintBb] = useState<{ r: ReceiptRow; bb: Inspection } | null>(null)
+  const company = useCompanyName()
   const [bank, setBank] = useState('')
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
@@ -40,13 +47,14 @@ export function ProcurementView() {
     setQueue(await get<QueueRow[]>(`/cycles/procurement/payable-queue?asOf=${asOf}`))
     setInbox(await get<InboxRow[]>('/cycles/payment/inbox'))
     setReorder(await get<ReorderRow[]>('/cycles/procurement/reorder-list'))
+    setReceipts(await get<ReceiptRow[]>('/cycles/procurement/receipts'))
   }), [run, asOf])
   useEffect(() => { load() }, [load])
 
   const act = (label: string, fn: () => Promise<unknown>) => run(async () => { await fn(); setInfo(label); await load() })
   const ask = (q: string) => { const v = prompt(q); return v && v.trim() ? v.trim() : null }
   const count = (s: string) => queue.filter(r => r.stage === s).length
-  const stepCount: Record<number, number | null> = { 0: reorder.length, 4: count('NOT_ACCEPTED'), 5: count('AWAITING_ORDER') + count('ORDER_CREATED'), 6: count('ORDER_APPROVED') + count('SENT_TO_BANK') + count('BANK_EXECUTED') }
+  const stepCount: Record<number, number | null> = { 0: reorder.length, 2: receipts.filter(r => !r.inspection).length, 4: count('NOT_ACCEPTED'), 5: count('AWAITING_ORDER') + count('ORDER_CREATED'), 6: count('ORDER_APPROVED') + count('SENT_TO_BANK') + count('BANK_EXECUTED') }
 
   return (
     <>
@@ -67,6 +75,39 @@ export function ProcurementView() {
             {stepCount[i] != null && <div>{stepCount[i]} chứng từ</div>}
           </div>))}
       </div>
+
+      <div className="panel">
+        <strong>Nhận hàng và biên bản kiểm nghiệm</strong>
+        <span className="muted"> · biên bản ghi số lượng thực nhận đạt của từng dòng phiếu nhập (không ghi Nhật ký); hóa đơn vượt số lượng đạt hoặc lệch đơn giá đơn đặt hàng thì bị chặn chấp nhận thanh toán</span>
+        <table className="grid">
+          <thead><tr><th>Phiếu nhập</th><th>Ngày</th><th>Nhà cung cấp</th><th className="num">Số lượng nhận</th><th>Biên bản kiểm nghiệm</th><th /></tr></thead>
+          <tbody>{receipts.slice(0, 30).map(r => (
+            <tr key={r.stockDocumentId}><td>{r.stockNumber}<div className="muted">{r.status === 'Draft' ? 'Nháp' : 'Đã ghi sổ'}</div></td><td>{r.documentDate}</td><td>{r.partnerName}</td><td className="num">{formatMoney(r.totalQty)}</td>
+              <td>{r.inspection ? <>{r.inspection.number} · {r.inspection.inspector}{r.inspection.lines.some(l => l.rejectedQty !== '0') && <div style={{ color: 'var(--danger)' }}>Không đạt: {r.inspection.lines.filter(l => l.rejectedQty !== '0').map(l => `${l.itemCode} ${formatMoney(l.rejectedQty)}`).join(', ')}</div>}</> : <span className="muted">chưa kiểm nghiệm</span>}</td>
+              <td style={{ display: 'flex', gap: 4 }}>
+                {!r.inspection && <button className="primary" disabled={busy} onClick={async () => setInspecting({ r, inspector: '', conclusion: '', accepted: {} })}>Lập biên bản</button>}
+                {r.inspection && <button onClick={() => setPrintBb({ r, bb: r.inspection! })}>In biên bản</button>}
+                {r.inspection && <button className="danger" disabled={busy} onClick={() => { const reason = ask('Lý do hủy biên bản (để lập lại):'); if (reason) act('Đã hủy biên bản kiểm nghiệm.', () => post(`/cycles/procurement/inspections/${r.inspection!.id}/cancel`, { reason })) }}>Hủy</button>}
+              </td></tr>))}
+            {receipts.length === 0 && <tr><td colSpan={6} className="muted">Chưa có phiếu nhập kho.</td></tr>}</tbody>
+        </table>
+        {inspecting && <div className="panel" style={{ marginTop: 8 }}>
+          <strong>Biên bản kiểm nghiệm cho {inspecting.r.stockNumber}</strong>
+          <div className="form-row">
+            <label style={{ flex: 1 }}>Người / ban kiểm nghiệm<input value={inspecting.inspector} onChange={e => setInspecting(v => v && { ...v, inspector: e.target.value })} /></label>
+            <label style={{ flex: 1 }}>Kết luận<input value={inspecting.conclusion} onChange={e => setInspecting(v => v && { ...v, conclusion: e.target.value })} /></label>
+          </div>
+          <InspectionLines key={inspecting.r.stockDocumentId} receiptId={inspecting.r.stockDocumentId} accepted={inspecting.accepted} onChange={acc => setInspecting(v => v && { ...v, accepted: acc })} />
+          <div className="toolbar">
+            <button className="primary" disabled={busy || !inspecting.inspector.trim()} onClick={() => run(async () => {
+              const lines = Object.entries(inspecting.accepted).filter(([, q]) => q.trim() !== '').map(([no, q]) => ({ stockLineNo: Number(no), acceptedQty: parseMoney(q) }))
+              if (lines.some(l => l.acceptedQty == null)) throw new Error('Số lượng đạt không hợp lệ.')
+              const res = await post<{ number: string }>('/cycles/procurement/inspections', { stockDocumentId: inspecting.r.stockDocumentId, inspectionDate: today(), inspector: inspecting.inspector.trim(), conclusion: inspecting.conclusion.trim() || null, lines })
+              setInfo(`Đã lập biên bản kiểm nghiệm ${res.number}.`); setInspecting(null); await load()
+            })}>Lưu biên bản</button><button onClick={() => setInspecting(null)}>Đóng</button></div>
+        </div>}
+      </div>
+      {printBb && <PrintBb data={printBb} company={company} onDone={() => setPrintBb(null)} />}
 
       <div className="panel">
         <strong>Danh mục cần đặt hàng</strong>
@@ -90,12 +131,24 @@ export function ProcurementView() {
                 <td style={{ color: overdue ? 'var(--danger)' : undefined }}>{r.dueDate ?? '—'}{overdue ? ' (quá hạn)' : ''}</td>
                 <td>{r.invoiceSeries}/{r.invoiceNo}<div className="muted">{r.number}</div></td><td>{r.partnerCode} – {r.partnerName}</td>
                 <td className="num">{formatMoney(r.open)}{r.open !== r.total && <div className="muted">/ {formatMoney(r.total)}</div>}</td>
-                <td>{r.hasReceiptLink ? '✓ phiếu nhập' : <span className="muted">không gắn phiếu nhập</span>} · {r.fromOrder ? '✓ đơn mua' : <span className="muted">không theo đơn</span>}</td>
+                <td>{r.hasReceiptLink ? '✓ phiếu nhập' : <span className="muted">không gắn phiếu nhập</span>} · {r.fromOrder ? '✓ đơn mua' : <span className="muted">không theo đơn</span>}
+                  <div title={(r.matchNotes ?? []).join('\n')} style={{ color: r.mismatchCount > 0 ? 'var(--danger)' : 'var(--ok)' }}>{r.mismatchCount > 0 ? `⚠ ${r.mismatchCount} chỗ lệch: ${(r.matchNotes ?? []).filter(n => n.includes('vượt') || n.includes('khác')).join(' ')}` : '✓ khớp khi đối chiếu'}</div></td>
                 <td>{STAGE_VI[r.stage] ?? r.stage}</td>
                 <td style={{ display: 'flex', gap: 4 }}>
                   {r.stage === 'NOT_ACCEPTED' && <button className="primary" disabled={busy} onClick={() => {
                     const note = prompt('Ghi chú chấp nhận (ví dụ: đã đối chiếu đơn – phiếu nhập – hóa đơn), có thể để trống:') ?? null
-                    if (note !== null) act(`Đã chấp nhận thanh toán ${r.invoiceSeries}/${r.invoiceNo}; chu trình thanh toán đã nhận bàn giao.`, () => post(`/cycles/procurement/invoices/${r.invoiceId}/accept-payment`, { note }))
+                    if (note === null) return
+                    const url = `/cycles/procurement/invoices/${r.invoiceId}/accept-payment`
+                    act(`Đã chấp nhận thanh toán ${r.invoiceSeries}/${r.invoiceNo}; chu trình thanh toán đã nhận bàn giao.`, async () => {
+                      try { await post(url, { note }) } catch (e) {
+                        // Lệch khi đối chiếu: người có trách nhiệm có thể vẫn chấp nhận nhưng phải ghi lý do (được ghi nhật ký).
+                        if (e instanceof ApiError && e.code === 'PAYMENT_MATCH_FAILED') {
+                          const reason = prompt(`${e.message}\n\nNhập lý do để vẫn chấp nhận thanh toán (bỏ trống = không chấp nhận):`)
+                          if (!reason || !reason.trim()) throw new Error('Đã không chấp nhận: hóa đơn còn lệch khi đối chiếu.')
+                          await post(url, { note: reason.trim(), acknowledgeMismatch: true })
+                        } else throw e
+                      }
+                    })
                   }}>Chấp nhận thanh toán</button>}
                   {r.acceptanceId && (r.stage === 'AWAITING_ORDER' || r.stage === 'ORDER_CREATED') && <button disabled={busy} onClick={() => {
                     const reason = ask('Lý do rút chấp nhận:')
@@ -133,5 +186,44 @@ export function ProcurementView() {
         </table>
       </div>
     </>
+  )
+}
+
+/** Số lượng thực nhận đạt từng dòng phiếu nhập (mặc định đạt toàn bộ). Lấy dòng từ phiếu kho. */
+function InspectionLines({ receiptId, accepted, onChange }: { receiptId: string; accepted: Record<number, string>; onChange: (a: Record<number, string>) => void }) {
+  const [lines, setLines] = useState<{ lineNo: number; itemId: string; quantity: string }[]>([])
+  const [items, setItems] = useState<{ id: string; code: string; name: string; unit: string }[]>([])
+  useEffect(() => {
+    get<{ id: string; lines: { lineNo: number; itemId: string; quantity: string }[] }[]>('/stock-documents').then(d => setLines(d.find(x => x.id === receiptId)?.lines ?? [])).catch(() => setLines([]))
+    get<{ id: string; code: string; name: string; unit: string }[]>('/items').then(setItems).catch(() => setItems([]))
+  }, [receiptId])
+  return (
+    <table className="grid"><thead><tr><th>Vật tư</th><th className="num">Số lượng nhận</th><th className="num">Số lượng đạt</th><th className="num">Không đạt</th></tr></thead>
+      <tbody>{lines.map(l => {
+        const it = items.find(i => i.id === l.itemId)
+        const v = accepted[l.lineNo] ?? formatMoney(l.quantity)
+        const q = parseMoney(v)
+        return <tr key={l.lineNo}><td>{it ? `${it.code} – ${it.name} (${it.unit})` : l.itemId}</td><td className="num">{formatMoney(l.quantity)}</td>
+          <td><input className="num" aria-label={`Số lượng đạt dòng ${l.lineNo}`} value={v} onChange={e => onChange({ ...accepted, [l.lineNo]: e.target.value })} /></td>
+          <td className="num" style={{ color: 'var(--danger)' }}>{q != null && q !== l.quantity ? formatMoney(addMoney([l.quantity, '-' + q])) : ''}</td></tr>
+      })}</tbody></table>
+  )
+}
+
+function PrintBb({ data, company, onDone }: { data: { r: ReceiptRow; bb: Inspection }; company: string; onDone: () => void }) {
+  useEffect(() => { const t = setTimeout(() => { printSheet(); onDone() }, 150); return () => clearTimeout(t) }, [onDone])
+  const { r, bb } = data
+  return (
+    <PrintSheet>
+      <div><b>{company}</b></div><h1>BIÊN BẢN KIỂM NGHIỆM</h1>
+      <div className="center">Số: <b>{bb.number}</b> · Ngày {bb.inspectionDate.split('-').reverse().join('/')} · Phiếu nhập kho {r.stockNumber}</div>
+      <p>Nhà cung cấp: <b>{r.partnerName}</b> · Người / ban kiểm nghiệm: {bb.inspector}</p>
+      <table><thead><tr><th>STT</th><th>Vật tư</th><th>ĐVT</th><th>Số lượng nhận</th><th>Đạt</th><th>Không đạt</th><th>Ghi chú</th></tr></thead>
+        <tbody>{bb.lines.map(l => <tr key={l.stockLineNo}><td className="center">{l.stockLineNo}</td><td>{l.itemName} ({l.itemCode})</td><td className="center">{l.unit}</td>
+          <td className="num">{formatMoney(l.receivedQty)}</td><td className="num">{formatMoney(l.acceptedQty)}</td><td className="num">{l.rejectedQty === '0' ? '' : formatMoney(l.rejectedQty)}</td><td>{l.note}</td></tr>)}</tbody></table>
+      <p>Kết luận: {bb.conclusion ?? '……………………………………………………………'}</p>
+      <div className="signs"><div><b>Người nhận hàng</b><br /><i>(Ký, họ tên)</i></div><div><b>Thủ kho</b><br /><i>(Ký, họ tên)</i></div><div><b>Ban kiểm nghiệm</b><br /><i>(Ký, họ tên)</i></div></div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu mẫu theo chế độ kế toán [CẦN XÁC MINH].</div>
+    </PrintSheet>
   )
 }

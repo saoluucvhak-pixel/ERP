@@ -29,6 +29,7 @@ public static class ErrorCodes
     public const string AlreadyPosted = "ALREADY_POSTED";
     public const string DuplicateSource = "DUPLICATE_SOURCE";
     public const string CreditLimitExceeded = "CREDIT_LIMIT_EXCEEDED";
+    public const string PaymentMatchFailed = "PAYMENT_MATCH_FAILED";
     public const string ConcurrencyConflict = "CONCURRENCY_CONFLICT";
     public const string Forbidden = "FORBIDDEN";
     public const string NotFound = "NOT_FOUND";

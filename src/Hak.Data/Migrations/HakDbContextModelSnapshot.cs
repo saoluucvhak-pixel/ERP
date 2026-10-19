@@ -819,6 +819,131 @@ namespace Hak.Data.Migrations
                     b.ToTable("business_partners");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_reason");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<string>("Conclusion")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("conclusion");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("InspectionDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("inspection_date");
+
+                    b.Property<string>("Inspector")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("inspector");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_cancelled");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<Guid?>("PartnerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_id");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("row_version");
+
+                    b.Property<Guid>("StockDocumentId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stock_document_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_goods_inspections");
+
+                    b.HasIndex("StockDocumentId")
+                        .HasDatabaseName("ix_goods_inspections_stock_document_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_goods_inspections_company_id_number");
+
+                    b.HasIndex("CompanyId", "StockDocumentId")
+                        .HasDatabaseName("ix_goods_inspections_company_id_stock_document_id");
+
+                    b.ToTable("goods_inspections");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspectionLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("AcceptedQty")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("accepted_qty");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("InspectionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("inspection_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<long>("ReceivedQty")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("received_qty");
+
+                    b.Property<int>("StockLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stock_line_no");
+
+                    b.HasKey("Id")
+                        .HasName("pk_goods_inspection_lines");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_goods_inspection_lines_item_id");
+
+                    b.HasIndex("InspectionId", "StockLineNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_goods_inspection_lines_inspection_id_stock_line_no");
+
+                    b.ToTable("goods_inspection_lines", t =>
+                        {
+                            t.HasCheckConstraint("ck_goods_inspection_lines_qty", "accepted_qty >= 0 AND accepted_qty <= received_qty");
+                        });
+                });
+
             modelBuilder.Entity("Hak.Domain.Cycles.PaymentAcceptance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5350,6 +5475,33 @@ namespace Hak.Data.Migrations
                         .HasConstraintName("fk_business_partners_companies_company_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspection", b =>
+                {
+                    b.HasOne("Hak.Domain.Inventory.StockDocument", null)
+                        .WithMany()
+                        .HasForeignKey("StockDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_goods_inspections_stock_documents_stock_document_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspectionLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Cycles.GoodsInspection", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("InspectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_goods_inspection_lines_goods_inspections_inspection_id");
+
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_goods_inspection_lines_items_item_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Cycles.PaymentAcceptance", b =>
                 {
                     b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
@@ -6091,6 +6243,11 @@ namespace Hak.Data.Migrations
                 });
 
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspection", b =>
                 {
                     b.Navigation("Lines");
                 });

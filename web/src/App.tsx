@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { get, post, session } from './api'
 import { AdminView } from './Admin'
 import { AssetsView } from './Assets'
@@ -25,31 +25,32 @@ import { VouchersView } from './Vouchers'
 
 interface Company { id: string; code: string; name: string; roles?: string[]; permissions?: string[] }
 
+/** Menu theo chu trình (tài liệu docs/10, tệp phân tích ERP mục IV): mỗi chu trình gồm các màn hình theo thứ tự các khâu; khâu ghi Nhật ký nêu ở từng màn. */
 const SCREENS = [
-  { key: 'home', label: 'Tổng quan', el: () => <DashboardView /> },
-  { key: 'vouchers', label: 'Chứng từ', el: () => <VouchersView /> },
-  { key: 'cash', label: 'Thu / Chi tiền', el: () => <CashDocsView /> },
-  { key: 'bank', label: 'Ngân hàng', el: () => <BankingView /> },
-  { key: 'arap', label: 'Công nợ', el: () => <ReceivablesView /> },
-  { key: 'orders', label: 'Đơn hàng', el: () => <OrdersView /> },
-  { key: 'procurement', label: 'Mua hàng → Thanh toán', el: () => <ProcurementView /> },
-  { key: 'revenue', label: 'Bán hàng → Thu tiền', el: () => <RevenueView /> },
-  { key: 'trade', label: 'Mua / Bán', el: () => <TradeView /> },
-  { key: 'stock', label: 'Kho', el: () => <InventoryView /> },
-  { key: 'production', label: 'Giá thành', el: () => <ProductionView /> },
-  { key: 'assets', label: 'Tài sản / CCDC', el: () => <AssetsView /> },
-  { key: 'fx', label: 'Ngoại tệ', el: () => <FxView /> },
-  { key: 'loans', label: 'Vay', el: () => <LoansView /> },
-  { key: 'payroll', label: 'Lương', el: () => <PayrollView /> },
-  { key: 'vat', label: 'Thuế GTGT', el: () => <VatView /> },
-  { key: 'tb', label: 'Cân đối phát sinh', el: () => <TrialBalanceView /> },
-  { key: 'ledger', label: 'Sổ chi tiết / Sổ quỹ', el: () => <AccountLedgerView /> },
-  { key: 'journal', label: 'Sổ Nhật ký chung', el: () => <GeneralJournalView /> },
-  { key: 'reports', label: 'Báo cáo theo mẫu', el: () => <ReportEngineView /> },
-  { key: 'catalog', label: 'Danh mục đối tượng', el: () => <CatalogView /> },
-  { key: 'setup', label: 'Thiết lập', el: () => <SetupView /> },
-  { key: 'periods', label: 'Kỳ kế toán', el: () => <PeriodsView /> },
-  { key: 'admin', label: 'Quản trị', el: () => <AdminView /> },
+  { key: 'home', group: '', label: 'Tổng quan', el: () => <DashboardView /> },
+  { key: 'orders', group: 'Chu trình doanh thu', label: 'Đơn hàng (bán, mua)', el: () => <OrdersView /> },
+  { key: 'revenue', group: 'Chu trình doanh thu', label: 'Bán hàng → Thu tiền', el: () => <RevenueView /> },
+  { key: 'arap', group: 'Chu trình doanh thu', label: 'Công nợ phải thu / phải trả', el: () => <ReceivablesView /> },
+  { key: 'procurement', group: 'Chu trình cung ứng', label: 'Mua hàng → Thanh toán', el: () => <ProcurementView /> },
+  { key: 'trade', group: 'Chu trình cung ứng', label: 'Hóa đơn mua / bán', el: () => <TradeView /> },
+  { key: 'stock', group: 'Chu trình cung ứng', label: 'Kho (phiếu, kiểm kê, tồn)', el: () => <InventoryView /> },
+  { key: 'production', group: 'Chu trình chuyển đổi', label: 'Giá thành sản xuất', el: () => <ProductionView /> },
+  { key: 'assets', group: 'Chu trình chuyển đổi', label: 'Tài sản / CCDC', el: () => <AssetsView /> },
+  { key: 'payroll', group: 'Nhân sự – tiền lương', label: 'Lương', el: () => <PayrollView /> },
+  { key: 'cash', group: 'Tài chính, thanh toán', label: 'Thu / Chi tiền', el: () => <CashDocsView /> },
+  { key: 'bank', group: 'Tài chính, thanh toán', label: 'Ngân hàng', el: () => <BankingView /> },
+  { key: 'fx', group: 'Tài chính, thanh toán', label: 'Ngoại tệ', el: () => <FxView /> },
+  { key: 'loans', group: 'Tài chính, thanh toán', label: 'Vay', el: () => <LoansView /> },
+  { key: 'vat', group: 'Tài chính, thanh toán', label: 'Thuế GTGT', el: () => <VatView /> },
+  { key: 'vouchers', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Chứng từ kế toán', el: () => <VouchersView /> },
+  { key: 'journal', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ Nhật ký chung', el: () => <GeneralJournalView /> },
+  { key: 'ledger', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ chi tiết / Sổ quỹ', el: () => <AccountLedgerView /> },
+  { key: 'tb', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Cân đối phát sinh', el: () => <TrialBalanceView /> },
+  { key: 'reports', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Báo cáo theo mẫu', el: () => <ReportEngineView /> },
+  { key: 'catalog', group: 'Danh mục và hệ thống', label: 'Danh mục đối tượng', el: () => <CatalogView /> },
+  { key: 'setup', group: 'Danh mục và hệ thống', label: 'Thiết lập', el: () => <SetupView /> },
+  { key: 'periods', group: 'Danh mục và hệ thống', label: 'Kỳ kế toán', el: () => <PeriodsView /> },
+  { key: 'admin', group: 'Danh mục và hệ thống', label: 'Quản trị', el: () => <AdminView /> },
 ] as const
 
 export default function App() {
@@ -116,7 +117,9 @@ export default function App() {
       <nav className="sidebar" aria-label="Phân hệ">
         <h1>HAK Accounting</h1>
         <div className="company">{company.code} – {company.name}</div>
-        {SCREENS.map(s => <button key={s.key} className={s.key === screen ? 'active' : ''} onClick={() => setScreen(s.key)}>{s.label}</button>)}
+        {SCREENS.map((s, i) => <Fragment key={s.key}>
+          {s.group && s.group !== SCREENS[i - 1]?.group && <div className="nav-group">{s.group}</div>}
+          <button className={s.key === screen ? 'active' : ''} onClick={() => setScreen(s.key)}>{s.label}</button></Fragment>)}
         <button onClick={() => { session.setCompany(null); setCompanyId(null) }}>Đổi công ty</button>
         <button onClick={logout}>Đăng xuất</button>
       </nav>

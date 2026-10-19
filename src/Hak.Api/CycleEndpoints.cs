@@ -3,7 +3,7 @@ using Hak.Domain.Cycles;
 
 namespace Hak.Api;
 
-public sealed record AcceptPaymentRequest(string? Note);
+public sealed record AcceptPaymentRequest(string? Note, bool AcknowledgeMismatch = false);
 public sealed record CreatePaymentOrderRequest(Guid BankAccountId);
 public sealed record DeliveryInvoiceRequest(string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate);
 
@@ -23,9 +23,23 @@ public static class CycleEndpoints
         api.MapGet("/procurement/payable-queue", async (HttpContext http, DateOnly asOf, PaymentAcceptanceService s) =>
             Results.Ok(await s.PayableQueueAsync(await http.SessionAsync(), asOf)));
         api.MapPost("/procurement/invoices/{id:guid}/accept-payment", async (HttpContext http, Guid id, AcceptPaymentRequest r, PaymentAcceptanceService s) =>
-            Results.Ok(Dto(await s.AcceptAsync(await http.SessionAsync(), id, r.Note))));
+            Results.Ok(Dto(await s.AcceptAsync(await http.SessionAsync(), id, r.Note, r.AcknowledgeMismatch))));
         api.MapPost("/procurement/acceptances/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, PaymentAcceptanceService s) =>
             Results.Ok(Dto(await s.CancelAsync(await http.SessionAsync(), id, r.Reason))));
+
+        // Cung ứng: biên bản kiểm nghiệm và đối chiếu nhiều bên của hóa đơn mua.
+        api.MapGet("/procurement/receipts", async (HttpContext http, bool? onlyPending, GoodsInspectionService s) => Results.Ok(await s.ReceiptsAsync(await http.SessionAsync(), onlyPending ?? false)));
+        api.MapPost("/procurement/inspections", async (HttpContext http, InspectionInput r, GoodsInspectionService s) =>
+        {
+            var b = await s.CreateAsync(await http.SessionAsync(), r);
+            return Results.Ok(new { b.Id, b.Number });
+        });
+        api.MapPost("/procurement/inspections/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, GoodsInspectionService s) =>
+        {
+            var b = await s.CancelAsync(await http.SessionAsync(), id, r.Reason);
+            return Results.Ok(new { b.Id, b.Number });
+        });
+        api.MapGet("/procurement/invoices/{id:guid}/match", async (HttpContext http, Guid id, PurchaseMatchService s) => Results.Ok(await s.MatchAsync(await http.SessionAsync(), id)));
 
         // Doanh thu: kiểm tra tín dụng và tồn kho khi nhận đơn bán. Cung ứng: danh mục cần đặt hàng từ tồn tối thiểu.
         api.MapGet("/revenue/orders/{id:guid}/check", async (HttpContext http, Guid id, SalesOrderCheckService s) => Results.Ok(await s.CheckAsync(await http.SessionAsync(), id)));

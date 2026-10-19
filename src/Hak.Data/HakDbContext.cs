@@ -57,6 +57,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<ClosingStep> ClosingSteps => Set<ClosingStep>();
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentAcceptance> PaymentAcceptances => Set<PaymentAcceptance>();
+    public DbSet<GoodsInspection> GoodsInspections => Set<GoodsInspection>();
+    public DbSet<GoodsInspectionLine> GoodsInspectionLines => Set<GoodsInspectionLine>();
     public DbSet<SalesDispatchOrder> SalesDispatchOrders => Set<SalesDispatchOrder>();
     public DbSet<SalesDispatchLine> SalesDispatchLines => Set<SalesDispatchLine>();
     public DbSet<SalesDelivery> SalesDeliveries => Set<SalesDelivery>();
@@ -413,6 +415,20 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.Property(x => x.RowVersion).IsConcurrencyToken();
             e.ToTable(t => t.HasCheckConstraint("ck_payment_orders_amount", "amount > 0"));
         });
+        b.Entity<GoodsInspection>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.StockDocumentId });
+            e.HasOne<StockDocument>().WithMany().HasForeignKey(x => x.StockDocumentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.InspectionId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<GoodsInspectionLine>(e =>
+        {
+            e.HasIndex(x => new { x.InspectionId, x.StockLineNo }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_goods_inspection_lines_qty", "accepted_qty >= 0 AND accepted_qty <= received_qty"));
+        });
         b.Entity<SalesDispatchOrder>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
@@ -634,6 +650,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<SettlementAllocation>().Property(x => x.ForeignAmount).HasConversion(moneyNullable);
         b.Entity<PaymentOrder>().Property(x => x.Amount).HasConversion(money);
         b.Entity<PaymentAcceptance>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<GoodsInspectionLine>().Property(x => x.ReceivedQty).HasConversion(money);
+        b.Entity<GoodsInspectionLine>().Property(x => x.AcceptedQty).HasConversion(money);
         b.Entity<SalesDispatchLine>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<SalesDeliveryLine>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<BusinessPartner>().Property(x => x.CreditLimit).HasConversion(moneyNullable);
