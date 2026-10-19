@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, post, type Period } from './api'
+import { get, post, put, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, parseRate, today } from './money'
+import { addMoney, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface LoanRow {
   id: string; code: string; description: string; lenderCode: string; accountCode: string; currency: string | null
@@ -24,6 +24,7 @@ export function LoansView() {
   const [creating, setCreating] = useState(false)
   const [linking, setLinking] = useState<{ loan: LoanRow; items: Candidate[]; picked: string[] } | null>(null)
   const [rateFor, setRateFor] = useState<LoanRow | null>(null)
+  const [scheduleFor, setScheduleFor] = useState<LoanRow | null>(null)
   const [periodId, setPeriodId] = useState('')
   const [fxRates, setFxRates] = useState<Record<string, string>>({})
   const [info, setInfo] = useState('')
@@ -88,6 +89,7 @@ export function LoansView() {
               {r.status === 'Active' && <>
                 <button disabled={busy} onClick={() => run(async () => setLinking({ loan: r, items: await get<Candidate[]>(`/loans/${r.id}/candidates`), picked: [] }))}>Gắn giải ngân / trả nợ</button>
                 <button disabled={busy} onClick={() => setRateFor(r)}>Đổi lãi suất</button>
+                <button disabled={busy} onClick={() => setScheduleFor(r)}>Lịch trả nợ</button>
                 <button disabled={busy} onClick={() => confirm(`Tất toán khế ước ${r.code}?`) && act(() => post(`/loans/${r.id}/close`), `Đã tất toán ${r.code}.`)}>Tất toán</button>
               </>}
             </td>
@@ -110,6 +112,8 @@ export function LoansView() {
           }, 'Đã gắn bút toán vào khế ước.')}>Gắn</button>
         </section>
       )}
+
+      {scheduleFor && <SchedulePanel loan={scheduleFor} onClose={() => setScheduleFor(null)} />}
 
       {rateFor && <RateForm loan={rateFor} busy={busy} onCancel={() => setRateFor(null)}
         onSubmit={(effectiveFrom, rate, note) => act(async () => { await post(`/loans/${rateFor.id}/rates`, { effectiveFrom, annualRatePercent: rate, note }); setRateFor(null) },
@@ -205,6 +209,57 @@ function NewLoan({ accounts, partners, onDone }: { accounts: ReturnType<typeof u
         <button className="primary" disabled={busy || !f.code || !f.lenderId || !f.principalAccountId || !f.maturityDate} onClick={submit}>Lưu nháp</button>
         <button onClick={() => onDone()}>Hủy</button>
       </div>
+    </section>
+  )
+}
+
+interface ScheduleRow { id?: string; dueDate: string; principalDue: string; interestDue: string; principalOpen?: string; status?: 'Pending' | 'Paid' | 'Overdue' }
+const SCHEDULE_VI = { Pending: 'Chờ trả', Paid: 'Đã trả', Overdue: 'Quá hạn' } as const
+
+/** Lịch trả nợ gốc và lãi của khế ước (tài liệu chu trình tài chính): sinh lịch trả gốc đều, sửa, lưu; trạng thái suy ra từ các lần trả gốc đã ghi sổ và gắn khế ước. */
+function SchedulePanel({ loan, onClose }: { loan: LoanRow; onClose: () => void }) {
+  const [rows, setRows] = useState<ScheduleRow[]>([])
+  const [draft, setDraft] = useState<ScheduleRow[] | null>(null)
+  const [gen, setGen] = useState({ installments: '12', firstDue: today(), rate: '' })
+  const [info, setInfo] = useState('')
+  const { busy, error, run, setError } = useAction()
+  const load = useCallback(() => run(async () => setRows(await get<ScheduleRow[]>(`/loans/${loan.id}/schedule?asOf=${today()}`))), [run, loan.id])
+  useEffect(() => { load() }, [load])
+  const shown = draft ?? rows
+  const total = (k: 'principalDue' | 'interestDue') => addMoney(shown.map(r => r[k]))
+  return (
+    <section className="panel">
+      <div className="toolbar"><h3>Lịch trả nợ {loan.code}</h3><span className="muted">hạn mức {formatMoney(loan.contractAmount)} · đáo hạn {loan.maturityDate}</span><button onClick={onClose}>Đóng</button></div>
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+      <div className="form-row">
+        <label>Số kỳ (trả gốc đều theo tháng)<input inputMode="numeric" value={gen.installments} onChange={e => setGen({ ...gen, installments: e.target.value })} /></label>
+        <label>Ngày trả đầu tiên<input type="date" value={gen.firstDue} onChange={e => setGen({ ...gen, firstDue: e.target.value })} /></label>
+        <label>Lãi suất %/năm (trống = theo khế ước)<input inputMode="decimal" value={gen.rate} onChange={e => setGen({ ...gen, rate: e.target.value })} /></label>
+        <button disabled={busy} onClick={() => run(async () => {
+          const rate = gen.rate.trim() ? parseRate(gen.rate) : null
+          if (gen.rate.trim() && rate == null) throw new Error('Lãi suất không hợp lệ.')
+          const items = await post<{ dueDate: string; principalDue: string; interestDue: string }[]>(`/loans/${loan.id}/schedule/preview`, { installments: Number(gen.installments), firstDue: gen.firstDue, annualRatePercent: rate })
+          setDraft(items)
+        })}>Sinh lịch xem trước</button>
+      </div>
+      <table className="grid"><thead><tr><th>Ngày đến hạn</th><th className="num">Nợ gốc</th><th className="num">Lãi</th><th className="num">Cộng</th><th className="num">Gốc còn phải trả</th><th>Trạng thái</th></tr></thead>
+        <tbody>{shown.map((r, i) => <tr key={r.id ?? i}><td>{r.dueDate}</td>
+          <td className="num">{draft ? <input aria-label={`Gốc kỳ ${i + 1}`} style={{ width: 130, textAlign: 'right' }} value={r.principalDue} onChange={e => setDraft(draft.map((x, j) => j === i ? { ...x, principalDue: e.target.value } : x))} /> : formatMoney(r.principalDue)}</td>
+          <td className="num">{draft ? <input aria-label={`Lãi kỳ ${i + 1}`} style={{ width: 130, textAlign: 'right' }} value={r.interestDue} onChange={e => setDraft(draft.map((x, j) => j === i ? { ...x, interestDue: e.target.value } : x))} /> : formatMoney(r.interestDue)}</td>
+          <td className="num">{formatMoney(addMoney([r.principalDue, r.interestDue]))}</td>
+          <td className="num">{r.principalOpen != null ? formatMoney(r.principalOpen) : ''}</td>
+          <td style={{ color: r.status === 'Overdue' ? 'var(--danger)' : undefined }}>{draft ? 'Bản xem trước' : r.status ? SCHEDULE_VI[r.status] : ''}</td></tr>)}
+          {shown.length === 0 && <tr><td colSpan={6} className="muted">Chưa có lịch trả nợ.</td></tr>}</tbody>
+        {shown.length > 0 && <tfoot><tr><td><b>Cộng</b></td><td className="num"><b>{formatMoney(total('principalDue'))}</b></td><td className="num"><b>{formatMoney(total('interestDue'))}</b></td><td className="num"><b>{formatMoney(addMoney([total('principalDue'), total('interestDue')]))}</b></td><td /><td /></tr></tfoot>}
+      </table>
+      {draft && <div className="toolbar">
+        <button className="primary" disabled={busy} onClick={() => run(async () => {
+          const items = draft.map(r => ({ dueDate: r.dueDate, principalDue: parseMoney(r.principalDue), interestDue: parseMoney(r.interestDue) }))
+          if (items.some(i => i.principalDue == null || i.interestDue == null)) { setError(new Error('Có số tiền không hợp lệ.')); return }
+          await put(`/loans/${loan.id}/schedule`, items); setDraft(null); setInfo('Đã lưu lịch trả nợ; kế hoạch tiền ở màn Tổng quan sẽ tính các kỳ chưa trả.'); await load()
+        })}>Lưu lịch</button>
+        <button onClick={() => setDraft(null)}>Bỏ bản xem trước</button></div>}
     </section>
   )
 }

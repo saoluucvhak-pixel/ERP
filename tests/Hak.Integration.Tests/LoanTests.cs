@@ -51,6 +51,41 @@ public class LoanTests
         2_000_000_000, new(2026, 1, 1), new(2026, 12, 31), 10m);
 
     [Fact]
+    public async Task RepaymentSchedule_EqualPrincipal_StatusFromRepayments_AndFeedsCashPlan()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var schedule = new LoanScheduleService(s.Db, s.Audit, h.Clock);
+        var loan = await s.Loans.CreateAsync(h.Preparer, Vnd(h));
+        await s.Loans.ActivateAsync(h.Approver, loan.Id);
+        await s.Loans.LinkAsync(h.Preparer, loan.Id, [await MoveAsync(h, s, new(2026, 1, 1), 2_000_000_000, drawdown: true)]);
+
+        // Sinh lịch trả gốc đều 4 kỳ từ 01/04: lãi theo dư nợ đầu kỳ, số ngày thực tế / 365; kỳ cuối trả hết gốc.
+        var draft = await schedule.PreviewEqualPrincipalAsync(h.Auditor, loan.Id, 4, new(2026, 4, 1), null);
+        Assert.Equal(4, draft.Count);
+        Assert.Equal((new DateOnly(2026, 4, 1), 500_000_000m, 49_315_068m), (draft[0].DueDate, draft[0].PrincipalDue, draft[0].InterestDue));
+        Assert.Equal((500_000_000m, 12_328_767m), (draft[1].PrincipalDue, draft[1].InterestDue));      // 1,5 tỷ × 10% × 30 ngày / 365
+        Assert.Equal(2_000_000_000m, draft.Sum(d => d.PrincipalDue));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => schedule.PreviewEqualPrincipalAsync(h.Auditor, loan.Id, 4, new(2025, 12, 1), null)));   // trả trước ngày giải ngân
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => schedule.SaveAsync(h.Auditor, loan.Id, draft)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => schedule.SaveAsync(h.Preparer, loan.Id, [.. draft, new(new DateOnly(2027, 1, 1), 1, 0)])));  // gốc vượt khế ước
+        await schedule.SaveAsync(h.Preparer, loan.Id, draft);
+
+        var before = await schedule.ListAsync(h.Auditor, loan.Id, new(2026, 4, 10));
+        Assert.Equal((ScheduleStatus.Overdue, ScheduleStatus.Pending), (before[0].Status, before[1].Status));
+        var plan = await schedule.UpcomingAsync(h.Auditor, new(2026, 4, 10));
+        Assert.Equal(4, plan.Count);
+        Assert.Equal(549_315_068m, plan[0].Total);
+
+        // Trả gốc kỳ 1 (đã ghi sổ và gắn khế ước) → kỳ 1 đã trả, còn 3 kỳ.
+        await s.Loans.LinkAsync(h.Preparer, loan.Id, [await MoveAsync(h, s, new(2026, 4, 2), 500_000_000, drawdown: false)]);
+        var after = await schedule.ListAsync(h.Auditor, loan.Id, new(2026, 4, 10));
+        Assert.Equal((ScheduleStatus.Paid, 0m, ScheduleStatus.Pending), (after[0].Status, after[0].PrincipalOpen, after[1].Status));
+        Assert.Equal(3, (await schedule.UpcomingAsync(h.Auditor, new(2026, 4, 10))).Count);
+    }
+
+    [Fact]
     public async Task VndLoan_DrawdownRateChangeRepayment_InterestPerPeriod_AndReconciliation()
     {
         using var h = await HostAsync();

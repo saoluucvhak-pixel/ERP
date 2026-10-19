@@ -106,4 +106,6 @@ public static class Permissions
     public const string AssetManage = "asset.manage";
     /// <summary>Create and activate loan contracts, link drawdowns/repayments, change rates.</summary>
     public const string LoanManage = "loan.manage";
+    /// <summary>Lập định mức, tổ xưởng, lệnh sản xuất, báo công (chu trình sản xuất). Ban hành lệnh cần voucher.approve; hoàn thành lệnh cần voucher.post và stock.document.</summary>
+    public const string ProductionManage = "production.manage";
 }

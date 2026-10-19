@@ -28,6 +28,8 @@ public static class AccountRoles
         new("FX_REVALUATION", "Ngoại tệ", "Chênh lệch tỷ giá do đánh giá lại cuối kỳ"),
         new("FX_REALIZED_GAIN", "Ngoại tệ", "Lãi chênh lệch tỷ giá đã thực hiện (thu/chi ngoại tệ theo hóa đơn)"),
         new("FX_REALIZED_LOSS", "Ngoại tệ", "Lỗ chênh lệch tỷ giá đã thực hiện"),
+        new("PROD_LABOR_APPLIED", "Sản xuất", "Chi phí nhân công trực tiếp phân bổ cho lệnh sản xuất theo giờ công (đối ứng Nợ TK dở dang); chỉ cần khi lệnh có báo công", Optional: true),
+        new("PROD_OVERHEAD_APPLIED", "Sản xuất", "Chi phí máy và sản xuất chung phân bổ cho lệnh sản xuất theo giờ máy (đối ứng Nợ TK dở dang); chỉ cần khi lệnh có báo công", Optional: true),
         new("PAYROLL_EXPENSE_GENERAL", "Lương", "Chi phí lương — mặc định cho mọi nhóm chưa có vai trò riêng"),
         new("PAYROLL_EXPENSE_PRODUCTION", "Lương", "Chi phí lương nhóm sản xuất (không ánh xạ thì dùng GENERAL)", Optional: true),
         new("PAYROLL_EXPENSE_SELLING", "Lương", "Chi phí lương nhóm bán hàng (không ánh xạ thì dùng GENERAL)", Optional: true),

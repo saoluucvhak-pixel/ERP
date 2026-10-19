@@ -16,7 +16,7 @@ import { PayrollView } from './Payroll'
 import { ProcurementView } from './Procurement'
 import { RevenueView } from './Revenue'
 import { SetupView } from './Setup'
-import { ProductionView } from './Production'
+import { ProductionView } from './ProductionOrders'
 import { ReportEngineView } from './ReportEngine'
 import { PeriodsView } from './Periods'
 import { TradeView } from './Trade'
@@ -35,7 +35,7 @@ const SCREENS = [
   { key: 'procurement', group: 'Chu trình cung ứng', label: 'Mua hàng → Thanh toán', el: () => <ProcurementView /> },
   { key: 'trade', group: 'Chu trình cung ứng', label: 'Hóa đơn mua / bán', el: () => <TradeView /> },
   { key: 'stock', group: 'Chu trình cung ứng', label: 'Kho (phiếu, kiểm kê, tồn)', el: () => <InventoryView /> },
-  { key: 'production', group: 'Chu trình chuyển đổi', label: 'Giá thành sản xuất', el: () => <ProductionView /> },
+  { key: 'production', group: 'Chu trình chuyển đổi', label: 'Sản xuất (lệnh, giá thành)', el: () => <ProductionView /> },
   { key: 'payroll', group: 'Nhân sự – tiền lương', label: 'Lương', el: () => <PayrollView /> },
   { key: 'cash', group: 'Tài chính, thanh toán', label: 'Thu / Chi tiền', el: () => <CashDocsView /> },
   { key: 'bank', group: 'Tài chính, thanh toán', label: 'Ngân hàng', el: () => <BankingView /> },

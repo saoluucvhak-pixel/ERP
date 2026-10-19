@@ -83,9 +83,11 @@ builder.Services.AddScoped<Hak.Application.Assets.AssetService>();
 builder.Services.AddScoped<Hak.Application.Fx.FxService>();
 builder.Services.AddScoped<Hak.Application.Fx.FxPaymentService>();
 builder.Services.AddScoped<Hak.Application.Loans.LoanService>();
+builder.Services.AddScoped<Hak.Application.Loans.LoanScheduleService>();
 builder.Services.AddScoped<Hak.Application.Payroll.PayrollService>();
 builder.Services.AddScoped<Hak.Application.Exchange.ExchangeKeyService>();
 builder.Services.AddScoped<Hak.Application.Production.ProductionCostService>();
+builder.Services.AddScoped<Hak.Application.Production.ProductionOrderService>();
 builder.Services.AddSingleton(new Hak.Application.Backup.BackupOptions
 {
     Directory = builder.Configuration["Hak:BackupPath"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "backups"),

@@ -153,6 +153,42 @@ Chị gửi bài để tham khảo. Đối chiếu với hệ thống:
 - **Đã làm:** thêm vào chứng từ hai trường **họ tên người giao / nhận** và **đơn vị, địa chỉ** (`Voucher.CounterpartyName`, `CounterpartyUnit`, migration `Phase7VoucherCounterparty`), nhập ở màn Thu / Chi tiền và hiện trên phiếu thu, phiếu chi in ra (trước đây dòng địa chỉ để trống, tên chỉ lấy từ danh mục đối tượng). Test: mở rộng 1 test tích hợp.
 - **Chưa làm:** cột lũy kế từ đầu năm trên bảng cân đối phát sinh.
 
+## 9j. Đã làm đợt 9 (19/10/2026): giao diện ô ứng dụng, chu trình sản xuất, lịch trả nợ vay — theo 3 tài liệu chị gửi
+Chị gửi ba tệp: *thiết kế chu trình sản xuất*, *thiết kế chu trình tài chính*, *kiến trúc cơ sở dữ liệu tổng thể ERP*. Đối chiếu và làm như sau.
+
+**Giao diện kiểu Odoo (theo đề xuất, chị đồng ý):** màn Tổng quan có **ô ứng dụng** nhóm theo chu trình, mỗi ô kèm số việc đang chờ (`HomeService`, `GET /api/cycles/home/work-queue`, tính từ chứng từ nguồn, phân hệ không có quyền xem thì bỏ qua); chứng từ có **thanh trạng thái** Nháp → Chờ duyệt → Đã duyệt → Đã ghi sổ (đỏ khi đã đảo, đã hủy) với nút hành động ngay trên thanh (`StatusBar`). Chưa làm: nút thông minh nhảy sang chứng từ liên quan, danh sách – biểu mẫu hai khung, bảng việc kanban.
+
+**Chu trình sản xuất** (`ProductionOrderService`, màn Sản xuất có 3 tab: Lệnh sản xuất, Định mức & tổ xưởng, Giá thành cuối kỳ):
+| Tài liệu | HAK |
+|---|---|
+| `product_bom` (thành phẩm, NVL, số lượng định mức, tỷ lệ hao hụt) | `Bom` + `BomLine`, một định mức hiện hành cho mỗi thành phẩm, sửa có nhật ký kiểm toán |
+| `work_centers` (đơn giá nhân công, máy + SXC theo giờ) | `WorkCenter` |
+| `production_orders` Draft → Released → In-Progress → Completed → Closed | `ProductionOrder` (thêm Cancelled); người ban hành khác người lập; số lệnh LSX{năm}-{số} |
+| Lập KHSX & MRP | Nhu cầu NVL theo định mức (kể cả hao hụt), đã xuất, còn phải xuất, tồn kho và phần thiếu |
+| `production_material_issues` | Phiếu xuất kho thường (đối ứng TK dở dang của đối tượng tính giá thành, giá vốn do kho tính) gắn lệnh bằng `ProductionOrderIssue`; lập sẵn từ định mức |
+| `production_labor_confirmations` | Báo công (giờ công, giờ máy), đơn giá chốt lúc báo, hủy được khi lệnh chưa hoàn thành |
+| Tính giá thành: CP NVL (621) + nhân công (622) + SXC (627) = TK 154, giá đơn vị = tổng ÷ số lượng thực nhập | Hoàn thành lệnh: kiểm tra mọi phiếu xuất đã ghi sổ và có giá; ghi Nhật ký phân bổ **Nợ TK dở dang / Có vai trò `PROD_LABOR_APPLIED`, `PROD_OVERHEAD_APPLIED`**; lập phiếu nhập thành phẩm Nháp theo tổng giá thành (Có TK dở dang); chốt giá thành đơn vị; bảng giá thành và so sánh thực xuất với định mức; đóng lệnh khi phiếu nhập đã ghi sổ |
+- Không dùng số hiệu TK pháp lý cố định (621, 622, 627, 154, 155): TK do kế toán trưởng ánh xạ qua vai trò, chờ xác minh. Hai vai trò mới `PROD_LABOR_APPLIED`, `PROD_OVERHEAD_APPLIED` chỉ bắt buộc khi lệnh có báo công. Quyền mới `production.manage`.
+- Người hoàn thành lệnh lập phiếu nhập thành phẩm nên người khác ghi sổ (tách người). Giá thành kỳ (tab Giá thành cuối kỳ) vẫn dùng khi muốn chênh lệch cuối kỳ; lệnh đã nhập thành phẩm theo giá thực tế của lệnh nên chênh lệch kỳ gần bằng 0.
+- Migration `Phase8ProductionOrders`. 1 test tích hợp đầy đủ luồng (định mức, ban hành, xuất, báo công, hoàn thành, ghi sổ, đóng); thử tay trên trình duyệt.
+
+**Chu trình tài chính:**
+| Tài liệu | HAK |
+|---|---|
+| `debt_contracts` (vay, lãi suất, ngày giải ngân, đáo hạn) | Đã có từ trước: khế ước vay, lãi suất theo ngày hiệu lực, gắn giải ngân / trả nợ |
+| Giải ngân Nợ 112 / Có 341; trả nợ gốc Nợ 341 | Đã có (chứng từ thường gắn khế ước) |
+| Trích trước lãi Nợ 635 / Có 335 | Đã có (trích lãi theo kỳ, 365 ngày) |
+| `debt_schedules` (kỳ trả, gốc, lãi, Pending / Paid / Overdue) | **Mới:** `LoanScheduleItem`, sinh lịch trả gốc đều (lãi = dư nợ đầu kỳ × lãi suất × số ngày ÷ 365 hoặc 360), sửa tay, lưu; trạng thái suy ra từ gốc đã trả (phân bổ theo ngày đến hạn); màn Vay → Lịch trả nợ |
+| Dự báo dòng tiền = số dư + thu dự kiến − chi dự kiến, chi gồm công nợ phải trả, lương, **lịch trả nợ vay** | Kế hoạch tiền ở Tổng quan nay tính cả các kỳ trả nợ vay VND chưa trả (gốc còn phải trả + lãi kỳ, coi như đã cam kết); chi lương chưa vào dự báo; khoản vay sắp giải ngân chưa vào |
+| `chart_of_accounts`, `bank_accounts` (tên ngân hàng, số tài khoản, TK 112) | TK có sẵn; **số tài khoản và tên ngân hàng chưa có trong danh mục** (đã ghi vào sổ việc cùng STK nhận của nhân viên) |
+| Vốn góp, cổ tức (`contract_type` Equity) | **Chưa làm** — cần chị mô tả quy trình |
+- Migration `Phase8LoanSchedule`; 1 test tích hợp (sinh lịch, trạng thái theo trả gốc, đưa vào kế hoạch tiền); thử tay lưu lịch.
+
+**Đối chiếu tài liệu kiến trúc tổng thể:**
+- Khớp: ma trận định khoản (nhập kho NVL, xuất NVL vào sản xuất, nhập thành phẩm, giá vốn, hóa đơn bán, lương, giải ngân) đều có, đi qua vai trò TK thay cho số hiệu; Sổ cái tích hợp = Nhật ký + Chi tiết Nhật ký.
+- Khác có chủ ý: trạng thái đơn mua / đơn bán, số đã trả của hóa đơn bán và trạng thái hóa đơn (`Unpaid / Partially_Paid / Paid`) suy ra từ chứng từ nguồn chứ không lưu cột (tránh lệch).
+- Chưa có, ghi vào sổ việc: TK công nợ phải thu / phải trả riêng theo từng đối tác (`ar_account`, `ap_account`) và TK giá vốn riêng theo từng vật tư (`cogs_account`) — hiện dùng vai trò chung `AR_TRADE`, `AP_TRADE`, `COGS`; loại vật tư (nguyên liệu, bán thành phẩm, thành phẩm, dịch vụ); cột "phân hệ nguồn" (`ref_module`) trên Sổ Nhật ký chung và loại giao dịch kho (`PURCHASE_GR`, `PROD_ISSUE`, `PROD_RECEIPT`, `SALES_ISSUE`) trên thẻ kho.
+
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
 |---|---|---|
@@ -172,8 +208,8 @@ Chị gửi bài để tham khảo. Đối chiếu với hệ thống:
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).
-**Thanh toán / tài chính**: số tài khoản nhận của nhân viên + file UNC; thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
-**Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm; chị gửi 3 đường dẫn bài về chu trình sản xuất trên Scribd và Studocu nhưng phiên làm việc không truy cập được hai trang này — cần chị gửi tệp PDF hoặc dán nội dung).
+**Thanh toán / tài chính**: số tài khoản và tên ngân hàng trong danh mục (tài khoản ngân hàng của công ty và STK nhận của đối tượng, nhân viên) + file UNC; vốn góp và cổ tức; khoản vay sắp giải ngân và chi lương vào kế hoạch tiền; TK công nợ riêng theo đối tác, TK giá vốn riêng theo vật tư, loại vật tư, cột phân hệ nguồn trên Sổ Nhật ký chung và loại giao dịch trên thẻ kho (mục 9j); thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
+**Chuyển đổi**: đã có định mức, tổ xưởng, lệnh sản xuất, báo công, giá thành lệnh (mục 9j theo tài liệu thiết kế chị gửi); còn kế hoạch sản xuất theo đơn bán / dự báo (MRP tự động), sản phẩm dở dang cuối kỳ theo lệnh, kiểm tra chất lượng trước khi nhập kho, phân bổ chi phí chung theo định mức, chu trình riêng của dăm gỗ (đo độ khô khi sản xuất) — chờ chị mô tả. Đường dẫn Scribd, Studocu phiên làm việc không truy cập được.
 **Nền**: cột lũy kế từ đầu năm trên bảng cân đối phát sinh; chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.
 **Các phân hệ làm trước khi theo chu trình** đã xếp vào menu theo chu trình và có bảng khâu ở mục 9d; còn thiếu màn hình dòng chảy cho Chuyển đổi (Nhân sự – lương và Tài chính đã có dải khâu ở mục 9g).
 **Còn dang dở từ các đợt trước:** in biên bản kiểm kê / bàn giao tài sản, đề nghị sửa chữa – nâng cấp tài sản, tạm ứng/hoàn ứng, kiểm kê quỹ, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.

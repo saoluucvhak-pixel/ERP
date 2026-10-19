@@ -642,7 +642,7 @@ public class TradeTests
         using var fx = await SetupAsync();
         var (h, s) = (fx.H, fx.S);
         var home = new Hak.Application.Cycles.HomeService(s.Db, s.PaymentAcceptances, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement),
-            new Hak.Application.Cycles.PayrollPaymentService(s.Db, s.Settlement, s.PaymentOrders, s.Audit), new Hak.Application.Cycles.ReorderService(s.Db), h.Clock);
+            new Hak.Application.Cycles.PayrollPaymentService(s.Db, s.Settlement, s.PaymentOrders, s.Audit), new Hak.Application.Cycles.ReorderService(s.Db), new Hak.Application.Loans.LoanScheduleService(s.Db, s.Audit, h.Clock), h.Clock);
         Assert.Empty(await home.WorkQueueAsync(h.Auditor));
 
         await DraftReceiptAsync(fx, 10, D(3, 2));                                           // 1 phiếu kho nháp
@@ -806,7 +806,7 @@ public class TradeTests
             [new InvoiceLineInput(60_000, issue.Id, 1, VatRate: 10)], DueDate: D(4, 10)));
         await fx.Inv.PostAsync(h.Approver, sale.Id);
 
-        var plan = new Hak.Application.Cycles.CashPlanService(s.Db, s.Ledger, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement), s.PaymentAcceptances);
+        var plan = new Hak.Application.Cycles.CashPlanService(s.Db, s.Ledger, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement), s.PaymentAcceptances, new Hak.Application.Loans.LoanScheduleService(s.Db, s.Audit, h.Clock));
         var p = await plan.PlanAsync(h.Auditor, D(3, 31), 4);
         Assert.Equal(10_000_000m, p.OpeningCash);
         Assert.Equal(7, p.Buckets.Count);   // overdue/today + 4 weeks + later + no due date

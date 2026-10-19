@@ -13,7 +13,7 @@ const TILE: Record<string, { icon: string; color: string; desc: string }> = {
   procurement: { icon: '🛒', color: '#7a3db8', desc: 'Cần đặt, nhận hàng, kiểm nghiệm, chấp nhận thanh toán' },
   trade: { icon: '📄', color: '#0b7a8a', desc: 'Hóa đơn mua, hóa đơn bán, hóa đơn điện tử' },
   stock: { icon: '📦', color: '#b4531a', desc: 'Phiếu nhập, xuất, chuyển kho, kiểm kê, giá xuất' },
-  production: { icon: '🏭', color: '#6b4f3a', desc: 'Tập hợp chi phí và giá thành sản xuất' },
+  production: { icon: '🏭', color: '#6b4f3a', desc: 'Định mức, lệnh sản xuất, báo công, giá thành' },
   payroll: { icon: '👥', color: '#c23b6b', desc: 'Nhận bảng lương, hàng chờ trả lương' },
   cash: { icon: '💵', color: '#1a7f37', desc: 'Phiếu thu, phiếu chi, báo có, báo nợ' },
   bank: { icon: '🏦', color: '#0b5cad', desc: 'Lệnh thanh toán, sao kê, đối chiếu ngân hàng' },

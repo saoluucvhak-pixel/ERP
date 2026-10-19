@@ -1,3 +1,4 @@
+using Hak.Application.Loans;
 using Hak.Application.Accounting;
 using Hak.Application.Security;
 using Hak.Data;
@@ -15,10 +16,10 @@ public sealed record CashPlan(DateOnly AsOf, decimal OpeningCash, IReadOnlyList<
 /// <summary>
 /// Kế hoạch tiền theo ngày đáo hạn (tệp phân tích ERP, mục V.2.2.3: "cung cấp thông tin để lập kế hoạch ngân sách phục vụ chuẩn bị tiền thanh toán
 /// tại từng thời điểm"). Số dư tiền đầu kỳ là số dư đã ghi sổ của các tài khoản quỹ và ngân hàng; thu và chi dự kiến lấy từ hóa đơn bán và mua VND
-/// còn nợ, xếp theo ngày đáo hạn (quá hạn và đến hạn trong ngày vào cột "Quá hạn / đến hạn", không có hạn vào cột "Chưa có hạn").
+/// còn nợ và lịch trả nợ vay VND, xếp theo ngày đáo hạn (quá hạn và đến hạn trong ngày vào cột "Quá hạn / đến hạn", không có hạn vào cột "Chưa có hạn").
 /// Đây là dự báo từ hạn thanh toán, không phải cam kết; chi đã chấp nhận thanh toán được tách riêng.
 /// </summary>
-public sealed class CashPlanService(HakDbContext db, LedgerQueryService ledger, SalesReportService sales, PaymentAcceptanceService payables)
+public sealed class CashPlanService(HakDbContext db, LedgerQueryService ledger, SalesReportService sales, PaymentAcceptanceService payables, LoanScheduleService loans)
 {
     public async Task<CashPlan> PlanAsync(SessionContext ctx, DateOnly asOf, int weeks = 8)
     {
@@ -30,6 +31,8 @@ public sealed class CashPlanService(HakDbContext db, LedgerQueryService ledger, 
 
         var inflow = (await sales.ReceivableQueueAsync(ctx, asOf)).Select(r => (Due: r.DueDate, r.Open, Accepted: false)).ToList();
         var outflow = (await payables.PayableQueueAsync(ctx, asOf)).Select(r => (Due: r.DueDate, r.Open, Accepted: r.Stage != PaymentAcceptanceService.Stages.NotAccepted)).ToList();
+        // Lịch trả nợ vay (gốc còn phải trả + lãi kỳ) là chi dự kiến đã có hạn cố định, coi như đã cam kết.
+        outflow.AddRange((await loans.UpcomingAsync(ctx, asOf)).Select(r => (Due: (DateOnly?)r.DueDate, Open: r.Total, Accepted: true)));
 
         // Buckets: [<= asOf] then consecutive 7-day weeks, then later, then no due date.
         var defs = new List<(string Label, DateOnly? From, DateOnly? To)> { ("Quá hạn / đến hạn hôm nay", null, asOf) };

@@ -11,7 +11,7 @@ interface Preview {
 }
 interface Run { id: string; costObjectId: string; periodStart: string; outputQuantity: string; actualCost: string; unitCost: string; closingWip: string; difference: string; status: 'Active' | 'Reversed' }
 
-export function ProductionView() {
+export function PeriodCostingView() {
   const { accounts } = useCatalog()
   const [objects, setObjects] = useState<CostObject[]>([])
   const [items, setItems] = useState<Item[]>([])

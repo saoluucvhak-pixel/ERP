@@ -1,4 +1,5 @@
 using Hak.Application.Assets;
+using Hak.Application.Loans;
 using Hak.Application.Security;
 using Hak.Data;
 using Hak.Domain.Assets;
@@ -6,6 +7,7 @@ using Hak.Domain.Banking;
 using Hak.Domain.Common;
 using Hak.Domain.Cycles;
 using Hak.Domain.Inventory;
+using Hak.Domain.Production;
 using Hak.Domain.Trade;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +21,7 @@ public sealed record WorkItem(string Screen, int Count, string Hint);
 /// Việc đang chờ xử lý theo phân hệ: mỗi chu trình tự nhận việc từ khâu trước (ví dụ hóa đơn mua chờ chấp nhận thanh toán, lệnh chi chờ duyệt).
 /// Tính khi xem từ chính chứng từ nguồn, không lưu. Phân hệ nào người dùng không có quyền xem thì bỏ qua, không báo lỗi.
 /// </summary>
-public sealed class HomeService(HakDbContext db, PaymentAcceptanceService acceptances, SalesReportService sales, PayrollPaymentService payroll, ReorderService reorder, IClock clock)
+public sealed class HomeService(HakDbContext db, PaymentAcceptanceService acceptances, SalesReportService sales, PayrollPaymentService payroll, ReorderService reorder, LoanScheduleService loans, IClock clock)
 {
     public async Task<IReadOnlyList<WorkItem>> WorkQueueAsync(SessionContext ctx)
     {
@@ -70,6 +72,18 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
             var cards = await db.LongTermAssets.CountAsync(a => a.CompanyId == cid && a.Status == AssetStatus.Draft);
             var counts = await db.AssetCounts.CountAsync(c => c.CompanyId == cid && c.Status == AssetCountStatus.Draft);
             return (requests + cards + counts, Join((requests, "đề nghị mua sắm chờ duyệt"), (cards, "thẻ tài sản chờ ghi tăng"), (counts, "phiếu kiểm kê chưa chốt")));
+        });
+        await Add("production", async () =>
+        {
+            var toRelease = await db.ProductionOrders.CountAsync(o => o.CompanyId == cid && o.Status == ProductionOrderStatus.Draft);
+            var running = await db.ProductionOrders.CountAsync(o => o.CompanyId == cid && (o.Status == ProductionOrderStatus.Released || o.Status == ProductionOrderStatus.InProgress));
+            var toClose = await db.ProductionOrders.CountAsync(o => o.CompanyId == cid && o.Status == ProductionOrderStatus.Completed);
+            return (toRelease + running + toClose, Join((toRelease, "lệnh sản xuất chờ ban hành"), (running, "lệnh đang sản xuất"), (toClose, "lệnh chờ ghi sổ nhập thành phẩm / đóng")));
+        });
+        await Add("loans", async () =>
+        {
+            var overdue = (await loans.UpcomingAsync(ctx, today)).Count(r => r.Status == ScheduleStatus.Overdue);
+            return (overdue, $"{overdue} kỳ trả nợ vay quá hạn");
         });
         await Add("vouchers", async () =>
         {
