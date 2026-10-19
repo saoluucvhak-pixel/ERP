@@ -84,3 +84,13 @@ Chỉ giới thiệu trong tệp. Hiện hệ thống nhận bảng lương JSON
 - API `/api/cycles/...`; màn hình **Mua hàng → Thanh toán** (các khâu kèm cờ ghi Nhật ký, hàng chờ theo ngày đáo hạn, hộp thư thanh toán).
 - Test: 2 test tích hợp (chấp nhận không sinh bút toán; từ chối rồi chấp nhận lại; tạo lệnh; duyệt, gửi, chi, ghi sổ → đã thanh toán; ngân hàng mặc định tự tạo lệnh; rút chấp nhận hủy lệnh).
 - Chưa làm tiếp: yêu cầu mua hàng từ tồn tối thiểu, biên bản kiểm nghiệm, xếp hạng nhà cung cấp, hóa đơn ngoại tệ (đi qua màn Ngoại tệ).
+
+## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
+**Chu trình doanh thu** (mục 2): lệnh bán hàng và các liên in; phiếu giao hàng và vận đơn (nơi nhận, đơn vị vận tải, NV giao hàng, liên kết số phiếu gửi hàng ở phiếu xuất); hóa đơn bán tự điền giá bán và thuế suất từ danh mục; báo cáo bán hàng và báo cáo thu tiền bán hàng; phân tích tiêu thụ (doanh thu, số lượng theo mặt hàng/ngành hàng/khách, giá vốn theo mặt hàng); biên bản và phê duyệt hàng trả lại/giảm giá; thông báo nợ quá hạn và xóa nợ có phê duyệt; thu tiền bàn giao ngược về hóa đơn bán như đã làm bên mua.
+**Chu trình cung ứng** (mục 3): đơn mua tạo từ danh mục cần đặt hàng; biên bản kiểm nghiệm và số lượng thực nhận so với đặt; xếp hạng uy tín và phê duyệt nhà cung cấp mới; màn đối chiếu nhiều bên (hóa đơn – đơn – phiếu giao hàng NCC – biên bản kiểm nghiệm – phiếu nhập); chiết khấu thanh toán và kế hoạch tiền theo ngày đáo hạn; hóa đơn mua ngoại tệ vào hàng chờ.
+**Thanh toán / tài chính**: lệnh thanh toán lương (`PAYROLL_PAYMENT`), thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
+**Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm).
+**Nền**: màn hình theo chu trình thay menu phẳng (mới có màn Mua hàng → Thanh toán); chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.
+**Các phân hệ làm trước khi theo chu trình** (Chứng từ, Thu/chi, Công nợ, Kho, Thuế GTGT, Báo cáo, Tổng quan) chưa gắn vào dòng chảy chu trình; cần rà để mỗi chứng từ ở đó thuộc đúng một khâu và nêu rõ ghi/không ghi Nhật ký.
+**Còn dang dở từ các đợt trước:** tạm ứng/hoàn ứng, kiểm kê quỹ, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.
+
