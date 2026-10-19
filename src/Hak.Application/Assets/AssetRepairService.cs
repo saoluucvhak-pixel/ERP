@@ -295,7 +295,7 @@ public sealed class AssetRepairService(HakDbContext db, StockService stock, Audi
     public async Task<IReadOnlyList<MaintenanceKpiRow>> KpiAsync(SessionContext ctx, DateOnly from, DateOnly to)
     {
         ctx.Require(Permissions.ReportView);
-        var start = from.ToDateTime(TimeOnly.MinValue); var end = to.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var start = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc); var end = to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var done = await db.AssetRepairs.AsNoTracking().Include(r => r.Materials).Where(r => r.CompanyId == ctx.CompanyId && (r.Status == RepairStatus.Completed || r.Status == RepairStatus.Closed)
             && r.EndTime != null && r.EndTime >= start && r.EndTime < end).ToListAsync();
         var assets = await AssetsAsync(done.Select(r => r.AssetId));
