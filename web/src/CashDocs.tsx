@@ -30,6 +30,8 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
   const [date, setDate] = useState(voucher?.postingDate ?? today())
   const [description, setDescription] = useState(voucher?.description ?? '')
   const [partnerId, setPartnerId] = useState(voucher?.partnerId ?? prefill?.partnerId ?? '')
+  const [cpName, setCpName] = useState(voucher?.counterpartyName ?? '')
+  const [cpUnit, setCpUnit] = useState(voucher?.counterpartyUnit ?? '')
   const [mainAccountId, setMainAccountId] = useState(voucher?.mainAccountId ?? '')
   const [lines, setLines] = useState<DocLine[]>(voucher ? linesOf(voucher) : [{ amount: prefill ? formatMoney(prefill.amount) : '', counterAccountId: '', settle: prefill?.settleJournalLineId ?? '', description: '' }])
   const [openItems, setOpenItems] = useState<OpenItem[]>([])
@@ -71,7 +73,7 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
     if (amounts.some(a => a == null)) { setError(new Error('Có dòng số tiền không hợp lệ.')); return }
     const body = {
       documentType: type, businessEvent: event, voucherDate: voucher?.voucherDate ?? date, postingDate: date, description,
-      partnerId: partnerId || null, mainAccountId: mainAccountId || null,
+      partnerId: partnerId || null, mainAccountId: mainAccountId || null, counterpartyName: cpName.trim() || null, counterpartyUnit: cpUnit.trim() || null,
       lines: lines.map((l, i) => ({ amount: amounts[i], counterAccountId: ev.needsCounter ? l.counterAccountId || null : null, settleJournalLineId: l.settle || null, description: l.description || null, dueDate: l.dueDate ?? null })),
     }
     if (voucher) { await put(`/documents/${voucher.id}?rowVersion=${voucher.rowVersion}`, body); onDone?.(); return }
@@ -109,6 +111,8 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
             <AccountSelect accounts={accounts} value={mainAccountId} onChange={setMainAccountId} filter={a => a.cashKind === cashKind} />
           </label>
           {ev.needsPartner && <label>Đối tượng<PartnerSelect partners={partners} value={partnerId} onChange={setPartnerId} /></label>}
+          <label>Họ tên người {outflow ? 'nhận' : 'nộp'} tiền<input value={cpName} maxLength={200} onChange={e => setCpName(e.target.value)} placeholder={partners.find(p => p.id === partnerId)?.name ?? 'nếu khác đối tượng'} /></label>
+          <label>Đơn vị / địa chỉ<input value={cpUnit} maxLength={300} onChange={e => setCpUnit(e.target.value)} placeholder={partners.find(p => p.id === partnerId)?.address ?? ''} /></label>
           <label style={{ flex: 1, minWidth: 220 }}>Diễn giải<input value={description} onChange={e => setDescription(e.target.value)} /></label>
         </div>
         <table className="grid">

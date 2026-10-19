@@ -183,8 +183,8 @@ function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
         <div className="center">Ngày {d(v.voucherDate)} · Số: <b>{v.number}</b></div>
         <div className="center">{receipt ? 'Nợ' : 'Có'}: {main} · {receipt ? 'Có' : 'Nợ'}: {counter}</div>
         {v.status !== 'Posted' && <div className="center" style={{ marginTop: 6 }}><span className="stamp">{STATUS_VI[v.status]?.toUpperCase()} — CHƯA GHI SỔ</span></div>}
-        <p>Họ và tên người {receipt ? 'nộp' : 'nhận'} tiền: <b>{p ? p.name : '…………………………………'}</b></p>
-        <p>Địa chỉ: …………………………………………………{p?.taxCode ? ` · MST: ${p.taxCode}` : ''}</p>
+        <p>Họ và tên người {receipt ? 'nộp' : 'nhận'} tiền: <b>{v.counterpartyName || (p ? p.name : '…………………………………')}</b></p>
+        <p>Đơn vị, địa chỉ: {v.counterpartyUnit || p?.address || '…………………………………………………'}{p?.taxCode ? ` · MST: ${p.taxCode}` : ''}</p>
         <p>Lý do {receipt ? 'nộp' : 'chi'}: {v.description}</p>
         <p>Số tiền: <b>{formatMoney(v.totalDebit)}</b> đồng</p>
         <p>Bằng chữ: <i>{amountInWords(v.totalDebit)}</i></p>

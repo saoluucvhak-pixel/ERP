@@ -53,6 +53,7 @@ public sealed class BusinessDocumentService(HakDbContext db, AccountingEngine en
         var lines = await rules.EvaluateAsync(rule, doc);
         var input = new VoucherInput(doc.DocumentType, doc.VoucherDate, doc.PostingDate, doc.Description, lines,
             SourceSystem: doc.SourceSystem, SourceId: doc.SourceId);
-        return (input, new DocumentMeta(doc.BusinessEvent, rule.Id, rule.Version, doc.MainAccountId, doc.PartnerId));
+        return (input, new DocumentMeta(doc.BusinessEvent, rule.Id, rule.Version, doc.MainAccountId, doc.PartnerId,
+            string.IsNullOrWhiteSpace(doc.CounterpartyName) ? null : doc.CounterpartyName.Trim(), string.IsNullOrWhiteSpace(doc.CounterpartyUnit) ? null : doc.CounterpartyUnit.Trim()));
     }
 }

@@ -19,7 +19,7 @@ namespace Hak.Application.Rules;
 public sealed record BusinessDocument(
     string DocumentType, string BusinessEvent, DateOnly VoucherDate, DateOnly PostingDate, string Description,
     Guid? PartnerId, Guid? MainAccountId, IReadOnlyList<BusinessDocumentLine> Lines,
-    string? SourceSystem = null, string? SourceId = null);
+    string? SourceSystem = null, string? SourceId = null, string? CounterpartyName = null, string? CounterpartyUnit = null);
 
 public sealed record BusinessDocumentLine(decimal Amount, Guid? CounterAccountId = null, Guid? SettleJournalLineId = null,
     string? Description = null, DateOnly? DueDate = null);

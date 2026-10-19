@@ -177,6 +177,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         });
         b.Entity<Voucher>(e =>
         {
+            e.Property(x => x.CounterpartyName).HasMaxLength(200);
+            e.Property(x => x.CounterpartyUnit).HasMaxLength(300);
             e.HasIndex(x => new { x.CompanyId, x.VoucherType, x.FiscalYearId, x.Number }).IsUnique();
             e.HasIndex(x => new { x.CompanyId, x.SourceSystem, x.SourceId }).IsUnique().HasFilter("source_id IS NOT NULL AND status <> 9"); // cancelled drafts do not block re-creation
             e.HasIndex(x => new { x.CompanyId, x.ReversesVoucherId }).IsUnique().HasFilter("reverses_voucher_id IS NOT NULL");

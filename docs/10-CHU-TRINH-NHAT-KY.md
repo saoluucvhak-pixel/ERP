@@ -140,6 +140,19 @@ Trước đợt này phân hệ Tài sản / CCDC mới có thẻ, khấu hao, p
 - Migration `Phase7AssetCycle` (SQLite + PostgreSQL). Bảng mới không có trigger bất biến vì không phải dữ liệu sổ. 1 test tích hợp (187 → 188); thử tay trên trình duyệt (lập đề nghị, bàn giao, kiểm kê có chênh lệch bộ phận).
 - Chưa làm: in biên bản kiểm kê / biên bản bàn giao; đề nghị sửa chữa, nâng cấp, thay đổi thông số thẻ (thẻ đã ghi tăng đang bị đóng băng); gắn thẻ CCDC với nhiều người giữ; tự gợi ý ghi giảm từ kiểm kê mất.
 
+## 9i. Đối chiếu với bài "Quy trình xử lý tổng hợp trong điều kiện hạch toán kế toán trên máy vi tính" (Nguyễn Mạnh Toàn, ĐH Đà Nẵng, 2011) — 19/10/2026
+Chị gửi bài để tham khảo. Đối chiếu với hệ thống:
+| Bài báo | Hệ thống HAK | Nhận xét |
+|---|---|---|
+| Kho thông tin chung = `NHATKY` (mỗi chứng từ một mẫu tin: loại, số, ngày, **họ tên, đơn vị**, diễn giải) + `CHITIETNK` (định khoản: số tiền, TK nợ, TK có, đối tượng chi tiết) | `Voucher` / `JournalEntry` + `JournalLine` | Khớp. HAK ghi mỗi dòng một vế Nợ hoặc Có (tổng quát hơn cặp Nợ–Có của bài, cho phép bút toán ghép). Thiếu **họ tên và đơn vị** ghi trên chứng từ → đã bổ sung (xem dưới). |
+| Chứng từ gốc và bút toán điều chỉnh cùng đổ vào `CHITIETNK` | chứng từ nghiệp vụ và chứng từ điều chỉnh (`AdjustsVoucherId`), chứng từ đảo | Khớp. |
+| `TH_TAIKHOAN`: số dư đầu năm, phát sinh nợ/có từng tháng, lũy kế, số dư cuối tháng → đầu tháng sau; cuối năm tự chuyển sang năm sau; lưu thành tập tin | Bảng cân đối phát sinh tính từ sổ cái khi xem (không lưu); số dư đầu năm sau lấy từ kết chuyển | Cùng kết quả với phương án 2 của bài (cộng dồn theo TK Nợ, TK Có rồi cập nhật) nhưng không lưu tập tin tổng hợp nên không lệch được với sổ chi tiết; giữ nguyên. **Cột lũy kế từ đầu năm chưa có** trên bảng cân đối phát sinh — ghi vào sổ việc. |
+| Số dư cuối kỳ: dư nợ nếu (đầu kỳ + PS nợ − PS có) ≥ 0, ngược lại dư có | giống, kèm chính sách hiển thị theo TK (`BalanceDisplay`: thuần / gộp theo đối tượng) | Khớp, HAK linh hoạt hơn với TK công nợ. |
+| Từ `TH_TAIKHOAN` lập Bảng CĐKT, báo cáo KQHĐKD, báo cáo LCTT | Report Engine + mẫu B01, B02, B03 | Khớp. |
+| Cập nhật tổng hợp ngay khi cập nhật chứng từ hoặc cuối tháng | ghi sổ trong một giao dịch, báo cáo tính theo yêu cầu | Khớp. |
+- **Đã làm:** thêm vào chứng từ hai trường **họ tên người giao / nhận** và **đơn vị, địa chỉ** (`Voucher.CounterpartyName`, `CounterpartyUnit`, migration `Phase7VoucherCounterparty`), nhập ở màn Thu / Chi tiền và hiện trên phiếu thu, phiếu chi in ra (trước đây dòng địa chỉ để trống, tên chỉ lấy từ danh mục đối tượng). Test: mở rộng 1 test tích hợp.
+- **Chưa làm:** cột lũy kế từ đầu năm trên bảng cân đối phát sinh.
+
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
 |---|---|---|
@@ -160,8 +173,8 @@ Trước đợt này phân hệ Tài sản / CCDC mới có thẻ, khấu hao, p
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).
 **Thanh toán / tài chính**: số tài khoản nhận của nhân viên + file UNC; thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
-**Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm).
-**Nền**: chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.
+**Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm; chị gửi 3 đường dẫn bài về chu trình sản xuất trên Scribd và Studocu nhưng phiên làm việc không truy cập được hai trang này — cần chị gửi tệp PDF hoặc dán nội dung).
+**Nền**: cột lũy kế từ đầu năm trên bảng cân đối phát sinh; chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.
 **Các phân hệ làm trước khi theo chu trình** đã xếp vào menu theo chu trình và có bảng khâu ở mục 9d; còn thiếu màn hình dòng chảy cho Chuyển đổi (Nhân sự – lương và Tài chính đã có dải khâu ở mục 9g).
 **Còn dang dở từ các đợt trước:** in biên bản kiểm kê / bàn giao tài sản, đề nghị sửa chữa – nâng cấp tài sản, tạm ứng/hoàn ứng, kiểm kê quỹ, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.
 
