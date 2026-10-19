@@ -3,6 +3,7 @@ using Hak.Domain.Assets;
 using Hak.Domain.Banking;
 using Hak.Domain.Catalog;
 using Hak.Domain.Common;
+using Hak.Domain.Cycles;
 using Hak.Domain.Fx;
 using Hak.Domain.Integration;
 using Hak.Domain.Inventory;
@@ -55,6 +56,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<ClosingRuleSet> ClosingRuleSets => Set<ClosingRuleSet>();
     public DbSet<ClosingStep> ClosingSteps => Set<ClosingStep>();
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
+    public DbSet<PaymentAcceptance> PaymentAcceptances => Set<PaymentAcceptance>();
     public DbSet<BankStatement> BankStatements => Set<BankStatement>();
     public DbSet<BankStatementLine> BankStatementLines => Set<BankStatementLine>();
     public DbSet<ReconciliationMatch> ReconciliationMatches => Set<ReconciliationMatch>();
@@ -407,6 +409,16 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.Property(x => x.RowVersion).IsConcurrencyToken();
             e.ToTable(t => t.HasCheckConstraint("ck_payment_orders_amount", "amount > 0"));
         });
+        b.Entity<PaymentAcceptance>(e =>
+        {
+            // One active acceptance per invoice is enforced by the service inside the single-writer transaction.
+            e.HasIndex(x => new { x.CompanyId, x.InvoiceId });
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+            e.ToTable(t => t.HasCheckConstraint("ck_payment_acceptances_amount", "amount > 0"));
+        });
         b.Entity<BankStatement>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.BankAccountId, x.SourceSha256 }).IsUnique();
@@ -585,6 +597,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<SettlementAllocation>().Property(x => x.Amount).HasConversion(money);
         b.Entity<SettlementAllocation>().Property(x => x.ForeignAmount).HasConversion(moneyNullable);
         b.Entity<PaymentOrder>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<PaymentAcceptance>().Property(x => x.Amount).HasConversion(money);
         b.Entity<BankStatement>().Property(x => x.OpeningBalance).HasConversion(money);
         b.Entity<BankStatement>().Property(x => x.ClosingBalance).HasConversion(money);
         b.Entity<BankStatementLine>().Property(x => x.Amount).HasConversion(money);

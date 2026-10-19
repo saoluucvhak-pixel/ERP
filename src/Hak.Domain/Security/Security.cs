@@ -95,6 +95,8 @@ public static class Permissions
     public const string CashDocument = "cash.document";
     public const string BankDocument = "bank.document";
     public const string PaymentOrderApprove = "payment_order.approve";
+    /// <summary>Chấp nhận thanh toán hóa đơn mua (bàn giao Cung ứng → Thanh toán). Không phát sinh bút toán.</summary>
+    public const string PaymentAccept = "payment.accept";
     public const string BankReconcile = "bank.reconcile";
     public const string StockDocument = "stock.document";
     public const string InvoiceDocument = "invoice.document";

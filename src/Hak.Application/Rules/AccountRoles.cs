@@ -14,6 +14,7 @@ public static class AccountRoles
     [
         new("AR_TRADE", "Bán hàng / công nợ", "Phải thu khách hàng (hóa đơn bán, thu tiền)"),
         new("AP_TRADE", "Mua hàng / công nợ", "Phải trả người bán (hóa đơn mua, trả tiền)"),
+        new("BANK_PAYMENT_DEFAULT", "Thanh toán", "Tài khoản ngân hàng mặc định để chu trình thanh toán TỰ tạo lệnh thanh toán Nháp khi nhận bàn giao từ Cung ứng (không ánh xạ thì lệnh chờ trong hộp thư, người thanh toán chọn tài khoản)", Optional: true),
         new("CASH_DEFAULT", "Thu chi", "Tài khoản tiền mặc định của quy tắc định khoản thu/chi"),
         new("GRNI", "Mua hàng / kho", "Hàng về chưa có hóa đơn (đối ứng phiếu nhập chờ hóa đơn, xuất trả nhà cung cấp)"),
         new("VAT_INPUT", "Thuế GTGT", "Thuế GTGT đầu vào được khấu trừ"),

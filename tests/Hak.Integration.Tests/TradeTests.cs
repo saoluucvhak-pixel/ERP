@@ -462,4 +462,77 @@ public class TradeTests
         Assert.Equal(1_240_000m + 50_000m - 10_000m + 920_000m, await fx.Bal("COGS"));
         Assert.Equal(0m, Assert.Single(await fx.S.Stock.ReconcileAsync(fx.H.Auditor, D(12, 31))).Difference);
     }
+
+    [Fact]
+    public async Task SupplyToPayment_Handoff_AcceptanceIsNotAccounting_ThenOrder_ThenPaid()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);   // posting rules for the bank payment
+        var voucherCount = () => s.Db.Vouchers.CountAsync();
+
+        var inv = await PostedPurchaseOfAdditiveAsync(fx);   // payable 5,500,000 (5,000,000 + VAT 10%)
+        var queue = await s.PaymentAcceptances.PayableQueueAsync(h.Auditor, D(3, 31));
+        var row = Assert.Single(queue);
+        Assert.Equal((5_500_000m, D(4, 2), true, "NOT_ACCEPTED"), (row.Open, row.DueDate, row.HasReceiptLink, row.Stage));
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Auditor, inv.Id, null)));
+        var before = await voucherCount();
+        var acc = await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "Đã đối chiếu đơn - phiếu nhập - hóa đơn");
+        Assert.Equal((Hak.Domain.Cycles.PaymentAcceptanceStatus.Pending, 5_500_000m, null), (acc.Status, acc.Amount, acc.PaymentOrderId));
+        Assert.Equal(before, await voucherCount());   // chấp nhận thanh toán KHÔNG phát sinh bút toán
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Approver, inv.Id, null)));
+
+        // Without BANK_PAYMENT_DEFAULT the handoff waits in the payment inbox, sorted by due date.
+        var inbox = Assert.Single(await s.PaymentAcceptances.InboxAsync(h.Auditor));
+        Assert.Equal(("AWAITING_ORDER", 5_500_000m), (inbox.Stage, inbox.Amount));
+
+        // The payer rejects with a reason (back to procurement), procurement accepts again.
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => s.PaymentAcceptances.RejectAsync(h.Preparer, acc.Id, " ")));
+        await s.PaymentAcceptances.RejectAsync(h.Preparer, acc.Id, "Thiếu hồ sơ kiểm nghiệm");
+        Assert.Empty(await s.PaymentAcceptances.InboxAsync(h.Auditor));
+        acc = await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null);
+
+        var po = await s.PaymentAcceptances.CreateOrderAsync(h.Preparer, acc.Id, h.Acc["BANK"]);
+        Assert.Equal((Hak.Domain.Banking.PaymentOrderStatus.Created, 5_500_000m), (po.Status, po.Amount));
+        Assert.Equal(po.Id, Assert.Single(await s.PaymentAcceptances.InboxAsync(h.Auditor)).PaymentOrderId);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => s.PaymentAcceptances.CreateOrderAsync(h.Preparer, acc.Id, h.Acc["BANK"])));
+        Assert.Equal("ORDER_CREATED", (await s.PaymentAcceptances.PayableQueueAsync(h.Auditor, D(3, 31))).Single().Stage);
+
+        // Normal payment-order workflow (separation of duties inside the payment cycle), then the voucher is accounted.
+        await s.PaymentOrders.ApproveAsync(h.Approver, po.Id);
+        await s.PaymentOrders.MarkSentAsync(h.Preparer, po.Id);
+        Assert.Equal("SENT_TO_BANK", (await s.PaymentAcceptances.InboxAsync(h.Auditor)).Single().Stage);
+        var (_, voucher) = await s.PaymentOrders.MarkExecutedAsync(h.Preparer, po.Id, D(3, 20), "FT26079XYZ");
+        await s.Engine.SubmitAsync(h.Preparer, voucher.Id);
+        await s.Engine.ApproveAsync(h.Approver, voucher.Id);
+        await s.Engine.PostAsync(h.Approver, voucher.Id);
+
+        h.Clock.UtcNow = new DateTime(2026, 3, 31, 8, 0, 0, DateTimeKind.Utc);   // "today" is after the payment date
+        Assert.Empty(await s.PaymentAcceptances.PayableQueueAsync(h.Auditor, D(3, 31)));   // payable settled: derived, not stored
+        var done = Assert.Single(await s.PaymentAcceptances.InboxAsync(h.Auditor));
+        Assert.Equal(("PAID", 0m), (done.Stage, done.Open));
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null)));   // already accepted and paid
+    }
+
+    [Fact]
+    public async Task SupplyToPayment_WithDefaultBank_PaymentCycleCreatesTheOrderByItself_AndCancelFollows()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        await s.Rules.SetRoleMappingAsync(h.Admin, "BANK_PAYMENT_DEFAULT", "BANK");
+        var inv = await PostedPurchaseOfAdditiveAsync(fx, "0000301");
+
+        var acc = await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null);
+        Assert.Equal(Hak.Domain.Cycles.PaymentAcceptanceStatus.OrderCreated, acc.Status);
+        var po = await s.Db.PaymentOrders.SingleAsync(o => o.Id == acc.PaymentOrderId);
+        Assert.Equal((Hak.Domain.Banking.PaymentOrderStatus.Created, 5_500_000m, acc.SettleJournalLineId, h.Acc["BANK"]), (po.Status, po.Amount, po.SettleJournalLineId, po.BankAccountId));
+        Assert.Contains("1C26TAA/0000301", po.Description);
+
+        await s.PaymentAcceptances.CancelAsync(h.Preparer, acc.Id, "Hoãn thanh toán theo thỏa thuận");
+        Assert.Equal(Hak.Domain.Banking.PaymentOrderStatus.Cancelled, (await s.Db.PaymentOrders.AsNoTracking().SingleAsync(o => o.Id == po.Id)).Status);
+        Assert.Equal("NOT_ACCEPTED", (await s.PaymentAcceptances.PayableQueueAsync(h.Auditor, D(3, 31))).Single().Stage);
+        await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null);   // can be accepted again after cancelling
+    }
 }

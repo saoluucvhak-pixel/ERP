@@ -799,6 +799,95 @@ namespace Hak.Data.Migrations
                     b.ToTable("business_partners");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Cycles.PaymentAcceptance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("AcceptedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<Guid>("AcceptedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("accepted_by");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("CloseReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("close_reason");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_by");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("due_date");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_id");
+
+                    b.Property<Guid?>("PaymentOrderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payment_order_id");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("row_version");
+
+                    b.Property<Guid>("SettleJournalLineId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("settle_journal_line_id");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payment_acceptances");
+
+                    b.HasIndex("InvoiceId")
+                        .HasDatabaseName("ix_payment_acceptances_invoice_id");
+
+                    b.HasIndex("PartnerId")
+                        .HasDatabaseName("ix_payment_acceptances_partner_id");
+
+                    b.HasIndex("CompanyId", "InvoiceId")
+                        .HasDatabaseName("ix_payment_acceptances_company_id_invoice_id");
+
+                    b.HasIndex("CompanyId", "Status")
+                        .HasDatabaseName("ix_payment_acceptances_company_id_status");
+
+                    b.ToTable("payment_acceptances", t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_acceptances_amount", "amount > 0");
+                        });
+                });
+
             modelBuilder.Entity("Hak.Domain.Fx.FxRevaluationRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4943,6 +5032,23 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_business_partners_companies_company_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.PaymentAcceptance", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_acceptances_commercial_invoices_invoice_id");
+
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_acceptances_business_partners_partner_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Inventory.CostingPolicy", b =>

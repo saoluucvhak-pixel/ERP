@@ -1,6 +1,6 @@
 # 10 — Thiết kế theo chu trình (bám tài liệu "Phân tích thiết kế hệ thống ERP", 20/12/2016)
 
-Trạng thái: **ĐỀ XUẤT, chờ chị xác nhận** (19/10/2026). Bản này bám tệp chị gửi; số mục (I–V) và tên tập tin lấy từ tệp. Tệp là mô hình quy trình và kiểm soát, **không phải căn cứ pháp lý**: pháp lý vẫn theo `legal/` (TT99). Tệp chỉ mô tả chi tiết 3 chu trình (doanh thu, cung ứng, chuyển đổi — chuyển đổi mới đến phần giới thiệu và danh sách chức năng); chu trình nhân sự – tiền lương và tài chính chỉ được giới thiệu ở mục IV.2.
+Trạng thái: **ĐANG THỰC HIỆN** (19/10/2026) — chị đã giao em quyết các điểm mở theo đề xuất (mục 8); lát cắt đầu **Cung ứng → Thanh toán đã làm xong** (mục 9). Bản này bám tệp chị gửi; số mục (I–V) và tên tập tin lấy từ tệp. Tệp là mô hình quy trình và kiểm soát, **không phải căn cứ pháp lý**: pháp lý vẫn theo `legal/` (TT99). Tệp chỉ mô tả chi tiết 3 chu trình (doanh thu, cung ứng, chuyển đổi — chuyển đổi mới đến phần giới thiệu và danh sách chức năng); chu trình nhân sự – tiền lương và tài chính chỉ được giới thiệu ở mục IV.2.
 
 ## 1. Quy trình kế toán trong tệp (mục I.5.2) — nền của "phát sinh / chuyển đổi / kết quả"
 | Giai đoạn trong tệp | Dữ liệu | Trong tệp là | Trong hệ thống hiện có |
@@ -70,9 +70,17 @@ Chỉ giới thiệu trong tệp. Hiện hệ thống nhận bảng lương JSON
 6. **Chiều phân tích** (bộ phận, hợp đồng/lô tàu…): tệp coi là một phần của "kế toán trách nhiệm"; kế thừa dọc chuỗi chứng từ. Chờ chị chọn chiều.
 7. Chu trình chuyển đổi: sau khi chị mô tả quy trình sản xuất.
 
-## 8. Chờ chị quyết định
-1. "Tự động" của bước thanh toán: tự tạo lệnh **Nháp** rồi chờ duyệt (đề xuất), hay tự duyệt dưới một hạn mức?
-2. Ai được bấm "Chấp nhận thanh toán", có hạn mức theo vai trò?
-3. Vượt hạn mức tín dụng: **chặn** hay **trình người có thẩm quyền**? Hay HAK không dùng hạn mức?
-4. Chiều phân tích của HAK.
-5. Quy trình sản xuất dăm (cho chu trình chuyển đổi).
+## 8. Các điểm mở đã chốt (chị giao em quyết theo đề xuất, 19/10/2026)
+1. **Mức tự động:** chu trình thanh toán tự tạo **lệnh Nháp**, người khác duyệt (tách nhiệm vụ). Không tự duyệt, không tự chuyển tiền.
+2. **Quyền "chấp nhận thanh toán"** (`payment.accept`): Kế toán trưởng, Kế toán tổng hợp, Kế toán công nợ (người rà soát đối chiếu theo tệp mục V.2.2.3). Duyệt lệnh vẫn là `payment_order.approve` (khác người lập). Chưa có hạn mức theo vai trò; thêm khi có yêu cầu.
+3. **Hạn mức tín dụng:** vượt hạn mức thì **trình người có thẩm quyền** (không chặn cứng), hạn mức để trống = không kiểm tra. Làm ở đợt doanh thu.
+4. **Chiều phân tích:** hoãn. Trọng tâm trước là luồng dữ liệu; chiều (hợp đồng/lô tàu, bộ phận) thiết kế sau khi luồng ổn, kế thừa dọc chuỗi chứng từ.
+5. **Chu trình chuyển đổi:** hoãn đến khi có mô tả quy trình sản xuất dăm; tệp mới nêu danh sách chức năng.
+
+## 9. Đã làm: Cung ứng → Thanh toán (19/10/2026)
+- Bảng `payment_acceptances` (migration `Phase7PaymentAcceptance`, SQLite và PostgreSQL): hóa đơn, nhà cung cấp, dòng công nợ phải trả cần tất toán, số còn nợ, ngày đáo hạn, trạng thái (Chờ tạo lệnh / Đã có lệnh / Bị từ chối / Đã rút), lệnh thanh toán, người và lúc chấp nhận/đóng, lý do.
+- `PaymentAcceptanceService` (`src/Hak.Application/Cycles`): hàng chờ thanh toán theo ngày đáo hạn (hóa đơn mua VND đã ghi sổ còn nợ), **chấp nhận thanh toán** (không ghi Nhật ký; kiểm tra hóa đơn đã ghi sổ, còn nợ, chưa được chấp nhận), **tự tạo lệnh Nháp** khi công ty ánh xạ vai trò `BANK_PAYMENT_DEFAULT` và người chấp nhận có quyền lập lệnh (không thì chờ trong hộp thư), tạo lệnh tay, từ chối kèm lý do (trả về Cung ứng), rút chấp nhận (hủy luôn lệnh nếu chưa duyệt).
+- **"Đã thanh toán" không lưu**: suy ra từ số còn lại của dòng công nợ và trạng thái lệnh, nên không bao giờ lệch sổ.
+- API `/api/cycles/...`; màn hình **Mua hàng → Thanh toán** (các khâu kèm cờ ghi Nhật ký, hàng chờ theo ngày đáo hạn, hộp thư thanh toán).
+- Test: 2 test tích hợp (chấp nhận không sinh bút toán; từ chối rồi chấp nhận lại; tạo lệnh; duyệt, gửi, chi, ghi sổ → đã thanh toán; ngân hàng mặc định tự tạo lệnh; rút chấp nhận hủy lệnh).
+- Chưa làm tiếp: yêu cầu mua hàng từ tồn tối thiểu, biên bản kiểm nghiệm, xếp hạng nhà cung cấp, hóa đơn ngoại tệ (đi qua màn Ngoại tệ).

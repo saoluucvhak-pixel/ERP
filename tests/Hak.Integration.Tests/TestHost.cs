@@ -41,6 +41,7 @@ public sealed class Scope : IDisposable
         Documents = new BusinessDocumentService(Db, Engine, Rules);
         Closing = new ClosingService(Db, Engine, Audit, clock);
         PaymentOrders = new PaymentOrderService(Db, Documents, Audit, clock);
+        PaymentAcceptances = new Hak.Application.Cycles.PaymentAcceptanceService(Db, PaymentOrders, Settlement, Audit, clock);
         BankRecon = new BankReconciliationService(Db, Audit, clock);
         Stock = new StockService(Db, Engine, Audit, clock);
         Dryness = new DrynessService(Db, Audit, clock);
@@ -72,6 +73,7 @@ public sealed class Scope : IDisposable
     public DrynessService Dryness { get; }
 
     public PaymentOrderService PaymentOrders { get; }
+    public Hak.Application.Cycles.PaymentAcceptanceService PaymentAcceptances { get; }
     public BankReconciliationService BankRecon { get; }
 
     public SettlementService Settlement { get; }
