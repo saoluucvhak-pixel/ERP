@@ -5,7 +5,8 @@ import { AssetsView } from './Assets'
 import { BankingView } from './Banking'
 import { CashDocsView } from './CashDocs'
 import { CatalogView } from './Catalog'
-import { ErrorBox, useAction } from './common'
+import { DashboardView } from './Dashboard'
+import { ErrorBox, navStore, useAction } from './common'
 import { FxView } from './Fx'
 import { InventoryView } from './Inventory'
 import { LoansView } from './Loans'
@@ -23,6 +24,7 @@ import { VouchersView } from './Vouchers'
 interface Company { id: string; code: string; name: string; roles?: string[]; permissions?: string[] }
 
 const SCREENS = [
+  { key: 'home', label: 'Tổng quan', el: () => <DashboardView /> },
   { key: 'vouchers', label: 'Chứng từ', el: () => <VouchersView /> },
   { key: 'cash', label: 'Thu / Chi tiền', el: () => <CashDocsView /> },
   { key: 'bank', label: 'Ngân hàng', el: () => <BankingView /> },
@@ -52,7 +54,7 @@ export default function App() {
   const [companyId, setCompanyId] = useState(session.companyId)
   const [isSystemAdmin, setIsSystemAdmin] = useState(false)
   const [systemAdmin, setSystemAdmin] = useState(false)
-  const [screen, setScreen] = useState<(typeof SCREENS)[number]['key']>('vouchers')
+  const [screen, setScreen] = useState<(typeof SCREENS)[number]['key']>('home')
 
   useEffect(() => {
     if (!token) return
@@ -60,6 +62,8 @@ export default function App() {
     get<Company[]>('/me/companies').then(setCompanies).catch(() => { session.setToken(null); setToken(null) })
     get<{ isSystemAdmin: boolean }>('/me').then(m => setIsSystemAdmin(m.isSystemAdmin)).catch(() => setIsSystemAdmin(false))
   }, [token])
+
+  useEffect(() => { navStore.go = key => setScreen(key as typeof screen) }, [])
 
   const logout = async () => {
     try { await post('/auth/logout') } catch { /* already expired */ }

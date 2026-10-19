@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
-import { AccountSelect, CASHFLOW_VI, ErrorBox, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { CashDocsView } from './CashDocs'
+import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES } from './voucherguards'
 import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
@@ -17,19 +19,21 @@ export function VouchersView() {
   const [total, setTotal] = useState(0)
   const [list, setList] = useState<Voucher[]>([])
   const [selected, setSelected] = useState<Voucher | null>(null)
-  const [editing, setEditing] = useState<Voucher | 'new' | null>(null)
+  const [editing, setEditing] = useState<Voucher | 'new' | { copyOf: Voucher } | null>(null)
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const { busy, error, run } = useAction()
   const [info, setInfo] = useState('')
+  const [accountId, setAccountId] = useState('')
+  const { accounts: allAccounts } = useCatalog()
 
   const load = useCallback(() => run(async () => {
-    const q = new URLSearchParams({ from, to, skip: String(page * PAGE), take: String(PAGE), ...(status ? { status } : {}), ...(type ? { type } : {}), ...(search ? { text: search } : {}) })
+    const q = new URLSearchParams({ from, to, skip: String(page * PAGE), take: String(PAGE), ...(status ? { status } : {}), ...(type ? { type } : {}), ...(search ? { text: search } : {}), ...(accountId ? { accountId } : {}) })
     const data = await get<{ items: Voucher[]; total: number }>(`/vouchers?${q}`)
     setList(data.items)
     setTotal(data.total)
     setSelected(s => (s ? data.items.find(v => v.id === s.id) ?? null : null))
     setChecked(c => new Set([...c].filter(id => data.items.some(v => v.id === id))))
-  }), [from, to, status, type, search, page, run])
+  }), [from, to, status, type, search, accountId, page, run])
   useEffect(() => { load() }, [load])
 
   const act = (label: string, fn: () => Promise<unknown>) => run(async () => { await fn(); setInfo(label); await load() })
@@ -54,7 +58,9 @@ export function VouchersView() {
   })
   const count = (...s: string[]) => list.filter(x => checked.has(x.id) && s.includes(x.status)).length
 
-  if (editing) return <VoucherForm voucher={editing === 'new' ? null : editing} onDone={() => { setEditing(null); load() }} />
+  if (editing && editing !== 'new' && !('copyOf' in editing) && canEditAsCashDoc(editing))
+    return <CashDocsView voucher={editing} onDone={() => { setEditing(null); load() }} />
+  if (editing) return <VoucherForm voucher={editing === 'new' || 'copyOf' in editing ? null : editing} template={editing !== 'new' && 'copyOf' in editing ? editing.copyOf : null} onDone={() => { setEditing(null); load() }} />
 
   const v = selected
   return (
@@ -75,10 +81,14 @@ export function VouchersView() {
             {Object.entries(TYPE_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
         </label>
+        <label>Tài khoản<AccountSelect accounts={allAccounts} value={accountId} onChange={id => { setAccountId(id); setPage(0) }} ariaLabel="Lọc theo tài khoản" /></label>
         <form onSubmit={e => { e.preventDefault(); setSearch(text.trim()); setPage(0) }} style={{ display: 'contents' }}>
           <label>Tìm<input value={text} onChange={e => setText(e.target.value)} placeholder="số, diễn giải" /></label>
         </form>
         <button onClick={() => load()} disabled={busy}>Tải lại</button>
+        <ExportButton fileName={`Chung_tu_${from}_${to}`} sheet="Chứng từ" disabled={list.length === 0}
+          columns={[{ header: 'Ngày HT', width: 12 }, { header: 'Số', width: 16 }, { header: 'Loại', width: 22 }, { header: 'Diễn giải', width: 50 }, { header: 'Số tiền', numeric: true, width: 18 }, { header: 'Trạng thái', width: 14 }]}
+          rows={list.map(x => [x.postingDate, x.number, TYPE_VI[x.voucherType] ?? x.voucherType, x.description ?? '', x.totalDebit, STATUS_VI[x.status] ?? x.status])} />
         <button className="primary" onClick={() => setEditing('new')}>Thêm chứng từ</button>
       </div>
       <ErrorBox error={error} />
@@ -98,7 +108,7 @@ export function VouchersView() {
             <strong>{v.number}</strong> <span className={`badge ${v.status}`}>{STATUS_VI[v.status]}</span>
             <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {v.postingDate} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
-            {v.status === 'Draft' && !['CR', 'CP', 'BR', 'BP'].includes(v.voucherType) && <button onClick={() => setEditing(v)}>Sửa</button>}
+            {v.status === 'Draft' && (!CASH_TYPES.includes(v.voucherType) || canEditAsCashDoc(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
             <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
               const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
               setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')
@@ -116,6 +126,7 @@ export function VouchersView() {
             {(v.status === 'Draft' || v.status === 'Submitted') && <button className="danger" onClick={() => {
               const reason = prompt('Lý do hủy:'); if (reason) act('Đã hủy', () => post(`/vouchers/${v.id}/cancel?rowVersion=${v.rowVersion}`, { reason }))
             }}>Hủy</button>}
+            {canCopyVoucher(v) && <button onClick={() => setEditing({ copyOf: v })}>Sao chép</button>}
             <button onClick={printSheet}>In chứng từ</button>
           </div>
           <LinesTable voucher={v} />
@@ -159,6 +170,34 @@ function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
   const acc = (id: string) => accounts.find(a => a.id === id)?.code ?? ''
   const par = (id: string | null) => (id ? partners.find(p => p.id === id) : undefined)
   const d = (s: string) => s.split('-').reverse().join('/')
+  if (CASH_TYPES.includes(v.voucherType)) {
+    const receipt = v.voucherType === 'CR' || v.voucherType === 'BR'
+    const p = par(v.partnerId ?? v.lines.find(l => l.partnerId)?.partnerId ?? null)
+    const main = acc(v.mainAccountId ?? '')
+    const counter = [...new Set(v.lines.filter(l => l.accountId !== v.mainAccountId).map(l => acc(l.accountId)).filter(Boolean))].join(', ')
+    const title = `${receipt ? 'PHIẾU THU' : 'PHIẾU CHI'}${v.voucherType === 'BR' || v.voucherType === 'BP' ? ' (BÁO ' + (receipt ? 'CÓ' : 'NỢ') + ' NGÂN HÀNG)' : ''}`
+    return (
+      <PrintSheet>
+        <div><b>{company}</b></div>
+        <h1>{title}</h1>
+        <div className="center">Ngày {d(v.voucherDate)} · Số: <b>{v.number}</b></div>
+        <div className="center">{receipt ? 'Nợ' : 'Có'}: {main} · {receipt ? 'Có' : 'Nợ'}: {counter}</div>
+        {v.status !== 'Posted' && <div className="center" style={{ marginTop: 6 }}><span className="stamp">{STATUS_VI[v.status]?.toUpperCase()} — CHƯA GHI SỔ</span></div>}
+        <p>Họ và tên người {receipt ? 'nộp' : 'nhận'} tiền: <b>{p ? p.name : '…………………………………'}</b></p>
+        <p>Địa chỉ: …………………………………………………{p?.taxCode ? ` · MST: ${p.taxCode}` : ''}</p>
+        <p>Lý do {receipt ? 'nộp' : 'chi'}: {v.description}</p>
+        <p>Số tiền: <b>{formatMoney(v.totalDebit)}</b> đồng</p>
+        <p>Bằng chữ: <i>{amountInWords(v.totalDebit)}</i></p>
+        <p>Kèm theo: ………… chứng từ gốc.</p>
+        <div className="signs">
+          <div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div>
+          <div><b>Người lập phiếu</b><br /><i>(Ký, họ tên)</i></div><div><b>Người {receipt ? 'nộp' : 'nhận'} tiền</b><br /><i>(Ký, họ tên)</i></div>
+          {v.voucherType === 'CR' || v.voucherType === 'CP' ? <div><b>Thủ quỹ</b><br /><i>(Ký, họ tên)</i></div> : null}
+        </div>
+        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu chứng từ theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+      </PrintSheet>
+    )
+  }
   return (
     <PrintSheet>
       <div><b>{company}</b></div>
@@ -201,14 +240,15 @@ function LinesTable({ voucher }: { voucher: Voucher }) {
   )
 }
 
-function VoucherForm({ voucher, onDone }: { voucher: Voucher | null; onDone: () => void }) {
+function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; template: Voucher | null; onDone: () => void }) {
+  const src = voucher ?? template
   const { accounts, partners } = useCatalog()
-  const [type, setType] = useState(voucher?.voucherType ?? 'GJ')
+  const [type, setType] = useState(src?.voucherType ?? 'GJ')
   const [voucherDate, setVoucherDate] = useState(voucher?.voucherDate ?? today())
   const [postingDate, setPostingDate] = useState(voucher?.postingDate ?? today())
-  const [description, setDescription] = useState(voucher?.description ?? '')
-  const [lines, setLines] = useState<LineDraft[]>(voucher
-    ? voucher.lines.map(l => ({ accountId: l.accountId, side: l.side, amount: formatMoney(l.amount), partnerId: l.partnerId ?? '', description: l.description ?? '', cashFlowCode: l.cashFlowCode ?? '' }))
+  const [description, setDescription] = useState(src?.description ?? '')
+  const [lines, setLines] = useState<LineDraft[]>(src
+    ? src.lines.map(l => ({ accountId: l.accountId, side: l.side, amount: formatMoney(l.amount), partnerId: l.partnerId ?? '', description: l.description ?? '', cashFlowCode: l.cashFlowCode ?? '' }))
     : [emptyLine('D'), emptyLine('C')])
   const { busy, error, setError, run } = useAction()
 
@@ -246,7 +286,7 @@ function VoucherForm({ voucher, onDone }: { voucher: Voucher | null; onDone: () 
   return (
     <>
       <div className="toolbar">
-        <h2>{voucher ? `Sửa chứng từ ${voucher.number}` : 'Chứng từ mới'}</h2>
+        <h2>{voucher ? `Sửa chứng từ ${voucher.number}` : template ? `Sao chép từ ${template.number}` : 'Chứng từ mới'}</h2>
         <span className="muted"><kbd>Ctrl+S</kbd> lưu · <kbd>Insert</kbd> thêm dòng · <kbd>Esc</kbd> đóng</span>
         <button onClick={onDone}>Đóng</button>
         <button className="primary" onClick={save} disabled={busy}>Lưu nháp</button>
@@ -289,6 +329,11 @@ function VoucherForm({ voucher, onDone }: { voucher: Voucher | null; onDone: () 
           </tfoot>
         </table>
         <button style={{ marginTop: 8 }} onClick={() => setLines(ls => [...ls, emptyLine('D')])}>+ Thêm dòng</button>
+        {diff !== '0' && <button style={{ marginTop: 8, marginLeft: 8 }} onClick={() => {
+          // Add a line on the lighter side for exactly the difference (decimal strings only).
+          const side: 'D' | 'C' = diff.startsWith('-') ? 'D' : 'C'
+          setLines(ls => [...ls, { ...emptyLine(side), amount: formatMoney(diff.replace('-', '')) }])
+        }}>+ Dòng cân đối ({formatMoney(diff.replace('-', ''))})</button>}
       </div>
     </>
   )

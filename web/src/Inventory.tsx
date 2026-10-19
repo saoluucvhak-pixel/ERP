@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog } from './common'
+import { addMoney, formatMoney, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
 interface Warehouse { id: string; code: string; name: string; policies: { method: string; effectiveFrom: string }[] }
 interface Item { id: string; code: string; name: string; unit: string }
-interface StockDoc { id: string; number: string; type: string; warehouseId: string; toWarehouseId: string | null; postingDate: string; description: string; status: string; voucherId: string | null; lines: { lineNo: number; itemId: string; quantity: string; amount: string | null }[] }
+interface StockDoc { id: string; number: string; type: string; warehouseId: string; toWarehouseId: string | null; documentDate?: string; postingDate: string; description: string; partnerId?: string | null; status: string; voucherId: string | null; lines: { lineNo: number; itemId: string; quantity: string; amount: string | null; counterAccountId?: string | null; description?: string | null }[] }
 
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
 const TYPE_VI: Record<string, string> = { Receipt: 'Phiếu nhập', Issue: 'Phiếu xuất', Transfer: 'Điều chuyển' }
@@ -24,8 +24,8 @@ function useStockCatalog() {
 }
 
 export function InventoryView() {
-  const [tab, setTab] = useState<'docs' | 'summary' | 'card' | 'costing' | 'bdmt'>('docs')
-  const tabs = { docs: 'Phiếu kho', summary: 'Nhập – xuất – tồn', card: 'Thẻ kho', costing: 'Tính giá cuối tháng', bdmt: 'MT / BDMT' } as const
+  const [tab, setTab] = useState<'docs' | 'count' | 'summary' | 'card' | 'costing' | 'bdmt'>('docs')
+  const tabs = { docs: 'Phiếu kho', count: 'Kiểm kê', summary: 'Nhập – xuất – tồn', card: 'Thẻ kho', costing: 'Tính giá cuối tháng', bdmt: 'MT / BDMT' } as const
   return (
     <>
       <div className="toolbar">
@@ -33,6 +33,7 @@ export function InventoryView() {
         {(Object.keys(tabs) as (keyof typeof tabs)[]).map(k => <button key={k} className={tab === k ? 'primary' : ''} onClick={() => setTab(k)}>{tabs[k]}</button>)}
       </div>
       {tab === 'docs' && <StockDocs />}
+      {tab === 'count' && <StockCount />}
       {tab === 'summary' && <Summary />}
       {tab === 'card' && <StockCard />}
       {tab === 'costing' && <Costing />}
@@ -57,12 +58,18 @@ function StockDocs() {
   const [info, setInfo] = useState('')
   const { busy, error, setError, run } = useAction()
   const [orders, setOrders] = useState<Order[]>([])
-  const load = useCallback(() => run(async () => { setList(await get<StockDoc[]>('/stock-documents')); setOrders(await get<Order[]>('/orders')) }), [run])
+  const [from, setFrom] = useState(today().slice(0, 4) + '-01-01')
+  const [to, setTo] = useState(today())
+  const [statusFilter, setStatusFilter] = useState('')
+  const [selId, setSelId] = useState('')
+  const load = useCallback(() => run(async () => { setList(await get<StockDoc[]>(`/stock-documents?from=${from}&to=${to}`)); setOrders(await get<Order[]>('/orders')) }), [run, from, to])
   useEffect(() => { load() }, [load])
   const orderKind = type === 'Receipt' ? 'Purchase' : type === 'Issue' ? 'Sales' : ''
   const orderLines = orders.filter(o => o.status === 'Confirmed' && o.kind === orderKind && o.partnerId === partnerId)
     .flatMap(o => o.lines.map(l => ({ key: `${o.id}:${l.lineNo}`, itemId: l.itemId, label: `${o.number}/${l.lineNo} · đặt ${formatMoney(l.quantity)}` })))
   const wh = (id: string | null) => warehouses.find(w => w.id === id)?.code ?? ''
+  const shown = list.filter(d => !statusFilter || d.status === statusFilter)
+  const sel = list.find(d => d.id === selId) ?? null
   const upd = (i: number, p: Partial<LineDraft>) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
 
   const save = () => run(async () => {
@@ -109,13 +116,22 @@ function StockDocs() {
         <button style={{ marginTop: 8 }} onClick={() => setLines(ls => [...ls, { itemId: '', quantity: '', amount: '', counterAccountId: '', orderLine: '' }])}>+ Thêm dòng</button>
         <p className="muted">Giá xuất kho do hệ thống tính theo phương pháp của kho; kho bình quân cuối tháng chỉ có giá trị sau khi chạy “Tính giá cuối tháng”.</p>
       </div>
+      <div className="toolbar">
+        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Trạng thái<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Tất cả</option>{Object.entries(STATUS_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        <ExportButton fileName={`Phieu_kho_${from}_${to}`} sheet="Phiếu kho" disabled={shown.length === 0}
+          columns={[{ header: 'Ngày' }, { header: 'Số' }, { header: 'Loại' }, { header: 'Kho' }, { header: 'Diễn giải', width: 40 }, { header: 'Trạng thái' }]}
+          rows={shown.map(d => [d.postingDate, d.number, TYPE_VI[d.type], wh(d.warehouseId) + (d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''), d.description, STATUS_VI[d.status] ?? d.status])} />
+      </div>
+      {sel && <StockDocDetail doc={sel} warehouses={warehouses} items={items} partners={partners} accounts={accounts} />}
       <div className="scroll">
         <table className="grid">
           <thead><tr><th>Ngày</th><th>Số</th><th>Loại</th><th>Kho</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{list.map(d => (
-            <tr key={d.id}><td>{d.postingDate}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
+          <tbody>{shown.map(d => (
+            <tr key={d.id} className={d.id === selId ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelId(d.id)}><td>{d.postingDate}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
-              <td style={{ display: 'flex', gap: 4 }}>
+              <td style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
                 {d.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
                 {d.status === 'Draft' && <button className="danger" onClick={() => { const r = prompt('Lý do hủy phiếu nháp:'); if (r) act(() => post(`/stock-documents/${d.id}/cancel`, { reason: r }), `Đã hủy ${d.number}.`) }}>Hủy</button>}
                 {d.status === 'Posted' && !d.number.startsWith('DP') && <button className="danger" onClick={() => {
@@ -123,10 +139,134 @@ function StockDocs() {
                   const dt = prompt('Ngày đảo (yyyy-mm-dd):', d.postingDate); if (dt) act(() => post(`/stock-documents/${d.id}/reverse`, { reversalDate: dt, reason }), `Đã đảo ${d.number}.`)
                 }}>Đảo</button>}
               </td></tr>))}
-            {list.length === 0 && <tr><td colSpan={7} className="muted">Chưa có phiếu kho.</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={7} className="muted">Không có phiếu kho trong khoảng đã chọn.</td></tr>}
           </tbody>
         </table>
       </div>
+    </>
+  )
+}
+
+/** Chi tiết một phiếu kho + in Phiếu nhập kho / xuất kho / điều chuyển (mẫu in nội bộ). */
+function StockDocDetail({ doc: d, warehouses, items, partners, accounts }: { doc: StockDoc; warehouses: Warehouse[]; items: Item[]; partners: { id: string; code: string; name: string }[]; accounts: { id: string; code: string }[] }) {
+  const wh = (id: string | null) => { const w = warehouses.find(x => x.id === id); return w ? `${w.code} – ${w.name}` : '' }
+  const it = (id: string) => items.find(x => x.id === id)
+  const par = partners.find(p => p.id === d.partnerId)
+  const total = addMoney(d.lines.map(l => l.amount ?? '0'))
+  const dd = (s: string) => s.split('-').reverse().join('/')
+  const title = d.type === 'Receipt' ? 'PHIẾU NHẬP KHO' : d.type === 'Issue' ? 'PHIẾU XUẤT KHO' : 'PHIẾU ĐIỀU CHUYỂN KHO'
+  return (
+    <div className="panel">
+      <div className="toolbar">
+        <strong>{d.number}</strong> <span className="muted">{TYPE_VI[d.type]} · {wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''} · {d.postingDate} · {STATUS_VI[d.status] ?? d.status}</span>
+        <span style={{ marginLeft: 'auto' }} /><button onClick={printSheet}>In phiếu</button>
+      </div>
+      <table className="grid">
+        <thead><tr><th>#</th><th>Vật tư</th><th>ĐVT</th><th className="num">Số lượng</th><th className="num">Giá trị</th><th>TK đối ứng</th></tr></thead>
+        <tbody>{d.lines.map(l => <tr key={l.lineNo}><td>{l.lineNo}</td><td>{it(l.itemId)?.code} – {it(l.itemId)?.name}</td><td>{it(l.itemId)?.unit}</td>
+          <td className="num">{formatMoney(l.quantity)}</td><td className="num">{l.amount == null ? <span className="muted">chờ tính giá</span> : formatMoney(l.amount)}</td>
+          <td>{accounts.find(a => a.id === l.counterAccountId)?.code ?? ''}</td></tr>)}</tbody>
+      </table>
+      <PrintSheet>
+        <h1>{title}</h1>
+        <div className="center">Số: <b>{d.number}</b> · Ngày {dd(d.postingDate)}</div>
+        {d.status !== 'Posted' && <div className="center" style={{ marginTop: 6 }}><span className="stamp">{(STATUS_VI[d.status] ?? d.status).toUpperCase()} — CHƯA GHI SỔ</span></div>}
+        <p>Họ tên người {d.type === 'Receipt' ? 'giao hàng' : 'nhận hàng'}: {par ? `${par.code} – ${par.name}` : '………………………………'}</p>
+        <p>Lý do: {d.description}</p>
+        <p>{d.type === 'Transfer' ? `Từ kho: ${wh(d.warehouseId)} → Đến kho: ${wh(d.toWarehouseId)}` : `Kho: ${wh(d.warehouseId)}`}</p>
+        <table>
+          <thead><tr><th>STT</th><th>Tên, mã vật tư</th><th>ĐVT</th><th>Số lượng</th><th>Thành tiền</th></tr></thead>
+          <tbody>{d.lines.map(l => <tr key={l.lineNo}><td className="center">{l.lineNo}</td><td>{it(l.itemId)?.name} ({it(l.itemId)?.code})</td><td className="center">{it(l.itemId)?.unit}</td>
+            <td className="num">{formatMoney(l.quantity)}</td><td className="num">{l.amount == null ? '' : formatMoney(l.amount)}</td></tr>)}</tbody>
+          <tfoot><tr><td colSpan={4}><b>Cộng</b></td><td className="num"><b>{formatMoney(total)}</b></td></tr></tfoot>
+        </table>
+        <div className="signs"><div><b>Người lập phiếu</b><br /><i>(Ký, họ tên)</i></div><div><b>Người {d.type === 'Receipt' ? 'giao' : 'nhận'} hàng</b><br /><i>(Ký, họ tên)</i></div><div><b>Thủ kho</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div></div>
+        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu chứng từ theo chế độ kế toán [CẦN XÁC MINH]. Thành tiền phiếu xuất để trống nếu chưa tính giá.</div>
+      </PrintSheet>
+    </div>
+  )
+}
+
+/**
+ * Kiểm kê kho: tồn sổ sách theo ngày ↔ số lượng thực tế; chênh lệch sinh phiếu nhập (thừa, nhập giá trị) và phiếu xuất (thiếu, hệ thống tính giá)
+ * ở trạng thái Nháp, TK đối ứng do người dùng chọn (không tự gán tài khoản xử lý chênh lệch).
+ */
+interface CountRow { itemId: string; code: string; name: string; unit: string; bookQty: string; actual: string; surplusValue: string }
+
+function StockCount() {
+  const { accounts } = useCatalog()
+  const { warehouses } = useStockCatalog()
+  const [warehouseId, setWarehouseId] = useState('')
+  const [date, setDate] = useState(today())
+  const [rows, setRows] = useState<CountRow[] | null>(null)
+  const [surplusAcc, setSurplusAcc] = useState('')
+  const [shortAcc, setShortAcc] = useState('')
+  const [info, setInfo] = useState('')
+  const { busy, error, setError, run } = useAction()
+  const load = () => run(async () => {
+    const s = await get<{ itemId: string; itemCode: string; itemName: string; unit: string; closingQty: string }[]>(`/reports/inventory-summary?from=${date}&to=${date}&warehouseId=${warehouseId}`)
+    setRows(s.map(r => ({ itemId: r.itemId, code: r.itemCode, name: r.itemName, unit: r.unit, bookQty: r.closingQty, actual: '', surplusValue: '' })))
+    setInfo('')
+  })
+  const upd = (i: number, p: Partial<CountRow>) => setRows(rs => rs && rs.map((r, j) => (j === i ? { ...r, ...p } : r)))
+  const diff = (r: CountRow) => { const a = parseMoney(r.actual); return a == null ? null : addMoney([a, '-' + r.bookQty]) }
+  const counted = (rows ?? []).filter(r => diff(r) != null)
+  const surplus = counted.filter(r => !diff(r)!.startsWith('-') && diff(r) !== '0')
+  const shortage = counted.filter(r => diff(r)!.startsWith('-'))
+  const create = () => run(async () => {
+    if (!warehouseId) return
+    if (surplus.length && !surplusAcc) { setError(new Error('Chọn TK đối ứng cho hàng thừa.')); return }
+    if (shortage.length && !shortAcc) { setError(new Error('Chọn TK đối ứng cho hàng thiếu.')); return }
+    const sv = surplus.map(r => parseMoney(r.surplusValue))
+    if (sv.some(v => v == null)) { setError(new Error('Hàng thừa phải nhập giá trị nhập.')); return }
+    const base = { warehouseId, toWarehouseId: null, documentDate: date, postingDate: date }
+    const made: string[] = []
+    if (surplus.length) made.push((await post<StockDoc>('/stock-documents', { ...base, type: 'Receipt', description: `Kiểm kê kho ngày ${date}: hàng thừa`, partnerId: null,
+      lines: surplus.map((r, i) => ({ itemId: r.itemId, quantity: diff(r), amount: sv[i], counterAccountId: surplusAcc, description: null, orderId: null, orderLineNo: null })) })).number)
+    if (shortage.length) made.push((await post<StockDoc>('/stock-documents', { ...base, type: 'Issue', description: `Kiểm kê kho ngày ${date}: hàng thiếu`, partnerId: null,
+      lines: shortage.map(r => ({ itemId: r.itemId, quantity: diff(r)!.slice(1), amount: null, counterAccountId: shortAcc, description: null, orderId: null, orderLineNo: null })) })).number)
+    setInfo(made.length ? `Đã lập phiếu Nháp: ${made.join(', ')}. Ghi sổ ở tab Phiếu kho (người khác ghi sổ).` : 'Không có chênh lệch, không cần lập phiếu.')
+  })
+  const wname = warehouses.find(w => w.id === warehouseId)
+  return (
+    <>
+      <div className="toolbar">
+        <label>Kho<select value={warehouseId} onChange={e => { setWarehouseId(e.target.value); setRows(null) }}><option value="">— chọn —</option>{warehouses.map(w => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}</select></label>
+        <label>Ngày kiểm kê<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+        <button className="primary" disabled={busy || !warehouseId} onClick={load}>Lấy tồn sổ sách</button>
+        <button disabled={!rows} onClick={printSheet}>In biên bản</button>
+      </div>
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+      {rows && <div className="panel">
+        <table className="grid">
+          <thead><tr><th>Vật tư</th><th>ĐVT</th><th className="num">Tồn sổ sách</th><th className="num">Thực tế</th><th className="num">Chênh lệch</th><th className="num">Giá trị nhập (nếu thừa)</th></tr></thead>
+          <tbody>{rows.map((r, i) => { const d = diff(r); return (
+            <tr key={r.code}><td>{r.code} – {r.name}</td><td>{r.unit}</td><td className="num">{formatMoney(r.bookQty)}</td>
+              <td><input className="num" aria-label={`Thực tế ${r.code}`} value={r.actual} onChange={e => upd(i, { actual: e.target.value })} /></td>
+              <td className="num" style={{ color: d && d !== '0' ? 'var(--danger)' : undefined }}>{d == null ? '' : formatMoney(d)}</td>
+              <td>{d && d !== '0' && !d.startsWith('-') && <input className="num" aria-label={`Giá trị ${r.code}`} value={r.surplusValue} onChange={e => upd(i, { surplusValue: e.target.value })} />}</td></tr>) })}
+            {rows.length === 0 && <tr><td colSpan={6} className="muted">Kho chưa có vật tư phát sinh đến ngày này.</td></tr>}</tbody>
+        </table>
+        <div className="form-row" style={{ marginTop: 8 }}>
+          <label>TK đối ứng hàng thừa<AccountSelect accounts={accounts} value={surplusAcc} onChange={setSurplusAcc} ariaLabel="TK hàng thừa" /></label>
+          <label>TK đối ứng hàng thiếu<AccountSelect accounts={accounts} value={shortAcc} onChange={setShortAcc} ariaLabel="TK hàng thiếu" /></label>
+          <button className="primary" style={{ alignSelf: 'flex-end' }} disabled={busy || counted.length === 0} onClick={create}>Lập phiếu điều chỉnh ({surplus.length} thừa, {shortage.length} thiếu)</button>
+        </div>
+        <p className="muted">Chỉ các dòng đã nhập số thực tế mới được xử lý. Phiếu ở trạng thái Nháp; hệ thống không tự chọn tài khoản xử lý chênh lệch — chị chọn theo quyết định của hội đồng kiểm kê.</p>
+      </div>}
+      {rows && <PrintSheet>
+        <h1>BIÊN BẢN KIỂM KÊ KHO</h1>
+        <div className="center">Kho: {wname ? `${wname.code} – ${wname.name}` : ''} · Thời điểm kiểm kê: {date.split('-').reverse().join('/')}</div>
+        <table>
+          <thead><tr><th>STT</th><th>Vật tư</th><th>ĐVT</th><th>Sổ sách</th><th>Thực tế</th><th>Chênh lệch</th></tr></thead>
+          <tbody>{rows.map((r, i) => { const d = diff(r); return <tr key={r.code}><td className="center">{i + 1}</td><td>{r.name} ({r.code})</td><td className="center">{r.unit}</td>
+            <td className="num">{formatMoney(r.bookQty)}</td><td className="num">{r.actual ? formatMoney(parseMoney(r.actual) ?? r.actual) : ''}</td><td className="num">{d == null ? '' : formatMoney(d)}</td></tr> })}</tbody>
+        </table>
+        <p>Ý kiến xử lý chênh lệch: ……………………………………………………………………………</p>
+        <div className="signs"><div><b>Thủ kho</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán kho</b><br /><i>(Ký, họ tên)</i></div><div><b>Đại diện Ban kiểm kê</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div></div>
+        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu theo chế độ kế toán [CẦN XÁC MINH].</div>
+      </PrintSheet>}
     </>
   )
 }

@@ -71,6 +71,8 @@ public static class Phase2Endpoints
         // ---- receivables / payables ----
         api.MapGet("/settlement/open-items", async (HttpContext http, Guid accountId, Guid? partnerId, DateOnly asOf, bool? includeSettled, SettlementService s) =>
             Results.Ok(await s.OpenItemsAsync(await http.SessionAsync(), accountId, partnerId, asOf, includeSettled ?? false)));
+        api.MapGet("/settlement/allocations", async (HttpContext http, Guid accountId, Guid partnerId, SettlementService s) =>
+            Results.Ok(await s.AllocationsAsync(await http.SessionAsync(), accountId, partnerId)));
         api.MapPost("/settlement/allocate", async (HttpContext http, AllocateRequest r, SettlementService s) =>
         {
             var a = await s.AllocateAsync(await http.SessionAsync(), r.LineA, r.LineB, r.Amount, r.Date, r.ForeignAmount);

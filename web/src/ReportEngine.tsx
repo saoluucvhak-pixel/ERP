@@ -113,7 +113,8 @@ function RunReport({ defs, onSnapshot }: { defs: DefInfo[]; onSnapshot: () => vo
       {defs.length === 0 && <p className="muted">Chưa có mẫu nào — khai báo ở tab "Mẫu báo cáo".</p>}</section>
       {result && <section className="panel">
         <div className="toolbar">
-          <ExportButton fileName={`${result.code}-${result.toDate}`} sheet={result.code} columns={exportColumns(result)} rows={exportRows(result)} />
+          <ExportButton fileName={`${result.code}-${result.toDate}`} sheet={result.code} columns={exportColumns(result)} rows={exportRows(result)} title={result.name}
+            subtitle={`${result.code} · kỳ ${result.fromDate} → ${result.toDate}${result.compareFrom ? ` · so sánh ${result.compareFrom} → ${result.compareTo}` : ''}${result.legalReference ? ` · ${result.legalReference}` : ''}${result.verified ? '' : ' · MẪU CHƯA XÁC MINH — chỉ dùng nội bộ'}`} />
           <label style={{ flex: 1 }}>Ghi chú khi chốt <input value={note} onChange={e => setNote(e.target.value)} placeholder="VD: số liệu trình ban giám đốc quý 3" /></label>
           <button disabled={busy} title="Lưu nguyên kết quả này (kèm mã băm) — chỉ kế toán trưởng" onClick={() => run(async () => {
             const s = await post<{ id: string; sha256: string }>('/report-runs/snapshots', { ...body(), note })
