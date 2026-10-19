@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
-import { AccountSelect, CASHFLOW_VI, ErrorBox, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
@@ -17,7 +17,7 @@ export function VouchersView() {
   const [total, setTotal] = useState(0)
   const [list, setList] = useState<Voucher[]>([])
   const [selected, setSelected] = useState<Voucher | null>(null)
-  const [editing, setEditing] = useState<Voucher | 'new' | null>(null)
+  const [editing, setEditing] = useState<Voucher | 'new' | { copyOf: Voucher } | null>(null)
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const { busy, error, run } = useAction()
   const [info, setInfo] = useState('')
@@ -54,7 +54,7 @@ export function VouchersView() {
   })
   const count = (...s: string[]) => list.filter(x => checked.has(x.id) && s.includes(x.status)).length
 
-  if (editing) return <VoucherForm voucher={editing === 'new' ? null : editing} onDone={() => { setEditing(null); load() }} />
+  if (editing) return <VoucherForm voucher={editing === 'new' || 'copyOf' in editing ? null : editing} template={editing !== 'new' && 'copyOf' in editing ? editing.copyOf : null} onDone={() => { setEditing(null); load() }} />
 
   const v = selected
   return (
@@ -79,6 +79,9 @@ export function VouchersView() {
           <label>Tìm<input value={text} onChange={e => setText(e.target.value)} placeholder="số, diễn giải" /></label>
         </form>
         <button onClick={() => load()} disabled={busy}>Tải lại</button>
+        <ExportButton fileName={`Chung_tu_${from}_${to}`} sheet="Chứng từ" disabled={list.length === 0}
+          columns={[{ header: 'Ngày HT', width: 12 }, { header: 'Số', width: 16 }, { header: 'Loại', width: 22 }, { header: 'Diễn giải', width: 50 }, { header: 'Số tiền', numeric: true, width: 18 }, { header: 'Trạng thái', width: 14 }]}
+          rows={list.map(x => [x.postingDate, x.number, TYPE_VI[x.voucherType] ?? x.voucherType, x.description ?? '', x.totalDebit, STATUS_VI[x.status] ?? x.status])} />
         <button className="primary" onClick={() => setEditing('new')}>Thêm chứng từ</button>
       </div>
       <ErrorBox error={error} />
@@ -116,6 +119,7 @@ export function VouchersView() {
             {(v.status === 'Draft' || v.status === 'Submitted') && <button className="danger" onClick={() => {
               const reason = prompt('Lý do hủy:'); if (reason) act('Đã hủy', () => post(`/vouchers/${v.id}/cancel?rowVersion=${v.rowVersion}`, { reason }))
             }}>Hủy</button>}
+            {['GJ', 'ADJ', 'ALC', 'OPB', 'CLS', 'FXR'].includes(v.voucherType) && <button onClick={() => setEditing({ copyOf: v })}>Sao chép</button>}
             <button onClick={printSheet}>In chứng từ</button>
           </div>
           <LinesTable voucher={v} />
@@ -201,14 +205,15 @@ function LinesTable({ voucher }: { voucher: Voucher }) {
   )
 }
 
-function VoucherForm({ voucher, onDone }: { voucher: Voucher | null; onDone: () => void }) {
+function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; template: Voucher | null; onDone: () => void }) {
+  const src = voucher ?? template
   const { accounts, partners } = useCatalog()
-  const [type, setType] = useState(voucher?.voucherType ?? 'GJ')
+  const [type, setType] = useState(src?.voucherType ?? 'GJ')
   const [voucherDate, setVoucherDate] = useState(voucher?.voucherDate ?? today())
   const [postingDate, setPostingDate] = useState(voucher?.postingDate ?? today())
-  const [description, setDescription] = useState(voucher?.description ?? '')
-  const [lines, setLines] = useState<LineDraft[]>(voucher
-    ? voucher.lines.map(l => ({ accountId: l.accountId, side: l.side, amount: formatMoney(l.amount), partnerId: l.partnerId ?? '', description: l.description ?? '', cashFlowCode: l.cashFlowCode ?? '' }))
+  const [description, setDescription] = useState(src?.description ?? '')
+  const [lines, setLines] = useState<LineDraft[]>(src
+    ? src.lines.map(l => ({ accountId: l.accountId, side: l.side, amount: formatMoney(l.amount), partnerId: l.partnerId ?? '', description: l.description ?? '', cashFlowCode: l.cashFlowCode ?? '' }))
     : [emptyLine('D'), emptyLine('C')])
   const { busy, error, setError, run } = useAction()
 
@@ -246,7 +251,7 @@ function VoucherForm({ voucher, onDone }: { voucher: Voucher | null; onDone: () 
   return (
     <>
       <div className="toolbar">
-        <h2>{voucher ? `Sửa chứng từ ${voucher.number}` : 'Chứng từ mới'}</h2>
+        <h2>{voucher ? `Sửa chứng từ ${voucher.number}` : template ? `Sao chép từ ${template.number}` : 'Chứng từ mới'}</h2>
         <span className="muted"><kbd>Ctrl+S</kbd> lưu · <kbd>Insert</kbd> thêm dòng · <kbd>Esc</kbd> đóng</span>
         <button onClick={onDone}>Đóng</button>
         <button className="primary" onClick={save} disabled={busy}>Lưu nháp</button>
@@ -289,6 +294,11 @@ function VoucherForm({ voucher, onDone }: { voucher: Voucher | null; onDone: () 
           </tfoot>
         </table>
         <button style={{ marginTop: 8 }} onClick={() => setLines(ls => [...ls, emptyLine('D')])}>+ Thêm dòng</button>
+        {diff !== '0' && <button style={{ marginTop: 8, marginLeft: 8 }} onClick={() => {
+          // Add a line on the lighter side for exactly the difference (decimal strings only).
+          const side: 'D' | 'C' = diff.startsWith('-') ? 'D' : 'C'
+          setLines(ls => [...ls, { ...emptyLine(side), amount: formatMoney(diff.replace('-', '')) }])
+        }}>+ Dòng cân đối ({formatMoney(diff.replace('-', ''))})</button>}
       </div>
     </>
   )
