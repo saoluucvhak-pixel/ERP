@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, FlowStrip, PartnerSelect, useAction, useCatalog } from './common'
 import { addMoney, formatMoney, parseMoney, today } from './money'
 
 interface PaymentOrder { id: string; number: string; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
@@ -42,6 +42,13 @@ function PaymentOrders() {
 
   return (
     <>
+      <FlowStrip steps={[
+        { label: 'Lệnh thanh toán Nháp (từ chấp nhận thanh toán, hàng chờ trả lương hoặc lập tay)', journal: false, count: `${list.filter(o => o.status === 'Created').length} lệnh chờ duyệt` },
+        { label: 'Duyệt lệnh (người khác người lập)', journal: false, count: `${list.filter(o => o.status === 'Approved').length} lệnh chờ gửi ngân hàng` },
+        { label: 'Gửi ngân hàng', journal: false, count: `${list.filter(o => o.status === 'SentToBank').length} lệnh chờ ngân hàng chi` },
+        { label: 'Ngân hàng đã chi → lập chứng từ chi', journal: true, screen: 'vouchers', count: `${list.filter(o => o.status === 'ExecutedByBank').length} lệnh chờ ghi sổ` },
+        { label: 'Đối chiếu sao kê', journal: false, count: `${list.filter(o => o.status === 'Posted').length} lệnh chờ đối chiếu` },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="panel">

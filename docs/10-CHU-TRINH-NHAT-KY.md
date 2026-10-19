@@ -122,7 +122,8 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 ## 9g. Đã làm đợt 7 (19/10/2026): giá vốn trong phân tích tiêu thụ, hàng chờ trả lương
 - **Giá vốn và lãi gộp theo mặt hàng / khách hàng / tháng** (`SalesReportService.AnalyseAsync`): giá vốn dòng hóa đơn bán = giá trị đã tính của dòng phiếu xuất kho liên kết × phần số lượng hóa đơn bao phủ, hàng trả lại trừ ngược; dòng chưa tính giá xuất (bình quân cuối tháng chưa chạy) được đếm riêng và báo ở màn hình (giá vốn khi đó đang thiếu); dòng dịch vụ không có giá vốn. Không trừ chênh lệch giá hóa đơn mua đã điều chỉnh giá vốn.
 - **Hàng chờ trả lương** (`PayrollPaymentService`, `GET /api/cycles/finance/payroll-payable`, `POST …/orders`, tệp mục V.3 bàn giao lương → thanh toán): phải trả người lao động còn nợ theo từng người (vai trò TK `PAYROLL_PAYABLE`), chọn các khoản để lập lệnh thanh toán lương (sự kiện `PAYROLL_PAYMENT`) ở trạng thái Nháp, đúng số còn nợ; khoản đã có lệnh còn hiệu lực không lập lại, hủy lệnh thì khoản lại chờ. Người khác duyệt ở màn Ngân hàng như mọi lệnh chi. Quy tắc hạch toán sự kiện `PAYROLL_PAYMENT` kế toán phải khai báo (chưa seed, vì chưa xác minh TK). Chưa có số tài khoản nhận của nhân viên trong danh mục nên lệnh chưa mang thông tin ngân hàng thụ hưởng.
-- Không có migration mới. Test: 1 test tích hợp mới + mở rộng test doanh thu (186 → 187). Chưa thử tay trên trình duyệt.
+- **Dải các khâu** (`FlowStrip` dùng chung) cho Nhân sự – lương (màn Lương: nhận bảng lương → kiểm tra gói → chứng từ lương → hàng chờ trả lương → ngân hàng chi) và Tài chính – thanh toán (màn Ngân hàng: lệnh Nháp → duyệt → gửi ngân hàng → ngân hàng chi + chứng từ → đối chiếu sao kê), mỗi khâu ghi rõ có/không ghi Nhật ký và số chứng từ đang chờ. Chu trình chuyển đổi chưa có dải khâu vì còn chờ mô tả quy trình dăm.
+- Không có migration mới. Test: 1 test tích hợp mới + mở rộng test doanh thu (186 → 187). Thử tay trên trình duyệt (dữ liệu dev-seed): duyệt/chặn nhà cung cấp, tạo đơn mua nháp từ danh mục cần đặt (tạo được đơn DMH2026-000001; nhà cung cấp bị chặn thì không chọn được), dải khâu lương và ngân hàng hiện đúng. Chưa thử tay hàng chờ trả lương có dữ liệu và cột giá vốn.
 
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
@@ -145,6 +146,6 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 **Thanh toán / tài chính**: số tài khoản nhận của nhân viên + file UNC; thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
 **Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm).
 **Nền**: chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.
-**Các phân hệ làm trước khi theo chu trình** đã xếp vào menu theo chu trình và có bảng khâu ở mục 9d; còn thiếu màn hình dòng chảy (các khâu và số chứng từ đang ở từng khâu) cho Chuyển đổi, Nhân sự – lương, Tài chính.
+**Các phân hệ làm trước khi theo chu trình** đã xếp vào menu theo chu trình và có bảng khâu ở mục 9d; còn thiếu màn hình dòng chảy cho Chuyển đổi (Nhân sự – lương và Tài chính đã có dải khâu ở mục 9g).
 **Còn dang dở từ các đợt trước:** tạm ứng/hoàn ứng, kiểm kê quỹ, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.
 

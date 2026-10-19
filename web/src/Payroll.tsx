@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, postRaw } from './api'
-import { AccountSelect, ErrorBox, ExportButton, STATUS_VI, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, ExportButton, FlowStrip, STATUS_VI, useAction, useCatalog } from './common'
 import { formatMoney, today } from './money'
 
 interface Totals { employees: number; gross: string; socialInsurance: string; healthInsurance: string; unemploymentInsurance: string; personalIncomeTax: string; otherDeduction: string; net: string; employerContributions: string }
@@ -24,6 +24,7 @@ export function PayrollView() {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [summary, setSummary] = useState<SummaryRow[]>([])
+  const [unpaid, setUnpaid] = useState(0)
   const { busy, error, run } = useAction()
 
   const load = useCallback(() => run(async () => {
@@ -77,7 +78,14 @@ export function PayrollView() {
             {sheets.length === 0 && <tr><td colSpan={9} className="muted">Chưa có bảng lương trong khoảng ngày.</td></tr>}</tbody></table>
       </section>
 
-      <PayrollPayable />
+      <FlowStrip steps={[
+        { label: 'Nhận bảng lương từ phần mềm lương (JSON có chữ ký)', journal: false },
+        { label: 'Kiểm tra gói, nhân viên, lương gộp − khấu trừ = thực lĩnh', journal: false },
+        { label: 'Chứng từ lương (Nợ chi phí / Có phải trả người lao động, BHXH, thuế)', journal: true, screen: 'vouchers', count: `${sheets.filter(x => x.voucherStatus === 'Draft').length} chứng từ nháp chờ ghi sổ` },
+        { label: 'Hàng chờ trả lương → lệnh thanh toán lương Nháp', journal: false, count: `${unpaid} khoản chưa có lệnh` },
+        { label: 'Ngân hàng chi', journal: true, screen: 'bank' },
+      ]} />
+      <PayrollPayable onCount={setUnpaid} />
       <ExchangeKeys />
 
       <section className="panel">
@@ -98,7 +106,7 @@ interface PayableRow { journalLineId: string; voucherNumber: string; postingDate
 const ORDER_STATUS_VI: Record<string, string> = { Created: 'Chờ duyệt', Approved: 'Đã duyệt', SentToBank: 'Đã gửi ngân hàng', ExecutedByBank: 'NH đã chi', Posted: 'Đã ghi sổ', Reconciled: 'Đã đối chiếu' }
 
 /** Bàn giao từ nhân sự – lương sang thanh toán: phải trả người lao động còn nợ → lệnh thanh toán lương Nháp (người khác duyệt ở màn Ngân hàng). */
-function PayrollPayable() {
+function PayrollPayable({ onCount }: { onCount?: (n: number) => void }) {
   const { accounts } = useCatalog()
   const [rows, setRows] = useState<PayableRow[]>([])
   const [pick, setPick] = useState<Set<string>>(new Set())
@@ -106,7 +114,7 @@ function PayrollPayable() {
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
   const asOf = today()
-  const load = useCallback(() => run(async () => setRows(await get<PayableRow[]>(`/cycles/finance/payroll-payable?asOf=${asOf}`))), [run, asOf])
+  const load = useCallback(() => run(async () => { const r = await get<PayableRow[]>(`/cycles/finance/payroll-payable?asOf=${asOf}`); setRows(r); onCount?.(r.filter(x => !x.paymentOrderNumber).length) }), [run, asOf, onCount])
   useEffect(() => { load() }, [load])
   const free = rows.filter(r => !r.paymentOrderNumber)
   return (
