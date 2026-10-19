@@ -189,6 +189,17 @@ Chị gửi ba tệp: *thiết kế chu trình sản xuất*, *thiết kế chu 
 - Khác có chủ ý: trạng thái đơn mua / đơn bán, số đã trả của hóa đơn bán và trạng thái hóa đơn (`Unpaid / Partially_Paid / Paid`) suy ra từ chứng từ nguồn chứ không lưu cột (tránh lệch).
 - Chưa có, ghi vào sổ việc: TK công nợ phải thu / phải trả riêng theo từng đối tác (`ar_account`, `ap_account`) và TK giá vốn riêng theo từng vật tư (`cogs_account`) — hiện dùng vai trò chung `AR_TRADE`, `AP_TRADE`, `COGS`; loại vật tư (nguyên liệu, bán thành phẩm, thành phẩm, dịch vụ); cột "phân hệ nguồn" (`ref_module`) trên Sổ Nhật ký chung và loại giao dịch kho (`PURCHASE_GR`, `PROD_ISSUE`, `PROD_RECEIPT`, `SALES_ISSUE`) trên thẻ kho.
 
+## 9k. Đã làm đợt 10 (19/10/2026): khung giao diện theo mẫu chị gửi, phân tích tài chính, số dư ban đầu
+Chị gửi ảnh giao diện mẫu. Đã dựng:
+- **Thanh bên theo phân hệ** (Tiền, Mua hàng, Bán hàng, Kho, Sản xuất, Tài sản – CCDC, Tiền lương, Thuế, Tổng hợp, Phân tích tài chính, Số dư ban đầu, Danh mục – hệ thống), mỗi mục có số việc đang chờ. Bên trong là **tab**: tab đầu **Quy trình** (các nghiệp vụ nối nhau trên một trục theo thứ tự các khâu của chu trình, xen kẽ trên và dưới; bấm nút mở đúng tab), bên phải danh sách **Báo cáo**, hàng **lối tắt danh mục** bên dưới; các tab sau là các màn hình hiện có. Cấu trúc khai báo ở `web/src/Modules.tsx`.
+- **Giữ nguyên** theo yêu cầu của chị: màn **Việc cần làm** (ô theo chu trình kèm số việc chờ), và mọi màn **phiếu, lệnh, nhập liệu** (chỉ đổi khung bên ngoài; riêng chứng từ kế toán có thanh trạng thái ở mục 9j).
+- **Thêm nhanh** ở đầu thanh bên: bảng lối tắt tới màn lập chứng từ của từng phân hệ.
+- **Số dư ban đầu**: lưới thẻ theo loại dữ liệu (tài khoản, đối tượng, vật tư, số dư và công nợ, tồn kho, TSCĐ – CCDC, chứng từ), bấm thẻ vào đúng màn nhập Excel / CSV đã có.
+- **Tổng quan**: thêm hai thẻ **Nợ phải thu / Nợ phải trả theo hạn nợ** (tổng, quá hạn, trong hạn, thanh tỷ lệ quá hạn); tuổi nợ chi tiết thu gọn.
+- **Phân tích tài chính** (`FinancialAnalysisService`, `FinancialRatios`, `GET /api/analysis/ratios`): 15 chỉ số (hệ số nợ, vốn tự có, nợ trên vốn chủ, nợ dài hạn; thanh toán hiện hành, nhanh, tức thời, lãi vay; vòng quay hàng tồn kho, số ngày lưu kho, vòng quay phải thu, kỳ thu tiền; lợi nhuận gộp, ROS, ROA, ROE) cho kỳ này so với kỳ liền trước cùng độ dài, tính từ **mẫu B01-DN và B02-DN đã nhập theo mã số chỉ tiêu** (không tự lấy tài khoản; chưa nhập mẫu thì báo rõ). Mã số lấy theo mẫu TT99 trong `legal/TT99-2025`, chờ chị xác minh mẫu. Không có cột "Tiêu chuẩn" như mẫu của chị vì ngưỡng tham chiếu doanh nghiệp tự quyết định; nếu chị cho ngưỡng em thêm cột và tô màu. Vòng quay tính theo kỳ chọn, không quy năm; số trung bình hai đầu kỳ chưa dùng (đang dùng số cuối kỳ).
+- Test: 1 test miền cho công thức chỉ số, 1 test tích hợp (mẫu thử → chỉ số, kỳ trước, thiếu mẫu); thử tay trên trình duyệt.
+- Chưa làm so với mẫu: thanh tìm kiếm thông minh, "Hay dùng" ghim chức năng, biểu đồ doanh thu – chi phí – lợi nhuận theo tháng, mặt hàng bán chạy, cơ cấu chi phí (cần phân loại tài khoản doanh thu, chi phí, đang chờ bộ tài khoản đã xác minh).
+
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
 |---|---|---|

@@ -143,3 +143,54 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .statusbar .step.current { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
 .statusbar .step.stopped { background: var(--danger); color: #fff; border-color: var(--danger); font-weight: 600; }
 .statusbar .actions { margin-left: auto; display: flex; gap: 6px; }
+
+/* Khung phân hệ theo mẫu: thanh bên + tab phân hệ + tab Quy trình */
+:root { --accent: #1a9a4a; --accent-text: #ffffff; --sidebar: #2b2f36; }
+@media (prefers-color-scheme: dark) { :root { --accent: #3fb36a; --accent-text: #0b1420; --sidebar: #14171c; } }
+.shell { grid-template-columns: 230px 1fr; }
+.content { min-width: 0; display: flex; flex-direction: column; }
+.sidebar button { display: flex; align-items: center; gap: 10px; border-radius: 6px; margin: 2px 8px; width: calc(100% - 16px); padding: 9px 12px; }
+.sidebar button.active { background: var(--accent); color: #fff; }
+.sidebar .nav-icon { width: 22px; text-align: center; }
+.nav-count { margin-left: auto; background: var(--danger); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 600; min-width: 18px; text-align: center; }
+.module-tabs { display: flex; gap: 2px; flex-wrap: wrap; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 14px; position: sticky; top: 0; z-index: 5; }
+.module-tabs button { border: 0; border-radius: 0; background: transparent; padding: 12px 14px; border-bottom: 3px solid transparent; display: flex; gap: 6px; align-items: center; }
+.module-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+button.link { border: 0; background: transparent; padding: 0; color: var(--text); text-align: left; cursor: pointer; }
+button.link:hover { color: var(--accent); text-decoration: underline; }
+.flow-main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 14px; }
+.flow-card { background: var(--panel); border-radius: 12px; padding: 18px 20px; border: 1px solid var(--line); }
+.flow-title { text-align: center; font-weight: 700; margin-bottom: 14px; }
+.flow-diagram { display: grid; grid-template-rows: auto 28px auto; align-items: center; column-gap: 4px; padding: 6px 0 10px; }
+.flow-line { grid-row: 2; height: 0; border-top: 2px solid var(--line); position: relative; }
+.flow-line::after { content: ''; position: absolute; right: -2px; top: -6px; border-left: 8px solid var(--line); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.flow-node { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; background: transparent; text-align: center; padding: 4px; position: relative; font-size: 13px; }
+.flow-node.up { align-self: end; padding-bottom: 14px; }
+.flow-node.down { align-self: start; padding-top: 14px; }
+.flow-node.up::after, .flow-node.down::after { content: ''; position: absolute; left: 50%; width: 0; height: 12px; border-left: 1px solid var(--muted); }
+.flow-node.up::after { bottom: 0; }
+.flow-node.down::after { top: 0; }
+.flow-icon { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.flow-node:hover .flow-icon { outline: 2px solid var(--accent); }
+.flow-label { max-width: 130px; }
+.flow-report ul { list-style: none; margin: 0; padding: 0; }
+.flow-report li { padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.flow-catalogs { display: flex; gap: 0; background: var(--panel); border-radius: 12px; border: 1px solid var(--line); margin-top: 14px; flex-wrap: wrap; }
+.flow-catalogs button { flex: 1 1 140px; padding: 16px 12px; text-align: center; border-right: 1px solid var(--line); font-weight: 500; }
+.flow-catalogs button:last-child { border-right: 0; }
+.flow-hints { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+@media (max-width: 900px) { .flow-main { grid-template-columns: 1fr; } .content .module-tabs { position: static; } }
+
+.quick-add { position: relative; margin: 0 8px 10px; }
+.sidebar .quick-add-btn { width: 100%; margin: 0; justify-content: center; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); }
+.quick-add-pop { position: absolute; left: 0; top: 100%; z-index: 20; width: 560px; max-width: 90vw; background: var(--panel); color: var(--text); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.28); padding: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 4px; }
+.quick-group { display: flex; flex-direction: column; gap: 6px; }
+.quick-title { font-weight: 700; border-left: 3px solid var(--accent); background: var(--row-alt); padding: 6px 8px; }
+.sidebar .quick-group button.link { padding: 3px 10px; margin: 0; width: auto; color: var(--accent); display: block; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.card-tile { display: flex; flex-direction: column; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 28px 16px; text-align: center; }
+.card-tile:hover { border-color: var(--accent); }
+.card-title { font-weight: 700; font-size: 15px; }
+.debt-total { font-size: 28px; font-weight: 700; }
+.debt-bar { background: var(--line); border-radius: 4px; height: 12px; margin-top: 12px; overflow: hidden; }
+.debt-bar > div { background: #f0832e; height: 12px; }

@@ -65,6 +65,7 @@ builder.Services.AddScoped<SalesOrderCheckService>();
 builder.Services.AddScoped<ReorderService>();
 builder.Services.AddScoped<SupplierService>();
 builder.Services.AddScoped<HomeService>();
+builder.Services.AddScoped<Hak.Application.Reports.FinancialAnalysisService>();
 builder.Services.AddScoped<PayrollPaymentService>();
 builder.Services.AddScoped<Hak.Application.Assets.AssetCycleService>();
 builder.Services.AddScoped<SalesDispatchService>();

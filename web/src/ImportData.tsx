@@ -177,8 +177,8 @@ function mapSheet(grid: string[][], fields: Field[]) {
 }
 
 /** Nhập danh mục và số dư đầu kỳ từ Excel/CSV: đọc tệp → kiểm tra (không ghi) → nhập (tất cả hoặc không gì cả). */
-export function ImportData() {
-  const [kind, setKind] = useState<keyof typeof KINDS>('accounts')
+export function ImportData({ initialKind = 'accounts' }: { initialKind?: string }) {
+  const [kind, setKind] = useState<keyof typeof KINDS>(initialKind in KINDS ? initialKind : 'accounts')
   const [fileName, setFileName] = useState('')
   const [sheet, setSheet] = useState<ReturnType<typeof mapSheet>>(null)
   const [result, setResult] = useState<Result | null>(null)

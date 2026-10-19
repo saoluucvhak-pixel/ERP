@@ -132,15 +132,30 @@ export function DashboardView() {
         {plan.buckets.some(b => b.closingCash.startsWith('-')) && <p style={{ color: 'var(--danger)' }}>Số dư tiền dự kiến âm ở một khoảng: cần chuẩn bị tiền, vay hoặc đàm phán lại hạn thanh toán.</p>}
       </div>}
 
-      {aging.length > 0 && <div className="panel">
-        <strong>Tuổi nợ</strong>
-        {aging.map(x => {
-          const cols = [{ label: 'Chưa đến hạn', v: addMoney(x.data.rows.map(r => r.notDue)) }, ...x.data.bucketLabels.map((l, i) => ({ label: `Quá hạn ${l} ngày`, v: addMoney(x.data.rows.map(r => r.buckets[i] ?? '0')) }))]
-          const max = maxAbs(cols.map(c => c.v))
-          return <div key={x.code} style={{ marginTop: 8 }}><div className="muted">{x.code} – {x.name} ({x.nature === 'Receivable' ? 'phải thu' : 'phải trả'})</div>
-            <table className="grid"><tbody>{cols.map((c, i) => <tr key={i}><td style={{ width: 160 }}>{c.label}</td><td><Bar value={c.v} max={max} tone={i === 0 ? undefined : 'var(--danger)'} /></td><td className="num" style={{ width: 140 }}>{formatMoney(c.v)}</td></tr>)}</tbody></table></div>
+      {aging.length > 0 && <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        {(['Receivable', 'Payable'] as const).map(n => {
+          const rows = aging.filter(x => x.nature === n).flatMap(x => x.data.rows)
+          const late = addMoney(rows.flatMap(r => r.buckets)); const inTerm = addMoney(rows.map(r => r.notDue)); const total = addMoney([late, inTerm])
+          return <div key={n} className="panel debt-card" style={{ flex: '1 1 320px', marginBottom: 0, cursor: 'pointer' }} onClick={() => navStore.go?.('arap')}>
+            <strong>{n === 'Receivable' ? 'Nợ phải thu theo hạn nợ' : 'Nợ phải trả theo hạn nợ'}</strong>
+            <div className="muted" style={{ marginTop: 10 }}>Tổng</div>
+            <div className="debt-total">{formatMoney(total)}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+              <div><div className="muted">Quá hạn</div><b style={{ color: 'var(--warn)' }}>{formatMoney(late)}</b></div>
+              <div style={{ textAlign: 'right' }}><div className="muted">Trong hạn</div><b>{formatMoney(inTerm)}</b></div>
+            </div>
+            <div className="debt-bar" aria-label={`Quá hạn ${pct(late, total)}%`}><div style={{ width: `${pct(late, total)}%` }} /></div>
+          </div>
         })}
       </div>}
+      {aging.length > 0 && <details className="panel"><summary><strong>Tuổi nợ chi tiết theo tài khoản</strong></summary>
+        {aging.map(x => {
+          const cols = [{ label: 'Chưa đến hạn', v: addMoney(x.data.rows.map(r => r.notDue)) }, ...x.data.bucketLabels.map((l, i) => ({ label: `Quá hạn ${l} ngày`, v: addMoney(x.data.rows.map(r => r.buckets[i])) }))]
+          const max = maxAbs(cols.map(c => c.v))
+          return <div key={x.code} style={{ marginTop: 8 }}><div className="muted">{x.code} – {x.name} ({x.nature === 'Receivable' ? 'phải thu' : 'phải trả'})</div>
+            <table className="grid"><tbody>{cols.map((c, i) => <tr key={i}><td style={{ width: 160 }}>{c.label}</td><td><Bar value={c.v} max={max} tone={i === 0 ? undefined : 'var(--danger)'} /></td><td className="num">{formatMoney(c.v)}</td></tr>)}</tbody></table></div>
+        })}
+      </details>}
 
       <div className="panel">
         <strong>Kiểm soát</strong>
