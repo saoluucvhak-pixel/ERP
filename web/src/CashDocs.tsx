@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { get, post, type OpenItem, type Voucher } from './api'
+import { get, post, put, type OpenItem, type Voucher } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, TYPE_VI, useAction, useCatalog } from './common'
 import { formatMoney, parseMoney, today } from './money'
 
@@ -12,18 +12,24 @@ const EVENTS: Record<string, { value: string; label: string; needsPartner: boole
        { value: 'INTERNAL_TRANSFER', label: 'Chuyển tiền nội bộ', needsPartner: false, needsCounter: true }],
 }
 
-interface DocLine { amount: string; counterAccountId: string; settle: string; description: string }
+interface DocLine { amount: string; counterAccountId: string; settle: string; description: string; dueDate?: string }
 
 /** Phiếu thu/chi, báo Nợ/Có: định khoản do Posting Rule Engine sinh ra theo nghiệp vụ được chọn. */
-export function CashDocsView() {
+/** Sửa phiếu Nháp: dựng lại form từ chứng từ đã lưu (dòng đối ứng = dòng khác TK quỹ/ngân hàng chính); lưu bằng PUT /documents. */
+function linesOf(v: Voucher): DocLine[] {
+  const rest = v.lines.filter(l => l.accountId !== v.mainAccountId)
+  return (rest.length ? rest : v.lines).map(l => ({ amount: formatMoney(l.amount), counterAccountId: l.accountId, settle: l.settleJournalLineId ?? '', description: l.description ?? '', dueDate: l.dueDate ?? undefined }))
+}
+
+export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | null; onDone?: () => void }) {
   const { accounts, partners } = useCatalog()
-  const [type, setType] = useState('CR')
-  const [event, setEvent] = useState('CUSTOMER_RECEIPT')
-  const [date, setDate] = useState(today())
-  const [description, setDescription] = useState('')
-  const [partnerId, setPartnerId] = useState('')
-  const [mainAccountId, setMainAccountId] = useState('')
-  const [lines, setLines] = useState<DocLine[]>([{ amount: '', counterAccountId: '', settle: '', description: '' }])
+  const [type, setType] = useState(voucher?.voucherType ?? 'CR')
+  const [event, setEvent] = useState(voucher?.businessEvent ?? 'CUSTOMER_RECEIPT')
+  const [date, setDate] = useState(voucher?.postingDate ?? today())
+  const [description, setDescription] = useState(voucher?.description ?? '')
+  const [partnerId, setPartnerId] = useState(voucher?.partnerId ?? '')
+  const [mainAccountId, setMainAccountId] = useState(voucher?.mainAccountId ?? '')
+  const [lines, setLines] = useState<DocLine[]>(voucher ? linesOf(voucher) : [{ amount: '', counterAccountId: '', settle: '', description: '' }])
   const [openItems, setOpenItems] = useState<OpenItem[]>([])
   const [created, setCreated] = useState<Voucher | null>(null)
   const { busy, error, setError, run } = useAction()
@@ -31,7 +37,7 @@ export function CashDocsView() {
   const cashKind = type === 'CR' || type === 'CP' ? 'Cash' : 'Bank'
   const arapRole = event === 'CUSTOMER_RECEIPT' ? 'Receivable' : event === 'SUPPLIER_PAYMENT' ? 'Payable' : null
 
-  useEffect(() => { setEvent(EVENTS[type][0].value); setMainAccountId('') }, [type])
+  useEffect(() => { if (!voucher) { setEvent(EVENTS[type][0].value); setMainAccountId('') } }, [type, voucher])
   useEffect(() => {
     const acc = accounts.find(a => a.openItemNature === arapRole)
     if (!acc || !partnerId) { setOpenItems([]); return }
@@ -45,11 +51,13 @@ export function CashDocsView() {
   const save = () => run(async () => {
     const amounts = lines.map(l => parseMoney(l.amount))
     if (amounts.some(a => a == null)) { setError(new Error('Có dòng số tiền không hợp lệ.')); return }
-    const v = await post<Voucher>('/documents', {
-      documentType: type, businessEvent: event, voucherDate: date, postingDate: date, description,
+    const body = {
+      documentType: type, businessEvent: event, voucherDate: voucher?.voucherDate ?? date, postingDate: date, description,
       partnerId: partnerId || null, mainAccountId: mainAccountId || null,
-      lines: lines.map((l, i) => ({ amount: amounts[i], counterAccountId: l.counterAccountId || null, settleJournalLineId: l.settle || null, description: l.description || null, dueDate: null })),
-    })
+      lines: lines.map((l, i) => ({ amount: amounts[i], counterAccountId: ev.needsCounter ? l.counterAccountId || null : null, settleJournalLineId: l.settle || null, description: l.description || null, dueDate: l.dueDate ?? null })),
+    }
+    if (voucher) { await put(`/documents/${voucher.id}?rowVersion=${voucher.rowVersion}`, body); onDone?.(); return }
+    const v = await post<Voucher>('/documents', body)
     setCreated(v)
     setLines([{ amount: '', counterAccountId: '', settle: '', description: '' }])
   })
@@ -58,13 +66,13 @@ export function CashDocsView() {
 
   return (
     <>
-      <div className="toolbar"><h2>Thu / Chi tiền</h2><button className="primary" onClick={save} disabled={busy}>Lưu nháp</button></div>
+      <div className="toolbar"><h2>{voucher ? `Sửa ${TYPE_VI[voucher.voucherType]} ${voucher.number}` : 'Thu / Chi tiền'}</h2>{onDone && <button onClick={onDone}>Đóng</button>}<button className="primary" onClick={save} disabled={busy}>Lưu nháp</button></div>
       <ErrorBox error={error} />
       {created && <div className="msg ok">Đã tạo {TYPE_VI[created.voucherType]} {created.number} (Nháp, {formatMoney(created.totalDebit)}). Gửi duyệt và ghi sổ ở màn hình Chứng từ.</div>}
       <div className="panel">
         <div className="form-row">
           <label>Loại chứng từ
-            <select value={type} onChange={e => setType(e.target.value)}>
+            <select value={type} onChange={e => setType(e.target.value)} disabled={!!voucher}>
               {Object.keys(EVENTS).map(t => <option key={t} value={t}>{TYPE_VI[t]}</option>)}
             </select>
           </label>

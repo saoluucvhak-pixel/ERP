@@ -29,14 +29,17 @@ public sealed record VoucherRequest(string VoucherType, DateOnly VoucherDate, Da
 public sealed record ReasonRequest(string Reason);
 public sealed record ReverseRequest(DateOnly ReversalDate, string Reason);
 
-public sealed record LineDto(int LineNo, Guid AccountId, string Side, decimal Amount, Guid? PartnerId, string? ForeignCurrency, decimal? ForeignAmount, decimal? ExchangeRate, string? Description, string? CashFlowCode = null);
+public sealed record LineDto(int LineNo, Guid AccountId, string Side, decimal Amount, Guid? PartnerId, string? ForeignCurrency, decimal? ForeignAmount, decimal? ExchangeRate, string? Description, string? CashFlowCode = null,
+    Guid? SettleJournalLineId = null, DateOnly? DueDate = null);
 public sealed record VoucherDto(Guid Id, string Number, string VoucherType, string Status, DateOnly VoucherDate, DateOnly PostingDate, string Description,
-    decimal TotalDebit, decimal TotalCredit, long RowVersion, Guid? ReversesVoucherId, Guid? AdjustsVoucherId, string? SourceSystem, string? SourceId, List<LineDto> Lines)
+    decimal TotalDebit, decimal TotalCredit, long RowVersion, Guid? ReversesVoucherId, Guid? AdjustsVoucherId, string? SourceSystem, string? SourceId, List<LineDto> Lines,
+    string? BusinessEvent = null, Guid? MainAccountId = null, Guid? PartnerId = null)
 {
     public static VoucherDto From(Voucher v) => new(v.Id, v.Number, v.VoucherType, v.Status.ToString(), v.VoucherDate, v.PostingDate, v.Description,
         v.TotalDebit, v.TotalCredit, v.RowVersion, v.ReversesVoucherId, v.AdjustsVoucherId, v.SourceSystem, v.SourceId,
         v.Lines.OrderBy(l => l.LineNo).Select(l => new LineDto(l.LineNo, l.AccountId, l.Side == Side.Debit ? "D" : "C", l.Amount, l.PartnerId,
-            l.ForeignCurrency, l.ForeignAmount, l.ExchangeRate, l.Description, l.CashFlowCode)).ToList());
+            l.ForeignCurrency, l.ForeignAmount, l.ExchangeRate, l.Description, l.CashFlowCode, l.SettleJournalLineId, l.DueDate)).ToList(),
+        v.BusinessEvent, v.MainAccountId, v.PartnerId);
 }
 
 public static class Endpoints

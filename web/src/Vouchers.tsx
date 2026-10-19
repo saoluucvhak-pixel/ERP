@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { CashDocsView } from './CashDocs'
 import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
@@ -54,6 +55,8 @@ export function VouchersView() {
   })
   const count = (...s: string[]) => list.filter(x => checked.has(x.id) && s.includes(x.status)).length
 
+  if (editing && editing !== 'new' && !('copyOf' in editing) && CASH_TYPES.includes(editing.voucherType))
+    return <CashDocsView voucher={editing} onDone={() => { setEditing(null); load() }} />
   if (editing) return <VoucherForm voucher={editing === 'new' || 'copyOf' in editing ? null : editing} template={editing !== 'new' && 'copyOf' in editing ? editing.copyOf : null} onDone={() => { setEditing(null); load() }} />
 
   const v = selected
@@ -101,7 +104,7 @@ export function VouchersView() {
             <strong>{v.number}</strong> <span className={`badge ${v.status}`}>{STATUS_VI[v.status]}</span>
             <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {v.postingDate} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
-            {v.status === 'Draft' && !['CR', 'CP', 'BR', 'BP'].includes(v.voucherType) && <button onClick={() => setEditing(v)}>Sửa</button>}
+            {v.status === 'Draft' && <button onClick={() => setEditing(v)}>Sửa</button>}
             <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
               const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
               setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')
@@ -154,6 +157,7 @@ export function VouchersView() {
 }
 
 const PAGE = 200
+const CASH_TYPES = ['CR', 'CP', 'BR', 'BP']
 
 /** Printed voucher (internal layout — the legal forms of the accounting regime are not reproduced until verified). */
 function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
@@ -163,6 +167,34 @@ function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
   const acc = (id: string) => accounts.find(a => a.id === id)?.code ?? ''
   const par = (id: string | null) => (id ? partners.find(p => p.id === id) : undefined)
   const d = (s: string) => s.split('-').reverse().join('/')
+  if (CASH_TYPES.includes(v.voucherType)) {
+    const receipt = v.voucherType === 'CR' || v.voucherType === 'BR'
+    const p = par(v.partnerId ?? v.lines.find(l => l.partnerId)?.partnerId ?? null)
+    const main = acc(v.mainAccountId ?? '')
+    const counter = [...new Set(v.lines.filter(l => l.accountId !== v.mainAccountId).map(l => acc(l.accountId)).filter(Boolean))].join(', ')
+    const title = `${receipt ? 'PHIẾU THU' : 'PHIẾU CHI'}${v.voucherType === 'BR' || v.voucherType === 'BP' ? ' (BÁO ' + (receipt ? 'CÓ' : 'NỢ') + ' NGÂN HÀNG)' : ''}`
+    return (
+      <PrintSheet>
+        <div><b>{company}</b></div>
+        <h1>{title}</h1>
+        <div className="center">Ngày {d(v.voucherDate)} · Số: <b>{v.number}</b></div>
+        <div className="center">{receipt ? 'Nợ' : 'Có'}: {main} · {receipt ? 'Có' : 'Nợ'}: {counter}</div>
+        {v.status !== 'Posted' && <div className="center" style={{ marginTop: 6 }}><span className="stamp">{STATUS_VI[v.status]?.toUpperCase()} — CHƯA GHI SỔ</span></div>}
+        <p>Họ và tên người {receipt ? 'nộp' : 'nhận'} tiền: <b>{p ? p.name : '…………………………………'}</b></p>
+        <p>Địa chỉ: …………………………………………………{p?.taxCode ? ` · MST: ${p.taxCode}` : ''}</p>
+        <p>Lý do {receipt ? 'nộp' : 'chi'}: {v.description}</p>
+        <p>Số tiền: <b>{formatMoney(v.totalDebit)}</b> đồng</p>
+        <p>Bằng chữ: <i>{amountInWords(v.totalDebit)}</i></p>
+        <p>Kèm theo: ………… chứng từ gốc.</p>
+        <div className="signs">
+          <div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div>
+          <div><b>Người lập phiếu</b><br /><i>(Ký, họ tên)</i></div><div><b>Người {receipt ? 'nộp' : 'nhận'} tiền</b><br /><i>(Ký, họ tên)</i></div>
+          {v.voucherType === 'CR' || v.voucherType === 'CP' ? <div><b>Thủ quỹ</b><br /><i>(Ký, họ tên)</i></div> : null}
+        </div>
+        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu chứng từ theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+      </PrintSheet>
+    )
+  }
   return (
     <PrintSheet>
       <div><b>{company}</b></div>
