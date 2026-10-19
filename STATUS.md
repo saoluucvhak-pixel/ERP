@@ -48,7 +48,7 @@ Trạng thái: `NOT_STARTED` · `DESIGNED` · `IN_PROGRESS` (code + test, thiế
 | Performance benchmark | NOT_STARTED | | | | Chưa đo, không công bố |
 | **Sao lưu / khôi phục mã hóa** (SQLite): ảnh chụp trực tuyến, AES-256-GCM theo khối, khóa PBKDF2-SHA256 600.000 vòng, phát hiện sai mật khẩu / sửa đổi / cắt cụt / sửa phần đầu; kiểm tra = SHA-256 + PRAGMA integrity_check + chuỗi nhật ký mọi công ty; khôi phục ra file mới (không ghi đè dữ liệu đang chạy); chỉ quản trị hệ thống; có nhật ký | AWAITING_REAL_DATA_VALIDATION | ✅ | ✅ (Quản trị) | ✅ | Chưa lịch sao lưu tự động, chưa chép ra ổ ngoài/đám mây; chế độ PostgreSQL dùng pg_dump (chưa có hướng dẫn vận hành) |
 | Tauri desktop shell, Installer MSI/EXE | NOT_STARTED | | | | Máy chưa có Rust/Cargo |
-| CI GitHub Actions (backend + frontend) | IN_PROGRESS | | | | Git đã cài (PortableGit 2.56), repo cục bộ đã khởi tạo; chưa có remote nên CI chưa chạy |
+| CI GitHub Actions (backend SQLite + backend PostgreSQL + frontend, ubuntu) | IN_PROGRESS | | | | Đã sửa 19/10/2026 (trước: windows, không có job PG); **chưa xác nhận chạy xanh trên GitHub** |
 | Môi trường: Rust 1.99 (rustup, người dùng), Git 2.56 portable, PostgreSQL 18.6 portable (127.0.0.1:5433) | — | | | | Rust MSVC cần thêm bộ “Desktop development with C++” của VS Build Tools (cần quyền admin) trước khi build Tauri |
 
 ## Kết quả test gần nhất (chạy thật trên máy này, 14/10/2026)
