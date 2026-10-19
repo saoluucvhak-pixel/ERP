@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { get, post, put, type OpenItem, type Voucher } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, navStore, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { addMoney, formatMoney, parseMoney, today } from './money'
 
 const EVENTS: Record<string, { value: string; label: string; needsPartner: boolean; needsCounter: boolean }[]> = {
@@ -23,13 +23,15 @@ function linesOf(v: Voucher): DocLine[] {
 
 export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | null; onDone?: () => void }) {
   const { accounts, partners } = useCatalog()
+  // Arrived from the revenue cycle's receivable queue: prefill a customer receipt that settles that invoice (consumed once).
+  const [prefill] = useState(() => { const r = voucher ? undefined : navStore.receipt; navStore.receipt = undefined; return r })
   const [type, setType] = useState(voucher?.voucherType ?? 'CR')
   const [event, setEvent] = useState(voucher?.businessEvent ?? 'CUSTOMER_RECEIPT')
   const [date, setDate] = useState(voucher?.postingDate ?? today())
   const [description, setDescription] = useState(voucher?.description ?? '')
-  const [partnerId, setPartnerId] = useState(voucher?.partnerId ?? '')
+  const [partnerId, setPartnerId] = useState(voucher?.partnerId ?? prefill?.partnerId ?? '')
   const [mainAccountId, setMainAccountId] = useState(voucher?.mainAccountId ?? '')
-  const [lines, setLines] = useState<DocLine[]>(voucher ? linesOf(voucher) : [{ amount: '', counterAccountId: '', settle: '', description: '' }])
+  const [lines, setLines] = useState<DocLine[]>(voucher ? linesOf(voucher) : [{ amount: prefill ? formatMoney(prefill.amount) : '', counterAccountId: '', settle: prefill?.settleJournalLineId ?? '', description: '' }])
   const [openItems, setOpenItems] = useState<OpenItem[]>([])
   const [created, setCreated] = useState<Voucher | null>(null)
   const [balance, setBalance] = useState<string | null>(null)

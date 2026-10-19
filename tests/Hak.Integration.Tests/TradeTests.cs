@@ -591,4 +591,77 @@ public class TradeTests
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Stock.UpdateItemCommercialAsync(h.Admin, fx.Add, -1, null, null, null)));
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Stock.UpdateItemCommercialAsync(h.Auditor, fx.Add, 1, null, null, null)));
     }
+
+    [Fact]
+    public async Task RevenueCycle_Order_Dispatch_Delivery_Invoice_Receivable_Reports()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);   // receipt rules for the collection report
+        await s.Setup.UpdatePartnerCommercialAsync(h.Admin, h.Partner["KH01"], "12 Lê Duẩn", null, null, null, 30);
+        await s.Stock.UpdateItemCommercialAsync(h.Admin, fx.Add, 60_000, 10, null, null);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        var svc = new Hak.Application.Cycles.SalesDispatchService(s.Db, s.Stock, fx.Inv, s.Audit, h.Clock);
+        var reports = new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement);
+        var orders = Orders(fx);
+
+        // Order of 40 kg at 60,000 without VAT on the line: VAT falls back to the item's default (10%).
+        var order = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, 5), "Bán phụ gia", [new OrderLineInput(fx.Add, 40, 60_000)]));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.CreateDispatchAsync(h.Preparer, new(order.Id, fx.Wh, D(3, 6), null, null, [new(1, 30)]))));   // order not confirmed yet
+        await orders.ConfirmAsync(h.Approver, order.Id);
+
+        // Lệnh bán hàng: no accounting; cannot exceed the order; must be issued before delivery.
+        var dispatch = await svc.CreateDispatchAsync(h.Preparer, new(order.Id, fx.Wh, D(3, 6), "Kho khách A", "Giao trong tuần", [new(1, 30)]));
+        Assert.StartsWith("LBH2026-", dispatch.Number);
+        Assert.Equal(ErrorCodes.OverDelivered, await CodeOf(() => svc.CreateDispatchAsync(h.Preparer, new(order.Id, fx.Wh, D(3, 6), null, null, [new(1, 11)]))));   // 30 + 11 > 40
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.CreateDeliveryAsync(h.Preparer, new(dispatch.Id, D(3, 7), null, null, null, null, null, [new(1, 10)]))));
+        await svc.IssueAsync(h.Preparer, dispatch.Id);
+
+        // Phiếu giao hàng → phiếu xuất kho Nháp linked to the order line (no ledger entry yet).
+        var vouchersBefore = await s.Db.Vouchers.CountAsync();
+        var d1 = await svc.CreateDeliveryAsync(h.Preparer, new(dispatch.Id, D(3, 7), null, "Xe 43C-123.45", "Nguyễn Văn A", "VD0001", null, [new(1, 20)]));
+        Assert.StartsWith("PGH2026-", d1.Number);
+        Assert.Equal("Kho khách A", d1.ShipTo);   // defaults to the dispatch order's destination
+        Assert.Equal(vouchersBefore, await s.Db.Vouchers.CountAsync());
+        var doc1 = await s.Db.StockDocuments.Include(x => x.Lines).SingleAsync(x => x.Id == d1.StockDocumentId);
+        Assert.Equal((StockDocumentType.Issue, StockDocumentStatus.Draft, order.Id, 1, 20m), (doc1.Type, doc1.Status, doc1.Lines[0].OrderId, doc1.Lines[0].OrderLineNo, doc1.Lines[0].Quantity));
+        Assert.Equal(ErrorCodes.OverDelivered, await CodeOf(() => svc.CreateDeliveryAsync(h.Preparer, new(dispatch.Id, D(3, 8), null, null, null, null, null, [new(1, 11)]))));   // 20 + 11 > 30
+        var d2 = await svc.CreateDeliveryAsync(h.Preparer, new(dispatch.Id, D(3, 8), null, null, null, null, null, [new(1, 10)]));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.CancelDispatchAsync(h.Preparer, dispatch.Id, "đổi ý")));   // has deliveries
+
+        // Hóa đơn needs the stock issue posted first (that is when goods leave and the Nhật ký is written).
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.CreateInvoiceAsync(h.Preparer, d1.Id, "1C26TAA", "0000900", D(3, 20))));
+        await s.Stock.PostDocumentAsync(h.Approver, d1.StockDocumentId);
+        var inv = await svc.CreateInvoiceAsync(h.Preparer, d1.Id, "1C26TAA", "0000900", D(3, 20));
+        var line = Assert.Single(inv.Lines);
+        Assert.Equal((60_000m, 10m, 20m, D(4, 19), order.Id), (line.UnitPrice, line.VatRate, line.StockQuantity, inv.DueDate, line.OrderId));   // price/VAT from the order and catalogue, due = date + 30 days
+        await fx.Inv.PostAsync(h.Approver, inv.Id);
+        Assert.Equal(1_320_000m, await fx.Bal("AR", h.Partner["KH01"]));
+
+        var view = Assert.Single(await svc.ListAsync(h.Auditor, order.Id));
+        Assert.Equal((30m, 30m, 0m), (view.Lines[0].Quantity, view.Lines[0].Delivered, view.Lines[0].Outstanding));
+        Assert.Equal("INVOICED", view.Deliveries.Single(x => x.Id == d1.Id).Stage);
+        Assert.Equal(inv.Number, view.Deliveries.Single(x => x.Id == d1.Id).InvoiceNumber);
+        Assert.Equal("AWAITING_STOCK_POSTING", view.Deliveries.Single(x => x.Id == d2.Id).Stage);
+
+        // Cancelling: a posted issue must be reversed first; a draft one is cancelled with its stock document.
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.CancelDeliveryAsync(h.Preparer, d1.Id, "nhầm")));
+        await svc.CancelDeliveryAsync(h.Preparer, d2.Id, "Khách hoãn nhận");
+        Assert.Equal(StockDocumentStatus.Cancelled, (await s.Db.StockDocuments.AsNoTracking().SingleAsync(x => x.Id == d2.StockDocumentId)).Status);
+        Assert.Equal(10m, (await svc.ListAsync(h.Auditor, order.Id)).Single().Lines[0].Outstanding);
+
+        // Hàng chờ thu tiền theo ngày đáo hạn, báo cáo bán hàng và thu tiền.
+        var q = Assert.Single(await reports.ReceivableQueueAsync(h.Auditor, D(3, 31)));
+        Assert.Equal((1_320_000m, D(4, 19), 0), (q.Open, q.DueDate, q.DaysOverdue));
+        Assert.Equal(12, Assert.Single(await reports.ReceivableQueueAsync(h.Auditor, D(5, 1))).DaysOverdue);
+        var sales = await reports.AnalyseAsync(h.Auditor, D(1, 1), D(12, 31));
+        var byItem = Assert.Single(sales.ByItem);
+        Assert.Equal(("PHU", 20m, 1_200_000m, 120_000m), (byItem.Key, byItem.Quantity, byItem.Revenue, byItem.Vat));
+        Assert.Equal(1_200_000m, Assert.Single(sales.ByPartner).Revenue);
+        Assert.Equal("2026-03", Assert.Single(sales.ByMonth).Key);
+        await Phase2Fixture.PostDocAsync(h, s, Phase2Fixture.Receipt(h, 500_000, D(3, 25)));
+        var coll = await reports.CollectionsAsync(h.Auditor, D(3, 1), D(3, 31));
+        Assert.Equal((500_000m, "KH01"), (coll.Total, Assert.Single(coll.ByPartner).PartnerCode));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.CreateDispatchAsync(h.Auditor, new(order.Id, fx.Wh, D(3, 6), null, null, [new(1, 1)]))));
+    }
 }

@@ -908,6 +908,286 @@ namespace Hak.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_reason");
+
+                    b.Property<string>("Carrier")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("carrier");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("DeliveryDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("delivery_date");
+
+                    b.Property<string>("DeliveryStaff")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("delivery_staff");
+
+                    b.Property<Guid>("DispatchOrderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dispatch_order_id");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_cancelled");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("ShipTo")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ship_to");
+
+                    b.Property<Guid>("StockDocumentId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stock_document_id");
+
+                    b.Property<string>("WaybillNo")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("waybill_no");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sales_deliveries");
+
+                    b.HasIndex("DispatchOrderId")
+                        .HasDatabaseName("ix_sales_deliveries_dispatch_order_id");
+
+                    b.HasIndex("StockDocumentId")
+                        .HasDatabaseName("ix_sales_deliveries_stock_document_id");
+
+                    b.HasIndex("CompanyId", "DispatchOrderId")
+                        .HasDatabaseName("ix_sales_deliveries_company_id_dispatch_order_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sales_deliveries_company_id_number");
+
+                    b.HasIndex("CompanyId", "StockDocumentId")
+                        .HasDatabaseName("ix_sales_deliveries_company_id_stock_document_id");
+
+                    b.ToTable("sales_deliveries");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDeliveryLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("delivery_id");
+
+                    b.Property<int>("DispatchLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("dispatch_line_no");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("item_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("line_no");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("StockLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stock_line_no");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sales_delivery_lines");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_sales_delivery_lines_item_id");
+
+                    b.HasIndex("DeliveryId", "LineNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sales_delivery_lines_delivery_id_line_no");
+
+                    b.ToTable("sales_delivery_lines", t =>
+                        {
+                            t.HasCheckConstraint("ck_sales_delivery_lines_qty", "quantity > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDispatchLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("DispatchOrderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dispatch_order_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("item_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("line_no");
+
+                    b.Property<int>("OrderLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("order_line_no");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quantity");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sales_dispatch_lines");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_sales_dispatch_lines_item_id");
+
+                    b.HasIndex("DispatchOrderId", "LineNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sales_dispatch_lines_dispatch_order_id_line_no");
+
+                    b.ToTable("sales_dispatch_lines", t =>
+                        {
+                            t.HasCheckConstraint("ck_sales_dispatch_lines_qty", "quantity > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDispatchOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_reason");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("DispatchDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("dispatch_date");
+
+                    b.Property<DateTime?>("IssuedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("issued_at");
+
+                    b.Property<Guid?>("IssuedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("issued_by");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_id");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("ShipTo")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("ship_to");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("warehouse_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sales_dispatch_orders");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("ix_sales_dispatch_orders_order_id");
+
+                    b.HasIndex("PartnerId")
+                        .HasDatabaseName("ix_sales_dispatch_orders_partner_id");
+
+                    b.HasIndex("WarehouseId")
+                        .HasDatabaseName("ix_sales_dispatch_orders_warehouse_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sales_dispatch_orders_company_id_number");
+
+                    b.HasIndex("CompanyId", "OrderId")
+                        .HasDatabaseName("ix_sales_dispatch_orders_company_id_order_id");
+
+                    b.ToTable("sales_dispatch_orders");
+                });
+
             modelBuilder.Entity("Hak.Domain.Fx.FxRevaluationRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5087,6 +5367,81 @@ namespace Hak.Data.Migrations
                         .HasConstraintName("fk_payment_acceptances_business_partners_partner_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDelivery", b =>
+                {
+                    b.HasOne("Hak.Domain.Cycles.SalesDispatchOrder", null)
+                        .WithMany()
+                        .HasForeignKey("DispatchOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_deliveries_sales_dispatch_orders_dispatch_order_id");
+
+                    b.HasOne("Hak.Domain.Inventory.StockDocument", null)
+                        .WithMany()
+                        .HasForeignKey("StockDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_deliveries_stock_documents_stock_document_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDeliveryLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Cycles.SalesDelivery", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("DeliveryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_delivery_lines_sales_deliveries_delivery_id");
+
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_delivery_lines_items_item_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDispatchLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Cycles.SalesDispatchOrder", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("DispatchOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_dispatch_lines_sales_dispatch_orders_dispatch_order_id");
+
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_dispatch_lines_items_item_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDispatchOrder", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.TradeOrder", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_dispatch_orders_trade_orders_order_id");
+
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_dispatch_orders_business_partners_partner_id");
+
+                    b.HasOne("Hak.Domain.Inventory.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sales_dispatch_orders_warehouses_warehouse_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Inventory.CostingPolicy", b =>
                 {
                     b.HasOne("Hak.Domain.Inventory.Warehouse", null)
@@ -5736,6 +6091,16 @@ namespace Hak.Data.Migrations
                 });
 
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDelivery", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.SalesDispatchOrder", b =>
                 {
                     b.Navigation("Lines");
                 });

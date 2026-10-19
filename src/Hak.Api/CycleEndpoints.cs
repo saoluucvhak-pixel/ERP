@@ -5,6 +5,7 @@ namespace Hak.Api;
 
 public sealed record AcceptPaymentRequest(string? Note);
 public sealed record CreatePaymentOrderRequest(Guid BankAccountId);
+public sealed record DeliveryInvoiceRequest(string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate);
 
 /// <summary>Bàn giao giữa các chu trình (docs/10). Hiện có: Cung ứng → Thanh toán.</summary>
 public static class CycleEndpoints
@@ -29,6 +30,43 @@ public static class CycleEndpoints
         // Doanh thu: kiểm tra tín dụng và tồn kho khi nhận đơn bán. Cung ứng: danh mục cần đặt hàng từ tồn tối thiểu.
         api.MapGet("/revenue/orders/{id:guid}/check", async (HttpContext http, Guid id, SalesOrderCheckService s) => Results.Ok(await s.CheckAsync(await http.SessionAsync(), id)));
         api.MapGet("/procurement/reorder-list", async (HttpContext http, ReorderService s) => Results.Ok(await s.ListAsync(await http.SessionAsync())));
+
+        // Doanh thu (tệp phân tích ERP, mục V.1): lệnh bán hàng → phiếu giao hàng → hóa đơn bán → thu tiền.
+        api.MapGet("/revenue/dispatch-orders", async (HttpContext http, Guid? orderId, bool? includeCancelled, SalesDispatchService s) =>
+            Results.Ok(await s.ListAsync(await http.SessionAsync(), orderId, includeCancelled ?? false)));
+        api.MapPost("/revenue/dispatch-orders", async (HttpContext http, DispatchInput r, SalesDispatchService s) =>
+        {
+            var d = await s.CreateDispatchAsync(await http.SessionAsync(), r);
+            return Results.Ok(new { d.Id, d.Number, status = d.Status.ToString() });
+        });
+        api.MapPost("/revenue/dispatch-orders/{id:guid}/issue", async (HttpContext http, Guid id, SalesDispatchService s) =>
+        {
+            var d = await s.IssueAsync(await http.SessionAsync(), id);
+            return Results.Ok(new { d.Id, d.Number, status = d.Status.ToString() });
+        });
+        api.MapPost("/revenue/dispatch-orders/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, SalesDispatchService s) =>
+        {
+            var d = await s.CancelDispatchAsync(await http.SessionAsync(), id, r.Reason);
+            return Results.Ok(new { d.Id, d.Number, status = d.Status.ToString() });
+        });
+        api.MapPost("/revenue/deliveries", async (HttpContext http, DeliveryInput r, SalesDispatchService s) =>
+        {
+            var d = await s.CreateDeliveryAsync(await http.SessionAsync(), r);
+            return Results.Ok(new { d.Id, d.Number, d.StockDocumentId });
+        });
+        api.MapPost("/revenue/deliveries/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, SalesDispatchService s) =>
+        {
+            var d = await s.CancelDeliveryAsync(await http.SessionAsync(), id, r.Reason);
+            return Results.Ok(new { d.Id, d.Number });
+        });
+        api.MapPost("/revenue/deliveries/{id:guid}/invoice", async (HttpContext http, Guid id, DeliveryInvoiceRequest r, SalesDispatchService s) =>
+        {
+            var inv = await s.CreateInvoiceAsync(await http.SessionAsync(), id, r.InvoiceSeries, r.InvoiceNo, r.InvoiceDate);
+            return Results.Ok(new { inv.Id, inv.Number, status = inv.Status.ToString(), inv.DueDate });
+        });
+        api.MapGet("/revenue/receivable-queue", async (HttpContext http, DateOnly asOf, SalesReportService s) => Results.Ok(await s.ReceivableQueueAsync(await http.SessionAsync(), asOf)));
+        api.MapGet("/revenue/sales-analysis", async (HttpContext http, DateOnly from, DateOnly to, SalesReportService s) => Results.Ok(await s.AnalyseAsync(await http.SessionAsync(), from, to)));
+        api.MapGet("/revenue/collections", async (HttpContext http, DateOnly from, DateOnly to, SalesReportService s) => Results.Ok(await s.CollectionsAsync(await http.SessionAsync(), from, to)));
 
         // Thanh toán: hộp thư nhận bàn giao.
         api.MapGet("/payment/inbox", async (HttpContext http, bool? includeClosed, PaymentAcceptanceService s) =>

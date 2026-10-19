@@ -13,6 +13,7 @@ import { LoansView } from './Loans'
 import { OrdersView } from './Orders'
 import { PayrollView } from './Payroll'
 import { ProcurementView } from './Procurement'
+import { RevenueView } from './Revenue'
 import { SetupView } from './Setup'
 import { ProductionView } from './Production'
 import { ReportEngineView } from './ReportEngine'
@@ -32,6 +33,7 @@ const SCREENS = [
   { key: 'arap', label: 'Công nợ', el: () => <ReceivablesView /> },
   { key: 'orders', label: 'Đơn hàng', el: () => <OrdersView /> },
   { key: 'procurement', label: 'Mua hàng → Thanh toán', el: () => <ProcurementView /> },
+  { key: 'revenue', label: 'Bán hàng → Thu tiền', el: () => <RevenueView /> },
   { key: 'trade', label: 'Mua / Bán', el: () => <TradeView /> },
   { key: 'stock', label: 'Kho', el: () => <InventoryView /> },
   { key: 'production', label: 'Giá thành', el: () => <ProductionView /> },

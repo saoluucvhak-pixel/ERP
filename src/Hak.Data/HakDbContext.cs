@@ -57,6 +57,10 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<ClosingStep> ClosingSteps => Set<ClosingStep>();
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentAcceptance> PaymentAcceptances => Set<PaymentAcceptance>();
+    public DbSet<SalesDispatchOrder> SalesDispatchOrders => Set<SalesDispatchOrder>();
+    public DbSet<SalesDispatchLine> SalesDispatchLines => Set<SalesDispatchLine>();
+    public DbSet<SalesDelivery> SalesDeliveries => Set<SalesDelivery>();
+    public DbSet<SalesDeliveryLine> SalesDeliveryLines => Set<SalesDeliveryLine>();
     public DbSet<BankStatement> BankStatements => Set<BankStatement>();
     public DbSet<BankStatementLine> BankStatementLines => Set<BankStatementLine>();
     public DbSet<ReconciliationMatch> ReconciliationMatches => Set<ReconciliationMatch>();
@@ -409,6 +413,38 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.Property(x => x.RowVersion).IsConcurrencyToken();
             e.ToTable(t => t.HasCheckConstraint("ck_payment_orders_amount", "amount > 0"));
         });
+        b.Entity<SalesDispatchOrder>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.OrderId });
+            e.HasOne<TradeOrder>().WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.DispatchOrderId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<SalesDispatchLine>(e =>
+        {
+            e.HasIndex(x => new { x.DispatchOrderId, x.LineNo }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_sales_dispatch_lines_qty", "quantity > 0"));
+        });
+        b.Entity<SalesDelivery>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.DispatchOrderId });
+            e.HasIndex(x => new { x.CompanyId, x.StockDocumentId });
+            e.HasOne<SalesDispatchOrder>().WithMany().HasForeignKey(x => x.DispatchOrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<StockDocument>().WithMany().HasForeignKey(x => x.StockDocumentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.DeliveryId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<SalesDeliveryLine>(e =>
+        {
+            e.HasIndex(x => new { x.DeliveryId, x.LineNo }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_sales_delivery_lines_qty", "quantity > 0"));
+        });
         b.Entity<PaymentAcceptance>(e =>
         {
             // One active acceptance per invoice is enforced by the service inside the single-writer transaction.
@@ -598,6 +634,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<SettlementAllocation>().Property(x => x.ForeignAmount).HasConversion(moneyNullable);
         b.Entity<PaymentOrder>().Property(x => x.Amount).HasConversion(money);
         b.Entity<PaymentAcceptance>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<SalesDispatchLine>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<SalesDeliveryLine>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<BusinessPartner>().Property(x => x.CreditLimit).HasConversion(moneyNullable);
         b.Entity<Item>().Property(x => x.SalePrice).HasConversion(moneyNullable);
         b.Entity<Item>().Property(x => x.DefaultVatRate).HasConversion(moneyNullable);
