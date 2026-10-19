@@ -4,6 +4,21 @@ import { ApiError, get, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
 
+/**
+ * Thanh trạng thái của chứng từ (kiểu Odoo): các bước theo thứ tự, bước hiện tại tô đậm, các bước đã qua đánh dấu; trạng thái dừng ngoài luồng
+ * (đã đảo, đã hủy) hiện thành một bước đỏ ở cuối. Nút hành động của luồng (gửi duyệt, duyệt, ghi sổ…) đặt ở bên phải qua children.
+ */
+export function StatusBar({ steps, current, stopped, children }: { steps: { key: string; label: string }[]; current: string; stopped?: Record<string, string>; children?: ReactNode }) {
+  const idx = steps.findIndex(s => s.key === current)
+  return (
+    <div className="statusbar" role="group" aria-label="Trạng thái chứng từ">
+      {steps.map((s, i) => <span key={s.key} className={`step${stopped?.[current] ? (i < steps.length ? ' done' : '') : i < idx ? ' done' : i === idx ? ' current' : ''}`} aria-current={i === idx ? 'step' : undefined}>{s.label}</span>)}
+      {stopped?.[current] && <span className="step stopped" aria-current="step">{stopped[current]}</span>}
+      {children && <span className="actions">{children}</span>}
+    </div>
+  )
+}
+
 export interface FlowStep { label: string; journal: boolean; screen?: string; note?: string; count?: string | null }
 
 /** Dải các khâu của một chu trình (tệp phân tích ERP, mục V): khâu nào ghi Nhật ký, bấm để sang màn hình của khâu, số chứng từ đang chờ ở khâu. */

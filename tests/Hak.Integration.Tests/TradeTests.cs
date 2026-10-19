@@ -637,6 +637,25 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task HomeWorkQueue_CountsWaitingWorkPerScreen()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        var home = new Hak.Application.Cycles.HomeService(s.Db, s.PaymentAcceptances, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement),
+            new Hak.Application.Cycles.PayrollPaymentService(s.Db, s.Settlement, s.PaymentOrders, s.Audit), new Hak.Application.Cycles.ReorderService(s.Db), h.Clock);
+        Assert.Empty(await home.WorkQueueAsync(h.Auditor));
+
+        await DraftReceiptAsync(fx, 10, D(3, 2));                                           // 1 phiếu kho nháp
+        await s.Stock.UpdateItemCommercialAsync(h.Admin, fx.Add, null, null, 50, 200);     // PHU dưới tồn tối thiểu
+        await Orders(fx).CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, 2), "Đơn bán", [new OrderLineInput(fx.Dam, 1, 1000)]));
+        var q = (await home.WorkQueueAsync(h.Auditor)).ToDictionary(w => w.Screen);
+        Assert.Equal(1, q["stock"].Count);
+        Assert.Equal(1, q["orders"].Count);
+        Assert.Equal(1, q["procurement"].Count);
+        Assert.Contains("dưới tồn tối thiểu", q["procurement"].Hint);
+    }
+
+    [Fact]
     public async Task RevenueCycle_Order_Dispatch_Delivery_Invoice_Receivable_Reports()
     {
         using var fx = await SetupAsync();

@@ -51,6 +51,9 @@ public static class CycleEndpoints
         api.MapGet("/revenue/orders/{id:guid}/check", async (HttpContext http, Guid id, SalesOrderCheckService s) => Results.Ok(await s.CheckAsync(await http.SessionAsync(), id)));
         api.MapGet("/procurement/reorder-list", async (HttpContext http, ReorderService s) => Results.Ok(await s.ListAsync(await http.SessionAsync())));
 
+        // Màn hình chính: việc đang chờ theo phân hệ.
+        api.MapGet("/home/work-queue", async (HttpContext http, HomeService s) => Results.Ok(await s.WorkQueueAsync(await http.SessionAsync())));
+
         // Cung ứng: duyệt và xếp hạng nhà cung cấp; tạo đơn mua nháp từ danh mục cần đặt.
         api.MapGet("/procurement/suppliers/rating", async (HttpContext http, DateOnly fromDate, DateOnly toDate, SupplierService s) =>
             Results.Ok(await s.RatingAsync(await http.SessionAsync(), fromDate, toDate)));

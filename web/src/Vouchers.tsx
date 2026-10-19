@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
-import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { CashDocsView } from './CashDocs'
 import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES } from './voucherguards'
 import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
@@ -113,12 +113,6 @@ export function VouchersView() {
               const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
               setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')
             })}>Kiểm tra</button>
-            {v.status === 'Draft' && <button onClick={() => act('Đã gửi duyệt', () => post(`/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`))}>Gửi duyệt</button>}
-            {v.status === 'Submitted' && <button onClick={() => act('Đã duyệt', () => post(`/vouchers/${v.id}/approve?rowVersion=${v.rowVersion}`))}>Duyệt</button>}
-            {(v.status === 'Submitted' || v.status === 'Approved') && <button onClick={() => {
-              const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(`/vouchers/${v.id}/reject?rowVersion=${v.rowVersion}`, { reason }))
-            }}>Trả lại</button>}
-            {v.status === 'Approved' && <button className="primary" onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
             {v.status === 'Posted' && <button className="danger" onClick={() => {
               const reason = prompt('Lý do đảo bút toán:'); if (!reason) return
               const date = prompt('Ngày đảo (yyyy-mm-dd):', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }))
@@ -129,6 +123,14 @@ export function VouchersView() {
             {canCopyVoucher(v) && <button onClick={() => setEditing({ copyOf: v })}>Sao chép</button>}
             <button onClick={printSheet}>In chứng từ</button>
           </div>
+          <StatusBar steps={VOUCHER_STEPS} current={v.status} stopped={{ Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }}>
+              {v.status === 'Draft' && <button onClick={() => act('Đã gửi duyệt', () => post(`/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`))}>Gửi duyệt</button>}
+              {v.status === 'Submitted' && <button onClick={() => act('Đã duyệt', () => post(`/vouchers/${v.id}/approve?rowVersion=${v.rowVersion}`))}>Duyệt</button>}
+              {(v.status === 'Submitted' || v.status === 'Approved') && <button onClick={() => {
+              const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(`/vouchers/${v.id}/reject?rowVersion=${v.rowVersion}`, { reason }))
+            }}>Trả lại</button>}
+              {v.status === 'Approved' && <button className="primary" onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
+          </StatusBar>
           <LinesTable voucher={v} />
           <VoucherPrint voucher={v} />
         </div>
@@ -161,6 +163,8 @@ export function VouchersView() {
 }
 
 const PAGE = 200
+
+const VOUCHER_STEPS = [{ key: 'Draft', label: 'Nháp' }, { key: 'Submitted', label: 'Chờ duyệt' }, { key: 'Approved', label: 'Đã duyệt' }, { key: 'Posted', label: 'Đã ghi sổ' }]
 
 /** Printed voucher (internal layout — the legal forms of the accounting regime are not reproduced until verified). */
 function VoucherPrint({ voucher: v }: { voucher: Voucher }) {

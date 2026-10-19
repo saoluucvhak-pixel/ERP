@@ -6,6 +6,7 @@ import { BankingView } from './Banking'
 import { CashDocsView } from './CashDocs'
 import { CatalogView } from './Catalog'
 import { DashboardView } from './Dashboard'
+import { HomeLauncher } from './Home'
 import { ErrorBox, navStore, useAction } from './common'
 import { FxView } from './Fx'
 import { InventoryView } from './Inventory'
@@ -27,7 +28,7 @@ interface Company { id: string; code: string; name: string; roles?: string[]; pe
 
 /** Menu theo chu trình (tài liệu docs/10, tệp phân tích ERP mục IV): mỗi chu trình gồm các màn hình theo thứ tự các khâu; khâu ghi Nhật ký nêu ở từng màn. */
 const SCREENS = [
-  { key: 'home', group: '', label: 'Tổng quan', el: () => <DashboardView /> },
+  { key: 'home', group: '', label: 'Tổng quan', el: () => <><HomeLauncher screens={SCREENS} /><DashboardView /></> },
   { key: 'orders', group: 'Chu trình doanh thu', label: 'Đơn hàng (bán, mua)', el: () => <OrdersView /> },
   { key: 'revenue', group: 'Chu trình doanh thu', label: 'Bán hàng → Thu tiền', el: () => <RevenueView /> },
   { key: 'arap', group: 'Chu trình doanh thu', label: 'Công nợ phải thu / phải trả', el: () => <ReceivablesView /> },
