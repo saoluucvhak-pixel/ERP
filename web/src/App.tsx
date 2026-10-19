@@ -63,6 +63,8 @@ export default function App() {
     get<{ isSystemAdmin: boolean }>('/me').then(m => setIsSystemAdmin(m.isSystemAdmin)).catch(() => setIsSystemAdmin(false))
   }, [token])
 
+  useEffect(() => { navStore.go = key => setScreen(key as typeof screen) }, [])
+
   const logout = async () => {
     try { await post('/auth/logout') } catch { /* already expired */ }
     session.setToken(null); session.setCompany(null); setCompanyId(null); setCompanies(null); setSystemAdmin(false); setToken(null)
@@ -104,7 +106,6 @@ export default function App() {
       </div></div>
     )
   }
-  navStore.go = key => setScreen(key as typeof screen)
   const current = SCREENS.find(s => s.key === screen)!
   return (
     <div className="shell">

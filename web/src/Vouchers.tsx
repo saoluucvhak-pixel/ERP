@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { CashDocsView } from './CashDocs'
+import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES } from './voucherguards'
 import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
@@ -57,7 +58,7 @@ export function VouchersView() {
   })
   const count = (...s: string[]) => list.filter(x => checked.has(x.id) && s.includes(x.status)).length
 
-  if (editing && editing !== 'new' && !('copyOf' in editing) && CASH_TYPES.includes(editing.voucherType))
+  if (editing && editing !== 'new' && !('copyOf' in editing) && canEditAsCashDoc(editing))
     return <CashDocsView voucher={editing} onDone={() => { setEditing(null); load() }} />
   if (editing) return <VoucherForm voucher={editing === 'new' || 'copyOf' in editing ? null : editing} template={editing !== 'new' && 'copyOf' in editing ? editing.copyOf : null} onDone={() => { setEditing(null); load() }} />
 
@@ -107,7 +108,7 @@ export function VouchersView() {
             <strong>{v.number}</strong> <span className={`badge ${v.status}`}>{STATUS_VI[v.status]}</span>
             <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {v.postingDate} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
-            {v.status === 'Draft' && <button onClick={() => setEditing(v)}>Sửa</button>}
+            {v.status === 'Draft' && (!CASH_TYPES.includes(v.voucherType) || canEditAsCashDoc(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
             <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
               const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
               setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')
@@ -125,7 +126,7 @@ export function VouchersView() {
             {(v.status === 'Draft' || v.status === 'Submitted') && <button className="danger" onClick={() => {
               const reason = prompt('Lý do hủy:'); if (reason) act('Đã hủy', () => post(`/vouchers/${v.id}/cancel?rowVersion=${v.rowVersion}`, { reason }))
             }}>Hủy</button>}
-            {['GJ', 'ADJ', 'ALC', 'OPB', 'CLS', 'FXR'].includes(v.voucherType) && <button onClick={() => setEditing({ copyOf: v })}>Sao chép</button>}
+            {canCopyVoucher(v) && <button onClick={() => setEditing({ copyOf: v })}>Sao chép</button>}
             <button onClick={printSheet}>In chứng từ</button>
           </div>
           <LinesTable voucher={v} />
@@ -160,7 +161,6 @@ export function VouchersView() {
 }
 
 const PAGE = 200
-const CASH_TYPES = ['CR', 'CP', 'BR', 'BP']
 
 /** Printed voucher (internal layout — the legal forms of the accounting regime are not reproduced until verified). */
 function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
