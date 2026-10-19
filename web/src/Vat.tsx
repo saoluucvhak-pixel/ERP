@@ -198,12 +198,13 @@ function Offset() {
   const [info, setInfo] = useState('')
   const [inputs, setInputs] = useState<OffsetAccount[]>([])
   const [outputs, setOutputs] = useState<OffsetAccount[]>([])
+  const [quarterly, setQuarterly] = useState(() => { try { return localStorage.getItem('hak.vat.frequency') === 'quarter' } catch { return false } })
   const { busy, error, run } = useAction()
   const ids = (l: OffsetAccount[]) => l.map(a => a.accountId)
   useEffect(() => { run(async () => { const list = await get<Period[]>('/periods'); setPeriods(list); const open = list.filter(p => p.status === 'Open'); if (open.length) setPeriodId(open[0].id) }) }, [run])
   const view = () => run(async () => {
     setInfo('')
-    const q = new URLSearchParams({ periodId })
+    const q = new URLSearchParams({ periodId, quarterly: String(quarterly) })
     if (inputs.length) q.set('inputAccounts', ids(inputs).join(','))
     if (outputs.length) q.set('outputAccounts', ids(outputs).join(','))
     const d = await get<OffsetPreview>(`/vat/offset?${q}`)
@@ -212,19 +213,23 @@ function Offset() {
     if (!outputs.length) setOutputs(d.outputAccounts)
   })
   const make = () => run(async () => {
-    const v = await post<{ number: string }>('/vat/offset', { periodId, inputAccountIds: inputs.length ? ids(inputs) : null, outputAccountIds: outputs.length ? ids(outputs) : null })
+    const v = await post<{ number: string }>('/vat/offset', { periodId, quarterly, inputAccountIds: inputs.length ? ids(inputs) : null, outputAccountIds: outputs.length ? ids(outputs) : null })
     setInfo(`Đã tạo chứng từ nháp ${v.number}. Vào Tổng hợp → Chứng từ để gửi duyệt và ghi sổ.`)
   })
   const sorted = [...periods].sort((a, b) => (a.startDate < b.startDate ? 1 : -1))
   return (
     <section className="panel">
       <h3>Khấu trừ thuế GTGT cuối kỳ</h3>
-      <p className="muted">Số thuế được khấu trừ = phần nhỏ hơn giữa số dư thuế GTGT đầu vào và đầu ra (lũy kế đến hết kỳ, gồm thuế đầu vào chuyển từ kỳ trước).
+      <p className="muted">Chọn kỳ kê khai theo tháng hoặc theo quý (quý dương lịch; chứng từ ghi ngày cuối quý). Số thuế được khấu trừ = phần nhỏ hơn giữa số dư thuế GTGT đầu vào và đầu ra (lũy kế đến hết kỳ, gồm thuế đầu vào chuyển từ kỳ trước).
         Hạch toán: Nợ thuế GTGT đầu ra / Có thuế GTGT đầu vào. Chứng từ tạo ra là bản nháp, cần gửi duyệt và ghi sổ như mọi chứng từ; mỗi kỳ chỉ một chứng từ.</p>
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="form-row">
-        <label>Kỳ kế toán <select value={periodId} onChange={e => { setPeriodId(e.target.value); setData(null) }}>
+        <label>Kỳ kê khai <select value={quarterly ? 'quarter' : 'month'} onChange={e => {
+          const q = e.target.value === 'quarter'; setQuarterly(q); setData(null)
+          try { localStorage.setItem('hak.vat.frequency', q ? 'quarter' : 'month') } catch { /* chỉ là tùy chọn hiển thị */ }
+        }}><option value="month">Theo tháng</option><option value="quarter">Theo quý</option></select></label>
+        <label>{quarterly ? 'Quý chứa tháng' : 'Kỳ kế toán'} <select value={periodId} onChange={e => { setPeriodId(e.target.value); setData(null) }}>
           {sorted.map(p => <option key={p.id} value={p.id}>{formatDate(p.startDate).slice(3)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
         <button disabled={busy || !periodId} onClick={view}>Xem trước</button>
         <button className="primary" disabled={busy || !data || data.offsetAmount === '0'} onClick={make}>Tạo chứng từ khấu trừ</button>
