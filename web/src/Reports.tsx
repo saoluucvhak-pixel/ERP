@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { get, post, session, type OpenItem, type TrialBalanceRow } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, ExportButton, navStore, PartnerSelect, PrintSheet, printSheet, TYPE_VI, useAction, useCatalog } from './common'
 import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
 
 const firstOfMonth = () => today().slice(0, 8) + '01'
@@ -24,7 +24,7 @@ export function TrialBalanceView() {
         <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
         <label><input type="checkbox" checked={rollup} onChange={e => setRollup(e.target.checked)} /> Cộng dồn TK tổng hợp</label>
         <button className="primary" onClick={load} disabled={busy}>Xem</button>
-        <ExportButton fileName={`BCDPS_${from}_${to}`} sheet="BCĐPS" disabled={!data}
+        <ExportButton fileName={`BCDPS_${from}_${to}`} sheet="BCĐPS" title="Bảng cân đối số phát sinh" subtitle={`Từ ngày ${from.split('-').reverse().join('/')} đến ngày ${to.split('-').reverse().join('/')}`} disabled={!data}
           columns={[{ header: 'TK' }, { header: 'Tên tài khoản', width: 40 }, ...['Dư đầu Nợ', 'Dư đầu Có', 'PS Nợ', 'PS Có', 'Dư cuối Nợ', 'Dư cuối Có'].map(h => ({ header: h, numeric: true }))]}
           rows={[...lines.map(r => [r.accountCode, '  '.repeat(r.level ?? 0) + r.accountName, ...amounts(r)]),
             ...(t ? [['Cộng', '', t.totalOpeningDebit, t.totalOpeningCredit, t.totalPeriodDebit, t.totalPeriodCredit, t.totalClosingDebit, t.totalClosingCredit]] : [])]} />
@@ -37,7 +37,9 @@ export function TrialBalanceView() {
             <table className="grid">
               <thead><tr><th>TK</th><th>Tên tài khoản</th><th className="num">Dư đầu Nợ</th><th className="num">Dư đầu Có</th><th className="num">PS Nợ</th><th className="num">PS Có</th><th className="num">Dư cuối Nợ</th><th className="num">Dư cuối Có</th></tr></thead>
               <tbody>{lines.map(r => (
-                <tr key={r.accountCode + (r.isGroup ? 'g' : '')} style={r.isGroup ? { fontWeight: 600 } : undefined}><td>{r.accountCode}</td>
+                <tr key={r.accountCode + (r.isGroup ? 'g' : '')} style={{ ...(r.isGroup ? { fontWeight: 600 } : {}), cursor: r.accountId && !r.isGroup ? 'pointer' : undefined }}
+                  title={r.accountId && !r.isGroup ? 'Bấm để xem sổ chi tiết tài khoản này' : undefined}
+                  onClick={() => { if (r.accountId && !r.isGroup) { navStore.ledger = { accountId: r.accountId, from, to }; navStore.go?.('ledger') } }}><td>{r.accountCode}</td>
                   <td style={{ paddingLeft: 8 + 14 * (r.level ?? 0) }}>{r.accountName}</td>
                   {amounts(r).map((v, i) => <td key={i} className="num">{v === '0' ? '' : formatMoney(v)}</td>)}</tr>))}
               </tbody>
@@ -58,16 +60,19 @@ const signed = (v: string) => (v.startsWith('-') ? `${formatMoney(v.slice(1))} C
 
 export function AccountLedgerView() {
   const { accounts, partners } = useCatalog()
-  const [accountId, setAccountId] = useState('')
+  const jump = navStore.ledger
+  const [accountId, setAccountId] = useState(jump?.accountId ?? '')
   const [partnerId, setPartnerId] = useState('')
-  const [from, setFrom] = useState(firstOfMonth())
-  const [to, setTo] = useState(today())
+  const [from, setFrom] = useState(jump?.from ?? firstOfMonth())
+  const [to, setTo] = useState(jump?.to ?? today())
   const [data, setData] = useState<Ledger | null>(null)
   const { busy, error, run } = useAction()
   const load = () => run(async () => {
     const q = new URLSearchParams({ accountId, from, to, ...(partnerId ? { partnerId } : {}) })
     setData(await get(`/reports/account-ledger?${q}`))
   })
+  // Arrived from a trial-balance row: show that account at once, then forget the request.
+  useEffect(() => { if (navStore.ledger) { navStore.ledger = undefined; load() } }, [])
   return (
     <>
       <div className="toolbar">
@@ -77,7 +82,8 @@ export function AccountLedgerView() {
         <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
         <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" onClick={load} disabled={busy || !accountId}>Xem</button>
-        <ExportButton fileName={`So_chi_tiet_${data?.accountCode ?? ''}_${from}_${to}`} sheet={`Sổ TK ${data?.accountCode ?? ''}`} disabled={!data}
+        <ExportButton fileName={`So_chi_tiet_${data?.accountCode ?? ''}_${from}_${to}`} sheet={`Sổ TK ${data?.accountCode ?? ''}`} title={`Sổ chi tiết tài khoản ${data?.accountCode ?? ''}`}
+          subtitle={`${data?.accountName ?? ''} · từ ${from.split('-').reverse().join('/')} đến ${to.split('-').reverse().join('/')}`} disabled={!data}
           columns={[{ header: 'Ngày' }, { header: 'Số CT' }, { header: 'Loại' }, { header: 'Diễn giải', width: 40 }, { header: 'TK đối ứng' },
             { header: 'Nợ', numeric: true }, { header: 'Có', numeric: true }, { header: 'Số dư (+Nợ / −Có)', numeric: true }]}
           rows={data ? [['', '', '', 'Số dư đầu kỳ', '', '', '', data.openingBalance],
@@ -274,7 +280,7 @@ export function GeneralJournalView() {
         <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
         <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" disabled={busy} onClick={() => run(async () => setRows(await get<JournalRow[]>(`/reports/general-journal?from=${from}&to=${to}`)))}>Xem</button>
-        <ExportButton fileName={`So_nhat_ky_chung_${from}_${to}`} sheet="Nhật ký chung" disabled={!rows}
+        <ExportButton fileName={`So_nhat_ky_chung_${from}_${to}`} sheet="Nhật ký chung" title="Sổ Nhật ký chung" subtitle={`Từ ngày ${from.split('-').reverse().join('/')} đến ngày ${to.split('-').reverse().join('/')}`} disabled={!rows}
           columns={[{ header: 'Ngày' }, { header: 'Số CT' }, { header: 'Loại' }, { header: 'Diễn giải', width: 40 }, { header: 'TK' }, { header: 'Đối tượng' },
             { header: 'Nợ', numeric: true }, { header: 'Có', numeric: true }]}
           rows={(rows ?? []).map(r => [r.postingDate, r.voucherNumber, TYPE_VI[r.voucherType] ?? r.voucherType, r.description, r.accountCode, r.partnerCode, r.debit, r.credit])} />

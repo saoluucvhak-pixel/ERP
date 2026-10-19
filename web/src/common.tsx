@@ -1,14 +1,49 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ApiError, get, type Account, type Partner } from './api'
+import { ApiError, get, session, type Account, type Partner } from './api'
+import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
 
 /** "Xuất Excel" for any report table: exact decimal values, typed numeric columns. */
-export function ExportButton({ fileName, sheet, columns, rows, disabled }: { fileName: string; sheet: string; columns: Column[]; rows: Cell[][]; disabled?: boolean }) {
+export function ExportButton({ fileName, sheet, columns, rows, disabled, title, subtitle }:
+  { fileName: string; sheet: string; columns: Column[]; rows: Cell[][]; disabled?: boolean; title?: string; subtitle?: string }) {
+  const [printing, setPrinting] = useState(false)
   return <>
     <button disabled={disabled || rows.length === 0} onClick={() => downloadXlsx(fileName, sheet, columns, rows)}>Xuất Excel</button>
-    <button disabled={disabled || rows.length === 0} onClick={() => window.print()} title="In trang hiện tại (ẩn menu, nút bấm)">In</button>
+    <button disabled={disabled || rows.length === 0} onClick={() => setPrinting(true)} title="In bản chính thức: tên công ty, tiêu đề, chữ ký">In</button>
+    {printing && <TablePrint title={title ?? sheet} subtitle={subtitle ?? fileName.replace(/_/g, ' ')} columns={columns} rows={rows} onDone={() => setPrinting(false)} />}
   </>
+}
+
+/** Cross-screen jump (e.g. trial balance row → account ledger): App registers `go`, the target screen consumes `ledger` once on mount. */
+export const navStore: { go?: (screen: string) => void; ledger?: { accountId: string; from: string; to: string } } = {}
+
+export function useCompanyName() {
+  const [name, setName] = useState('')
+  useEffect(() => { get<{ id: string; name: string }[]>('/me/companies').then(cs => setName(cs.find(c => c.id === session.companyId)?.name ?? '')).catch(() => undefined) }, [])
+  return name
+}
+
+/** Any report table on paper: company, title, period line, table with repeating header, signatures. Numeric columns use Vietnamese grouping from the exact string. */
+function TablePrint({ title, subtitle, columns, rows, onDone }: { title: string; subtitle: string; columns: Column[]; rows: Cell[][]; onDone: () => void }) {
+  const company = useCompanyName()
+  useEffect(() => { const t = setTimeout(() => { printSheet(); onDone() }, 150); return () => clearTimeout(t) }, [onDone])
+  return (
+    <PrintSheet>
+      <div><b>{company}</b></div>
+      <h1>{title.toUpperCase()}</h1>
+      <div className="center">{subtitle}</div>
+      <table>
+        <thead><tr>{columns.map((c, i) => <th key={i}>{c.header}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}>{columns.map((c, j) => {
+          const v = r[j]
+          return <td key={j} className={c.numeric ? 'num' : undefined} style={{ whiteSpace: 'pre-wrap' }}>{v == null ? '' : c.numeric ? formatMoney(v) : v}</td>
+        })}</tr>)}</tbody>
+      </table>
+      <div className="signs"><div><b>Người lập biểu</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
+      <div className="foot">HAK Accounting · in lúc {new Date().toLocaleString('vi-VN')}. Mẫu in nội bộ, chưa đối chiếu mẫu sổ/báo cáo theo chế độ kế toán [CẦN XÁC MINH].</div>
+    </PrintSheet>
+  )
 }
 
 /** A document laid out for paper, outside the app shell; shown only while printSheet() prints it. */

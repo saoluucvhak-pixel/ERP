@@ -5,7 +5,7 @@ import { AssetsView } from './Assets'
 import { BankingView } from './Banking'
 import { CashDocsView } from './CashDocs'
 import { CatalogView } from './Catalog'
-import { ErrorBox, useAction } from './common'
+import { ErrorBox, navStore, useAction } from './common'
 import { FxView } from './Fx'
 import { InventoryView } from './Inventory'
 import { LoansView } from './Loans'
@@ -102,6 +102,7 @@ export default function App() {
       </div></div>
     )
   }
+  navStore.go = key => setScreen(key as typeof screen)
   const current = SCREENS.find(s => s.key === screen)!
   return (
     <div className="shell">
