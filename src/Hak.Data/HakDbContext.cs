@@ -98,6 +98,11 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<ProductionConfirmation> ProductionConfirmations => Set<ProductionConfirmation>();
     public DbSet<AssetRequest> AssetRequests => Set<AssetRequest>();
     public DbSet<AssetAssignment> AssetAssignments => Set<AssetAssignment>();
+    public DbSet<Contract> Contracts => Set<Contract>();
+    public DbSet<ContractLine> ContractLines => Set<ContractLine>();
+    public DbSet<ContractMilestone> ContractMilestones => Set<ContractMilestone>();
+    public DbSet<ContractAmendment> ContractAmendments => Set<ContractAmendment>();
+    public DbSet<ContractDocument> ContractDocuments => Set<ContractDocument>();
     public DbSet<AssetRepair> AssetRepairs => Set<AssetRepair>();
     public DbSet<AssetRepairMaterial> AssetRepairMaterials => Set<AssetRepairMaterial>();
     public DbSet<MaintenanceRequest> MaintenanceRequests => Set<MaintenanceRequest>();
@@ -587,6 +592,32 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.AssetId, x.StartDate });
             e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
         });
+        b.Entity<Contract>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(l => l.ContractId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Milestones).WithOne().HasForeignKey(m => m.ContractId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<ContractLine>(e =>
+        {
+            e.HasIndex(x => new { x.ContractId, x.ItemId }).IsUnique();
+            e.HasOne<Hak.Domain.Inventory.Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.Ignore(x => x.NetPrice); e.Ignore(x => x.CommittedAmount);
+        });
+        b.Entity<ContractAmendment>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
+            e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ContractDocument>(e =>
+        {
+            e.HasIndex(x => x.ContractId);
+            e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<TradeOrder>().HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<MaintenanceRequest>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
@@ -798,6 +829,12 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<EInvoiceRateLine>().Property(x => x.VatAmount).HasConversion(money);
         b.Entity<TaxDeclarationLine>().Property(x => x.DeclaredAmount).HasConversion(money);
         b.Entity<AssetRequest>().Property(x => x.EstimatedCost).HasConversion(money);
+        foreach (var prop in new[] { nameof(Contract.ExchangeRate), nameof(Contract.TotalAmount), nameof(Contract.TaxAmount) }) b.Entity<Contract>().Property(prop).HasConversion(money);
+        foreach (var prop in new[] { nameof(ContractLine.CommittedQty), nameof(ContractLine.UnitPrice), nameof(ContractLine.DiscountRate), nameof(ContractLine.TaxRate) }) b.Entity<ContractLine>().Property(prop).HasConversion(money);
+        b.Entity<ContractMilestone>().Property(x => x.Percentage).HasConversion(moneyNullable);
+        b.Entity<ContractMilestone>().Property(x => x.DueAmount).HasConversion(money);
+        b.Entity<ContractMilestone>().Property(x => x.PaidAmount).HasConversion(money);
+        b.Entity<ContractAmendment>().Property(x => x.ValueChange).HasConversion(money);
         b.Entity<AssetRepair>().Property(x => x.EstimatedLaborCost).HasConversion(money);
         b.Entity<AssetRepair>().Property(x => x.EstimatedMaterialCost).HasConversion(money);
         b.Entity<AssetRepair>().Property(x => x.ActualLaborCost).HasConversion(moneyNullable);

@@ -117,3 +117,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 | 19/10/2026 | 2 đơn vị tính (cố định + BDMT theo thời điểm), migration Phase8ItemAltUnit | 195 tích hợp, web 20 | docs/10 mục 9l |
 
 | 19/10/2026 | Bảo trì & sửa chữa tài sản theo CMMS (YCSC, phiếu thi công, lịch bảo trì, KPI) + Nhật ký tài sản (migration Phase8AssetMaintenance) | xem docs/10 mục 9m |
+
+| 19/10/2026 | Quản lý hợp đồng mua bán (hợp đồng, đơn kế thừa trừ lùi, phụ lục, mốc thanh toán, báo cáo; migration Phase9Contracts) | 198 tích hợp (SQLite và PostgreSQL), web 20 | docs/10 mục 9n |

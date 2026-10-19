@@ -18,7 +18,7 @@ namespace Hak.Application.Trade;
 public sealed record OrderLineInput(Guid ItemId, decimal Quantity, decimal UnitPrice, PricingBasis Basis = PricingBasis.Quantity, decimal? VatRate = null, string? Description = null);
 
 public sealed record OrderInput(InvoiceKind Kind, Guid PartnerId, DateOnly OrderDate, string Description, IReadOnlyList<OrderLineInput> Lines,
-    DateOnly? ExpectedDate = null, string? ContractNo = null, string? Currency = null, decimal OverDeliveryTolerancePercent = 0);
+    DateOnly? ExpectedDate = null, string? ContractNo = null, string? Currency = null, decimal OverDeliveryTolerancePercent = 0, Guid? ContractId = null);
 
 public sealed record OrderLineFulfilment(int LineNo, Guid ItemId, string ItemCode, decimal Ordered, PricingBasis Basis, decimal UnitPrice,
     decimal StockPosted, decimal StockDraft, decimal Bdmt, decimal Invoiced, decimal InvoicedAmount, decimal ReturnedQty, decimal ReturnedAmount, decimal Outstanding);
@@ -43,12 +43,18 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
             if (input.Kind == InvoiceKind.Purchase) RequireApprovedSupplier(partner);
             if (input.Currency is { } cur && !await db.Currencies.AnyAsync(c => c.Code == cur))
                 throw new DomainException(ErrorCodes.ValidationFailed, $"Đồng tiền {cur} chưa khai báo.");
+            string? contractNo = input.ContractNo;
+            if (input.ContractId is { } cid)
+            {
+                await ContractControl.ValidateCallOffAsync(db, ctx.CompanyId, cid, input.Kind, input.PartnerId, input.OrderDate, input.Lines);
+                contractNo = await db.Contracts.AsNoTracking().Where(c => c.Id == cid).Select(c => c.Code).FirstAsync();
+            }
             var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.OrderDate && f.EndDate >= input.OrderDate)
                      ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.OrderDate}.");
             var order = new TradeOrder
             {
-                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, PartnerId = input.PartnerId, ContractNo = input.ContractNo, OrderDate = input.OrderDate,
+                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, PartnerId = input.PartnerId, ContractNo = contractNo, ContractId = input.ContractId, OrderDate = input.OrderDate,
                 ExpectedDate = input.ExpectedDate, Currency = input.Currency, Description = input.Description.Trim(),
                 OverDeliveryTolerancePercent = input.OverDeliveryTolerancePercent, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
                 Number = await NextNumberAsync(ctx.CompanyId, fy, input.Kind == InvoiceKind.Purchase ? "DMH" : "DBH"),
@@ -81,6 +87,11 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
     public Task<TradeOrder> ConfirmAsync(SessionContext ctx, Guid id, string? creditOverrideReason = null) => TransitionAsync(ctx, id, Permissions.VoucherApprove, "confirm", async (o, company) =>
     {
         o.Confirm(ctx.UserId, clock.UtcNow, company.RequireDistinctApprover);
+        if (o.ContractId is { } cid)
+        {
+            var ls = await db.TradeOrderLines.AsNoTracking().Where(l => l.OrderId == o.Id).Select(l => new OrderLineInput(l.ItemId, l.Quantity, l.UnitPrice, l.Basis, l.VatRate, l.Description)).ToListAsync();
+            await ContractControl.ValidateCallOffAsync(db, ctx.CompanyId, cid, o.Kind, o.PartnerId, o.OrderDate, ls, o.Id);
+        }
         if (o.Kind == InvoiceKind.Purchase)
             RequireApprovedSupplier(await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == o.PartnerId));
         if (o.Kind != InvoiceKind.Sales) return;

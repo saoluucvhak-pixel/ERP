@@ -16,6 +16,7 @@ import { FxView } from './Fx'
 import { InventoryView } from './Inventory'
 import { LoansView } from './Loans'
 import { OrdersView } from './Orders'
+import { ContractsView } from './Contracts'
 import { PayrollView } from './Payroll'
 import { ProcurementView } from './Procurement'
 import { RevenueView } from './Revenue'
@@ -34,6 +35,7 @@ interface Company { id: string; code: string; name: string; roles?: string[]; pe
 const SCREENS = [
   { key: 'home', label: 'Tổng quan', el: () => <DashboardView /> },
   { key: 'cycles', label: 'Quản lý chu trình', el: () => <HomeLauncher screens={LAUNCHER} /> },
+  { key: 'contracts', label: 'Hợp đồng', el: () => <ContractsView /> },
   { key: 'orders', label: 'Đơn hàng', el: () => <OrdersView /> },
   { key: 'revenue', label: 'Bán hàng → Thu tiền', el: () => <RevenueView /> },
   { key: 'arap', label: 'Công nợ', el: () => <ReceivablesView /> },

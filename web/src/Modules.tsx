@@ -35,21 +35,21 @@ export const MODULES: AppModule[] = [
     catalogs: [{ label: 'Tài khoản ngân hàng', screen: 'setup' }, CAT_PARTNERS, CAT_SETUP],
   },
   {
-    key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'orders', 'trade', 'arap'], title: 'NGHIỆP VỤ MUA HÀNG',
+    key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'contracts', 'orders', 'trade', 'arap'], title: 'NGHIỆP VỤ MUA HÀNG',
     flow: [
-      { label: 'Cần đặt hàng', icon: '📋', screen: 'procurement' }, { label: 'Đơn mua hàng', icon: '📝', screen: 'orders' }, { label: 'Nhận hàng, kiểm nghiệm, nhập kho', icon: '📦', screen: 'procurement' },
+      { label: 'Cần đặt hàng', icon: '📋', screen: 'procurement' }, { label: 'Hợp đồng mua', icon: '📑', screen: 'contracts' }, { label: 'Đơn mua hàng', icon: '📝', screen: 'orders' }, { label: 'Nhận hàng, kiểm nghiệm, nhập kho', icon: '📦', screen: 'procurement' },
       { label: 'Hóa đơn mua', icon: '📄', screen: 'trade' }, { label: 'Chấp nhận thanh toán', icon: '✔️', screen: 'procurement' }, { label: 'Thanh toán', icon: '💸', screen: 'procurement' }, { label: 'Công nợ phải trả', icon: '🧮', screen: 'arap' },
     ],
-    reports: [{ label: 'Hàng chờ thanh toán theo ngày đáo hạn', screen: 'procurement' }, { label: 'Công nợ phải trả nhà cung cấp', screen: 'arap' }, { label: 'Xếp hạng nhà cung cấp', screen: 'procurement' }, { label: 'Sổ chi tiết công nợ', screen: 'ledger' }],
+    reports: [{ label: 'Tiến độ, lịch thanh toán, chênh lệch giá hợp đồng', screen: 'contracts' }, { label: 'Hàng chờ thanh toán theo ngày đáo hạn', screen: 'procurement' }, { label: 'Công nợ phải trả nhà cung cấp', screen: 'arap' }, { label: 'Xếp hạng nhà cung cấp', screen: 'procurement' }, { label: 'Sổ chi tiết công nợ', screen: 'ledger' }],
     catalogs: [{ label: 'Nhà cung cấp', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup' }, CAT_SETUP],
   },
   {
-    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'orders', 'trade', 'arap'], title: 'NGHIỆP VỤ BÁN HÀNG',
+    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'trade', 'arap'], title: 'NGHIỆP VỤ BÁN HÀNG',
     flow: [
-      { label: 'Đơn bán, kiểm tra tín dụng', icon: '📝', screen: 'orders' }, { label: 'Lệnh bán hàng', icon: '📋', screen: 'revenue' }, { label: 'Giao hàng, xuất kho', icon: '🚚', screen: 'revenue' },
+      { label: 'Hợp đồng bán', icon: '📑', screen: 'contracts' }, { label: 'Đơn bán, kiểm tra tín dụng', icon: '📝', screen: 'orders' }, { label: 'Lệnh bán hàng', icon: '📋', screen: 'revenue' }, { label: 'Giao hàng, xuất kho', icon: '🚚', screen: 'revenue' },
       { label: 'Hóa đơn bán', icon: '📄', screen: 'trade' }, { label: 'Theo dõi phải thu', icon: '🧮', screen: 'arap' }, { label: 'Thu tiền', icon: '💵', screen: 'revenue' },
     ],
-    reports: [{ label: 'Phân tích tiêu thụ, giá vốn, lãi gộp', screen: 'revenue' }, { label: 'Thu tiền bán hàng', screen: 'revenue' }, { label: 'Thông báo nợ quá hạn', screen: 'revenue' }, { label: 'Công nợ phải thu khách hàng', screen: 'arap' }],
+    reports: [{ label: 'Tiến độ, lịch thanh toán, chênh lệch giá hợp đồng', screen: 'contracts' }, { label: 'Phân tích tiêu thụ, giá vốn, lãi gộp', screen: 'revenue' }, { label: 'Thu tiền bán hàng', screen: 'revenue' }, { label: 'Thông báo nợ quá hạn', screen: 'revenue' }, { label: 'Công nợ phải thu khách hàng', screen: 'arap' }],
     catalogs: [{ label: 'Khách hàng', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup' }, CAT_SETUP],
   },
   {

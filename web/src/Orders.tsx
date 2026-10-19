@@ -9,6 +9,8 @@ interface FulfilLine { lineNo: number; itemCode: string; ordered: string; basis:
 interface Fulfil { number: string; status: string; lines: FulfilLine[]; invoices: { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; purpose: string; total: string; settled: string; open: string }[] }
 interface SalesCheck { orderId: string; number: string; partnerName: string; creditLimit: string | null; creditCheckApplied: boolean; creditCheckNote: string | null; currentBalance: string; overdueAmount: string
   orderValue: string; balanceAfter: string; exceedsCredit: boolean; anyShortage: boolean; lines: { lineNo: number; itemCode: string; itemName: string; unit: string; ordered: string; onHand: string; shortfall: string }[] }
+interface ContractRef { id: string; code: string; name: string; kind: string; partnerId: string; expirationDate: string; status: string; expired: boolean }
+interface ContractLineRef { itemId: string; netPrice: string; remainingQty: string }
 interface LineDraft { itemId: string; qty: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string }
 
 const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Confirmed: 'Đã xác nhận', Closed: 'Đã đóng', Cancelled: 'Đã hủy' }
@@ -23,7 +25,11 @@ export function OrdersView() {
   const [lines, setLines] = useState<LineDraft[]>([{ itemId: '', qty: '', basis: 'Bdmt', price: '', vat: '' }])
   const [detail, setDetail] = useState<Fulfil | null>(null)
   const [info, setInfo] = useState('')
+  const [contracts, setContracts] = useState<ContractRef[]>([])
+  const [contractId, setContractId] = useState('')
+  const [contractLines, setContractLines] = useState<ContractLineRef[]>([])
   const { busy, error, setError, run } = useAction()
+  useEffect(() => { get<ContractRef[]>(`/contracts?kind=${kind}`).then(c => setContracts(c.filter(x => x.status === 'Active' && !x.expired))).catch(() => setContracts([])); setContractId(''); setContractLines([]) }, [kind])
   useEffect(() => { get<Item[]>('/items').then(setItems).catch(() => setItems([])) }, [])
   const load = useCallback(() => run(async () => setList(await get<Order[]>(`/orders?kind=${kind}`))), [run, kind])
   useEffect(() => { load() }, [load])
@@ -40,7 +46,7 @@ export function OrdersView() {
     if (parsed.some(l => !l.itemId || !l.q || l.p == null)) { setError(new Error('Dòng đơn hàng thiếu vật tư, số lượng hoặc đơn giá.')); return }
     const item = (id: string) => items.find(i => i.id === id)
     await post('/orders', {
-      kind, partnerId: head.partnerId, orderDate: head.orderDate, description: head.description, contractNo: head.contractNo || null,
+      kind, partnerId: head.partnerId, orderDate: head.orderDate, description: head.description, contractNo: head.contractNo || null, contractId: contractId || null,
       overDeliveryTolerancePercent: parseMoney(head.tolerance) ?? '0', currency: null, expectedDate: null,
       lines: parsed.map(l => ({ itemId: l.itemId, quantity: l.q, unitPrice: l.p, basis: item(l.itemId)?.tracksDryness ? l.basis : 'Quantity', vatRate: l.v, description: null })),
     })
@@ -63,6 +69,13 @@ export function OrdersView() {
         <div className="form-row">
           <label>{kind === 'Sales' ? 'Khách hàng' : 'Nhà cung cấp'}<PartnerSelect partners={partners} value={head.partnerId} onChange={v => setHead(h => ({ ...h, partnerId: v }))} /></label>
           <label>Số hợp đồng<input value={head.contractNo} onChange={e => setHead(h => ({ ...h, contractNo: e.target.value }))} /></label>
+          <label title="Đơn kế thừa hợp đồng: lấy giá cam kết, trừ lùi số lượng còn lại; bị chặn khi hết hạn hoặc vượt cam kết">Theo hợp đồng<select aria-label="Theo hợp đồng" value={contractId} onChange={async e => {
+            const id = e.target.value; setContractId(id)
+            const c = contracts.find(x => x.id === id)
+            if (!c) { setContractLines([]); return }
+            setHead(h => ({ ...h, partnerId: c.partnerId, contractNo: c.code }))
+            run(async () => setContractLines((await get<{ lines: ContractLineRef[] }>(`/contracts/${id}`)).lines))
+          }}><option value="">— không —</option>{contracts.map(c => <option key={c.id} value={c.id}>{c.code} – {c.name}</option>)}</select></label>
           <label>Ngày đơn<input type="date" value={head.orderDate} onChange={e => setHead(h => ({ ...h, orderDate: e.target.value }))} /></label>
           <label>Dung sai giao vượt %<input className="num" size={4} value={head.tolerance} onChange={e => setHead(h => ({ ...h, tolerance: e.target.value }))} /></label>
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>
@@ -72,7 +85,7 @@ export function OrdersView() {
           <thead><tr><th>#</th><th>Vật tư</th><th className="num">Số lượng (ĐVT chính)</th><th>Giá theo</th><th className="num">Đơn giá</th><th className="num">Thuế %</th><th /></tr></thead>
           <tbody>{lines.map((l, i) => (
             <tr key={i}><td>{i + 1}</td>
-              <td><select aria-label="Vật tư" value={l.itemId} onChange={e => upd(i, { itemId: e.target.value })}><option value="">— chọn —</option>{items.map(it => <option key={it.id} value={it.id}>{it.code} – {it.name} ({it.unit})</option>)}</select></td>
+              <td><select aria-label="Vật tư" value={l.itemId} onChange={e => { const cl = contractLines.find(c => c.itemId === e.target.value); upd(i, { itemId: e.target.value, ...(cl && !l.price ? { price: formatMoney(cl.netPrice) } : {}) }) }}><option value="">— chọn —</option>{(contractId ? items.filter(it => contractLines.length === 0 || contractLines.some(c => c.itemId === it.id)) : items).map(it => <option key={it.id} value={it.id}>{it.code} – {it.name} ({it.unit})</option>)}</select></td>
               <td><input className="num" aria-label="Số lượng" value={l.qty} onChange={e => upd(i, { qty: e.target.value })} /></td>
               <td><select aria-label="Giá theo" value={items.find(it => it.id === l.itemId)?.tracksDryness ? l.basis : 'Quantity'} disabled={!items.find(it => it.id === l.itemId)?.tracksDryness} onChange={e => upd(i, { basis: e.target.value as LineDraft['basis'] })}><option value="Bdmt">BDMT</option><option value="Quantity">Số lượng</option></select></td>
               <td><input className="num" aria-label="Đơn giá" value={l.price} onChange={e => upd(i, { price: e.target.value })} /></td>

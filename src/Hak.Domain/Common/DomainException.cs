@@ -30,6 +30,8 @@ public static class ErrorCodes
     public const string DuplicateSource = "DUPLICATE_SOURCE";
     public const string CreditLimitExceeded = "CREDIT_LIMIT_EXCEEDED";
     public const string SupplierNotApproved = "SUPPLIER_NOT_APPROVED";
+    public const string ContractExpired = "CONTRACT_EXPIRED";
+    public const string ContractLimitExceeded = "CONTRACT_LIMIT_EXCEEDED";
     public const string PaymentMatchFailed = "PAYMENT_MATCH_FAILED";
     public const string ConcurrencyConflict = "CONCURRENCY_CONFLICT";
     public const string Forbidden = "FORBIDDEN";
