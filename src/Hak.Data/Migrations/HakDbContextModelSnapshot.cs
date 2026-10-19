@@ -802,6 +802,22 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
+                    b.Property<DateTime?>("SupplierDecidedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("supplier_decided_at");
+
+                    b.Property<Guid?>("SupplierDecidedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("supplier_decided_by");
+
+                    b.Property<int>("SupplierStatus")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("supplier_status");
+
+                    b.Property<string>("SupplierStatusReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("supplier_status_reason");
+
                     b.Property<string>("TaxCode")
                         .HasColumnType("TEXT")
                         .HasColumnName("tax_code");
@@ -2907,6 +2923,10 @@ namespace Hak.Data.Migrations
                     b.Property<bool>("RequireDistinctApprover")
                         .HasColumnType("INTEGER")
                         .HasColumnName("require_distinct_approver");
+
+                    b.Property<bool>("RequireSupplierApproval")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("require_supplier_approval");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()

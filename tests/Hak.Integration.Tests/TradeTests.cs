@@ -1,3 +1,4 @@
+using Hak.Domain.Catalog;
 using Hak.Application.Inventory;
 using Hak.Application.Trade;
 using Hak.Domain.Common;
@@ -590,6 +591,49 @@ public class TradeTests
 
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Stock.UpdateItemCommercialAsync(h.Admin, fx.Add, -1, null, null, null)));
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Stock.UpdateItemCommercialAsync(h.Auditor, fx.Add, 1, null, null, null)));
+    }
+
+    [Fact]
+    public async Task Supplier_Approval_Rating_And_DraftOrderFromReorderList()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        var suppliers = new Hak.Application.Cycles.SupplierService(s.Db, Orders(fx), s.Audit, h.Clock);
+        var inspections = new Hak.Application.Cycles.GoodsInspectionService(s.Db, s.Audit, h.Clock);
+        var reorder = new Hak.Application.Cycles.ReorderService(s.Db);
+        await s.Stock.UpdateItemCommercialAsync(h.Admin, fx.Add, 60_000, 10, 50, 200);
+
+        // Danh mục cần đặt → đơn mua Nháp (chưa có đơn nào thì chưa có giá gợi ý).
+        Assert.Null(Assert.Single(await reorder.ListAsync(h.Auditor)).LastPrice);
+        var draft = await suppliers.CreateOrderFromReorderAsync(h.Preparer, h.Partner["NCC01"], [new(fx.Add, 200, 55_000)], D(3, 10));
+        Assert.Equal((OrderStatus.Draft, InvoiceKind.Purchase), (draft.Status, draft.Kind));
+        var hint = Assert.Single(await reorder.ListAsync(h.Auditor));
+        Assert.Equal((55_000m, h.Partner["NCC01"]), (hint.LastPrice, hint.LastPartnerId));
+        Assert.Equal(ErrorCodes.VoucherNoLines, await CodeOf(() => suppliers.CreateOrderFromReorderAsync(h.Preparer, h.Partner["NCC01"], [])));
+
+        // Nhập đúng hạn 200 kg theo đơn, kiểm nghiệm đạt 180 → tỷ lệ đạt 90%, giao đúng hạn 100% → điểm 94 hạng A.
+        await Orders(fx).ConfirmAsync(h.Approver, draft.Id);
+        var receipt = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 8), D(3, 8), "Nhập theo đơn",
+            [new StockLineInput(fx.Add, 200, 11_000_000, fx.A("GRNI"), OrderId: draft.Id, OrderLineNo: 1)], PartnerId: h.Partner["NCC01"]));
+        await s.Stock.PostDocumentAsync(h.Approver, receipt.Id);
+        await inspections.CreateAsync(h.Preparer, new Hak.Application.Cycles.InspectionInput(receipt.Id, D(3, 8), "Thủ kho", null, [new(1, 180)]));
+        var row = Assert.Single(await suppliers.RatingAsync(h.Auditor, D(3, 1), D(3, 31)), r => r.Code == "NCC01");
+        Assert.Equal((1, 90m, 1, 100m, 94, "A"), (row.Receipts, row.AcceptRate, row.OnTimeReceipts, row.OnTimeRate, row.Score, row.Grade));
+        Assert.Equal(11_000_000m, row.PurchaseAmount);
+
+        // Công ty bật duyệt nhà cung cấp: NCC mới chờ duyệt, chưa đặt hàng được; người tạo không tự duyệt; chặn cần lý do.
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => suppliers.SetApprovalPolicyAsync(h.Auditor, true)));
+        await suppliers.SetApprovalPolicyAsync(h.Admin, true);
+        var ncc2 = (await s.Setup.CreatePartnerAsync(h.Admin, "NCC02", "Nhà cung cấp 2", PartnerRoles.Supplier)).Id;
+        var kh = (await s.Setup.CreatePartnerAsync(h.Admin, "KH09", "Khách 9", PartnerRoles.Customer)).Id;
+        Assert.Equal(ErrorCodes.SupplierNotApproved, await CodeOf(() => suppliers.CreateOrderFromReorderAsync(h.Preparer, ncc2, [new(fx.Add, 10, 1)])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => suppliers.SetStatusAsync(h.Admin, kh, SupplierStatus.Blocked, "x")));   // khách hàng không phải NCC
+        await suppliers.SetStatusAsync(h.Approver, ncc2, SupplierStatus.Approved, null);
+        await suppliers.CreateOrderFromReorderAsync(h.Preparer, ncc2, [new(fx.Add, 10, 1)]);
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => suppliers.SetStatusAsync(h.Admin, ncc2, SupplierStatus.Blocked, " ")));
+        await suppliers.SetStatusAsync(h.Admin, ncc2, SupplierStatus.Blocked, "Giao hàng kém chất lượng");
+        Assert.Equal(ErrorCodes.SupplierNotApproved, await CodeOf(() => suppliers.CreateOrderFromReorderAsync(h.Preparer, ncc2, [new(fx.Add, 10, 1)])));
+        Assert.Contains(await suppliers.RatingAsync(h.Auditor, D(3, 1), D(3, 31)), r => r.Code == "NCC02" && r.Status == SupplierStatus.Blocked && r.Score == null);
     }
 
     [Fact]

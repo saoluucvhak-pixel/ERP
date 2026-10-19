@@ -131,7 +131,8 @@ public static class Endpoints
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
             return Results.Ok(await db.BusinessPartners.Where(p => p.CompanyId == ctx.CompanyId).OrderBy(p => p.Code)
-                .Select(p => new { p.Id, p.Code, p.Name, p.TaxCode, p.IsActive, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays }).ToListAsync());
+                .Select(p => new { p.Id, p.Code, p.Name, p.TaxCode, p.IsActive, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays,
+                    isSupplier = (p.Roles & PartnerRoles.Supplier) != 0, supplierStatus = p.SupplierStatus.ToString(), p.SupplierStatusReason }).ToListAsync());
         });
         api.MapPut("/partners/{id:guid}/commercial", async (HttpContext http, Guid id, PartnerCommercialRequest r, SetupService s) =>
         { await s.UpdatePartnerCommercialAsync(await http.SessionAsync(), id, r.Address, r.Phone, r.Email, r.CreditLimit, r.PaymentTermsDays); return Results.NoContent(); });

@@ -113,6 +113,12 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 - **Thông báo nợ quá hạn** (`SalesReportService.OverdueNoticesAsync`, `GET /api/cycles/revenue/overdue`, tệp mục V.1.1.2.9): nợ quá hạn theo khách hàng (hóa đơn, hạn, số ngày quá hạn, còn nợ), khách nợ lâu nhất trước; in thông báo gửi khách có địa chỉ, điện thoại, tổng bằng chữ, chỗ ký. Hiện ở màn Bán hàng → Thu tiền.
 - Không có migration mới. Test: 1 test tích hợp (184 → 185); thử tay trên trình duyệt.
 
+## 9f. Đã làm đợt 6 (19/10/2026): nhà cung cấp và đặt hàng từ danh mục cần đặt
+- **Duyệt nhà cung cấp** (`SupplierService`, `BusinessPartner.SupplierStatus` Approved/Pending/Blocked, `Company.RequireSupplierApproval`): công ty bật chính sách thì nhà cung cấp mới tạo ở trạng thái Chờ duyệt; đơn mua (lập và xác nhận) chỉ cho nhà cung cấp Đã duyệt (`SUPPLIER_NOT_APPROVED`). Duyệt cần quyền duyệt chứng từ và người duyệt khác người tạo; chặn / đưa về chờ duyệt cần quyền danh mục và lý do. Mọi thay đổi vào nhật ký kiểm toán.
+- **Xếp hạng uy tín** (`GET /api/cycles/procurement/suppliers/rating`): tính khi xem từ phiếu nhập đã ghi sổ trong kỳ, biên bản kiểm nghiệm và hạn giao của đơn mua, không lưu. Điểm = 60% tỷ lệ hàng đạt kiểm nghiệm + 40% tỷ lệ phiếu nhập đúng hạn (có một chỉ tiêu thì lấy chỉ tiêu đó); hạng A ≥ 90, B ≥ 75, còn lại C. Trọng số và ngưỡng là đề xuất của em, chưa được chị xác nhận.
+- **Đơn mua nháp từ danh mục cần đặt** (`POST /api/cycles/procurement/reorder-list/create-order`): chọn dòng, nhà cung cấp, số lượng và đơn giá (gợi ý theo đơn mua gần nhất bằng VND, tính theo số lượng) → đơn mua Nháp, người khác xác nhận như thường.
+- Màn Mua hàng → Thanh toán có thêm bảng nhà cung cấp (trạng thái, điểm, hạng, nút duyệt / chặn) và chọn dòng để tạo đơn nháp. Migration `Phase7SupplierApproval` (SQLite + PostgreSQL). 1 test tích hợp (185 → 186). Chưa thử tay trên trình duyệt.
+
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
 |---|---|---|
@@ -130,7 +136,7 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): giá vốn theo mặt hàng trong phân tích tiêu thụ; biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
-**Chu trình cung ứng** (mục 3): nút tạo đơn mua nháp từ danh mục cần đặt hàng; xếp hạng uy tín và phê duyệt nhà cung cấp mới (đề xuất: điểm tính từ tỷ lệ đạt kiểm nghiệm + cờ chờ duyệt, bật theo công ty); chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).
+**Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).
 **Thanh toán / tài chính**: lệnh thanh toán lương (`PAYROLL_PAYMENT`), thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
 **Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm).
 **Nền**: chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.

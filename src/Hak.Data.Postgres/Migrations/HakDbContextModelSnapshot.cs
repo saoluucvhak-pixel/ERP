@@ -817,6 +817,22 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
+                    b.Property<DateTime?>("SupplierDecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("supplier_decided_at");
+
+                    b.Property<Guid?>("SupplierDecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("supplier_decided_by");
+
+                    b.Property<int>("SupplierStatus")
+                        .HasColumnType("integer")
+                        .HasColumnName("supplier_status");
+
+                    b.Property<string>("SupplierStatusReason")
+                        .HasColumnType("text")
+                        .HasColumnName("supplier_status_reason");
+
                     b.Property<string>("TaxCode")
                         .HasColumnType("text")
                         .HasColumnName("tax_code");
@@ -2946,6 +2962,10 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<bool>("RequireDistinctApprover")
                         .HasColumnType("boolean")
                         .HasColumnName("require_distinct_approver");
+
+                    b.Property<bool>("RequireSupplierApproval")
+                        .HasColumnType("boolean")
+                        .HasColumnName("require_supplier_approval");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()

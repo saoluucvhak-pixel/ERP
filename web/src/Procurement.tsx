@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError, get, post } from './api'
+import { ApiError, get, post, put } from './api'
 import { AccountSelect, ErrorBox, ExportButton, navStore, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
 import { addMoney, formatMoney, parseMoney, today } from './money'
 
@@ -8,7 +8,10 @@ interface QueueRow { invoiceId: string; number: string; invoiceSeries: string; i
 interface InspLine { stockLineNo: number; itemCode: string; itemName: string; unit: string; receivedQty: string; acceptedQty: string; rejectedQty: string; note: string | null }
 interface Inspection { id: string; number: string; inspectionDate: string; inspector: string; conclusion: string | null; lines: InspLine[] }
 interface ReceiptRow { stockDocumentId: string; stockNumber: string; documentDate: string; status: string; partnerName: string; description: string; totalQty: string; inspection: Inspection | null }
-interface ReorderRow { itemId: string; code: string; name: string; unit: string; onHand: string; minStock: string; suggestedQty: string }
+interface ReorderRow { itemId: string; code: string; name: string; unit: string; onHand: string; minStock: string; suggestedQty: string; lastPrice: string | null; lastPartnerId: string | null }
+interface SupplierRow { id: string; code: string; name: string; isActive: boolean; isSupplier: boolean; supplierStatus: 'Approved' | 'Pending' | 'Blocked'; supplierStatusReason: string | null }
+interface RatingRow { partnerId: string; receipts: number; purchaseAmount: string; acceptRate: string | null; onTimeRate: string | null; score: number | null; grade: string | null }
+const SUPPLIER_VI = { Approved: 'Đã duyệt', Pending: 'Chờ duyệt', Blocked: 'Bị chặn' } as const
 interface InboxRow { acceptanceId: string; invoiceNumber: string; invoiceSeries: string; invoiceNo: string; partnerName: string; amount: string; open: string; dueDate: string | null; stage: string
   paymentOrderNumber: string | null; acceptedAt: string; note: string | null; closeReason: string | null }
 
@@ -35,6 +38,11 @@ export function ProcurementView() {
   const [inbox, setInbox] = useState<InboxRow[]>([])
   const [reorder, setReorder] = useState<ReorderRow[]>([])
   const [receipts, setReceipts] = useState<ReceiptRow[]>([])
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([])
+  const [rating, setRating] = useState<Record<string, RatingRow>>({})
+  const [policy, setPolicy] = useState(false)
+  const [pick, setPick] = useState<Record<string, { qty: string; price: string }>>({})
+  const [orderSupplier, setOrderSupplier] = useState('')
   const [inspecting, setInspecting] = useState<{ r: ReceiptRow; inspector: string; conclusion: string; accepted: Record<number, string> } | null>(null)
   const [printBb, setPrintBb] = useState<{ r: ReceiptRow; bb: Inspection } | null>(null)
   const company = useCompanyName()
@@ -48,6 +56,10 @@ export function ProcurementView() {
     setInbox(await get<InboxRow[]>('/cycles/payment/inbox'))
     setReorder(await get<ReorderRow[]>('/cycles/procurement/reorder-list'))
     setReceipts(await get<ReceiptRow[]>('/cycles/procurement/receipts'))
+    setSuppliers((await get<SupplierRow[]>('/partners')).filter(p => p.isSupplier && p.isActive))
+    setPolicy((await get<{ require: boolean }>('/cycles/procurement/suppliers/policy')).require)
+    const rows = await get<RatingRow[]>(`/cycles/procurement/suppliers/rating?fromDate=${asOf.slice(0, 4)}-01-01&toDate=${asOf}`)
+    setRating(Object.fromEntries(rows.map(r => [r.partnerId, r])))
   }), [run, asOf])
   useEffect(() => { load() }, [load])
 
@@ -113,9 +125,46 @@ export function ProcurementView() {
         <strong>Danh mục cần đặt hàng</strong>
         <span className="muted"> · vật tư có tồn hiện tại thấp hơn tồn tối thiểu (khai báo ở Thiết lập → Vật tư); số lượng đề xuất = số lượng đặt tối ưu</span>
         <table className="grid">
-          <thead><tr><th>Vật tư</th><th>ĐVT</th><th className="num">Tồn hiện tại</th><th className="num">Tồn tối thiểu</th><th className="num">Đề xuất đặt</th></tr></thead>
-          <tbody>{reorder.map(r => <tr key={r.itemId}><td>{r.code} – {r.name}</td><td>{r.unit}</td><td className="num" style={{ color: 'var(--danger)' }}>{formatMoney(r.onHand)}</td><td className="num">{formatMoney(r.minStock)}</td><td className="num">{formatMoney(r.suggestedQty)}</td></tr>)}
-            {reorder.length === 0 && <tr><td colSpan={5} className="muted">Không có vật tư nào dưới tồn tối thiểu (hoặc chưa khai báo tồn tối thiểu).</td></tr>}</tbody>
+          <thead><tr><th>Vật tư</th><th>ĐVT</th><th className="num">Tồn hiện tại</th><th className="num">Tồn tối thiểu</th><th className="num">Đề xuất đặt</th><th className="num">SL đặt</th><th className="num">Đơn giá (gợi ý theo đơn gần nhất)</th></tr></thead>
+          <tbody>{reorder.map(r => {
+            const p = pick[r.itemId]
+            return <tr key={r.itemId}><td><input type="checkbox" aria-label={`Chọn ${r.code}`} checked={!!p} onChange={e => setPick(v => { const n = { ...v }; if (e.target.checked) { n[r.itemId] = { qty: r.suggestedQty, price: r.lastPrice ?? '' }; if (!orderSupplier && r.lastPartnerId) setOrderSupplier(r.lastPartnerId) } else delete n[r.itemId]; return n })} /> {r.code} – {r.name}</td><td>{r.unit}</td><td className="num" style={{ color: 'var(--danger)' }}>{formatMoney(r.onHand)}</td><td className="num">{formatMoney(r.minStock)}</td><td className="num">{formatMoney(r.suggestedQty)}</td>
+              <td className="num">{p ? <input aria-label={`Số lượng ${r.code}`} style={{ width: 90, textAlign: 'right' }} value={p.qty} onChange={e => setPick(v => ({ ...v, [r.itemId]: { ...p, qty: e.target.value } }))} /> : null}</td>
+              <td className="num">{p ? <input aria-label={`Đơn giá ${r.code}`} style={{ width: 110, textAlign: 'right' }} value={p.price} onChange={e => setPick(v => ({ ...v, [r.itemId]: { ...p, price: e.target.value } }))} /> : null}</td></tr>
+          })}
+            {reorder.length === 0 && <tr><td colSpan={7} className="muted">Không có vật tư nào dưới tồn tối thiểu (hoặc chưa khai báo tồn tối thiểu).</td></tr>}</tbody>
+        </table>
+        {Object.keys(pick).length > 0 && <div className="toolbar">
+          <select aria-label="Nhà cung cấp đặt hàng" value={orderSupplier} onChange={e => setOrderSupplier(e.target.value)}>
+            <option value="">— Chọn nhà cung cấp —</option>
+            {suppliers.map(p => <option key={p.id} value={p.id} disabled={p.supplierStatus !== 'Approved'}>{p.code} – {p.name}{p.supplierStatus !== 'Approved' ? ` (${SUPPLIER_VI[p.supplierStatus]})` : ''}</option>)}
+          </select>
+          <button className="primary" disabled={busy || !orderSupplier} onClick={() => run(async () => {
+            const lines = Object.entries(pick).map(([itemId, v]) => ({ itemId, quantity: parseMoney(v.qty), unitPrice: parseMoney(v.price || '0') }))
+            if (lines.some(l => l.quantity == null || l.unitPrice == null)) throw new Error('Số lượng hoặc đơn giá không hợp lệ.')
+            const o = await post<{ number: string }>('/cycles/procurement/reorder-list/create-order', { partnerId: orderSupplier, lines })
+            setPick({}); setInfo(`Đã tạo đơn mua nháp ${o.number}; người khác xác nhận ở màn Đơn hàng.`); await load()
+          })}>Tạo đơn mua nháp từ các dòng đã chọn</button></div>}
+      </div>
+
+      <div className="panel">
+        <strong>Nhà cung cấp: duyệt và xếp hạng uy tín</strong>
+        <span className="muted"> · điểm = 60% tỷ lệ hàng đạt kiểm nghiệm + 40% giao đúng hạn (từ đầu năm); A ≥ 90, B ≥ 75, còn lại C</span>
+        <label className="muted" style={{ display: 'block', margin: '6px 0' }}>
+          <input type="checkbox" checked={policy} disabled={busy} onChange={e => act('Đã cập nhật chính sách duyệt nhà cung cấp.', () => put('/cycles/procurement/suppliers/policy', { require: e.target.checked }))} /> Nhà cung cấp mới phải được duyệt trước khi đặt hàng
+        </label>
+        <table className="grid">
+          <thead><tr><th>Nhà cung cấp</th><th>Trạng thái</th><th className="num">Phiếu nhập</th><th className="num">Giá trị nhập</th><th className="num">Đạt kiểm nghiệm</th><th className="num">Đúng hạn</th><th className="num">Điểm</th><th>Hạng</th><th></th></tr></thead>
+          <tbody>{suppliers.map(p => { const r = rating[p.id]; return <tr key={p.id}>
+            <td>{p.code} – {p.name}</td>
+            <td title={p.supplierStatusReason ?? ''} style={{ color: p.supplierStatus === 'Approved' ? undefined : 'var(--danger)' }}>{SUPPLIER_VI[p.supplierStatus]}</td>
+            <td className="num">{r?.receipts ?? 0}</td><td className="num">{formatMoney(r?.purchaseAmount ?? '0')}</td>
+            <td className="num">{r?.acceptRate != null ? `${r.acceptRate}%` : '—'}</td><td className="num">{r?.onTimeRate != null ? `${r.onTimeRate}%` : '—'}</td>
+            <td className="num">{r?.score ?? '—'}</td><td>{r?.grade ?? '—'}</td>
+            <td>{p.supplierStatus !== 'Approved' && <button disabled={busy} onClick={() => act(`Đã duyệt ${p.code}.`, () => put(`/cycles/procurement/suppliers/${p.id}/status`, { status: 'Approved' }))}>Duyệt</button>}
+              {p.supplierStatus !== 'Blocked' && <button disabled={busy} onClick={() => { const reason = ask('Lý do chặn nhà cung cấp:'); if (reason) act(`Đã chặn ${p.code}.`, () => put(`/cycles/procurement/suppliers/${p.id}/status`, { status: 'Blocked', reason })) }}>Chặn</button>}
+              {p.supplierStatus === 'Approved' && <button disabled={busy} onClick={() => { const reason = ask('Lý do đưa về chờ duyệt:'); if (reason) act(`Đã đưa ${p.code} về chờ duyệt.`, () => put(`/cycles/procurement/suppliers/${p.id}/status`, { status: 'Pending', reason })) }}>Chờ duyệt</button>}</td></tr> })}
+            {suppliers.length === 0 && <tr><td colSpan={9} className="muted">Chưa có nhà cung cấp.</td></tr>}</tbody>
         </table>
       </div>
 

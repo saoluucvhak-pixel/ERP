@@ -4,6 +4,7 @@ using Hak.Application.Cycles;
 using Hak.Application.Settlement;
 using Hak.Application.Security;
 using Hak.Data;
+using Hak.Domain.Catalog;
 using Hak.Domain.Common;
 using Hak.Domain.Inventory;
 using Hak.Domain.Organization;
@@ -37,8 +38,9 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         if (input.OverDeliveryTolerancePercent is < 0 or > 100) throw new DomainException(ErrorCodes.ValidationFailed, "Dung sai giao vượt từ 0 đến 100%.");
         return await db.InTransactionAsync(async () =>
         {
-            if (!await db.BusinessPartners.AnyAsync(p => p.Id == input.PartnerId && p.CompanyId == ctx.CompanyId))
-                throw new DomainException(ErrorCodes.PartnerWrongCompany, "Đối tượng không thuộc công ty.");
+            var partner = await db.BusinessPartners.AsNoTracking().FirstOrDefaultAsync(p => p.Id == input.PartnerId && p.CompanyId == ctx.CompanyId)
+                          ?? throw new DomainException(ErrorCodes.PartnerWrongCompany, "Đối tượng không thuộc công ty.");
+            if (input.Kind == InvoiceKind.Purchase) RequireApprovedSupplier(partner);
             if (input.Currency is { } cur && !await db.Currencies.AnyAsync(c => c.Code == cur))
                 throw new DomainException(ErrorCodes.ValidationFailed, $"Đồng tiền {cur} chưa khai báo.");
             var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
@@ -79,6 +81,8 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
     public Task<TradeOrder> ConfirmAsync(SessionContext ctx, Guid id, string? creditOverrideReason = null) => TransitionAsync(ctx, id, Permissions.VoucherApprove, "confirm", async (o, company) =>
     {
         o.Confirm(ctx.UserId, clock.UtcNow, company.RequireDistinctApprover);
+        if (o.Kind == InvoiceKind.Purchase)
+            RequireApprovedSupplier(await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == o.PartnerId));
         if (o.Kind != InvoiceKind.Sales) return;
         var check = await new SalesOrderCheckService(db, new SettlementService(db, audit, clock), clock).ComputeAsync(ctx, o);
         if (!check.ExceedsCredit) return;
@@ -89,6 +93,13 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         await audit.AppendAsync(ctx.CompanyId, ctx, "order.credit_override", "order", o.Id.ToString(),
             new { o.Number, check.CreditLimit, check.CurrentBalance, check.OrderValue, check.BalanceAfter, reason = creditOverrideReason.Trim() });
     });
+
+    private static void RequireApprovedSupplier(BusinessPartner p)
+    {
+        if (p.SupplierStatus == SupplierStatus.Approved) return;
+        throw new DomainException(ErrorCodes.SupplierNotApproved,
+            $"Nhà cung cấp {p.Code} – {p.Name} {(p.SupplierStatus == SupplierStatus.Pending ? "đang chờ duyệt" : "đã bị chặn")}; chưa được đặt hàng.");
+    }
 
     public Task<TradeOrder> CloseAsync(SessionContext ctx, Guid id, string reason)
         => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "close", (o, _) => { o.Close(reason); return Task.CompletedTask; });

@@ -1,9 +1,13 @@
+using Hak.Domain.Catalog;
 using Hak.Application.Cycles;
 using Hak.Domain.Cycles;
 
 namespace Hak.Api;
 
 public sealed record AcceptPaymentRequest(string? Note, bool AcknowledgeMismatch = false);
+public sealed record SupplierStatusRequest(SupplierStatus Status, string? Reason);
+public sealed record SupplierPolicyRequest(bool Require);
+public sealed record ReorderOrderRequest(Guid PartnerId, IReadOnlyList<ReorderOrderLine> Lines, DateOnly? ExpectedDate);
 public sealed record CreatePaymentOrderRequest(Guid BankAccountId);
 public sealed record DeliveryInvoiceRequest(string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate);
 
@@ -44,6 +48,20 @@ public static class CycleEndpoints
         // Doanh thu: kiểm tra tín dụng và tồn kho khi nhận đơn bán. Cung ứng: danh mục cần đặt hàng từ tồn tối thiểu.
         api.MapGet("/revenue/orders/{id:guid}/check", async (HttpContext http, Guid id, SalesOrderCheckService s) => Results.Ok(await s.CheckAsync(await http.SessionAsync(), id)));
         api.MapGet("/procurement/reorder-list", async (HttpContext http, ReorderService s) => Results.Ok(await s.ListAsync(await http.SessionAsync())));
+
+        // Cung ứng: duyệt và xếp hạng nhà cung cấp; tạo đơn mua nháp từ danh mục cần đặt.
+        api.MapGet("/procurement/suppliers/rating", async (HttpContext http, DateOnly fromDate, DateOnly toDate, SupplierService s) =>
+            Results.Ok(await s.RatingAsync(await http.SessionAsync(), fromDate, toDate)));
+        api.MapPut("/procurement/suppliers/{id:guid}/status", async (HttpContext http, Guid id, SupplierStatusRequest r, SupplierService s) =>
+        { await s.SetStatusAsync(await http.SessionAsync(), id, r.Status, r.Reason); return Results.NoContent(); });
+        api.MapGet("/procurement/suppliers/policy", async (HttpContext http, SupplierService s) => Results.Ok(new { require = await s.ApprovalPolicyAsync(await http.SessionAsync()) }));
+        api.MapPut("/procurement/suppliers/policy", async (HttpContext http, SupplierPolicyRequest r, SupplierService s) =>
+        { await s.SetApprovalPolicyAsync(await http.SessionAsync(), r.Require); return Results.NoContent(); });
+        api.MapPost("/procurement/reorder-list/create-order", async (HttpContext http, ReorderOrderRequest r, SupplierService s) =>
+        {
+            var o = await s.CreateOrderFromReorderAsync(await http.SessionAsync(), r.PartnerId, r.Lines, r.ExpectedDate);
+            return Results.Ok(new { o.Id, o.Number });
+        });
 
         // Doanh thu (tệp phân tích ERP, mục V.1): lệnh bán hàng → phiếu giao hàng → hóa đơn bán → thu tiền.
         api.MapGet("/revenue/dispatch-orders", async (HttpContext http, Guid? orderId, bool? includeCancelled, SalesDispatchService s) =>

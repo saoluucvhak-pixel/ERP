@@ -318,6 +318,9 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
             if (await db.BusinessPartners.AnyAsync(p => p.CompanyId == ctx.CompanyId && p.Code == code))
                 throw new DomainException(ErrorCodes.DuplicateCode, $"Mã đối tượng {code} đã tồn tại.");
             var p = new BusinessPartner { Id = Ids.New(), CompanyId = ctx.CompanyId, Code = code, Name = name, Roles = roles, TaxCode = taxCode, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            // Công ty bật "duyệt nhà cung cấp": nhà cung cấp mới chờ duyệt, chưa được đặt hàng.
+            if (roles.HasFlag(PartnerRoles.Supplier) && await db.Companies.AnyAsync(c => c.Id == ctx.CompanyId && c.RequireSupplierApproval))
+                p.SupplierStatus = SupplierStatus.Pending;
             db.BusinessPartners.Add(p);
             await audit.AppendAsync(ctx.CompanyId, ctx, "partner.create", "business_partner", p.Id.ToString(), new { code, name, taxCode });
             await db.SaveChangesAsync();
