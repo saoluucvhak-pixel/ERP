@@ -65,6 +65,9 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - Tiếp theo: nhập mẫu BCTC khi có TT99 Phụ lục IV đã xác minh (chỉ là dữ liệu mẫu, công cụ đã sẵn) → bộ cài Tauri/MSI (GĐ8; gói chạy độc lập tools/package/package.ps1 đã XONG 2026-10-15; Tauri cần VS C++ — cần quyền admin; tệp .ps1 phải lưu UTF-8 CÓ BOM cho PowerShell 5.1) → GĐ7 đối chiếu dữ liệu thật (chờ thư mục).
 - Lưu ý khi thêm entity có decimal: phải thêm `HasConversion(money)` trong `ApplySqliteMoneyStorage` (SQLite), PostgreSQL tự áp numeric(19,4).
 
+## Định hướng kiến trúc mới (19/10/2026, chị chốt) — xem docs/10-CHU-TRINH-NHAT-KY.md
+Xây theo **chu trình** (doanh thu, cung ứng, chuyển đổi, nhân sự–lương, tài chính/thanh toán), mỗi chu trình có **nhật ký sự kiện** riêng; sự kiện **phát sinh hoặc không phát sinh** bút toán (hợp đồng, đặt hàng: không; nhập hàng: có). Phân biệt dữ liệu **phát sinh / chuyển đổi / kết quả**. Cuối chu trình này thì chu trình sau **tự nhận** (bàn giao qua hộp thư, ví dụ "chấp nhận thanh toán" → chu trình thanh toán tạo lệnh). Chiều phân tích kế thừa dọc chuỗi chứng từ. Đề xuất đang chờ chị xác nhận 4 điểm ở mục 8 của tài liệu; trước khi làm không đụng sổ cái.
+
 ## Bước tiếp theo
 1. ~~Đơn hàng~~ (xong 2026-10-15, 156 test).
 2. GĐ4: ~~Thuế GTGT~~ (xong 2026-10-15, 160 test); ~~TSCĐ & khấu hao; CCDC phân bổ~~ (xong 2026-10-15, 173 test); ~~ngoại tệ: đánh giá lại tiền/vay~~ (xong 2026-10-15, 180 test); ~~công nợ ngoại tệ + chênh lệch tỷ giá đã thực hiện~~ (xong 2026-10-15, 190 test); ~~vay~~ (xong 2026-10-15, 198 test); ~~hàng mua trả lại / giảm giá hàng mua~~ (xong 2026-10-15, 200 test); ~~lương (import JSON)~~ (xong 2026-10-15, 205 test); ~~giá thành~~ (xong 2026-10-15, 209 test).
