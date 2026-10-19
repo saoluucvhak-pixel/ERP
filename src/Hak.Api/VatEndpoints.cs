@@ -9,7 +9,7 @@ namespace Hak.Api;
 
 public sealed record EInvoiceImportRequest(string SourceName, List<EInvoiceInput> Invoices);
 public sealed record DeclarationRequest(DateOnly PeriodFrom, DateOnly PeriodTo, List<DeclarationLineInput> Lines);
-public sealed record VatOffsetRequest(Guid PeriodId);
+public sealed record VatOffsetRequest(Guid PeriodId, Guid[]? InputAccountIds = null, Guid[]? OutputAccountIds = null);
 public sealed record FiledRequest(string FilingReference, DateOnly FiledDate);
 public sealed record CompanyProfileRequest(string Name, string? TaxCode);
 public sealed record PartnerUpdateRequest(string Name, string? TaxCode, bool IsActive = true);
@@ -72,8 +72,12 @@ public static class VatEndpoints
             Results.Ok(new { (await s.SaveDeclarationAsync(await http.SessionAsync(), r.PeriodFrom, r.PeriodTo, r.Lines)).Id }));
         api.MapPost("/vat/declarations/{id:guid}/filed", async (HttpContext http, Guid id, FiledRequest r, VatService s) =>
         { await s.MarkFiledAsync(await http.SessionAsync(), id, r.FilingReference, r.FiledDate); return Results.NoContent(); });
-        api.MapGet("/vat/offset", async (HttpContext http, Guid periodId, VatOffsetService s) => Results.Ok(await s.PreviewAsync(await http.SessionAsync(), periodId)));
-        api.MapPost("/vat/offset", async (HttpContext http, VatOffsetRequest r, VatOffsetService s) => Results.Ok(await s.GenerateAsync(await http.SessionAsync(), r.PeriodId)));
+        api.MapGet("/vat/offset", async (HttpContext http, Guid periodId, string? inputAccounts, string? outputAccounts, VatOffsetService s) =>
+            Results.Ok(await s.PreviewAsync(await http.SessionAsync(), periodId, ParseIds(inputAccounts), ParseIds(outputAccounts))));
+        api.MapPost("/vat/offset", async (HttpContext http, VatOffsetRequest r, VatOffsetService s) => Results.Ok(await s.GenerateAsync(await http.SessionAsync(), r.PeriodId, r.InputAccountIds, r.OutputAccountIds)));
         api.MapGet("/vat/payable-summary", async (HttpContext http, DateOnly from, DateOnly to, VatService s) => Results.Ok(await s.PayableSummaryAsync(await http.SessionAsync(), from, to)));
     }
+
+    private static Guid[]? ParseIds(string? csv)
+        => string.IsNullOrWhiteSpace(csv) ? null : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToArray();
 }

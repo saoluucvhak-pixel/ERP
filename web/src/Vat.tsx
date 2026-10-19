@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, get, post, session, type Period } from './api'
-import { ErrorBox, useAction, DateInput } from './common'
+import { AccountSelect, ErrorBox, useAction, DateInput, useCatalog } from './common'
 import { formatMoney, parseMoney, today, formatDate } from './money'
 
 const DIFF_VI: Record<string, string> = {
@@ -165,7 +165,30 @@ function Declarations() {
 }
 
 interface OffsetPreview { periodStart: string; periodEnd: string; inputBalance: string; outputBalance: string; offsetAmount: string; netPayable: string; carryForward: string
-  lines: { accountId: string; accountCode: string; side: string; amount: string }[]; note: string }
+  lines: { accountId: string; accountCode: string; side: string; amount: string }[]; note: string
+  inputAccounts: OffsetAccount[]; outputAccounts: OffsetAccount[] }
+interface OffsetAccount { accountId: string; code: string; name: string }
+
+/** Danh sách tài khoản tham gia khấu trừ: bỏ bớt / thêm tài khoản; để trống thì dùng mặc định theo vai trò TK ở Thiết lập. */
+function AccountPicks({ title, picked, onChange }: { title: string; picked: OffsetAccount[]; onChange: (list: OffsetAccount[]) => void }) {
+  const { postable } = useCatalog()
+  const add = (id: string) => {
+    const a = postable.find(x => x.id === id)
+    if (a && !picked.some(p => p.accountId === a.id)) onChange([...picked, { accountId: a.id, code: a.code, name: a.name }])
+  }
+  return (
+    <div className="panel" style={{ maxWidth: 560 }}>
+      <strong>{title}</strong>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
+        {picked.length === 0 && <span className="muted">Chưa có (dùng mặc định theo vai trò TK)</span>}
+        {picked.map(a => (
+          <span key={a.accountId} className="year-chip" title={a.name}>{a.code}
+            <button aria-label={`Bỏ ${a.code}`} style={{ border: 0, padding: '0 2px' }} onClick={() => onChange(picked.filter(p => p.accountId !== a.accountId))}>×</button></span>))}
+      </div>
+      <AccountSelect accounts={postable} value="" onChange={add} ariaLabel={`Thêm ${title}`} />
+    </div>
+  )
+}
 
 /** Khấu trừ thuế GTGT cuối kỳ: Nợ thuế đầu ra / Có thuế đầu vào, số tiền = phần nhỏ hơn của hai số dư lũy kế. Chỉ tạo chứng từ NHÁP. */
 function Offset() {
@@ -173,11 +196,23 @@ function Offset() {
   const [periodId, setPeriodId] = useState('')
   const [data, setData] = useState<OffsetPreview | null>(null)
   const [info, setInfo] = useState('')
+  const [inputs, setInputs] = useState<OffsetAccount[]>([])
+  const [outputs, setOutputs] = useState<OffsetAccount[]>([])
   const { busy, error, run } = useAction()
+  const ids = (l: OffsetAccount[]) => l.map(a => a.accountId)
   useEffect(() => { run(async () => { const list = await get<Period[]>('/periods'); setPeriods(list); const open = list.filter(p => p.status === 'Open'); if (open.length) setPeriodId(open[0].id) }) }, [run])
-  const view = () => run(async () => { setInfo(''); setData(await get<OffsetPreview>(`/vat/offset?periodId=${periodId}`)) })
+  const view = () => run(async () => {
+    setInfo('')
+    const q = new URLSearchParams({ periodId })
+    if (inputs.length) q.set('inputAccounts', ids(inputs).join(','))
+    if (outputs.length) q.set('outputAccounts', ids(outputs).join(','))
+    const d = await get<OffsetPreview>(`/vat/offset?${q}`)
+    setData(d)
+    if (!inputs.length) setInputs(d.inputAccounts)
+    if (!outputs.length) setOutputs(d.outputAccounts)
+  })
   const make = () => run(async () => {
-    const v = await post<{ number: string }>('/vat/offset', { periodId })
+    const v = await post<{ number: string }>('/vat/offset', { periodId, inputAccountIds: inputs.length ? ids(inputs) : null, outputAccountIds: outputs.length ? ids(outputs) : null })
     setInfo(`Đã tạo chứng từ nháp ${v.number}. Vào Tổng hợp → Chứng từ để gửi duyệt và ghi sổ.`)
   })
   const sorted = [...periods].sort((a, b) => (a.startDate < b.startDate ? 1 : -1))
@@ -194,6 +229,8 @@ function Offset() {
         <button disabled={busy || !periodId} onClick={view}>Xem trước</button>
         <button className="primary" disabled={busy || !data || data.offsetAmount === '0'} onClick={make}>Tạo chứng từ khấu trừ</button>
       </div>
+      <AccountPicks title="Tài khoản thuế GTGT đầu ra khấu trừ (bên Nợ)" picked={outputs} onChange={l => { setOutputs(l); setData(null) }} />
+      <AccountPicks title="Tài khoản thuế GTGT đầu vào được khấu trừ (bên Có)" picked={inputs} onChange={l => { setInputs(l); setData(null) }} />
       {data && (
         <>
           <table className="grid" style={{ maxWidth: 560 }}><tbody>
