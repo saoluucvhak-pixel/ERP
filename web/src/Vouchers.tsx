@@ -22,15 +22,17 @@ export function VouchersView() {
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const { busy, error, run } = useAction()
   const [info, setInfo] = useState('')
+  const [accountId, setAccountId] = useState('')
+  const { accounts: allAccounts } = useCatalog()
 
   const load = useCallback(() => run(async () => {
-    const q = new URLSearchParams({ from, to, skip: String(page * PAGE), take: String(PAGE), ...(status ? { status } : {}), ...(type ? { type } : {}), ...(search ? { text: search } : {}) })
+    const q = new URLSearchParams({ from, to, skip: String(page * PAGE), take: String(PAGE), ...(status ? { status } : {}), ...(type ? { type } : {}), ...(search ? { text: search } : {}), ...(accountId ? { accountId } : {}) })
     const data = await get<{ items: Voucher[]; total: number }>(`/vouchers?${q}`)
     setList(data.items)
     setTotal(data.total)
     setSelected(s => (s ? data.items.find(v => v.id === s.id) ?? null : null))
     setChecked(c => new Set([...c].filter(id => data.items.some(v => v.id === id))))
-  }), [from, to, status, type, search, page, run])
+  }), [from, to, status, type, search, accountId, page, run])
   useEffect(() => { load() }, [load])
 
   const act = (label: string, fn: () => Promise<unknown>) => run(async () => { await fn(); setInfo(label); await load() })
@@ -78,6 +80,7 @@ export function VouchersView() {
             {Object.entries(TYPE_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
         </label>
+        <label>Tài khoản<AccountSelect accounts={allAccounts} value={accountId} onChange={id => { setAccountId(id); setPage(0) }} ariaLabel="Lọc theo tài khoản" /></label>
         <form onSubmit={e => { e.preventDefault(); setSearch(text.trim()); setPage(0) }} style={{ display: 'contents' }}>
           <label>Tìm<input value={text} onChange={e => setText(e.target.value)} placeholder="số, diễn giải" /></label>
         </form>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post, put, type OpenItem, type Voucher } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, TYPE_VI, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { addMoney, formatMoney, parseMoney, today } from './money'
 
 const EVENTS: Record<string, { value: string; label: string; needsPartner: boolean; needsCounter: boolean }[]> = {
   CR: [{ value: 'CUSTOMER_RECEIPT', label: 'Thu tiền khách hàng', needsPartner: true, needsCounter: false }],
@@ -32,6 +32,8 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
   const [lines, setLines] = useState<DocLine[]>(voucher ? linesOf(voucher) : [{ amount: '', counterAccountId: '', settle: '', description: '' }])
   const [openItems, setOpenItems] = useState<OpenItem[]>([])
   const [created, setCreated] = useState<Voucher | null>(null)
+  const [balance, setBalance] = useState<string | null>(null)
+  const [recent, setRecent] = useState<Voucher[]>([])
   const { busy, error, setError, run } = useAction()
   const ev = EVENTS[type].find(e => e.value === event) ?? EVENTS[type][0]
   const cashKind = type === 'CR' || type === 'CP' ? 'Cash' : 'Bank'
@@ -47,6 +49,20 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
       .then(items => setOpenItems(items.filter(i => i.side === (arapRole === 'Receivable' ? 'Debit' : 'Credit') && !i.foreignCurrency)))
       .catch(() => setOpenItems([]))
   }, [accounts, arapRole, partnerId, date])
+
+  // Fund balance up to the document date (posted entries only) and the latest documents touching that fund.
+  useEffect(() => {
+    if (!mainAccountId) { setBalance(null); setRecent([]); return }
+    const q = new URLSearchParams({ accountId: mainAccountId, from: `${date.slice(0, 4)}-01-01`, to: date })
+    get<{ closingBalance: string }>(`/reports/account-ledger?${q}`).then(l => setBalance(l.closingBalance)).catch(() => setBalance(null))
+    const since = new Date(date); since.setDate(since.getDate() - 60)
+    const r = new URLSearchParams({ accountId: mainAccountId, from: since.toISOString().slice(0, 10), take: '200' })
+    get<{ items: Voucher[] }>(`/vouchers?${r}`)
+      .then(d => setRecent(d.items.filter(v => ['CR', 'CP', 'BR', 'BP'].includes(v.voucherType)).slice(-10).reverse())).catch(() => setRecent([]))
+  }, [mainAccountId, date, created])
+  const outflow = type === 'CP' || type === 'BP'
+  const total = addMoney(lines.map(l => parseMoney(l.amount) ?? '0'))
+  const overdraw = outflow && balance != null && total !== '0' && addMoney([balance, '-' + total]).startsWith('-')
 
   const save = () => run(async () => {
     const amounts = lines.map(l => parseMoney(l.amount))
@@ -69,6 +85,11 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
       <div className="toolbar"><h2>{voucher ? `Sửa ${TYPE_VI[voucher.voucherType]} ${voucher.number}` : 'Thu / Chi tiền'}</h2>{onDone && <button onClick={onDone}>Đóng</button>}<button className="primary" onClick={save} disabled={busy}>Lưu nháp</button></div>
       <ErrorBox error={error} />
       {created && <div className="msg ok">Đã tạo {TYPE_VI[created.voucherType]} {created.number} (Nháp, {formatMoney(created.totalDebit)}). Gửi duyệt và ghi sổ ở màn hình Chứng từ.</div>}
+      {mainAccountId && balance != null && <div className={overdraw ? 'msg error' : 'msg ok'}>
+        Số dư đã ghi sổ đến {date}: <b>{formatMoney(balance)}</b>
+        {outflow && total !== '0' && <> · Phiếu này chi <b>{formatMoney(total)}</b> → còn {formatMoney(addMoney([balance, '-' + total]))}</>}
+        {overdraw && ' — vượt số dư, hệ thống sẽ chặn khi ghi sổ nếu quỹ không cho phép âm.'}
+      </div>}
       <div className="panel">
         <div className="form-row">
           <label>Loại chứng từ
@@ -113,6 +134,10 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
           </tbody>
         </table>
         <button style={{ marginTop: 8 }} onClick={() => setLines(ls => [...ls, { amount: '', counterAccountId: '', settle: '', description: '' }])}>+ Thêm dòng</button>
+        {recent.length > 0 && <><h3>Phiếu gần đây của {cashKind === 'Cash' ? 'quỹ' : 'tài khoản'} này</h3>
+          <table className="grid"><thead><tr><th>Ngày</th><th>Số</th><th>Diễn giải</th><th className="num">Số tiền</th><th>Trạng thái</th></tr></thead><tbody>
+            {recent.map(v => <tr key={v.id}><td>{v.postingDate}</td><td>{v.number}</td><td>{v.description}</td><td className="num">{formatMoney(v.totalDebit)}</td><td>{STATUS_VI[v.status]}</td></tr>)}
+          </tbody></table></>}
         <p className="muted">Định khoản được sinh từ quy tắc đang hiệu lực cho nghiệp vụ đã chọn; số tiền thanh toán không được vượt số còn phải thu/trả của chứng từ.</p>
       </div>
     </>
