@@ -10,7 +10,7 @@ import { FxView } from './Fx'
 import { InventoryView } from './Inventory'
 import { LoansView } from './Loans'
 import { OrdersView } from './Orders'
-import { SKINS, loadTheme, saveTheme, type Mode, type Skin, type Theme } from './theme'
+import { ThemePanel } from './ThemePanel'
 import { PayrollView } from './Payroll'
 import { SetupView } from './Setup'
 import { ProductionView } from './Production'
@@ -60,16 +60,16 @@ const MODULES: { key: string; label: string; icon: string; title: string; items:
   { key: 'bank', label: 'Tiền gửi', icon: 'bank', title: 'NGHIỆP VỤ TIỀN GỬI', items: ['bank', 'fx', 'loans'], shortcuts: ['catalog'] },
   { key: 'trade', label: 'Mua / Bán hàng', icon: 'cart', title: 'NGHIỆP VỤ MUA / BÁN HÀNG', items: ['orders', 'trade', 'arap'], shortcuts: ['catalog'] },
   { key: 'stock', label: 'Kho', icon: 'stock', title: 'NGHIỆP VỤ KHO', items: ['stock'], shortcuts: ['setup'] },
-  { key: 'cost', label: 'Giá thành', icon: 'gear', title: 'NGHIỆP VỤ GIÁ THÀNH', items: ['production'], shortcuts: ['setup'] },
+  { key: 'cost', label: 'Giá thành', icon: 'calc', title: 'NGHIỆP VỤ GIÁ THÀNH', items: ['production'], shortcuts: ['setup'] },
   { key: 'assets', label: 'Tài sản / CCDC', icon: 'asset', title: 'NGHIỆP VỤ TÀI SẢN / CCDC', items: ['assets'], shortcuts: ['setup'] },
-  { key: 'payroll', label: 'Tiền lương', icon: 'money', title: 'NGHIỆP VỤ TIỀN LƯƠNG', items: ['payroll'], shortcuts: ['catalog'] },
+  { key: 'payroll', label: 'Tiền lương', icon: 'people', title: 'NGHIỆP VỤ TIỀN LƯƠNG', items: ['payroll'], shortcuts: ['catalog'] },
   { key: 'tax', label: 'Thuế', icon: 'tax', title: 'NGHIỆP VỤ THUẾ GTGT', items: ['vat'], shortcuts: ['catalog'] },
   { key: 'general', label: 'Tổng hợp', icon: 'book', title: 'NGHIỆP VỤ TỔNG HỢP', items: ['vouchers', 'periods', 'journal'], shortcuts: ['setup'] },
   { key: 'reports', label: 'Báo cáo', icon: 'chart', title: 'BÁO CÁO', items: ['tb', 'ledger', 'journal', 'reports'], shortcuts: [] },
-  { key: 'catalog', label: 'Danh mục', icon: 'list', title: 'DANH MỤC & THIẾT LẬP', items: ['catalog', 'setup'], shortcuts: [] },
-  { key: 'system', label: 'Hệ thống', icon: 'gear', title: 'HỆ THỐNG', items: ['admin'], shortcuts: [] },
+  { key: 'catalog', label: 'Danh mục', icon: 'people', title: 'DANH MỤC & THIẾT LẬP', items: ['catalog', 'setup'], shortcuts: [] },
+  { key: 'system', label: 'Hệ thống', icon: 'shield', title: 'HỆ THỐNG', items: ['admin'], shortcuts: [] },
 ]
-const TILE_ICON: Record<string, string> = { cash: 'cash', bank: 'bank', fx: 'swap', loans: 'money', orders: 'doc', trade: 'cart', arap: 'list', stock: 'stock', production: 'gear', assets: 'asset', payroll: 'money', vat: 'tax', vouchers: 'doc', periods: 'book', journal: 'book', tb: 'chart', ledger: 'book', reports: 'chart', catalog: 'list', setup: 'gear', admin: 'gear' }
+const TILE_ICON: Record<string, string> = { cash: 'cash', bank: 'bank', fx: 'swap', loans: 'loan', orders: 'doc', trade: 'cart', arap: 'list', stock: 'stock', production: 'calc', assets: 'asset', payroll: 'people', vat: 'tax', vouchers: 'doc', periods: 'calendar', journal: 'book', tb: 'chart', ledger: 'book', reports: 'chart', catalog: 'people', setup: 'gear', admin: 'shield' }
 /** Quyền (một trong các quyền) để thấy từng màn hình; rỗng = ai cũng thấy. Backend vẫn kiểm tra lại ở từng thao tác. */
 const SCREEN_PERMS: Record<string, string[]> = {
   vouchers: ['voucher.view'], periods: ['voucher.view', 'period.lock'], cash: ['cash.document'], bank: ['bank.document', 'bank.reconcile'],
@@ -158,7 +158,7 @@ export default function App() {
         <button className="company-chip" title="Bấm để đổi công ty" onClick={() => { session.setCompany(null); setCompanyId(null) }}>{company.name} ▾</button>
         <span className="year-chip"><i /> Dữ liệu kế toán {new Date().getFullYear()}</span>
         <div className="topbar-right">
-          <ThemePicker />
+          <ThemePanel />
           <span className="who" title={(company.roles ?? []).join(', ')}>{(company.roles ?? []).join(', ') || 'Người dùng'}</span>
           <button onClick={logout}>Đăng xuất</button>
         </div>
@@ -238,17 +238,3 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
   )
 }
 
-function ThemePicker() {
-  const [t, setT] = useState(loadTheme)
-  const change = (n: Theme) => { setT(n); saveTheme(n) }
-  return (
-    <div className="theme-pick">
-      <select aria-label="Kiểu giao diện" value={t.skin} onChange={e => change({ ...t, skin: e.target.value as Skin })}>
-        {SKINS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
-      </select>
-      <select aria-label="Chế độ sáng/tối" value={t.mode} onChange={e => change({ ...t, mode: e.target.value as Mode })}>
-        <option value="auto">Tự động</option><option value="light">Sáng</option><option value="dark">Tối</option>
-      </select>
-    </div>
-  )
-}
