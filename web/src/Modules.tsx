@@ -24,6 +24,7 @@ const CAT_SETUP: ModuleLink = { label: 'Tùy chọn', screen: 'setup' }
  */
 export const MODULES: AppModule[] = [
   { key: 'home', label: 'Tổng quan', icon: '▦', screens: [], title: 'Tổng quan', flow: [], reports: [], catalogs: [] },
+  { key: 'cycles', label: 'Quản lý chu trình', icon: '🔄', screens: [], title: 'Quản lý chu trình', flow: [], reports: [], catalogs: [] },
   {
     key: 'money', label: 'Tiền', icon: '💵', screens: ['cash', 'bank', 'fx', 'loans'], title: 'NGHIỆP VỤ TIỀN MẶT, TIỀN GỬI, VAY',
     flow: [

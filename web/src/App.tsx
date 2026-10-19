@@ -32,7 +32,8 @@ interface Company { id: string; code: string; name: string; roles?: string[]; pe
 
 /** Các màn hình (tab) của phần mềm; phân hệ ở thanh bên xếp chúng thành tab theo cấu trúc trong Modules.tsx. */
 const SCREENS = [
-  { key: 'home', label: 'Tổng quan', el: () => <><HomeLauncher screens={LAUNCHER} /><DashboardView /></> },
+  { key: 'home', label: 'Tổng quan', el: () => <DashboardView /> },
+  { key: 'cycles', label: 'Quản lý chu trình', el: () => <HomeLauncher screens={LAUNCHER} /> },
   { key: 'orders', label: 'Đơn hàng', el: () => <OrdersView /> },
   { key: 'revenue', label: 'Bán hàng → Thu tiền', el: () => <RevenueView /> },
   { key: 'arap', label: 'Công nợ', el: () => <ReceivablesView /> },
@@ -106,7 +107,7 @@ export default function App() {
 
   useEffect(() => {
     navStore.go = key => {
-      if (key === 'home') { setModuleKey('home'); setTab('flow'); return }
+      if (key === 'home' || key === 'cycles') { setModuleKey(key); setTab('flow'); return }
       const m = moduleOfScreen(key)
       if (m) { setModuleKey(m.key); setTab(key) }
     }
@@ -180,7 +181,7 @@ export default function App() {
             {SCREEN_LABELS[k]}{work[k] ? <span className="nav-count">{work[k]}</span> : null}</button>)}
         </div>}
         <main className="main" key={company.id + module.key + tab}>
-          {module.key === 'home' ? screenEl('home')
+          {module.screens.length === 0 ? screenEl(module.key)
             : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[k]).map(k => [k, work[k]]))} />
             : screenEl(tab)}
         </main>

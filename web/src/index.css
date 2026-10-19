@@ -194,3 +194,22 @@ button.link:hover { color: var(--accent); text-decoration: underline; }
 .debt-total { font-size: 28px; font-weight: 700; }
 .debt-bar { background: var(--line); border-radius: 4px; height: 12px; margin-top: 12px; overflow: hidden; }
 .debt-bar > div { background: #f0832e; height: 12px; }
+
+/* Tổng quan kiểu thẻ */
+.ov-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; align-items: stretch; }
+.ov-card { background: var(--panel); border-radius: 12px; border: 1px solid var(--line); padding: 16px 18px; min-width: 0; }
+.ov-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.ov-head h3 { margin: 0; font-size: 16px; }
+.ov-two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.ov-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+.ov-sum { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); font-weight: 700; cursor: pointer; }
+.ov-sum b { color: var(--accent); }
+.ov-sub { padding-left: 14px; }
+.ov-foot { margin-top: 10px; font-size: 12px; }
+.ov-big { font-size: 28px; font-weight: 700; }
+.ov-big small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.ov-totals { display: flex; gap: 28px; margin-bottom: 8px; }
+.ov-totals div { display: flex; flex-direction: column; font-size: 12px; }
+.ov-totals b { font-size: 22px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-right: 8px; }
+@media (max-width: 700px) { .ov-two { grid-template-columns: 1fr; } }

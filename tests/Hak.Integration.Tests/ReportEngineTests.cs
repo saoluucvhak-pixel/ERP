@@ -85,6 +85,29 @@ public class ReportEngineTests
     }
 
     [Fact]
+    public async Task DashboardOverview_CashFlowByMonth_Position_AndIncomeFromTemplate()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        await SeedAsync(h, s);
+        var overview = new DashboardOverviewService(s.Db, s.Reports, s.Ledger, s.Stock, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement));
+
+        var before = await overview.OverviewAsync(h.Auditor, new(2026, 3, 31));
+        Assert.False(before.HasIncomeTemplate);
+        Assert.Empty(before.Income);
+        Assert.Equal((850m, 850m, 0m, 450m, 0m), (before.Cash, before.CashOnHand, before.Bank, before.Receivable, before.Payable));
+        Assert.Equal([(1, 1_000m, 0m, 1_000m), (2, 0m, 0m, 1_000m), (3, 50m, 200m, 850m)], before.CashFlow.Select(c => (c.Month, c.Inflow, c.Outflow, c.Closing)).ToArray());
+
+        await s.Reports.SaveDraftAsync(h.Preparer, new("B02-DN", "Kết quả kinh doanh (mẫu thử)", "Kiểm thử", null,
+            [new("10", "Doanh thu thuần", "MOV_C(REV ; AR)"), new("11", "Giá vốn", "MOV_D(EXP)")], []));
+        var after = await overview.OverviewAsync(h.Auditor, new(2026, 3, 31));
+        Assert.True(after.HasIncomeTemplate);
+        Assert.False(after.IncomeTemplateVerified);
+        Assert.Equal([(1, 0m, 0m, 0m), (2, 500m, 0m, 500m), (3, 0m, 200m, -200m)], after.Income.Select(i => (i.Month, i.Revenue, i.Cost, i.Profit)).ToArray());
+        Assert.Equal(("Giá vốn hàng bán", 200m), (after.CostBreakdown[0].Name, after.CostBreakdown[0].Amount));
+    }
+
+    [Fact]
     public async Task Templates_AreValidated_VerifiedByASecondPerson_ThenFrozen_NewVersionsAreDrafts()
     {
         using var h = await TestHost.CreateAsync();
