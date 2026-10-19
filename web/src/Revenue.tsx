@@ -14,8 +14,8 @@ interface QueueRow { invoiceId: string; number: string; invoiceSeries: string; i
   total: string; open: string; settleJournalLineId: string }
 interface OverdueInv { invoiceId: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; dueDate: string; daysOverdue: number; total: string; open: string }
 interface Overdue { partnerId: string; partnerCode: string; partnerName: string; address: string | null; phone: string | null; email: string | null; totalOpen: string; maxDaysOverdue: number; invoices: OverdueInv[] }
-interface Row { key: string; name: string; quantity: string; revenue: string; vat: string; invoices: number }
-interface Analysis { byItem: Row[]; byPartner: Row[]; byMonth: Row[]; totalRevenue: string; totalVat: string }
+interface Row { key: string; name: string; quantity: string; revenue: string; vat: string; invoices: number; cost: string; uncostedLines: number }
+interface Analysis { byItem: Row[]; byPartner: Row[]; byMonth: Row[]; totalRevenue: string; totalVat: string; totalCost: string; uncostedLines: number }
 interface Collections { byPartner: { partnerCode: string; partnerName: string; collected: string; receipts: number }[]; total: string }
 interface Warehouse { id: string; code: string; name: string }
 
@@ -135,8 +135,10 @@ export function RevenueView() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [coll, setColl] = useState<Collections | null>(null)
   const loadReports = () => run(async () => { setAnalysis(await get<Analysis>(`/cycles/revenue/sales-analysis?from=${from}&to=${to}`)); setColl(await get<Collections>(`/cycles/revenue/collections?from=${from}&to=${to}`)) })
-  const rowCols = (first: string) => [{ header: first, width: 34 }, { header: 'Số lượng', numeric: true }, { header: 'Doanh thu (chưa thuế)', numeric: true }, { header: 'Thuế GTGT', numeric: true }, { header: 'Số hóa đơn', numeric: true }]
-  const rowData = (rows: Row[]) => rows.map(r => [r.key ? `${r.key} – ${r.name}` : r.name, r.quantity, r.revenue, r.vat, String(r.invoices)])
+  const sub = (a: string, b: string) => addMoney([a, b.startsWith('-') ? b.slice(1) : '-' + b])
+  const margin = (r: { revenue: string; cost: string }) => sub(r.revenue, r.cost)
+  const rowCols = (first: string) => [{ header: first, width: 34 }, { header: 'Số lượng', numeric: true }, { header: 'Doanh thu (chưa thuế)', numeric: true }, { header: 'Thuế GTGT', numeric: true }, { header: 'Số hóa đơn', numeric: true }, { header: 'Giá vốn', numeric: true }, { header: 'Lãi gộp', numeric: true }]
+  const rowData = (rows: Row[]) => rows.map(r => [r.key ? `${r.key} – ${r.name}` : r.name, r.quantity, r.revenue, r.vat, String(r.invoices), r.cost, margin(r)])
 
   return (
     <>
@@ -248,10 +250,11 @@ export function RevenueView() {
           {([['Theo mặt hàng', analysis.byItem, 'Mặt hàng'], ['Theo khách hàng', analysis.byPartner, 'Khách hàng'], ['Theo tháng', analysis.byMonth, 'Tháng']] as const).map(([title, rows, first]) => (
             <div key={title} style={{ marginTop: 8 }}>
               <div className="toolbar"><strong>{title}</strong><ExportButton fileName={`Ban_hang_${title.replace(/ /g, '_')}_${from}_${to}`} sheet={title} title={`Phân tích tiêu thụ ${title.toLowerCase()}`} subtitle={`Từ ${d8(from)} đến ${d8(to)}`} disabled={rows.length === 0} columns={rowCols(first)} rows={rowData(rows)} /></div>
-              <table className="grid"><thead><tr><th>{first}</th><th className="num">Số lượng</th><th className="num">Doanh thu</th><th className="num">Thuế GTGT</th><th className="num">Số HĐ</th></tr></thead>
-                <tbody>{rows.map(r => <tr key={r.key + r.name}><td>{r.key ? `${r.key} – ${r.name}` : r.name}</td><td className="num">{formatMoney(r.quantity)}</td><td className="num">{formatMoney(r.revenue)}</td><td className="num">{formatMoney(r.vat)}</td><td className="num">{r.invoices}</td></tr>)}
-                  {rows.length === 0 && <tr><td colSpan={5} className="muted">Không có hóa đơn bán trong kỳ.</td></tr>}</tbody></table></div>))}
-          <p className="muted">Giá vốn theo mặt hàng chưa có trong báo cáo này (xem Nhập – xuất – tồn ở màn Kho).</p>
+              <table className="grid"><thead><tr><th>{first}</th><th className="num">Số lượng</th><th className="num">Doanh thu</th><th className="num">Thuế GTGT</th><th className="num">Số HĐ</th><th className="num">Giá vốn</th><th className="num">Lãi gộp</th></tr></thead>
+                <tbody>{rows.map(r => <tr key={r.key + r.name}><td>{r.key ? `${r.key} – ${r.name}` : r.name}</td><td className="num">{formatMoney(r.quantity)}</td><td className="num">{formatMoney(r.revenue)}</td><td className="num">{formatMoney(r.vat)}</td><td className="num">{r.invoices}</td><td className="num" title={r.uncostedLines ? `${r.uncostedLines} dòng chưa tính giá xuất` : undefined}>{formatMoney(r.cost)}{r.uncostedLines > 0 && ' *'}</td><td className="num">{formatMoney(margin(r))}</td></tr>)}
+                  {rows.length === 0 && <tr><td colSpan={7} className="muted">Không có hóa đơn bán trong kỳ.</td></tr>}</tbody></table></div>))}
+          <p>Giá vốn: <b>{formatMoney(analysis.totalCost)}</b> · Lãi gộp: <b>{formatMoney(sub(analysis.totalRevenue, analysis.totalCost))}</b></p>
+          <p className="muted">Giá vốn lấy từ giá trị đã tính của phiếu xuất kho gắn với hóa đơn bán (hàng trả lại trừ ngược). {analysis.uncostedLines > 0 ? `* Có ${analysis.uncostedLines} dòng chưa tính giá xuất (chạy tính giá cuối tháng ở màn Kho) nên giá vốn đang thiếu; dòng dịch vụ không có giá vốn.` : 'Dòng dịch vụ không có giá vốn.'}</p>
         </>}
         {coll && <div style={{ marginTop: 8 }}>
           <div className="toolbar"><strong>Thu tiền bán hàng trong kỳ: {formatMoney(coll.total)}</strong><ExportButton fileName={`Thu_tien_ban_hang_${from}_${to}`} sheet="Thu tiền" title="Báo cáo thu tiền bán hàng" subtitle={`Từ ${d8(from)} đến ${d8(to)}`} disabled={coll.byPartner.length === 0}

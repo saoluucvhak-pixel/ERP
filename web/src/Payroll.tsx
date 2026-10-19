@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, postRaw } from './api'
-import { ErrorBox, ExportButton, STATUS_VI, useAction } from './common'
+import { AccountSelect, ErrorBox, ExportButton, STATUS_VI, useAction, useCatalog } from './common'
 import { formatMoney, today } from './money'
 
 interface Totals { employees: number; gross: string; socialInsurance: string; healthInsurance: string; unemploymentInsurance: string; personalIncomeTax: string; otherDeduction: string; net: string; employerContributions: string }
@@ -77,6 +77,7 @@ export function PayrollView() {
             {sheets.length === 0 && <tr><td colSpan={9} className="muted">Chưa có bảng lương trong khoảng ngày.</td></tr>}</tbody></table>
       </section>
 
+      <PayrollPayable />
       <ExchangeKeys />
 
       <section className="panel">
@@ -90,6 +91,44 @@ export function PayrollView() {
             {[r.gross, r.socialInsurance, r.healthInsurance, r.unemploymentInsurance, r.personalIncomeTax, r.otherDeduction, r.net, r.employerContributions].map((v, i) => <td key={i} className="num">{formatMoney(v)}</td>)}</tr>)}</tbody></table></div>
       </section>
     </>
+  )
+}
+
+interface PayableRow { journalLineId: string; voucherNumber: string; postingDate: string; employeeCode: string; employeeName: string; net: string; open: string; description: string | null; paymentOrderNumber: string | null; paymentOrderStatus: string | null }
+const ORDER_STATUS_VI: Record<string, string> = { Created: 'Chờ duyệt', Approved: 'Đã duyệt', SentToBank: 'Đã gửi ngân hàng', ExecutedByBank: 'NH đã chi', Posted: 'Đã ghi sổ', Reconciled: 'Đã đối chiếu' }
+
+/** Bàn giao từ nhân sự – lương sang thanh toán: phải trả người lao động còn nợ → lệnh thanh toán lương Nháp (người khác duyệt ở màn Ngân hàng). */
+function PayrollPayable() {
+  const { accounts } = useCatalog()
+  const [rows, setRows] = useState<PayableRow[]>([])
+  const [pick, setPick] = useState<Set<string>>(new Set())
+  const [bank, setBank] = useState('')
+  const [info, setInfo] = useState('')
+  const { busy, error, run } = useAction()
+  const asOf = today()
+  const load = useCallback(() => run(async () => setRows(await get<PayableRow[]>(`/cycles/finance/payroll-payable?asOf=${asOf}`))), [run, asOf])
+  useEffect(() => { load() }, [load])
+  const free = rows.filter(r => !r.paymentOrderNumber)
+  return (
+    <section className="panel">
+      <h3>Hàng chờ trả lương <span className="muted">· phải trả người lao động còn nợ sau khi ghi sổ phiếu lương (cần ánh xạ vai trò TK PAYROLL_PAYABLE)</span></h3>
+      <ErrorBox error={error} />
+      {info && <div className="msg ok">{info}</div>}
+      <table className="grid"><thead><tr><th /><th>Nhân viên</th><th>Chứng từ</th><th>Ngày</th><th className="num">Còn phải trả</th><th>Lệnh thanh toán</th></tr></thead>
+        <tbody>{rows.map(r => <tr key={r.journalLineId}>
+          <td><input type="checkbox" aria-label={`Chọn ${r.employeeCode}`} disabled={!!r.paymentOrderNumber} checked={pick.has(r.journalLineId)}
+            onChange={e => setPick(v => { const n = new Set(v); if (e.target.checked) n.add(r.journalLineId); else n.delete(r.journalLineId); return n })} /></td>
+          <td>{r.employeeCode} – {r.employeeName}</td><td>{r.voucherNumber}</td><td>{r.postingDate}</td><td className="num">{formatMoney(r.open)}</td>
+          <td>{r.paymentOrderNumber ? `${r.paymentOrderNumber} (${ORDER_STATUS_VI[r.paymentOrderStatus ?? ''] ?? r.paymentOrderStatus})` : '—'}</td></tr>)}
+          {rows.length === 0 && <tr><td colSpan={6} className="muted">Không có khoản phải trả lương nào đang mở.</td></tr>}</tbody></table>
+      {free.length > 0 && <div className="toolbar">
+        <button onClick={() => setPick(pick.size === free.length ? new Set() : new Set(free.map(r => r.journalLineId)))}>{pick.size === free.length ? 'Bỏ chọn hết' : 'Chọn hết'}</button>
+        <label>Tài khoản ngân hàng chi<AccountSelect accounts={accounts} value={bank} onChange={setBank} filter={a => a.cashKind === 'Bank'} ariaLabel="Tài khoản ngân hàng chi lương" /></label>
+        <button className="primary" disabled={busy || !bank || pick.size === 0} onClick={() => run(async () => {
+          const created = await post<{ number: string }[]>('/cycles/finance/payroll-payable/orders', { bankAccountId: bank, journalLineIds: [...pick] })
+          setPick(new Set()); setInfo(`Đã lập ${created.length} lệnh thanh toán lương nháp (${created.map(o => o.number).join(', ')}); người khác duyệt ở màn Ngân hàng.`); await load()
+        })}>Lập lệnh thanh toán lương ({pick.size})</button></div>}
+    </section>
   )
 }
 

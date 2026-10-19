@@ -16,9 +16,9 @@ public sealed record ReceivableQueueRow(Guid InvoiceId, string Number, string In
 public sealed record OverdueInvoice(Guid InvoiceId, string Number, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly DueDate, int DaysOverdue, decimal Total, decimal Open);
 public sealed record OverdueNotice(Guid PartnerId, string PartnerCode, string PartnerName, string? Address, string? Phone, string? Email, decimal TotalOpen, int MaxDaysOverdue, IReadOnlyList<OverdueInvoice> Invoices);
 
-public sealed record SalesAnalysisRow(string Key, string Name, decimal Quantity, decimal Revenue, decimal Vat, int Invoices);
+public sealed record SalesAnalysisRow(string Key, string Name, decimal Quantity, decimal Revenue, decimal Vat, int Invoices, decimal Cost = 0, int UncostedLines = 0);
 public sealed record SalesAnalysis(DateOnly FromDate, DateOnly ToDate, IReadOnlyList<SalesAnalysisRow> ByItem, IReadOnlyList<SalesAnalysisRow> ByPartner, IReadOnlyList<SalesAnalysisRow> ByMonth,
-    decimal TotalRevenue, decimal TotalVat);
+    decimal TotalRevenue, decimal TotalVat, decimal TotalCost = 0, int UncostedLines = 0);
 
 public sealed record CollectionRow(string PartnerCode, string PartnerName, decimal Collected, int Receipts);
 public sealed record CollectionReport(DateOnly FromDate, DateOnly ToDate, IReadOnlyList<CollectionRow> ByPartner, decimal Total);
@@ -74,23 +74,40 @@ public sealed class SalesReportService(HakDbContext db, SettlementService settle
         var raw = await (from l in db.CommercialInvoiceLines.AsNoTracking()
                          join i in db.CommercialInvoices.AsNoTracking() on l.InvoiceId equals i.Id
                          where i.CompanyId == ctx.CompanyId && i.Kind == InvoiceKind.Sales && i.Status == InvoiceStatus.Posted && i.PostingDate >= fromDate && i.PostingDate <= toDate
-                         select new { i.Id, i.PartnerId, i.PostingDate, i.Purpose, l.ItemId, l.StockQuantity, l.FunctionalAmount, l.VatAmount }).ToListAsync();
+                         select new { i.Id, i.PartnerId, i.PostingDate, i.Purpose, l.ItemId, l.StockQuantity, l.FunctionalAmount, l.VatAmount, l.StockDocumentId, l.StockLineNo }).ToListAsync();
+        // Giá vốn của dòng hóa đơn = giá trị đã tính của dòng phiếu kho liên kết × phần số lượng hóa đơn đó bao phủ (hàng trả lại trừ ngược). Chưa tính giá (bình quân cuối tháng chưa chạy) thì đếm riêng.
+        var docIds = raw.Where(r => r.StockDocumentId != null).Select(r => r.StockDocumentId!.Value).Distinct().ToList();
+        var movs = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && docIds.Contains(m.DocumentId)).ToListAsync();
+        var movIds = movs.Select(m => m.Id).ToList();
+        var vals = (await db.StockValuations.AsNoTracking().Where(v => v.CompanyId == ctx.CompanyId && v.VoidedAt == null && movIds.Contains(v.MovementId)).ToListAsync())
+            .GroupBy(v => v.MovementId).ToDictionary(g => g.Key, g => g.Sum(v => v.Value));
+        var movByLine = movs.GroupBy(m => (m.DocumentId, m.LineNo)).ToDictionary(g => g.Key, g => g.ToList());
         var items = await db.Items.AsNoTracking().Where(x => x.CompanyId == ctx.CompanyId).ToDictionaryAsync(x => x.Id);
         var partners = await db.BusinessPartners.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToDictionaryAsync(p => p.Id);
         // Returns and discounts reduce revenue; increases add to it.
         static int Sign(InvoicePurpose p) => p is InvoicePurpose.Return or InvoicePurpose.Discount ? -1 : 1;
-        var lines = raw.Select(r => (r.Id, r.PartnerId, r.PostingDate, r.ItemId, Qty: Sign(r.Purpose) * (r.Purpose is InvoicePurpose.Normal or InvoicePurpose.Return ? r.StockQuantity ?? 0 : 0),
-            Rev: Sign(r.Purpose) * r.FunctionalAmount, Vat: Sign(r.Purpose) * r.VatAmount)).ToList();
+        (decimal Cost, bool Uncosted) CostOf(Guid? doc, int? lineNo, decimal? qty, InvoicePurpose p)
+        {
+            if (p is not (InvoicePurpose.Normal or InvoicePurpose.Return) || doc is null || lineNo is null || qty is null or 0) return (0, false);
+            if (!movByLine.TryGetValue((doc.Value, lineNo.Value), out var ms)) return (0, true);
+            var total = ms.Sum(m => Math.Abs(m.Quantity));
+            if (total == 0 || ms.Any(m => !vals.ContainsKey(m.Id))) return (0, true);
+            var value = ms.Sum(m => Math.Abs(vals[m.Id]));
+            return (Sign(p) * Math.Round(value * qty.Value / total, 0, MidpointRounding.AwayFromZero), false);
+        }
+        var lines = raw.Select(r => { var (c, u) = CostOf(r.StockDocumentId, r.StockLineNo, r.StockQuantity, r.Purpose);
+            return (r.Id, r.PartnerId, r.PostingDate, r.ItemId, Qty: Sign(r.Purpose) * (r.Purpose is InvoicePurpose.Normal or InvoicePurpose.Return ? r.StockQuantity ?? 0 : 0),
+            Rev: Sign(r.Purpose) * r.FunctionalAmount, Vat: Sign(r.Purpose) * r.VatAmount, Cost: c, Uncosted: u); }).ToList();
 
-        static SalesAnalysisRow Row(string key, string name, IEnumerable<(Guid Id, Guid PartnerId, DateOnly PostingDate, Guid? ItemId, decimal Qty, decimal Rev, decimal Vat)> g)
+        static SalesAnalysisRow Row(string key, string name, IEnumerable<(Guid Id, Guid PartnerId, DateOnly PostingDate, Guid? ItemId, decimal Qty, decimal Rev, decimal Vat, decimal Cost, bool Uncosted)> g)
         {
             var list = g.ToList();
-            return new SalesAnalysisRow(key, name, list.Sum(x => x.Qty), list.Sum(x => x.Rev), list.Sum(x => x.Vat), list.Select(x => x.Id).Distinct().Count());
+            return new SalesAnalysisRow(key, name, list.Sum(x => x.Qty), list.Sum(x => x.Rev), list.Sum(x => x.Vat), list.Select(x => x.Id).Distinct().Count(), list.Sum(x => x.Cost), list.Count(x => x.Uncosted));
         }
         var byItem = lines.GroupBy(l => l.ItemId).Select(g => Row(g.Key is { } id ? items[id].Code : "", g.Key is { } i2 ? items[i2].Name : "(không theo vật tư)", g)).OrderByDescending(r => r.Revenue).ToList();
         var byPartner = lines.GroupBy(l => l.PartnerId).Select(g => Row(partners[g.Key].Code, partners[g.Key].Name, g)).OrderByDescending(r => r.Revenue).ToList();
         var byMonth = lines.GroupBy(l => $"{l.PostingDate.Year:D4}-{l.PostingDate.Month:D2}").Select(g => Row(g.Key, g.Key, g)).OrderBy(r => r.Key, StringComparer.Ordinal).ToList();
-        return new SalesAnalysis(fromDate, toDate, byItem, byPartner, byMonth, lines.Sum(l => l.Rev), lines.Sum(l => l.Vat));
+        return new SalesAnalysis(fromDate, toDate, byItem, byPartner, byMonth, lines.Sum(l => l.Rev), lines.Sum(l => l.Vat), lines.Sum(l => l.Cost), lines.Count(l => l.Uncosted));
     }
 
     /// <summary>Báo cáo thu tiền bán hàng: tiền khách đã trả (phiếu thu tiền mặt và báo có ngân hàng ghi bên Có của TK phải thu) theo khách hàng.</summary>

@@ -64,6 +64,7 @@ builder.Services.AddScoped<PaymentAcceptanceService>();
 builder.Services.AddScoped<SalesOrderCheckService>();
 builder.Services.AddScoped<ReorderService>();
 builder.Services.AddScoped<SupplierService>();
+builder.Services.AddScoped<PayrollPaymentService>();
 builder.Services.AddScoped<SalesDispatchService>();
 builder.Services.AddScoped<GoodsInspectionService>();
 builder.Services.AddScoped<PurchaseMatchService>();

@@ -119,6 +119,11 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 - **Đơn mua nháp từ danh mục cần đặt** (`POST /api/cycles/procurement/reorder-list/create-order`): chọn dòng, nhà cung cấp, số lượng và đơn giá (gợi ý theo đơn mua gần nhất bằng VND, tính theo số lượng) → đơn mua Nháp, người khác xác nhận như thường.
 - Màn Mua hàng → Thanh toán có thêm bảng nhà cung cấp (trạng thái, điểm, hạng, nút duyệt / chặn) và chọn dòng để tạo đơn nháp. Migration `Phase7SupplierApproval` (SQLite + PostgreSQL). 1 test tích hợp (185 → 186). Chưa thử tay trên trình duyệt.
 
+## 9g. Đã làm đợt 7 (19/10/2026): giá vốn trong phân tích tiêu thụ, hàng chờ trả lương
+- **Giá vốn và lãi gộp theo mặt hàng / khách hàng / tháng** (`SalesReportService.AnalyseAsync`): giá vốn dòng hóa đơn bán = giá trị đã tính của dòng phiếu xuất kho liên kết × phần số lượng hóa đơn bao phủ, hàng trả lại trừ ngược; dòng chưa tính giá xuất (bình quân cuối tháng chưa chạy) được đếm riêng và báo ở màn hình (giá vốn khi đó đang thiếu); dòng dịch vụ không có giá vốn. Không trừ chênh lệch giá hóa đơn mua đã điều chỉnh giá vốn.
+- **Hàng chờ trả lương** (`PayrollPaymentService`, `GET /api/cycles/finance/payroll-payable`, `POST …/orders`, tệp mục V.3 bàn giao lương → thanh toán): phải trả người lao động còn nợ theo từng người (vai trò TK `PAYROLL_PAYABLE`), chọn các khoản để lập lệnh thanh toán lương (sự kiện `PAYROLL_PAYMENT`) ở trạng thái Nháp, đúng số còn nợ; khoản đã có lệnh còn hiệu lực không lập lại, hủy lệnh thì khoản lại chờ. Người khác duyệt ở màn Ngân hàng như mọi lệnh chi. Quy tắc hạch toán sự kiện `PAYROLL_PAYMENT` kế toán phải khai báo (chưa seed, vì chưa xác minh TK). Chưa có số tài khoản nhận của nhân viên trong danh mục nên lệnh chưa mang thông tin ngân hàng thụ hưởng.
+- Không có migration mới. Test: 1 test tích hợp mới + mở rộng test doanh thu (186 → 187). Chưa thử tay trên trình duyệt.
+
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
 |---|---|---|
@@ -135,9 +140,9 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 | Chứng từ kế toán, Sổ Nhật ký chung, Sổ chi tiết, Cân đối phát sinh, Báo cáo theo mẫu | Kế toán tổng hợp: Nhật ký (chuyển đổi) và sổ, báo cáo (kết quả) | — |
 
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
-**Chu trình doanh thu** (mục 2): giá vốn theo mặt hàng trong phân tích tiêu thụ; biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
+**Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).
-**Thanh toán / tài chính**: lệnh thanh toán lương (`PAYROLL_PAYMENT`), thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
+**Thanh toán / tài chính**: số tài khoản nhận của nhân viên + file UNC; thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
 **Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm).
 **Nền**: chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.
 **Các phân hệ làm trước khi theo chu trình** đã xếp vào menu theo chu trình và có bảng khâu ở mục 9d; còn thiếu màn hình dòng chảy (các khâu và số chứng từ đang ở từng khâu) cho Chuyển đổi, Nhân sự – lương, Tài chính.

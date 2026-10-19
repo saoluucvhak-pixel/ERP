@@ -701,6 +701,8 @@ public class TradeTests
         var sales = await reports.AnalyseAsync(h.Auditor, D(1, 1), D(12, 31));
         var byItem = Assert.Single(sales.ByItem);
         Assert.Equal(("PHU", 20m, 1_200_000m, 120_000m), (byItem.Key, byItem.Quantity, byItem.Revenue, byItem.Vat));
+        Assert.Equal((1_000_000m, 0), (byItem.Cost, byItem.UncostedLines));   // 20 kg × 50,000 bình quân
+        Assert.Equal((1_000_000m, 0), (sales.TotalCost, sales.UncostedLines));
         Assert.Equal(1_200_000m, Assert.Single(sales.ByPartner).Revenue);
         Assert.Equal("2026-03", Assert.Single(sales.ByMonth).Key);
         await Phase2Fixture.PostDocAsync(h, s, Phase2Fixture.Receipt(h, 500_000, D(3, 25)));

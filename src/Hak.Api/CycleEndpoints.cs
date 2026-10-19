@@ -1,3 +1,4 @@
+using Hak.Domain.Common;
 using Hak.Domain.Catalog;
 using Hak.Application.Cycles;
 using Hak.Domain.Cycles;
@@ -8,6 +9,7 @@ public sealed record AcceptPaymentRequest(string? Note, bool AcknowledgeMismatch
 public sealed record SupplierStatusRequest(SupplierStatus Status, string? Reason);
 public sealed record SupplierPolicyRequest(bool Require);
 public sealed record ReorderOrderRequest(Guid PartnerId, IReadOnlyList<ReorderOrderLine> Lines, DateOnly? ExpectedDate);
+public sealed record PayrollOrdersRequest(Guid BankAccountId, IReadOnlyList<Guid> JournalLineIds, DateOnly? AsOf);
 public sealed record CreatePaymentOrderRequest(Guid BankAccountId);
 public sealed record DeliveryInvoiceRequest(string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate);
 
@@ -61,6 +63,14 @@ public static class CycleEndpoints
         {
             var o = await s.CreateOrderFromReorderAsync(await http.SessionAsync(), r.PartnerId, r.Lines, r.ExpectedDate);
             return Results.Ok(new { o.Id, o.Number });
+        });
+
+        // Nhân sự – lương → thanh toán: hàng chờ trả lương và lệnh thanh toán lương Nháp.
+        api.MapGet("/finance/payroll-payable", async (HttpContext http, DateOnly asOf, PayrollPaymentService s) => Results.Ok(await s.QueueAsync(await http.SessionAsync(), asOf)));
+        api.MapPost("/finance/payroll-payable/orders", async (HttpContext http, PayrollOrdersRequest r, PayrollPaymentService s, IClock clock) =>
+        {
+            var created = await s.CreateOrdersAsync(await http.SessionAsync(), r.BankAccountId, r.JournalLineIds, r.AsOf ?? DateOnly.FromDateTime(clock.UtcNow));
+            return Results.Ok(created.Select(o => new { o.Id, o.Number, o.Amount }));
         });
 
         // Doanh thu (tệp phân tích ERP, mục V.1): lệnh bán hàng → phiếu giao hàng → hóa đơn bán → thu tiền.
