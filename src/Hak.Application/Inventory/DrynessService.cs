@@ -14,7 +14,8 @@ public sealed record MeasurementInput(Guid DocumentId, int LineNo, decimal Dryne
 
 public sealed record DrynessSummaryRow(Guid WarehouseId, string WarehouseCode, Guid ItemId, string ItemCode,
     decimal OpeningMt, decimal OpeningBdmt, decimal InMt, decimal InBdmt, decimal OutMt, decimal OutBdmt, decimal ClosingMt, decimal ClosingBdmt,
-    decimal UnmeasuredInMt, decimal UnmeasuredOutMt);
+    decimal UnmeasuredInMt, decimal UnmeasuredOutMt,
+    decimal EstimatedInBdmt = 0, decimal EstimatedOutBdmt = 0, decimal EstimatedClosingBdmt = 0, decimal? ClosingDrynessPercent = null);
 
 public sealed record PendingMeasurement(Guid DocumentId, string DocumentNumber, StockDocumentType Type, DateOnly PostingDate, int LineNo,
     Guid ItemId, string ItemCode, decimal Quantity, MeasurementKind ExpectedKind);
@@ -61,6 +62,7 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
         {
             var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId)
                        ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            if (tracks && item.AltUnit != null) throw new DomainException(ErrorCodes.ValidationFailed, "Vật tư đã có đơn vị quy đổi cố định; xóa đơn vị đó trước khi chuyển sang theo dõi độ khô (BDMT).");
             if (!tracks && await db.StockMeasurements.AnyAsync(m => m.ItemId == itemId))
                 throw new DomainException(ErrorCodes.ValidationFailed, "Vật tư đã có kết quả đo độ khô; không tắt theo dõi BDMT được.");
             item.TracksDryness = tracks;
@@ -135,32 +137,71 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
         });
     }
 
-    /// <summary>MT and BDMT in/out/closing per warehouse and item; lines without a measurement are reported, never guessed.</summary>
+    /// <summary>
+    /// MT và BDMT nhập – xuất – tồn theo kho và vật tư. Các cột BDMT chính chỉ tính phần đã có kết quả đo (phiếu nhập đo, chứng thư xuất bán), không đoán.
+    /// Phần xuất và chuyển kho CHƯA đo được tính tạm theo <b>bình quân thời điểm</b> của kho lúc xuất (BDMT tồn ÷ MT tồn, theo thứ tự phát sinh; hàng chuyển kho mang
+    /// đúng BDMT đó sang kho nhận) và báo riêng ở các cột "tạm tính", để hai đơn vị MT / BDMT luôn theo dõi được. Phần nhập chưa đo thì không đoán. Khi có kết quả đo
+    /// thì số đo thay số tạm tính. Không ghi sổ cái.
+    /// </summary>
     public async Task<IReadOnlyList<DrynessSummaryRow>> SummaryAsync(SessionContext ctx, DateOnly from, DateOnly to, Guid? warehouseId = null)
     {
         ctx.Require(Permissions.ReportView);
         var tracked = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId && i.TracksDryness).ToDictionaryAsync(i => i.Id);
         var ids = tracked.Keys.ToList();
-        var q = db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && ids.Contains(m.ItemId) && m.MovementDate <= to);
-        if (warehouseId is not null) q = q.Where(m => m.WarehouseId == warehouseId);
-        var moves = await q.ToListAsync();
-        var bdmt = await BdmtByMovementAsync(ctx.CompanyId, moves);
+        var all = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && ids.Contains(m.ItemId) && m.MovementDate <= to).OrderBy(m => m.Sequence).ToListAsync();
+        var bdmt = await BdmtByMovementAsync(ctx.CompanyId, all);
+        var estimate = EstimateAtTime(all, bdmt);
+        var moves = warehouseId is null ? all : all.Where(m => m.WarehouseId == warehouseId).ToList();
         var whs = await db.Warehouses.AsNoTracking().Where(w => w.CompanyId == ctx.CompanyId).ToDictionaryAsync(w => w.Id);
 
         return moves.GroupBy(m => (m.WarehouseId, m.ItemId)).Select(g =>
         {
             decimal B(StockMovement m) => bdmt.TryGetValue(m.Id, out var b) ? b : 0;
+            decimal E(StockMovement m) => estimate.TryGetValue(m.Id, out var e) ? e : 0;
             var before = g.Where(m => m.MovementDate < from).ToList();
             var ins = g.Where(m => m.MovementDate >= from && m.Quantity > 0).ToList();
             var outs = g.Where(m => m.MovementDate >= from && m.Quantity < 0).ToList();
             var om = before.Sum(m => m.Quantity); var ob = before.Sum(B);
             var im = ins.Sum(m => m.Quantity); var ib = ins.Sum(B);
             var xm = -outs.Sum(m => m.Quantity); var xb = -outs.Sum(B);
+            var estIn = ins.Sum(E); var estOut = -outs.Sum(E);
+            var estBefore = before.Sum(E);
+            var closingMt = om + im - xm; var closingEst = ob + ib - xb + estBefore + estIn - estOut;
             return new DrynessSummaryRow(g.Key.WarehouseId, whs[g.Key.WarehouseId].Code, g.Key.ItemId, tracked[g.Key.ItemId].Code,
-                om, ob, im, ib, xm, xb, om + im - xm, ob + ib - xb,
+                om, ob, im, ib, xm, xb, closingMt, ob + ib - xb,
                 g.Where(m => m.Quantity > 0 && !bdmt.ContainsKey(m.Id)).Sum(m => m.Quantity),
-                -g.Where(m => m.Quantity < 0 && !bdmt.ContainsKey(m.Id)).Sum(m => m.Quantity));
+                -g.Where(m => m.Quantity < 0 && !bdmt.ContainsKey(m.Id)).Sum(m => m.Quantity),
+                estIn, estOut, closingEst, closingMt > 0 ? Math.Round(closingEst / closingMt * 100, 2) : null);
         }).OrderBy(r => r.WarehouseCode, StringComparer.Ordinal).ThenBy(r => r.ItemCode, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
+    /// BDMT tạm tính theo bình quân thời điểm cho các dòng xuất / chuyển kho chưa có kết quả đo, duyệt theo thứ tự phát sinh toàn công ty.
+    /// Số dư BDMT của kho dùng số đo (nếu có) cộng số tạm tính trước đó; dòng nhập chưa đo không đoán (kho nhận của chuyển kho lấy đúng BDMT kho xuất đã tính).
+    /// </summary>
+    private static Dictionary<Guid, decimal> EstimateAtTime(IReadOnlyList<StockMovement> ordered, IReadOnlyDictionary<Guid, decimal> measured)
+    {
+        var balance = new Dictionary<(Guid Warehouse, Guid Item), (decimal Mt, decimal Bd)>();
+        var carried = new Dictionary<(Guid Document, int Line), decimal>();
+        var estimate = new Dictionary<Guid, decimal>();
+        foreach (var m in ordered)
+        {
+            var key = (m.WarehouseId, m.ItemId);
+            var (mt, bd) = balance.GetValueOrDefault(key);
+            decimal? signed = null;                                   // BDMT có dấu của dòng này
+            if (measured.TryGetValue(m.Id, out var meas)) signed = meas;
+            else if (m.Quantity < 0)
+            {
+                if (mt > 0 && bd > 0)
+                {
+                    var amount = Math.Round(bd * Math.Min(-m.Quantity, mt) / mt, MoneyMath.StorageScale, MidpointRounding.AwayFromZero);
+                    signed = -amount; estimate[m.Id] = signed.Value; carried[(m.DocumentId, m.LineNo)] = amount;
+                }
+            }
+            else if (carried.TryGetValue((m.DocumentId, m.LineNo), out var c)) { signed = c; estimate[m.Id] = c; }
+            balance[key] = (mt + m.Quantity, bd + (signed ?? 0));
+        }
+        return estimate;
     }
 
     /// <summary>

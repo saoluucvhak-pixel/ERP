@@ -1947,6 +1947,14 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<long?>("AltFactor")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("alt_factor");
+
+                    b.Property<string>("AltUnit")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("alt_unit");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasColumnType("TEXT")

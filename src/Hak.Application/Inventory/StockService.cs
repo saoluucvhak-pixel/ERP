@@ -77,6 +77,34 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     }
 
     /// <summary>Giá bán, thuế suất GTGT mặc định, tồn tối thiểu, số lượng đặt tối ưu của vật tư (danh mục hàng hóa theo tệp phân tích ERP).</summary>
+    /// <summary>
+    /// Khai báo hoặc xóa đơn vị tính quy đổi cố định của vật tư (1 đơn vị quy đổi = <paramref name="factor"/> đơn vị chính). Không dùng cho vật tư theo dõi độ khô:
+    /// đơn vị quy đổi của dăm gỗ là BDMT, hệ số theo độ khô đo tại từng thời điểm (DrynessService). Số lượng trên sổ kho luôn giữ theo đơn vị chính.
+    /// </summary>
+    public async Task<Item> SetItemAltUnitAsync(SessionContext ctx, Guid itemId, string? altUnit, decimal? factor)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        var clear = string.IsNullOrWhiteSpace(altUnit) && factor is null;
+        if (!clear)
+        {
+            if (string.IsNullOrWhiteSpace(altUnit) || factor is null) throw new DomainException(ErrorCodes.ValidationFailed, "Đơn vị quy đổi cần có cả tên đơn vị và hệ số.");
+            if (altUnit.Trim().Length > 20) throw new DomainException(ErrorCodes.ValidationFailed, "Tên đơn vị quy đổi tối đa 20 ký tự.");
+            if (factor <= 0 || !MoneyMath.HasAtMostDecimals(factor.Value, MoneyMath.StorageScale)) throw new DomainException(ErrorCodes.ValidationFailed, "Hệ số quy đổi phải lớn hơn 0 (tối đa 4 chữ số thập phân).");
+        }
+        return await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId)
+                       ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            if (!clear && item.TracksDryness) throw new DomainException(ErrorCodes.ValidationFailed, $"{item.Code} theo dõi độ khô: đơn vị quy đổi là BDMT theo độ khô từng thời điểm, không khai báo hệ số cố định.");
+            if (!clear && string.Equals(altUnit!.Trim(), item.Unit, StringComparison.OrdinalIgnoreCase)) throw new DomainException(ErrorCodes.ValidationFailed, "Đơn vị quy đổi phải khác đơn vị chính.");
+            var old = new { item.AltUnit, item.AltFactor };
+            item.AltUnit = clear ? null : altUnit!.Trim(); item.AltFactor = clear ? null : factor;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.alt_unit", "item", item.Id.ToString(), new { old, item.AltUnit, item.AltFactor });
+            await db.SaveChangesAsync();
+            return item;
+        });
+    }
+
     public async Task<Item> UpdateItemCommercialAsync(SessionContext ctx, Guid itemId, decimal? salePrice, decimal? defaultVatRate, decimal? minStock, decimal? reorderQty)
     {
         ctx.Require(Permissions.CatalogManage);

@@ -252,7 +252,17 @@ function ItemCommercialCells({ item, busy, onSave }: { item: Item; busy: boolean
   </>
 }
 
-interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
+/** Đơn vị quy đổi cố định: 1 <ĐVT phụ> = <hệ số> ĐVT chính. Vật tư đo độ khô dùng BDMT (quy đổi theo thời điểm) nên không đặt ở đây. */
+function ItemAltUnitCell({ item, busy, onSave }: { item: Item; busy: boolean; onSave: (altUnit: string | null, altFactor: string | null) => void }) {
+  const [u, setU] = useState(item.altUnit ?? '')
+  const [f, setF] = useState(item.altFactor ? formatMoney(item.altFactor) : '')
+  if (item.tracksDryness) return <td className="muted" title="Hệ số quy đổi theo độ khô tại từng thời điểm đo">BDMT – theo độ khô thời điểm</td>
+  const dirty = u !== (item.altUnit ?? '') || f !== (item.altFactor ? formatMoney(item.altFactor) : '')
+  return <td>1 <input aria-label={`ĐVT phụ ${item.code}`} value={u} size={5} onChange={e => setU(e.target.value)} /> = <input className="num" aria-label={`Hệ số quy đổi ${item.code}`} value={f} size={7} onChange={e => setF(e.target.value)} /> {item.unit}
+    {dirty && <button className="primary" disabled={busy} onClick={() => onSave(u.trim() || null, f.trim() ? parseMoney(f) : null)}>Lưu</button>}</td>
+}
+
+interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean; altUnit?: string | null; altFactor?: string | null; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
 
 function Stock() {
@@ -292,9 +302,10 @@ function Stock() {
       </section>
       <section className="panel">
         <h3>Vật tư, hàng hóa</h3>
-        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đo độ khô (MT/BDMT)</th></tr></thead>
+        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đơn vị quy đổi cố định</th><th>Đo độ khô (MT/BDMT)</th></tr></thead>
           <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
             <ItemCommercialCells item={i} busy={busy} onSave={(body) => act(() => put(`/items/${i.id}/commercial`, body), `Đã lưu thông tin thương mại ${i.code}.`)} />
+            <ItemAltUnitCell key={`${i.id}-${i.altUnit}-${i.altFactor}`} item={i} busy={busy} onSave={(altUnit, altFactor) => act(() => put(`/items/${i.id}/alt-unit`, { altUnit, altFactor }), `Đã lưu đơn vị quy đổi ${i.code}.`)} />
             <td><input type="checkbox" aria-label={`Đo độ khô ${i.code}`} checked={i.tracksDryness} disabled={busy}
               onChange={e => act(() => post(`/items/${i.id}/tracks-dryness`, { tracks: e.target.checked }), 'Đã cập nhật theo dõi độ khô.')} /></td></tr>)}</tbody></table>
         <div className="form-row" style={{ marginTop: 8 }}>

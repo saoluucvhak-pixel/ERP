@@ -72,3 +72,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 1. ~~Đơn hàng~~ (xong 2026-10-15, 156 test).
 2. GĐ4: ~~Thuế GTGT~~ (xong 2026-10-15, 160 test); ~~TSCĐ & khấu hao; CCDC phân bổ~~ (xong 2026-10-15, 173 test); ~~ngoại tệ: đánh giá lại tiền/vay~~ (xong 2026-10-15, 180 test); ~~công nợ ngoại tệ + chênh lệch tỷ giá đã thực hiện~~ (xong 2026-10-15, 190 test); ~~vay~~ (xong 2026-10-15, 198 test); ~~hàng mua trả lại / giảm giá hàng mua~~ (xong 2026-10-15, 200 test); ~~lương (import JSON)~~ (xong 2026-10-15, 205 test); ~~giá thành~~ (xong 2026-10-15, 209 test).
 3. GĐ5 đa công ty/LAN (PostgreSQL), GĐ6 Report Engine + BCTC (cần TT99 đã xác minh), GĐ7 đối chiếu dữ liệu thực, GĐ8 bộ cài.
+
+- 19/10 đợt 11: 2 đơn vị tính (Item.AltUnit/AltFactor cố định; BDMT ước tính bình quân thời điểm cho xuất chưa đo) — docs/10 mục 9l. Chờ chị quyết: chính sách theo kho, phiếu chênh lệch CL, lô, mượn/trả (như HAK_KHO_OFFLINE).

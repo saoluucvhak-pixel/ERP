@@ -656,6 +656,31 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task ItemUnits_FixedAlternateUnit_ExclusiveWithDrynessBdmt()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        // Đơn vị quy đổi cố định: 1 tấn = 1000 kg (PHU tính bằng kg); số lượng trên sổ vẫn giữ theo đơn vị chính.
+        var item = await s.Stock.SetItemAltUnitAsync(h.Admin, fx.Add, " tấn ", 1000);
+        Assert.Equal(("tấn", 1000m), (item.AltUnit, item.AltFactor));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Stock.SetItemAltUnitAsync(h.Auditor, fx.Add, "tấn", 1000)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Stock.SetItemAltUnitAsync(h.Admin, fx.Add, "tấn", 0)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Stock.SetItemAltUnitAsync(h.Admin, fx.Add, "tấn", null)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Stock.SetItemAltUnitAsync(h.Admin, fx.Add, "kg", 2)));          // trùng đơn vị chính
+
+        // Dăm gỗ theo dõi độ khô: đơn vị quy đổi là BDMT theo từng thời điểm, không khai báo hệ số cố định; và ngược lại.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Stock.SetItemAltUnitAsync(h.Admin, fx.Dam, "BDMT", 1)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Dryness.SetItemTracksDrynessAsync(h.Admin, fx.Add, true)));
+        await s.Stock.SetItemAltUnitAsync(h.Admin, fx.Add, null, null);                                                                 // xóa đơn vị quy đổi
+        Assert.Null((await s.Db.Items.AsNoTracking().FirstAsync(i => i.Id == fx.Add)).AltUnit);
+        await s.Dryness.SetItemTracksDrynessAsync(h.Admin, fx.Add, true);
+
+        Assert.Equal(2m, UnitConversion.ToAlt(2_000, 1000));
+        Assert.Equal(12_000m, UnitConversion.ToMain(12, 1000));
+        Assert.Equal(0.3333m, UnitConversion.ToAlt(1, 3));
+    }
+
+    [Fact]
     public async Task RevenueCycle_Order_Dispatch_Delivery_Invoice_Receivable_Reports()
     {
         using var fx = await SetupAsync();

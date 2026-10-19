@@ -54,6 +54,34 @@ public class DrynessIntegrationTests
     }
 
     [Fact]
+    public async Task UnmeasuredIssuesAndTransfers_AreEstimatedAtTheAverageDrynessOfTheTime_AndReportedSeparately()
+    {
+        using var fx = await SetupAsync();
+        var r1 = await fx.Receive(D(3, 1), 100, 150_000_000);
+        var r2 = await fx.Receive(D(3, 5), 50, 80_000_000);
+        await fx.Measure(r1, 52.35m, EvidenceType.InternalReport, "PĐ-001");          // 52,35 BDMT
+        await fx.Measure(r2, 50m, EvidenceType.InternalReport, "PĐ-002");             // 25 BDMT → tồn 150 MT / 77,35 BDMT
+        await fx.Ship(D(3, 10), 30);                                                  // xuất chưa có chứng thư
+        var transfer = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Transfer, fx.Yard, D(3, 12), D(3, 12), "Chuyển ra cảng",
+            [new StockLineInput(fx.Dam, 20)], ToWarehouseId: fx.Port));
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, transfer.Id);
+
+        var rows = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31))).ToDictionary(r => r.WarehouseCode);
+        var yard = rows["BAI"]; var port = rows["CANG"];
+        // Cột chính chỉ gồm phần đã đo; phần xuất chưa đo vẫn báo là chưa đo.
+        Assert.Equal((150m, 77.35m, 50m, 0m, 50m), (yard.InMt, yard.InBdmt, yard.OutMt, yard.OutBdmt, yard.UnmeasuredOutMt));
+        // Tạm tính theo bình quân thời điểm: 30 MT × 77,35/150 = 15,47; 20 MT × 61,88/120 = 10,3133 (kho nhận mang đúng số đó).
+        Assert.Equal((25.7833m, 100m, 51.5667m, 51.57m), (yard.EstimatedOutBdmt, yard.ClosingMt, yard.EstimatedClosingBdmt, yard.ClosingDrynessPercent));
+        Assert.Equal((20m, 20m, 10.3133m, 10.3133m, 51.57m), (port.InMt, port.UnmeasuredInMt, port.EstimatedInBdmt, port.EstimatedClosingBdmt, port.ClosingDrynessPercent));
+
+        // Có chứng thư thì số đo thay số tạm tính.
+        var ship = await fx.S.Db.StockDocuments.AsNoTracking().FirstAsync(d => d.Type == StockDocumentType.Issue);
+        await fx.Measure(ship, 55m, EvidenceType.Certificate, "CT-1");
+        var after = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31))).ToDictionary(r => r.WarehouseCode)["BAI"];
+        Assert.Equal((16.5m, 20m), (after.OutBdmt, after.UnmeasuredOutMt));
+    }
+
+    [Fact]
     public async Task ReceiptAndShipment_ProduceMtAndBdmtBalances()
     {
         using var fx = await SetupAsync();

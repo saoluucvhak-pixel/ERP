@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { toAlt, toMain } from './units'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog } from './common'
 import { addMoney, formatMoney, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
 interface Warehouse { id: string; code: string; name: string; policies: { method: string; effectiveFrom: string }[] }
-interface Item { id: string; code: string; name: string; unit: string }
+interface Item { id: string; code: string; name: string; unit: string; tracksDryness?: boolean; altUnit?: string | null; altFactor?: string | null }
 interface StockDoc { id: string; number: string; type: string; warehouseId: string; toWarehouseId: string | null; documentDate?: string; postingDate: string; description: string; partnerId?: string | null; status: string; voucherId: string | null; lines: { lineNo: number; itemId: string; quantity: string; amount: string | null; counterAccountId?: string | null; description?: string | null }[] }
 
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
@@ -106,7 +107,11 @@ function StockDocs() {
           <tbody>{lines.map((l, i) => (
             <tr key={i}><td>{i + 1}</td>
               <td><select aria-label="Vật tư" value={l.itemId} onChange={e => upd(i, { itemId: e.target.value })}><option value="">— chọn —</option>{items.map(it => <option key={it.id} value={it.id}>{it.code} – {it.name} ({it.unit})</option>)}</select></td>
-              <td><input className="num" aria-label="Số lượng" value={l.quantity} onChange={e => upd(i, { quantity: e.target.value })} /></td>
+              <td><input className="num" aria-label="Số lượng" value={l.quantity} onChange={e => upd(i, { quantity: e.target.value })} />
+                {(() => { const it = items.find(x => x.id === l.itemId); if (!it?.altUnit || !it.altFactor) return null
+                  const q = parseMoney(l.quantity); const alt = q ? toAlt(q, it.altFactor) : null
+                  return <div className="muted" style={{ fontSize: 12 }}>= <input className="num" aria-label={`Số lượng theo ${it.altUnit}`} size={7} placeholder={it.altUnit} value={alt ? formatMoney(alt) : ''}
+                    onChange={e => { const a = parseMoney(e.target.value); if (a) { const m = toMain(a, it.altFactor!); if (m) upd(i, { quantity: formatMoney(m) }) } else if (e.target.value.trim() === '') upd(i, { quantity: '' }) }} /> {it.altUnit}</div> })()}</td>
               {type === 'Receipt' && <td><input className="num" aria-label="Giá trị" value={l.amount} onChange={e => upd(i, { amount: e.target.value })} onBlur={() => { const p = parseMoney(l.amount); if (p) upd(i, { amount: formatMoney(p) }) }} /></td>}
               {type !== 'Transfer' && <td><AccountSelect accounts={accounts} value={l.counterAccountId} onChange={v => upd(i, { counterAccountId: v })} ariaLabel="TK đối ứng" /></td>}
               {type !== 'Transfer' && <td><select aria-label="Theo đơn hàng" value={l.orderLine} onChange={e => upd(i, { orderLine: e.target.value })}><option value="">—</option>{orderLines.filter(o => !l.itemId || o.itemId === l.itemId).map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select></td>}
@@ -273,7 +278,15 @@ function StockCount() {
 
 interface SummaryRow { warehouseCode: string; itemCode: string; itemName: string; unit: string; openingQty: string; openingValue: string; inQty: string; inValue: string; outQty: string; outValue: string; closingQty: string; closingValue: string; pendingOutQty: string }
 
+/** Số lượng theo đơn vị quy đổi cố định của vật tư (ví dụ 2 tấn); vật tư không có đơn vị quy đổi cố định thì để trống. */
+const altText = (item: Item | undefined, mainQty: string) => {
+  if (!item?.altUnit || !item.altFactor) return item?.tracksDryness ? <span className="muted" title="Quy đổi theo độ khô từng thời điểm: xem tab MT / BDMT">BDMT</span> : ''
+  const v = toAlt(mainQty, item.altFactor)
+  return v == null || v === '0' ? '' : `${formatMoney(v)} ${item.altUnit}`
+}
+
 function Summary() {
+  const { items } = useStockCatalog()
   const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
   const [rows, setRows] = useState<SummaryRow[] | null>(null)
@@ -298,9 +311,11 @@ function Summary() {
       {recon.map(r => <div key={r.accountCode} className={`msg ${r.difference === '0' ? 'ok' : 'error'}`}>
         TK {r.accountCode}: {r.difference === '0' ? 'sổ kho khớp sổ cái' : `sổ kho lệch sổ cái ${formatMoney(r.difference)}`}{r.pendingIssueQty !== '0' ? ` · ${formatMoney(r.pendingIssueQty)} đơn vị xuất chờ tính giá cuối tháng` : ''}</div>)}
       {rows && <div className="scroll"><table className="grid">
-        <thead><tr><th>Kho</th><th>Vật tư</th><th>ĐVT</th><th className="num">Tồn đầu SL</th><th className="num">Tồn đầu GT</th><th className="num">Nhập SL</th><th className="num">Nhập GT</th><th className="num">Xuất SL</th><th className="num">Xuất GT</th><th className="num">Tồn cuối SL</th><th className="num">Tồn cuối GT</th><th className="num">Chờ tính giá</th></tr></thead>
+        <thead><tr><th>Kho</th><th>Vật tư</th><th>ĐVT</th><th className="num">Tồn đầu SL</th><th className="num">Tồn đầu GT</th><th className="num">Nhập SL</th><th className="num">Nhập GT</th><th className="num">Xuất SL</th><th className="num">Xuất GT</th><th className="num">Tồn cuối SL</th><th className="num" title="Tồn cuối theo đơn vị quy đổi cố định của vật tư (1 đơn vị quy đổi = hệ số × đơn vị chính)">Tồn quy đổi</th><th className="num">Tồn cuối GT</th><th className="num">Chờ tính giá</th></tr></thead>
         <tbody>{rows.map(r => <tr key={r.warehouseCode + r.itemCode}><td>{r.warehouseCode}</td><td>{r.itemCode} – {r.itemName}</td><td>{r.unit}</td>
-          {[r.openingQty, r.openingValue, r.inQty, r.inValue, r.outQty, r.outValue, r.closingQty, r.closingValue, r.pendingOutQty].map((v, i) => <td key={i} className="num">{f(v)}</td>)}</tr>)}</tbody>
+          {[r.openingQty, r.openingValue, r.inQty, r.inValue, r.outQty, r.outValue, r.closingQty].map((v, i) => <td key={i} className="num">{f(v)}</td>)}
+          <td className="num">{altText(items.find(i => i.code === r.itemCode), r.closingQty)}</td>
+          {[r.closingValue, r.pendingOutQty].map((v, i) => <td key={i} className="num">{f(v)}</td>)}</tr>)}</tbody>
       </table></div>}
     </>
   )
@@ -315,6 +330,7 @@ function StockCard() {
   const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
   const [rows, setRows] = useState<CardRow[] | null>(null)
+  const selItem = items.find(i => i.id === itemId)
   const { busy, error, run } = useAction()
   const load = () => run(async () => setRows(await get(`/reports/stock-card?warehouseId=${warehouseId}&itemId=${itemId}&from=${from}&to=${to}`)))
   return (
@@ -328,11 +344,11 @@ function StockCard() {
       </div>
       <ErrorBox error={error} />
       {rows && <table className="grid">
-        <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Diễn giải</th><th className="num">Nhập</th><th className="num">Xuất</th><th className="num">Giá trị</th><th className="num">Tồn SL</th><th className="num">Tồn GT</th></tr></thead>
+        <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Diễn giải</th><th className="num">Nhập</th><th className="num">Xuất</th><th className="num">Giá trị</th><th className="num">Tồn SL</th>{selItem?.altUnit && <th className="num">Tồn quy đổi ({selItem.altUnit})</th>}<th className="num">Tồn GT</th></tr></thead>
         <tbody>{rows.map((r, i) => <tr key={i}><td>{r.date}</td><td>{r.documentNumber}</td><td>{r.description}</td>
           <td className="num">{r.inQty === '0' ? '' : formatMoney(r.inQty)}</td><td className="num">{r.outQty === '0' ? '' : formatMoney(r.outQty)}</td>
           <td className="num">{r.value == null ? <span className="muted">chờ tính giá</span> : formatMoney(r.value)}</td>
-          <td className="num">{formatMoney(r.balanceQty)}</td><td className="num">{r.balanceValue == null ? '—' : formatMoney(r.balanceValue)}</td></tr>)}</tbody>
+          <td className="num">{formatMoney(r.balanceQty)}</td>{selItem?.altUnit && <td className="num">{altText(selItem, r.balanceQty)}</td>}<td className="num">{r.balanceValue == null ? '—' : formatMoney(r.balanceValue)}</td></tr>)}</tbody>
       </table>}
     </>
   )
@@ -376,7 +392,7 @@ function Costing() {
 
 interface Pending { documentId: string; documentNumber: string; type: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; expectedKind: string }
 interface Measurement { id: string; documentNumber: string; lineNo: number; kind: string; measuredMt: string; lineMt: string; drynessPercent: string; bdmt: string; methodCode: string; evidenceType: string; evidenceNo: string; evidenceIssuer: string | null; evidenceDate: string; supersededAt: string | null; supersedeReason: string | null }
-interface DrySummary { warehouseCode: string; itemCode: string; openingMt: string; openingBdmt: string; inMt: string; inBdmt: string; outMt: string; outBdmt: string; closingMt: string; closingBdmt: string; unmeasuredInMt: string; unmeasuredOutMt: string }
+interface DrySummary { warehouseCode: string; itemCode: string; openingMt: string; openingBdmt: string; inMt: string; inBdmt: string; outMt: string; outBdmt: string; closingMt: string; closingBdmt: string; unmeasuredInMt: string; unmeasuredOutMt: string; estimatedInBdmt: string; estimatedOutBdmt: string; estimatedClosingBdmt: string; closingDrynessPercent: string | null }
 
 const KIND_VI: Record<string, string> = { Receipt: 'Đo khi nhập', Shipment: 'Đo ở tàu (xuất)', Other: 'Khác' }
 
@@ -443,11 +459,14 @@ function Bdmt() {
       <div className="panel">
         <strong>Tồn MT / BDMT</strong>
         <table className="grid">
-          <thead><tr><th>Kho</th><th>Vật tư</th><th className="num">Đầu MT</th><th className="num">Đầu BDMT</th><th className="num">Nhập MT</th><th className="num">Nhập BDMT</th><th className="num">Xuất MT</th><th className="num">Xuất BDMT</th><th className="num">Cuối MT</th><th className="num">Cuối BDMT</th><th className="num">MT chưa có kết quả đo</th></tr></thead>
+          <thead><tr><th>Kho</th><th>Vật tư</th><th className="num">Đầu MT</th><th className="num">Đầu BDMT</th><th className="num">Nhập MT</th><th className="num">Nhập BDMT</th><th className="num">Xuất MT</th><th className="num">Xuất BDMT</th><th className="num">Cuối MT</th><th className="num">Cuối BDMT (đã đo)</th><th className="num" title="Tồn BDMT gồm cả phần xuất, chuyển kho chưa đo được tính tạm theo độ khô bình quân của kho lúc xuất">Cuối BDMT (kể cả tạm tính)</th><th className="num">Độ khô bình quân tồn %</th><th className="num">MT chưa có kết quả đo</th></tr></thead>
           <tbody>{rows.map(r => <tr key={r.warehouseCode + r.itemCode}><td>{r.warehouseCode}</td><td>{r.itemCode}</td>
             {[r.openingMt, r.openingBdmt, r.inMt, r.inBdmt, r.outMt, r.outBdmt, r.closingMt, r.closingBdmt].map((v, i) => <td key={i} className="num">{n(v)}</td>)}
+            <td className="num" title={r.estimatedOutBdmt !== '0' ? `Xuất tạm tính ${formatMoney(r.estimatedOutBdmt)} BDMT theo bình quân thời điểm` : undefined}>{n(r.estimatedClosingBdmt)}{r.estimatedOutBdmt !== '0' || r.estimatedInBdmt !== '0' ? ' *' : ''}</td>
+            <td className="num">{r.closingDrynessPercent == null ? '' : formatMoney(r.closingDrynessPercent)}</td>
             <td className="num">{n(r.unmeasuredInMt)}{r.unmeasuredOutMt !== '0' ? ` / xuất ${formatMoney(r.unmeasuredOutMt)}` : ''}</td></tr>)}</tbody>
         </table>
+        {rows.some(r => r.estimatedOutBdmt !== '0' || r.estimatedInBdmt !== '0') && <p className="muted">* Có phần tạm tính: xuất và chuyển kho chưa có kết quả đo được tính BDMT theo <b>độ khô bình quân thời điểm</b> của kho lúc xuất (BDMT tồn ÷ MT tồn); hàng chuyển kho mang đúng BDMT đó sang kho nhận. Có chứng thư hoặc kết quả đo thì số đo thay số tạm tính. Không ghi sổ cái.</p>}
       </div>
       <div className="panel">
         <strong>Chờ kết quả đo / chứng thư ({pending.length})</strong>

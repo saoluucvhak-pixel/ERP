@@ -218,6 +218,13 @@ Chị gửi ảnh giao diện mẫu. Đã dựng:
 | Thuế GTGT | Báo cáo (kết quả): đối chiếu 3 nguồn, bảng kê; không ghi Nhật ký | Không |
 | Chứng từ kế toán, Sổ Nhật ký chung, Sổ chi tiết, Cân đối phát sinh, Báo cáo theo mẫu | Kế toán tổng hợp: Nhật ký (chuyển đổi) và sổ, báo cáo (kết quả) | — |
 
+## 9l. Đã làm đợt 11 (19/10/2026): theo dõi 2 đơn vị tính
+
+Chị chốt: dăm gỗ vẫn theo chu trình bình thường, chỉ khác là theo dõi **2 đơn vị tính**: (1) quy đổi **cố định**; (2) quy đổi **theo thời điểm** (dăm gỗ: hệ số = độ khô tại thời điểm). Tham chiếu cách quản lý của HAK_KHO_OFFLINE (chỉ đọc).
+- Cố định: `Item.AltUnit` + `AltFactor` (1 ĐVT phụ = hệ số ĐVT chính); sổ kho vẫn giữ ĐVT chính, số lượng quy đổi hiển thị ở tồn kho/thẻ kho và nhập được ở dòng phiếu kho. Vật tư đo độ khô không đặt được đơn vị cố định (loại trừ nhau).
+- Theo thời điểm: BDMT = MT × độ khô. Xuất/chuyển kho chưa đo được **ước tính theo độ khô bình quân thời điểm** (BDMT tồn ÷ MT tồn lúc xuất), báo riêng với phần đã đo.
+- Chưa làm (chờ chị quyết): chính sách "Thực tế / Bình quân thời điểm" theo kho, phiếu chênh lệch CL, lô, mượn/trả như HAK_KHO_OFFLINE.
+
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).

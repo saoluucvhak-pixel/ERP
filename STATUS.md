@@ -113,3 +113,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 4. Chế độ LAN/PostgreSQL chạy được nhưng chưa có bộ cài máy chủ; giới hạn |số tiền| ≤ 922.337.203.685.477,5807.
 5. Giao diện chạy qua Vite (dev) hoặc gói chạy độc lập; chưa đóng gói Tauri, chưa có tab đa màn hình, tùy chỉnh cột; đã có xuất Excel; **in**: nút In cạnh Xuất Excel ở mọi báo cáo (CSS in ẩn menu/nút), In chứng từ = phiếu kế toán nội bộ có số tiền bằng chữ và ô ký (mẫu pháp lý phiếu thu/chi chưa dựng — [CẦN XÁC MINH]).
 6. (Đã xử lý 15/10/2026) Danh sách chứng từ phân trang (200 dòng/trang, tối đa 1.000), lọc theo loại, tài khoản, từ khóa (số/diễn giải). Trên SQLite tìm không phân biệt hoa/thường chỉ với chữ không dấu.
+
+| 19/10/2026 | 2 đơn vị tính (cố định + BDMT theo thời điểm), migration Phase8ItemAltUnit | 195 tích hợp, web 20 | docs/10 mục 9l |

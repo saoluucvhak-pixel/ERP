@@ -22,6 +22,13 @@ public sealed class Item
     public Guid InventoryAccountId { get; set; }
     /// <summary>Wood chips etc.: every receipt/issue line needs a dryness measurement to derive BDMT.</summary>
     public bool TracksDryness { get; set; }
+    /// <summary>
+    /// Đơn vị tính quy đổi cố định (ví dụ 1 tấn = 1000 kg, 1 thùng = 12 chai): sổ kho chỉ giữ số lượng theo đơn vị chính, số theo đơn vị quy đổi suy ra bằng
+    /// <see cref="AltFactor"/>. Vật tư theo dõi độ khô (dăm gỗ) không dùng hệ số cố định: đơn vị quy đổi của nó là BDMT với hệ số theo độ khô đo tại từng thời điểm.
+    /// </summary>
+    public string? AltUnit { get; set; }
+    /// <summary>Số đơn vị chính trong 1 đơn vị quy đổi.</summary>
+    public decimal? AltFactor { get; set; }
     /// <summary>Giá bán mặc định (VND/đơn vị chính), thuế suất GTGT mặc định (%), tồn tối thiểu và số lượng đặt tối ưu (danh mục hàng hóa theo tệp phân tích ERP). Null = chưa khai báo.</summary>
     public decimal? SalePrice { get; set; }
     public decimal? DefaultVatRate { get; set; }

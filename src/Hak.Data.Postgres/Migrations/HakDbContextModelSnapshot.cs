@@ -1968,6 +1968,15 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal?>("AltFactor")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("alt_factor");
+
+                    b.Property<string>("AltUnit")
+                        .HasColumnType("text")
+                        .HasColumnName("alt_unit");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasColumnType("text")
