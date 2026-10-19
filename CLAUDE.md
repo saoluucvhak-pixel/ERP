@@ -66,7 +66,7 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - Lưu ý khi thêm entity có decimal: phải thêm `HasConversion(money)` trong `ApplySqliteMoneyStorage` (SQLite), PostgreSQL tự áp numeric(19,4).
 
 ## Định hướng kiến trúc mới (19/10/2026, chị chốt) — xem docs/10-CHU-TRINH-NHAT-KY.md
-Xây theo **chu trình** (doanh thu, cung ứng, chuyển đổi, nhân sự–lương, tài chính/thanh toán), mỗi chu trình có **nhật ký sự kiện** riêng; sự kiện **phát sinh hoặc không phát sinh** bút toán (hợp đồng, đặt hàng: không; nhập hàng: có). Phân biệt dữ liệu **phát sinh / chuyển đổi / kết quả**. Cuối chu trình này thì chu trình sau **tự nhận** (bàn giao qua hộp thư, ví dụ "chấp nhận thanh toán" → chu trình thanh toán tạo lệnh). Chiều phân tích kế thừa dọc chuỗi chứng từ. Đề xuất đang chờ chị xác nhận 4 điểm ở mục 8 của tài liệu; trước khi làm không đụng sổ cái.
+**Bám tệp "Phân tích thiết kế hệ thống ERP" chị gửi** (không tự thêm khái niệm ngoài tệp). Xây theo **chu trình** (doanh thu, cung ứng, chuyển đổi; nhân sự–lương và tài chính chỉ được giới thiệu trong tệp). Quy trình tệp: **ghi nhận** (chứng từ nghiệp vụ = dữ liệu phát sinh) → **xử lý** (ghi **Nhật ký + Chi tiết Nhật ký**, sổ cái, sổ chi tiết = dữ liệu chuyển đổi) → **báo cáo** (tập tin tồn/tổng hợp, BCĐPS, BCTC = dữ liệu kết quả). Khâu **phát sinh nghiệp vụ kế toán = có ghi Nhật ký** (xuất/nhập kho, hóa đơn, thu/chi); đơn đặt hàng, yêu cầu mua hàng, lệnh bán hàng, hợp đồng: không. Cuối chu trình này thì chu trình sau tự nhận (ví dụ cung ứng "chấp nhận thanh toán" → hàng chờ thanh toán theo ngày đáo hạn → thanh toán tự tạo lệnh Nháp). Đang chờ chị xác nhận 5 điểm ở mục 8 của tài liệu; trước khi làm không đụng sổ cái.
 
 ## Bước tiếp theo
 1. ~~Đơn hàng~~ (xong 2026-10-15, 156 test).
