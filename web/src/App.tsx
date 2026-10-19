@@ -10,6 +10,7 @@ import { FxView } from './Fx'
 import { InventoryView } from './Inventory'
 import { LoansView } from './Loans'
 import { OrdersView } from './Orders'
+import { SKINS, loadTheme, saveTheme, type Mode, type Skin, type Theme } from './theme'
 import { PayrollView } from './Payroll'
 import { SetupView } from './Setup'
 import { ProductionView } from './Production'
@@ -157,6 +158,7 @@ export default function App() {
         <button className="company-chip" title="Bấm để đổi công ty" onClick={() => { session.setCompany(null); setCompanyId(null) }}>{company.name} ▾</button>
         <span className="year-chip"><i /> Dữ liệu kế toán {new Date().getFullYear()}</span>
         <div className="topbar-right">
+          <ThemePicker />
           <span className="who" title={(company.roles ?? []).join(', ')}>{(company.roles ?? []).join(', ') || 'Người dùng'}</span>
           <button onClick={logout}>Đăng xuất</button>
         </div>
@@ -233,5 +235,20 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
         <button className="primary" disabled={busy || !userName || !password || (firstRun && (!fullName || !confirm))}>{firstRun ? 'Tạo quản trị viên và đăng nhập' : 'Đăng nhập'}</button>
       </div>
     </form>
+  )
+}
+
+function ThemePicker() {
+  const [t, setT] = useState(loadTheme)
+  const change = (n: Theme) => { setT(n); saveTheme(n) }
+  return (
+    <div className="theme-pick">
+      <select aria-label="Kiểu giao diện" value={t.skin} onChange={e => change({ ...t, skin: e.target.value as Skin })}>
+        {SKINS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
+      </select>
+      <select aria-label="Chế độ sáng/tối" value={t.mode} onChange={e => change({ ...t, mode: e.target.value as Mode })}>
+        <option value="auto">Tự động</option><option value="light">Sáng</option><option value="dark">Tối</option>
+      </select>
+    </div>
   )
 }

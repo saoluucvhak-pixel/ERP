@@ -32,19 +32,66 @@
   background: var(--bg);
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b101a; --panel: #121926; --text: #e8e6df; --muted: #9aa0ad; --line: #232c3d;
-    --accent: #d4b06a; --accent-hover: #e3c88f; --accent-soft: rgba(212, 176, 106, .16); --accent-text: #1b1405;
-    --gold: #d4b06a; --gold-soft: #5a4520;
-    --danger: #ff8a6a; --ok: #4ac26b; --warn: #f0b35a;
-    --row-alt: #151d2b; --row-hover: #19222f; --thead: #18202f; --topbar: #0e1420; --topbar-text: #e8e6df;
-    --sidebar: linear-gradient(180deg, #090e19 0%, #060a12 100%);
-    --focus: rgba(212, 176, 106, .32);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 22px rgba(0, 0, 0, .3);
-    color-scheme: dark;
-  }
+/* Kiểu giao diện: data-skin (luxe mặc định, classic, neutral, champagne) × data-mode (light/dark). Chọn ở thanh trên, lưu theo trình duyệt (theme.ts). */
+:root { --side-active-bg: rgba(214, 178, 106, .16); --side-active-text: #e6cf9b; }
+:root[data-mode="dark"] {
+  --bg: #0b101a; --panel: #121926; --text: #e8e6df; --muted: #9aa0ad; --line: #232c3d;
+  --accent: #d4b06a; --accent-hover: #e3c88f; --accent-soft: rgba(212, 176, 106, .16); --accent-text: #1b1405;
+  --gold: #d4b06a; --gold-soft: #5a4520;
+  --danger: #ff8a6a; --ok: #4ac26b; --warn: #f0b35a;
+  --row-alt: #151d2b; --row-hover: #19222f; --thead: #18202f; --topbar: #0e1420; --topbar-text: #e8e6df;
+  --sidebar: linear-gradient(180deg, #090e19 0%, #060a12 100%);
+  --focus: rgba(212, 176, 106, .32);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 22px rgba(0, 0, 0, .3);
+  color-scheme: dark;
 }
+/* classic — xanh ngọc (tokens :root của Design System) */
+:root[data-skin="classic"] {
+  --bg: #f3f6fa; --panel: #ffffff; --text: #14212b; --muted: #5c6b7c; --line: #e3e9f0;
+  --accent: #0e7c86; --accent-hover: #0b6870; --accent-soft: #e2f1f2; --accent-text: #ffffff;
+  --gold: #d99a2b; --gold-soft: #f0cf8f; --row-alt: #f8fafc; --row-hover: #f1f7f8; --thead: #f5f8fa; --topbar: #ffffff; --topbar-text: #14212b;
+  --sidebar: linear-gradient(180deg, #0f2740 0%, #0a1c30 100%); --sidebar-line: rgba(255, 255, 255, .08);
+  --focus: rgba(14, 124, 134, .22); --shadow: 0 1px 2px rgba(16, 35, 58, .05), 0 6px 18px rgba(16, 35, 58, .06);
+  --side-active-bg: rgba(20, 163, 173, .22); --side-active-text: #ffffff;
+}
+:root[data-skin="classic"][data-mode="dark"] {
+  --bg: #0d151e; --panel: #15202c; --text: #e3eaf2; --muted: #8ea0b5; --line: #243244;
+  --accent: #21b5c0; --accent-hover: #47c8d1; --accent-soft: rgba(33, 181, 192, .16); --accent-text: #062c30;
+  --gold: #f0b35a; --gold-soft: #5a4520; --row-alt: #121c27; --row-hover: #1b2a38; --thead: #1a2633; --topbar: #101a25; --topbar-text: #e3eaf2;
+  --sidebar: linear-gradient(180deg, #0a1826 0%, #071019 100%); --focus: rgba(33, 181, 192, .3);
+}
+/* neutral — xám xanh doanh nghiệp (giá trị do ERP đề xuất, repo chung chưa có file token) */
+:root[data-skin="neutral"] {
+  --bg: #f1f4f8; --panel: #ffffff; --text: #0f172a; --muted: #5b6678; --line: #dde3ec;
+  --accent: #334155; --accent-hover: #1e293b; --accent-soft: #e8ecf2; --accent-text: #ffffff;
+  --gold: #64748b; --gold-soft: #cbd5e1; --row-alt: #f7f9fc; --row-hover: #eef2f7; --thead: #eef1f6; --topbar: #ffffff; --topbar-text: #0f172a;
+  --sidebar: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); --sidebar-line: rgba(255, 255, 255, .08);
+  --focus: rgba(51, 65, 85, .25); --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 6px 18px rgba(15, 23, 42, .06);
+  --side-active-bg: rgba(148, 163, 184, .2); --side-active-text: #ffffff;
+}
+:root[data-skin="neutral"][data-mode="dark"] {
+  --bg: #0f172a; --panel: #1e293b; --text: #e2e8f0; --muted: #94a3b8; --line: #334155;
+  --accent: #94a3b8; --accent-hover: #cbd5e1; --accent-soft: rgba(148, 163, 184, .16); --accent-text: #0f172a;
+  --gold: #94a3b8; --gold-soft: #475569; --row-alt: #1a2436; --row-hover: #243247; --thead: #243247; --topbar: #172033; --topbar-text: #e2e8f0;
+  --sidebar: linear-gradient(180deg, #0b1220 0%, #060a14 100%); --focus: rgba(148, 163, 184, .32);
+}
+/* champagne — vàng ấm (giá trị do ERP đề xuất) */
+:root[data-skin="champagne"] {
+  --bg: #faf6ec; --panel: #fffdf7; --text: #2a2314; --muted: #766b55; --line: #ece2c8;
+  --accent: #8a6a1f; --accent-hover: #6f5418; --accent-soft: #f6edd6; --accent-text: #ffffff;
+  --gold: #c9a45c; --gold-soft: #efd9a8; --row-alt: #fbf7ec; --row-hover: #f8f1de; --thead: #f4ecd6; --topbar: #fffdf7; --topbar-text: #2a2314;
+  --sidebar: linear-gradient(180deg, #3a2f17 0%, #241c0d 100%); --sidebar-line: rgba(239, 217, 168, .2);
+  --focus: rgba(201, 164, 92, .35); --shadow: 0 1px 2px rgba(42, 35, 20, .05), 0 8px 22px rgba(42, 35, 20, .07);
+  --side-active-bg: rgba(239, 217, 168, .18); --side-active-text: #efd9a8;
+}
+:root[data-skin="champagne"][data-mode="dark"] {
+  --bg: #14100a; --panel: #1d1810; --text: #efe8d6; --muted: #a39a82; --line: #3a2f1a;
+  --accent: #e0b862; --accent-hover: #efd08a; --accent-soft: rgba(224, 184, 98, .16); --accent-text: #1d1505;
+  --gold: #e0b862; --gold-soft: #5a4520; --row-alt: #19140d; --row-hover: #251e12; --thead: #251e12; --topbar: #17120b; --topbar-text: #efe8d6;
+  --sidebar: linear-gradient(180deg, #0f0b06 0%, #080603 100%); --focus: rgba(224, 184, 98, .34);
+}
+.theme-pick { display: flex; align-items: center; gap: 6px; }
+.theme-pick select { padding: 4px 6px; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); }
 button { font: inherit; padding: 5px 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 4px; cursor: pointer; }
@@ -74,7 +121,7 @@ label > input, label > select { color: var(--text); font-size: 13px; }
 .sidebar-title { font-size: 11px; letter-spacing: .06em; color: var(--sidebar-mut); padding: 12px 8px 6px; }
 .sidebar button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; border-radius: 6px; background: transparent; color: inherit; padding: 8px 10px; margin-bottom: 2px; }
 .sidebar button:hover { background: rgba(255,255,255,.08); color: inherit; }
-.sidebar button.active { background: rgba(214, 178, 106, .16); color: var(--gold-soft); font-weight: 600; box-shadow: inset 3px 0 0 var(--gold); }
+.sidebar button.active { background: var(--side-active-bg); color: var(--side-active-text); font-weight: 600; box-shadow: inset 3px 0 0 var(--gold); }
 .sidebar .quick-add { justify-content: center; border: 1px solid var(--sidebar-line); margin-bottom: 4px; }
 .content { display: flex; flex-direction: column; min-width: 0; overflow: auto; }
 .tabs { display: flex; gap: 4px; background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 14px; position: sticky; top: 0; z-index: 5; overflow-x: auto; flex: none; }
