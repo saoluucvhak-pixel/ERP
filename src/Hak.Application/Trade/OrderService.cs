@@ -1,5 +1,7 @@
 using Hak.Application.Audit;
 using Hak.Application.Common;
+using Hak.Application.Cycles;
+using Hak.Application.Settlement;
 using Hak.Application.Security;
 using Hak.Data;
 using Hak.Domain.Common;
@@ -70,10 +72,22 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         });
     }
 
-    public Task<TradeOrder> ConfirmAsync(SessionContext ctx, Guid id) => TransitionAsync(ctx, id, Permissions.VoucherApprove, "confirm", async (o, company) =>
+    /// <summary>
+    /// Xác nhận đơn. Đơn bán VND của khách có hạn mức tín dụng: nếu số dư công nợ + giá trị đơn vượt hạn mức thì bị từ chối (CREDIT_LIMIT_EXCEEDED),
+    /// trừ khi người có quyền credit.override xác nhận kèm lý do (được ghi nhật ký). Thiếu tồn kho không chặn.
+    /// </summary>
+    public Task<TradeOrder> ConfirmAsync(SessionContext ctx, Guid id, string? creditOverrideReason = null) => TransitionAsync(ctx, id, Permissions.VoucherApprove, "confirm", async (o, company) =>
     {
         o.Confirm(ctx.UserId, clock.UtcNow, company.RequireDistinctApprover);
-        await Task.CompletedTask;
+        if (o.Kind != InvoiceKind.Sales) return;
+        var check = await new SalesOrderCheckService(db, new SettlementService(db, audit, clock), clock).ComputeAsync(ctx, o);
+        if (!check.ExceedsCredit) return;
+        var detail = $"Số dư công nợ {check.CurrentBalance:N0} + đơn {check.OrderValue:N0} = {check.BalanceAfter:N0} vượt hạn mức tín dụng {check.CreditLimit:N0} của {check.PartnerName}.";
+        if (string.IsNullOrWhiteSpace(creditOverrideReason))
+            throw new DomainException(ErrorCodes.CreditLimitExceeded, detail + " Cần người có thẩm quyền xác nhận kèm lý do, hoặc yêu cầu khách thanh toán nợ cũ.");
+        ctx.Require(Permissions.CreditOverride);
+        await audit.AppendAsync(ctx.CompanyId, ctx, "order.credit_override", "order", o.Id.ToString(),
+            new { o.Number, check.CreditLimit, check.CurrentBalance, check.OrderValue, check.BalanceAfter, reason = creditOverrideReason.Trim() });
     });
 
     public Task<TradeOrder> CloseAsync(SessionContext ctx, Guid id, string reason)

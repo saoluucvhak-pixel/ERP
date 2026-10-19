@@ -747,6 +747,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("Address")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("address");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -764,6 +768,14 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
+                    b.Property<long?>("CreditLimit")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("credit_limit");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("email");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
@@ -772,6 +784,14 @@ namespace Hak.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
+
+                    b.Property<int?>("PaymentTermsDays")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("payment_terms_days");
+
+                    b.Property<string>("Phone")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("phone");
 
                     b.Property<int>("Roles")
                         .HasColumnType("INTEGER")
@@ -1265,6 +1285,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
+                    b.Property<long?>("DefaultVatRate")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_vat_rate");
+
                     b.Property<Guid>("InventoryAccountId")
                         .HasColumnType("TEXT")
                         .HasColumnName("inventory_account_id");
@@ -1273,10 +1297,22 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
+                    b.Property<long?>("MinStock")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("min_stock");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
+
+                    b.Property<long?>("ReorderQty")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("reorder_qty");
+
+                    b.Property<long?>("SalePrice")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sale_price");
 
                     b.Property<bool>("TracksDryness")
                         .HasColumnType("INTEGER")

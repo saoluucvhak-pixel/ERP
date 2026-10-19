@@ -535,4 +535,60 @@ public class TradeTests
         Assert.Equal("NOT_ACCEPTED", (await s.PaymentAcceptances.PayableQueueAsync(h.Auditor, D(3, 31))).Single().Stage);
         await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null);   // can be accepted again after cancelling
     }
+
+    [Fact]
+    public async Task SalesOrder_CreditCheck_BlocksOverLimit_UnlessAuthorisedWithReason_AndShortageNeverBlocks()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await s.Setup.UpdatePartnerCommercialAsync(h.Admin, h.Partner["KH01"], "12 Lê Duẩn, Đà Nẵng", "0236 111 222", "kh01@example.vn", 10_000_000, 30);
+        // KH01 already owes 8,000,000 (posted receivable).
+        await h.PostedAsync(s, new Hak.Application.Accounting.VoucherInput(Hak.Domain.Vouchers.VoucherTypes.General, D(3, 1), D(3, 1), "Bán chịu",
+            [new(h.Acc["AR"], Hak.Domain.Vouchers.Side.Debit, 8_000_000, h.Partner["KH01"], DueDate: D(3, 10)), new(h.Acc["REV"], Hak.Domain.Vouchers.Side.Credit, 8_000_000)]));
+
+        var orders = Orders(fx);
+        var line = new OrderLineInput(fx.Add, 10, 300_000, VatRate: 10);   // 3,300,000 incl. VAT → 11,300,000 > 10,000,000
+        var order = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, 5), "Bán phụ gia", [line]));
+
+        var checker = new Hak.Application.Cycles.SalesOrderCheckService(s.Db, s.Settlement, h.Clock);
+        var check = await checker.CheckAsync(h.Approver, order.Id);
+        Assert.Equal((10_000_000m, 8_000_000m, 8_000_000m, 3_300_000m, 11_300_000m, true, true), (check.CreditLimit, check.CurrentBalance, check.OverdueAmount, check.OrderValue, check.BalanceAfter, check.ExceedsCredit, check.AnyShortage));
+        Assert.Equal((10m, 0m, 10m), (check.Lines[0].Ordered, check.Lines[0].OnHand, check.Lines[0].Shortfall));
+
+        Assert.Equal(ErrorCodes.CreditLimitExceeded, await CodeOf(() => orders.ConfirmAsync(h.Approver, order.Id)));
+        Assert.Equal(ErrorCodes.CreditLimitExceeded, await CodeOf(() => orders.ConfirmAsync(h.Approver, order.Id, "  ")));
+        var noOverride = h.Approver with { Permissions = h.Approver.Permissions.Where(p => p != "credit.override").ToHashSet() };
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => orders.ConfirmAsync(noOverride, order.Id, "Khách lâu năm, đã trả đủ kỳ trước")));
+        Assert.Equal(OrderStatus.Draft, (await s.Db.TradeOrders.AsNoTracking().SingleAsync(o => o.Id == order.Id)).Status);   // failed attempts changed nothing
+        var confirmed = await orders.ConfirmAsync(h.Approver, order.Id, "Khách lâu năm, đã trả đủ kỳ trước");
+        Assert.Equal(OrderStatus.Confirmed, confirmed.Status);
+        Assert.Contains(s.Db.AuditLogs.AsNoTracking().Select(a => a.Action).ToList(), a => a == "order.credit_override");
+
+        // A customer without a declared limit is not checked; missing stock never blocks the order.
+        var free = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH02"], D(3, 5), "Bán không hạn mức", [new OrderLineInput(fx.Add, 999, 1_000_000)]));
+        var freeCheck = await checker.CheckAsync(h.Approver, free.Id);
+        Assert.False(freeCheck.ExceedsCredit);
+        Assert.True(freeCheck.AnyShortage);
+        Assert.Equal(OrderStatus.Confirmed, (await orders.ConfirmAsync(h.Approver, free.Id)).Status);
+    }
+
+    [Fact]
+    public async Task ReorderList_ShowsItemsBelowMinimumStock_WithOptimalQuantity()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await s.Stock.UpdateItemCommercialAsync(h.Admin, fx.Add, 60_000, 10, 50, 200);
+        var reorder = new Hak.Application.Cycles.ReorderService(s.Db);
+
+        var row = Assert.Single(await reorder.ListAsync(h.Auditor));
+        Assert.Equal(("PHU", 0m, 50m, 200m), (row.Code, row.OnHand, row.MinStock, row.SuggestedQty));
+
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 2), fx.Add);   // 100 kg ≥ minimum 50
+        Assert.Empty(await reorder.ListAsync(h.Auditor));
+        await PostedIssueAsync(fx, 70, D(3, 4), fx.Add);                 // 30 kg left < 50
+        Assert.Equal(30m, Assert.Single(await reorder.ListAsync(h.Auditor)).OnHand);
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Stock.UpdateItemCommercialAsync(h.Admin, fx.Add, -1, null, null, null)));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Stock.UpdateItemCommercialAsync(h.Auditor, fx.Add, 1, null, null, null)));
+    }
 }

@@ -76,6 +76,24 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         });
     }
 
+    /// <summary>Giá bán, thuế suất GTGT mặc định, tồn tối thiểu, số lượng đặt tối ưu của vật tư (danh mục hàng hóa theo tệp phân tích ERP).</summary>
+    public async Task<Item> UpdateItemCommercialAsync(SessionContext ctx, Guid itemId, decimal? salePrice, decimal? defaultVatRate, decimal? minStock, decimal? reorderQty)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        if (salePrice is < 0 || minStock is < 0 || reorderQty is < 0) throw new DomainException(ErrorCodes.ValidationFailed, "Giá bán, tồn tối thiểu và số lượng đặt không được âm.");
+        if (defaultVatRate is < 0 or > 100) throw new DomainException(ErrorCodes.ValidationFailed, "Thuế suất GTGT từ 0 đến 100%.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId)
+                       ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            var old = new { item.SalePrice, item.DefaultVatRate, item.MinStock, item.ReorderQty };
+            item.SalePrice = salePrice; item.DefaultVatRate = defaultVatRate; item.MinStock = minStock; item.ReorderQty = reorderQty;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.update_commercial", "item", item.Id.ToString(), new { old, salePrice, defaultVatRate, minStock, reorderQty });
+            await db.SaveChangesAsync();
+            return item;
+        });
+    }
+
     /// <summary>
     /// Sets the warehouse costing method from <paramref name="effectiveFrom"/>, which must be the first day of a fiscal
     /// year with no stock movement on or after it (consistency principle: no retroactive change of method).

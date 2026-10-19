@@ -61,6 +61,8 @@ builder.Services.AddScoped<BusinessDocumentService>();
 builder.Services.AddScoped<ClosingService>();
 builder.Services.AddScoped<PaymentOrderService>();
 builder.Services.AddScoped<PaymentAcceptanceService>();
+builder.Services.AddScoped<SalesOrderCheckService>();
+builder.Services.AddScoped<ReorderService>();
 builder.Services.AddScoped<BankReconciliationService>();
 builder.Services.AddScoped<StatementVoucherService>();
 builder.Services.AddScoped<StockService>();

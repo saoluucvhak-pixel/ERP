@@ -22,6 +22,11 @@ public sealed class Item
     public Guid InventoryAccountId { get; set; }
     /// <summary>Wood chips etc.: every receipt/issue line needs a dryness measurement to derive BDMT.</summary>
     public bool TracksDryness { get; set; }
+    /// <summary>Giá bán mặc định (VND/đơn vị chính), thuế suất GTGT mặc định (%), tồn tối thiểu và số lượng đặt tối ưu (danh mục hàng hóa theo tệp phân tích ERP). Null = chưa khai báo.</summary>
+    public decimal? SalePrice { get; set; }
+    public decimal? DefaultVatRate { get; set; }
+    public decimal? MinStock { get; set; }
+    public decimal? ReorderQty { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, Modal, useAction } from './common'
 import { ImportData } from './ImportData'
+import { formatMoney, parseMoney } from './money'
 
 const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', import: 'Nhập từ Excel/CSV' } as const
 
@@ -233,7 +234,25 @@ function Roles() {
 }
 
 interface Warehouse { id: string; code: string; name: string; isActive: boolean; policies: { method: string; effectiveFrom: string; note: string }[] }
-interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean }
+/** Giá bán, thuế suất, tồn tối thiểu, số lượng đặt tối ưu của một vật tư (danh mục hàng hóa theo tệp phân tích ERP). */
+function ItemCommercialCells({ item, busy, onSave }: { item: Item; busy: boolean; onSave: (body: Record<string, string | null>) => void }) {
+  const init = { salePrice: item.salePrice ? formatMoney(item.salePrice) : '', vat: item.defaultVatRate ? formatMoney(item.defaultVatRate) : '', min: item.minStock ? formatMoney(item.minStock) : '', reorder: item.reorderQty ? formatMoney(item.reorderQty) : '' }
+  const [v, setV] = useState(init)
+  const [err, setErr] = useState('')
+  const dirty = (Object.keys(init) as (keyof typeof init)[]).some(k => v[k] !== init[k])
+  const p = (t: string) => (t.trim() ? parseMoney(t) : null)
+  const field = (k: keyof typeof init, label: string) => <td><input className="num" aria-label={`${label} ${item.code}`} value={v[k]} size={9} onChange={e => setV(x => ({ ...x, [k]: e.target.value }))} /></td>
+  return <>
+    {field('salePrice', 'Giá bán')}{field('vat', 'Thuế GTGT')}{field('min', 'Tồn tối thiểu')}{field('reorder', 'SL đặt tối ưu')}
+    <td>{dirty && <button className="primary" disabled={busy} title={err} onClick={() => {
+      const q = { salePrice: p(v.salePrice), defaultVatRate: p(v.vat), minStock: p(v.min), reorderQty: p(v.reorder) }
+      if ((Object.entries({ salePrice: v.salePrice, vat: v.vat, min: v.min, reorder: v.reorder })).some(([, t]) => t.trim() && parseMoney(t) == null)) { setErr('Có ô không hợp lệ'); return }
+      setErr(''); onSave(q)
+    }}>Lưu</button>}{err && <span className="muted"> {err}</span>}</td>
+  </>
+}
+
+interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
 
 function Stock() {
@@ -273,8 +292,9 @@ function Stock() {
       </section>
       <section className="panel">
         <h3>Vật tư, hàng hóa</h3>
-        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th>Đo độ khô (MT/BDMT)</th></tr></thead>
+        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đo độ khô (MT/BDMT)</th></tr></thead>
           <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
+            <ItemCommercialCells item={i} busy={busy} onSave={(body) => act(() => put(`/items/${i.id}/commercial`, body), `Đã lưu thông tin thương mại ${i.code}.`)} />
             <td><input type="checkbox" aria-label={`Đo độ khô ${i.code}`} checked={i.tracksDryness} disabled={busy}
               onChange={e => act(() => post(`/items/${i.id}/tracks-dryness`, { tracks: e.target.checked }), 'Đã cập nhật theo dõi độ khô.')} /></td></tr>)}</tbody></table>
         <div className="form-row" style={{ marginTop: 8 }}>

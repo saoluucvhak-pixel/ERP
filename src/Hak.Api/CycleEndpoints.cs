@@ -26,6 +26,10 @@ public static class CycleEndpoints
         api.MapPost("/procurement/acceptances/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, PaymentAcceptanceService s) =>
             Results.Ok(Dto(await s.CancelAsync(await http.SessionAsync(), id, r.Reason))));
 
+        // Doanh thu: kiểm tra tín dụng và tồn kho khi nhận đơn bán. Cung ứng: danh mục cần đặt hàng từ tồn tối thiểu.
+        api.MapGet("/revenue/orders/{id:guid}/check", async (HttpContext http, Guid id, SalesOrderCheckService s) => Results.Ok(await s.CheckAsync(await http.SessionAsync(), id)));
+        api.MapGet("/procurement/reorder-list", async (HttpContext http, ReorderService s) => Results.Ok(await s.ListAsync(await http.SessionAsync())));
+
         // Thanh toán: hộp thư nhận bàn giao.
         api.MapGet("/payment/inbox", async (HttpContext http, bool? includeClosed, PaymentAcceptanceService s) =>
             Results.Ok(await s.InboxAsync(await http.SessionAsync(), includeClosed ?? false)));

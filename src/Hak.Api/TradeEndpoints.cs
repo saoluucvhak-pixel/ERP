@@ -8,6 +8,8 @@ namespace Hak.Api;
 
 public sealed record ReturnReceiptRequest(int OriginalLineNo, decimal Quantity, DateOnly Date, Guid? WarehouseId, string? Description);
 
+public sealed record ConfirmOrderRequest(string? CreditOverrideReason);
+
 public static class TradeEndpoints
 {
     private static object Dto(CommercialInvoice i) => new
@@ -64,7 +66,7 @@ public static class TradeEndpoints
             }));
         });
         api.MapPost("/orders", async (HttpContext http, OrderInput r, OrderService s) => Results.Ok(new { (await s.CreateAsync(await http.SessionAsync(), r)).Id }));
-        api.MapPost("/orders/{id:guid}/confirm", async (HttpContext http, Guid id, OrderService s) => { await s.ConfirmAsync(await http.SessionAsync(), id); return Results.NoContent(); });
+        api.MapPost("/orders/{id:guid}/confirm", async (HttpContext http, Guid id, ConfirmOrderRequest? r, OrderService s) => { await s.ConfirmAsync(await http.SessionAsync(), id, r?.CreditOverrideReason); return Results.NoContent(); });
         api.MapPost("/orders/{id:guid}/close", async (HttpContext http, Guid id, ReasonRequest r, OrderService s) => { await s.CloseAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
         api.MapPost("/orders/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, OrderService s) => { await s.CancelAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
         api.MapGet("/orders/{id:guid}/fulfilment", async (HttpContext http, Guid id, OrderService s) => Results.Ok(await s.FulfilmentAsync(await http.SessionAsync(), id)));

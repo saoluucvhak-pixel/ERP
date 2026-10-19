@@ -62,6 +62,13 @@ public sealed class BusinessPartner
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public string? TaxCode { get; set; }
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    /// <summary>Hạn mức tín dụng (VND) cho bán chịu; null = không kiểm tra (danh mục khách hàng theo tệp phân tích ERP, mục V.1.2.1).</summary>
+    public decimal? CreditLimit { get; set; }
+    /// <summary>Điều kiện thanh toán: số ngày từ ngày hóa đơn đến hạn thanh toán.</summary>
+    public int? PaymentTermsDays { get; set; }
     public PartnerRoles Roles { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }

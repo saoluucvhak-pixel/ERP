@@ -28,6 +28,7 @@ public static class ErrorCodes
     public const string SodViolation = "SOD_VIOLATION";
     public const string AlreadyPosted = "ALREADY_POSTED";
     public const string DuplicateSource = "DUPLICATE_SOURCE";
+    public const string CreditLimitExceeded = "CREDIT_LIMIT_EXCEEDED";
     public const string ConcurrencyConflict = "CONCURRENCY_CONFLICT";
     public const string Forbidden = "FORBIDDEN";
     public const string NotFound = "NOT_FOUND";

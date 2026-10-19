@@ -7,6 +7,8 @@ export interface Order { id: string; number: string; kind: string; partnerId: st
 interface Item { id: string; code: string; name: string; unit: string; tracksDryness: boolean }
 interface FulfilLine { lineNo: number; itemCode: string; ordered: string; basis: string; unitPrice: string; stockPosted: string; stockDraft: string; bdmt: string; invoiced: string; invoicedAmount: string; returnedQty: string; returnedAmount: string; outstanding: string }
 interface Fulfil { number: string; status: string; lines: FulfilLine[]; invoices: { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; purpose: string; total: string; settled: string; open: string }[] }
+interface SalesCheck { orderId: string; number: string; partnerName: string; creditLimit: string | null; creditCheckApplied: boolean; creditCheckNote: string | null; currentBalance: string; overdueAmount: string
+  orderValue: string; balanceAfter: string; exceedsCredit: boolean; anyShortage: boolean; lines: { lineNo: number; itemCode: string; itemName: string; unit: string; ordered: string; onHand: string; shortfall: string }[] }
 interface LineDraft { itemId: string; qty: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string }
 
 const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Confirmed: 'Đã xác nhận', Closed: 'Đã đóng', Cancelled: 'Đã hủy' }
@@ -27,6 +29,11 @@ export function OrdersView() {
   useEffect(() => { load() }, [load])
   const upd = (i: number, p: Partial<LineDraft>) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
   const act = (fn: () => Promise<unknown>, msg: string) => run(async () => { await fn(); setInfo(msg); await load() })
+  const [check, setCheck] = useState<SalesCheck | null>(null)
+  /** Đơn bán: kiểm tra tín dụng và tồn kho trước khi xác nhận (tệp phân tích ERP, mục V.1.2.1); đơn mua xác nhận ngay. */
+  const confirm = (o: Order) => o.kind === 'Sales'
+    ? run(async () => setCheck(await get<SalesCheck>(`/cycles/revenue/orders/${o.id}/check`)))
+    : act(() => post(`/orders/${o.id}/confirm`), `Đã xác nhận ${o.number}.`)
 
   const save = () => run(async () => {
     const parsed = lines.map(l => ({ ...l, q: parseMoney(l.qty), p: parseMoney(l.price), v: l.vat === '' ? null : parseMoney(l.vat) }))
@@ -90,6 +97,29 @@ export function OrdersView() {
           </table>
         </div>
       )}
+      {check && (
+        <div className="panel">
+          <div className="toolbar"><strong>Kiểm tra tín dụng và tồn kho — {check.number} · {check.partnerName}</strong><button onClick={() => setCheck(null)}>Đóng</button></div>
+          <p style={{ color: check.exceedsCredit ? 'var(--danger)' : undefined }}>
+            {check.creditCheckApplied
+              ? <>Hạn mức <b>{formatMoney(check.creditLimit)}</b> · số dư công nợ hiện tại <b>{formatMoney(check.currentBalance)}</b> (quá hạn {formatMoney(check.overdueAmount)}) + giá trị đơn ước tính <b>{formatMoney(check.orderValue)}</b> = <b>{formatMoney(check.balanceAfter)}</b>{check.exceedsCredit ? ' — VƯỢT HẠN MỨC.' : ' — trong hạn mức.'}</>
+              : <span className="muted">{check.creditCheckNote}</span>}
+          </p>
+          <table className="grid">
+            <thead><tr><th>Vật tư</th><th>ĐVT</th><th className="num">Đặt</th><th className="num">Tồn hiện tại</th><th className="num">Thiếu</th></tr></thead>
+            <tbody>{check.lines.map(l => <tr key={l.lineNo}><td>{l.itemCode} – {l.itemName}</td><td>{l.unit}</td><td className="num">{formatMoney(l.ordered)}</td><td className="num">{formatMoney(l.onHand)}</td>
+              <td className="num" style={{ color: l.shortfall !== '0' ? 'var(--danger)' : undefined }}>{l.shortfall === '0' ? '' : formatMoney(l.shortfall)}</td></tr>)}</tbody>
+          </table>
+          {check.anyShortage && <p className="muted">Thiếu hàng không chặn xác nhận: thỏa thuận ngày giao với khách và giao trễ phần thiếu.</p>}
+          <div className="toolbar">
+            {!check.exceedsCredit && <button className="primary" disabled={busy} onClick={() => act(() => post(`/orders/${check.orderId}/confirm`), `Đã xác nhận ${check.number}.`).then(() => setCheck(null))}>Xác nhận đơn</button>}
+            {check.exceedsCredit && <button className="danger" disabled={busy} title="Chỉ người có quyền chấp thuận vượt hạn mức; lý do được ghi nhật ký" onClick={() => {
+              const reason = prompt('Lý do chấp thuận bán vượt hạn mức tín dụng (người có thẩm quyền):')
+              if (reason && reason.trim()) act(() => post(`/orders/${check.orderId}/confirm`, { creditOverrideReason: reason.trim() }), `Đã xác nhận ${check.number} vượt hạn mức (ghi nhật ký).`).then(() => setCheck(null))
+            }}>Xác nhận vượt hạn mức…</button>}
+          </div>
+        </div>
+      )}
       <div className="scroll">
         <table className="grid">
           <thead><tr><th>Số đơn</th><th>Ngày</th><th>Đối tượng</th><th>Hợp đồng</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
@@ -98,7 +128,7 @@ export function OrdersView() {
               <td><span className="badge">{STATUS_VI[o.status] ?? o.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => run(async () => setDetail(await get<Fulfil>(`/orders/${o.id}/fulfilment`)))}>Tiến độ</button>
-                {o.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/orders/${o.id}/confirm`), `Đã xác nhận ${o.number}.`)}>Xác nhận</button>}
+                {o.status === 'Draft' && <button className="primary" onClick={() => confirm(o)}>{o.kind === 'Sales' ? 'Kiểm tra & xác nhận' : 'Xác nhận'}</button>}
                 {o.status === 'Confirmed' && <button onClick={() => { const r = prompt('Lý do đóng đơn:'); if (r) act(() => post(`/orders/${o.id}/close`, { reason: r }), `Đã đóng ${o.number}.`) }}>Đóng đơn</button>}
                 {(o.status === 'Draft' || o.status === 'Confirmed') && <button className="danger" onClick={() => { const r = prompt('Lý do hủy đơn:'); if (r) act(() => post(`/orders/${o.id}/cancel`, { reason: r }), `Đã hủy ${o.number}.`) }}>Hủy</button>}
               </td></tr>))}
