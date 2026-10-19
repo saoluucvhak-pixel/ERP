@@ -67,6 +67,7 @@ builder.Services.AddScoped<SalesDispatchService>();
 builder.Services.AddScoped<GoodsInspectionService>();
 builder.Services.AddScoped<PurchaseMatchService>();
 builder.Services.AddScoped<SalesReportService>();
+builder.Services.AddScoped<CashPlanService>();
 builder.Services.AddScoped<BankReconciliationService>();
 builder.Services.AddScoped<StatementVoucherService>();
 builder.Services.AddScoped<StockService>();

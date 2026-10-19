@@ -108,6 +108,11 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 - **Menu theo chu trình**: Doanh thu (Đơn hàng, Bán hàng → Thu tiền, Công nợ) · Cung ứng (Mua hàng → Thanh toán, Hóa đơn mua/bán, Kho) · Chuyển đổi (Giá thành, Tài sản/CCDC) · Nhân sự – tiền lương (Lương) · Tài chính, thanh toán (Thu/Chi tiền, Ngân hàng, Ngoại tệ, Vay, Thuế GTGT) · Kế toán tổng hợp (Chứng từ, Sổ Nhật ký chung, Sổ chi tiết, Cân đối phát sinh, Báo cáo theo mẫu) · Danh mục và hệ thống.
 - Bảng `goods_inspections`, `goods_inspection_lines` (migration `Phase7Inspection`, SQLite và PostgreSQL). Test: 1 test tích hợp (183 → 184); thử tay trên trình duyệt.
 
+## 9e. Đã làm đợt 5 (19/10/2026): kế hoạch tiền và thông báo nợ quá hạn
+- **Kế hoạch tiền theo ngày đáo hạn** (`CashPlanService`, `GET /api/cycles/finance/cash-plan`, tệp mục V.2.2.3): số dư tiền mặt + ngân hàng đã ghi sổ làm đầu kỳ; thu dự kiến từ hóa đơn bán còn nợ và chi dự kiến từ hóa đơn mua còn nợ, xếp theo ngày đáo hạn vào các khoảng "Quá hạn / đến hạn hôm nay", từng tuần (mặc định 8 tuần), "Sau đó", "Chưa có hạn"; tách phần chi đã chấp nhận thanh toán; số dư tiền lũy kế, cảnh báo khi âm. Hiện ở màn Tổng quan, xuất Excel và in. Là dự báo từ hạn thanh toán, không phải cam kết; hóa đơn ngoại tệ chưa tính.
+- **Thông báo nợ quá hạn** (`SalesReportService.OverdueNoticesAsync`, `GET /api/cycles/revenue/overdue`, tệp mục V.1.1.2.9): nợ quá hạn theo khách hàng (hóa đơn, hạn, số ngày quá hạn, còn nợ), khách nợ lâu nhất trước; in thông báo gửi khách có địa chỉ, điện thoại, tổng bằng chữ, chỗ ký. Hiện ở màn Bán hàng → Thu tiền.
+- Không có migration mới. Test: 1 test tích hợp (184 → 185); thử tay trên trình duyệt.
+
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
 |---|---|---|
@@ -124,8 +129,8 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 | Chứng từ kế toán, Sổ Nhật ký chung, Sổ chi tiết, Cân đối phát sinh, Báo cáo theo mẫu | Kế toán tổng hợp: Nhật ký (chuyển đổi) và sổ, báo cáo (kết quả) | — |
 
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
-**Chu trình doanh thu** (mục 2): giá vốn theo mặt hàng trong phân tích tiêu thụ; biên bản và phê duyệt hàng trả lại/giảm giá; thông báo nợ quá hạn (in/gửi) và xóa nợ có phê duyệt; đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
-**Chu trình cung ứng** (mục 3): nút tạo đơn mua nháp từ danh mục cần đặt hàng; xếp hạng uy tín và phê duyệt nhà cung cấp mới (đề xuất: điểm tính từ tỷ lệ đạt kiểm nghiệm + cờ chờ duyệt, bật theo công ty); chiết khấu thanh toán và kế hoạch tiền theo ngày đáo hạn; hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).
+**Chu trình doanh thu** (mục 2): giá vốn theo mặt hàng trong phân tích tiêu thụ; biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
+**Chu trình cung ứng** (mục 3): nút tạo đơn mua nháp từ danh mục cần đặt hàng; xếp hạng uy tín và phê duyệt nhà cung cấp mới (đề xuất: điểm tính từ tỷ lệ đạt kiểm nghiệm + cờ chờ duyệt, bật theo công ty); chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).
 **Thanh toán / tài chính**: lệnh thanh toán lương (`PAYROLL_PAYMENT`), thu tiền khách hàng (`RECEIPT_EXPECTED`), xuất file UNC theo mẫu ngân hàng, hạn mức duyệt theo vai trò.
 **Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm).
 **Nền**: chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.

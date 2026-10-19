@@ -79,6 +79,8 @@ public static class CycleEndpoints
             return Results.Ok(new { inv.Id, inv.Number, status = inv.Status.ToString(), inv.DueDate });
         });
         api.MapGet("/revenue/receivable-queue", async (HttpContext http, DateOnly asOf, SalesReportService s) => Results.Ok(await s.ReceivableQueueAsync(await http.SessionAsync(), asOf)));
+        api.MapGet("/revenue/overdue", async (HttpContext http, DateOnly asOf, SalesReportService s) => Results.Ok(await s.OverdueNoticesAsync(await http.SessionAsync(), asOf)));
+        api.MapGet("/finance/cash-plan", async (HttpContext http, DateOnly asOf, int? weeks, CashPlanService s) => Results.Ok(await s.PlanAsync(await http.SessionAsync(), asOf, weeks ?? 8)));
         api.MapGet("/revenue/sales-analysis", async (HttpContext http, DateOnly from, DateOnly to, SalesReportService s) => Results.Ok(await s.AnalyseAsync(await http.SessionAsync(), from, to)));
         api.MapGet("/revenue/collections", async (HttpContext http, DateOnly from, DateOnly to, SalesReportService s) => Results.Ok(await s.CollectionsAsync(await http.SessionAsync(), from, to)));
 

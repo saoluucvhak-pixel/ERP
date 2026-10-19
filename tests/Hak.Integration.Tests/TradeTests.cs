@@ -723,4 +723,44 @@ public class TradeTests
         Assert.Equal(("PRICE_DIFF", 50_000m, 40_000m), (m2.Flags.Single(f => f.Blocking).Code, m2.Lines[0].UnitPrice, m2.Lines[0].OrderPrice));
         Assert.Equal(ErrorCodes.PaymentMatchFailed, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv2.Id, null)));
     }
+
+    [Fact]
+    public async Task CashPlan_BucketsReceivablesAndPayablesByDueDate_AndOverdueNoticesPerCustomer()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        await s.Setup.UpdatePartnerCommercialAsync(h.Admin, h.Partner["KH01"], "12 Lê Duẩn", "0236 111 222", null, null, null);
+        await Phase2Fixture.PostDocAsync(h, s, Phase2Fixture.Receipt(h, 10_000_000, D(3, 1)));   // opening cash 10,000,000 on the cash account
+
+        // Payable 5,500,000 due 02/04 (purchase) and receivable 660,000 due 10/04 (sale of 10 kg at 60,000 + 10% VAT).
+        var purchase = await PostedPurchaseOfAdditiveAsync(fx);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Dam);
+        var issue = await PostedIssueAsync(fx, 10, D(3, 12), fx.Add);
+        var sale = await fx.Inv.CreateAsync(h.Preparer, new InvoiceInput(InvoiceKind.Sales, h.Partner["KH01"], "1C26T", "200", D(3, 12), D(3, 12), "Bán phụ gia",
+            [new InvoiceLineInput(60_000, issue.Id, 1, VatRate: 10)], DueDate: D(4, 10)));
+        await fx.Inv.PostAsync(h.Approver, sale.Id);
+
+        var plan = new Hak.Application.Cycles.CashPlanService(s.Db, s.Ledger, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement), s.PaymentAcceptances);
+        var p = await plan.PlanAsync(h.Auditor, D(3, 31), 4);
+        Assert.Equal(10_000_000m, p.OpeningCash);
+        Assert.Equal(7, p.Buckets.Count);   // overdue/today + 4 weeks + later + no due date
+        var w1 = p.Buckets[1]; var w2 = p.Buckets[2];
+        Assert.Equal((D(4, 1), D(4, 7), 0m, 5_500_000m, 0m, 4_500_000m), (w1.From, w1.To, w1.Inflow, w1.Outflow, w1.OutflowAccepted, w1.ClosingCash));
+        Assert.Equal((D(4, 8), D(4, 14), 660_000m, 0m, 5_160_000m), (w2.From, w2.To, w2.Inflow, w2.Outflow, w2.ClosingCash));
+        Assert.Equal((660_000m, 5_500_000m, 5_160_000m), (p.TotalInflow, p.TotalOutflow, p.EndingCash));
+
+        // Accepting the payable moves it to the "accepted" part of the outflow.
+        await s.PaymentAcceptances.AcceptAsync(h.Preparer, purchase.Id, null);
+        Assert.Equal(5_500_000m, (await plan.PlanAsync(h.Auditor, D(3, 31), 4)).Buckets[1].OutflowAccepted);
+
+        // As of 01/05 the sale is 21 days overdue and appears in the first bucket and in the overdue notice (with the customer's contact details).
+        Assert.Equal(660_000m, (await plan.PlanAsync(h.Auditor, D(5, 1), 2)).Buckets[0].Inflow);
+        var reports = new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement);
+        var notice = Assert.Single(await reports.OverdueNoticesAsync(h.Auditor, D(5, 1)));
+        Assert.Equal(("KH01", "12 Lê Duẩn", 660_000m, 21), (notice.PartnerCode, notice.Address, notice.TotalOpen, notice.MaxDaysOverdue));
+        Assert.Equal(D(4, 10), Assert.Single(notice.Invoices).DueDate);
+        Assert.Empty(await reports.OverdueNoticesAsync(h.Auditor, D(4, 10)));   // due today is not overdue yet
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => plan.PlanAsync(h.Auditor, D(3, 31), 0)));
+    }
 }

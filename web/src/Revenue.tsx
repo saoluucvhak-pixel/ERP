@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { get, post } from './api'
 import { ErrorBox, ExportButton, navStore, PrintSheet, printSheet, useAction, useCompanyName } from './common'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
 interface DLine { lineNo: number; orderLineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; quantity: string; delivered: string; outstanding: string }
@@ -12,6 +12,8 @@ interface Dispatch { id: string; number: string; orderId: string; orderNumber: s
   dispatchDate: string; shipTo: string | null; note: string | null; status: string; cancelReason: string | null; lines: DLine[]; deliveries: Delivery[] }
 interface QueueRow { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; dueDate: string | null; daysOverdue: number; partnerId: string; partnerCode: string; partnerName: string
   total: string; open: string; settleJournalLineId: string }
+interface OverdueInv { invoiceId: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; dueDate: string; daysOverdue: number; total: string; open: string }
+interface Overdue { partnerId: string; partnerCode: string; partnerName: string; address: string | null; phone: string | null; email: string | null; totalOpen: string; maxDaysOverdue: number; invoices: OverdueInv[] }
 interface Row { key: string; name: string; quantity: string; revenue: string; vat: string; invoices: number }
 interface Analysis { byItem: Row[]; byPartner: Row[]; byMonth: Row[]; totalRevenue: string; totalVat: string }
 interface Collections { byPartner: { partnerCode: string; partnerName: string; collected: string; receipts: number }[]; total: string }
@@ -43,6 +45,7 @@ export function RevenueView() {
   const [dispatches, setDispatches] = useState<Dispatch[]>([])
   const [whs, setWhs] = useState<Warehouse[]>([])
   const [queue, setQueue] = useState<QueueRow[]>([])
+  const [overdue, setOverdue] = useState<Overdue[]>([])
   const [info, setInfo] = useState('')
   const [print, setPrint] = useState<ReactNode>(null)
   const { busy, error, setError, run } = useAction()
@@ -52,6 +55,7 @@ export function RevenueView() {
     setOrders(await get<Order[]>('/orders'))
     setDispatches(await get<Dispatch[]>('/cycles/revenue/dispatch-orders'))
     setQueue(await get<QueueRow[]>(`/cycles/revenue/receivable-queue?asOf=${asOf}`))
+    setOverdue(await get<Overdue[]>(`/cycles/revenue/overdue?asOf=${asOf}`))
   }), [run, asOf])
   useEffect(() => { load() }, [load])
   useEffect(() => { get<Warehouse[]>('/warehouses').then(setWhs).catch(() => setWhs([])) }, [])
@@ -109,6 +113,21 @@ export function RevenueView() {
     <table><thead><tr><th>STT</th><th>Tên, mã hàng</th><th>ĐVT</th><th>Số lượng</th></tr></thead>
       <tbody>{x.lines.map(l => <tr key={l.lineNo}><td className="center">{l.lineNo}</td><td>{l.itemName} ({l.itemCode})</td><td className="center">{l.unit}</td><td className="num">{formatMoney(l.quantity)}</td></tr>)}</tbody></table>
     <div className="signs"><div><b>Người lập phiếu</b><br /><i>(Ký, họ tên)</i></div><div><b>Thủ kho</b><br /><i>(Ký, họ tên)</i></div><div><b>Người giao hàng</b><br /><i>(Ký, họ tên)</i></div><div><b>Người nhận hàng</b><br /><i>(Ký, họ tên)</i></div></div></>))
+
+  const printNotice = (n: Overdue) => setPrint(
+    <div className="copy">
+      <div><b>{company}</b></div><h1>THÔNG BÁO NỢ QUÁ HẠN</h1>
+      <div className="center">Ngày {d8(asOf)}</div>
+      <p>Kính gửi: <b>{n.partnerName}</b>{n.address ? ` · ${n.address}` : ''}{n.phone ? ` · ĐT ${n.phone}` : ''}</p>
+      <p>Theo sổ sách của chúng tôi, đến ngày {d8(asOf)} quý khách còn các khoản nợ đã quá hạn thanh toán như sau:</p>
+      <table><thead><tr><th>Hóa đơn</th><th>Ngày hóa đơn</th><th>Hạn thanh toán</th><th>Quá hạn (ngày)</th><th>Còn nợ</th></tr></thead>
+        <tbody>{n.invoices.map(i => <tr key={i.invoiceId}><td>{i.invoiceSeries}/{i.invoiceNo}</td><td className="center">{d8(i.invoiceDate)}</td><td className="center">{d8(i.dueDate)}</td><td className="num">{i.daysOverdue}</td><td className="num">{formatMoney(i.open)}</td></tr>)}</tbody>
+        <tfoot><tr><td colSpan={4}><b>Cộng</b></td><td className="num"><b>{formatMoney(n.totalOpen)}</b></td></tr></tfoot></table>
+      <p>Bằng chữ: <i>{amountInWords(n.totalOpen)}</i></p>
+      <p>Đề nghị quý khách thanh toán trong thời gian sớm nhất hoặc liên hệ để thống nhất kế hoạch thanh toán. Nếu số liệu có chênh lệch, xin phản hồi để đối chiếu. Nếu quý khách đã thanh toán, xin bỏ qua thông báo này.</p>
+      <div className="signs"><div><b>Kế toán công nợ</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu mẫu theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+    </div>)
 
   // ---- reports
   const [from, setFrom] = useState(today().slice(0, 4) + '-01-01')
@@ -210,6 +229,14 @@ export function RevenueView() {
               <td className="num">{formatMoney(r.open)}{r.open !== r.total && <div className="muted">/ {formatMoney(r.total)}</div>}</td>
               <td><button className="primary" onClick={() => { navStore.receipt = { partnerId: r.partnerId, settleJournalLineId: r.settleJournalLineId, amount: r.open }; navStore.go?.('cash') }}>Lập phiếu thu</button></td></tr>))}
             {queue.length === 0 && <tr><td colSpan={5} className="muted">Không có hóa đơn bán nào còn nợ.</td></tr>}</tbody></table>
+      </div>
+
+      <div className="panel">
+        <div className="toolbar"><strong>Nợ quá hạn theo khách hàng</strong><span className="muted">in thông báo gửi khách (tệp mục V.1.1.2.9)</span></div>
+        <table className="grid"><thead><tr><th>Khách hàng</th><th>Liên hệ</th><th className="num">Số hóa đơn</th><th className="num">Quá hạn lâu nhất (ngày)</th><th className="num">Tổng nợ quá hạn</th><th /></tr></thead>
+          <tbody>{overdue.map(n => <tr key={n.partnerId}><td>{n.partnerCode} – {n.partnerName}</td><td>{[n.phone, n.email].filter(Boolean).join(' · ')}</td><td className="num">{n.invoices.length}</td>
+            <td className="num" style={{ color: 'var(--danger)' }}>{n.maxDaysOverdue}</td><td className="num">{formatMoney(n.totalOpen)}</td><td><button onClick={() => printNotice(n)}>In thông báo</button></td></tr>)}
+            {overdue.length === 0 && <tr><td colSpan={6} className="muted">Không có khách hàng nào nợ quá hạn.</td></tr>}</tbody></table>
       </div>
 
       <div className="panel">

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, type Period } from './api'
-import { ErrorBox, navStore, useAction, useCatalog } from './common'
+import { ErrorBox, ExportButton, navStore, useAction, useCatalog } from './common'
 import { maxAbs, pct } from './dashboardmath'
 import { addMoney, formatMoney, today } from './money'
 
 interface TbRow { accountId: string; accountCode: string; accountName: string; closingDebit: string; closingCredit: string }
 interface Aging { bucketLabels: string[]; rows: { notDue: string; buckets: string[] }[] }
+interface PlanBucket { label: string; inflow: string; inflowDocs: number; outflow: string; outflowAccepted: string; outflowDocs: number; net: string; closingCash: string }
+interface Plan { openingCash: string; buckets: PlanBucket[]; totalInflow: string; totalOutflow: string; endingCash: string }
 interface Counts { draft: number | null; submitted: number | null; approved: number | null; stockDrafts: number | null }
 
 const neg = (v: string) => (v.startsWith('-') ? v.slice(1) : v === '0' ? '0' : '-' + v)
@@ -32,19 +34,21 @@ export function DashboardView() {
   const [periods, setPeriods] = useState<Period[]>([])
   const [recon, setRecon] = useState<boolean | null>(null)
   const [vat, setVat] = useState<string | null>(null)
+  const [plan, setPlan] = useState<Plan | null>(null)
   const { busy, error, run } = useAction()
   const asOf = today()
   const month1 = asOf.slice(0, 8) + '01'
 
   const load = useCallback(() => run(async () => {
     const total = async (path: string) => (await get<{ total: number }>(path)).total
-    const [t, r, p, d, s, a, st, v] = await Promise.allSettled([
+    const [t, r, p, d, s, a, st, v, pl] = await Promise.allSettled([
       get<{ isBalanced: boolean; rows: TbRow[] }>(`/reports/trial-balance?from=${asOf.slice(0, 4)}-01-01&to=${asOf}&rollup=false`),
       get<{ isReconciled: boolean }>(`/reports/subledger-reconciliation?asOf=${asOf}`),
       get<Period[]>('/periods'),
       total('/vouchers?status=Draft&take=1'), total('/vouchers?status=Submitted&take=1'), total('/vouchers?status=Approved&take=1'),
       get<{ status: string }[]>('/stock-documents'),
       get<{ netPayable: string }>(`/vat/payable-summary?from=${month1}&to=${asOf}`),
+      get<Plan>(`/cycles/finance/cash-plan?asOf=${asOf}&weeks=8`),
     ])
     setTb(t.status === 'fulfilled' ? t.value : null)
     setRecon(r.status === 'fulfilled' ? r.value.isReconciled : null)
@@ -52,6 +56,7 @@ export function DashboardView() {
     setCounts({ draft: d.status === 'fulfilled' ? d.value : null, submitted: s.status === 'fulfilled' ? s.value : null, approved: a.status === 'fulfilled' ? a.value : null,
       stockDrafts: st.status === 'fulfilled' ? st.value.filter(x => x.status === 'Draft').length : null })
     setVat(v.status === 'fulfilled' ? v.value.netPayable : null)
+    setPlan(pl.status === 'fulfilled' ? pl.value : null)
   }), [run, asOf, month1])
   useEffect(() => { load() }, [load])
 
@@ -105,6 +110,27 @@ export function DashboardView() {
           </tbody></table>
         </div>
       </div>
+
+      {plan && <div className="panel">
+        <div className="toolbar">
+          <strong>Kế hoạch tiền theo ngày đáo hạn</strong>
+          <span className="muted">dự báo từ hạn thanh toán của hóa đơn bán và mua còn nợ; số dư đầu = tiền mặt + ngân hàng đã ghi sổ ({formatMoney(plan.openingCash)})</span>
+          <ExportButton fileName={`Ke_hoach_tien_${asOf}`} sheet="Kế hoạch tiền" title="Kế hoạch tiền theo ngày đáo hạn" subtitle={`Từ ngày ${asOf.split('-').reverse().join('/')}, số dư tiền đầu kỳ ${formatMoney(plan.openingCash)}`}
+            columns={[{ header: 'Khoảng thời gian', width: 30 }, { header: 'Thu dự kiến', numeric: true }, { header: 'Chi dự kiến', numeric: true }, { header: 'Trong đó đã chấp nhận chi', numeric: true }, { header: 'Thu − chi', numeric: true }, { header: 'Số dư tiền cuối khoảng', numeric: true }]}
+            rows={plan.buckets.map(b => [b.label, b.inflow, b.outflow, b.outflowAccepted, b.net, b.closingCash])} />
+        </div>
+        <table className="grid">
+          <thead><tr><th>Khoảng thời gian</th><th className="num">Thu dự kiến</th><th className="num">Chi dự kiến</th><th className="num">Đã chấp nhận chi</th><th className="num">Số dư tiền cuối khoảng</th></tr></thead>
+          <tbody>{plan.buckets.map(b => (
+            <tr key={b.label} style={{ cursor: b.inflowDocs + b.outflowDocs > 0 ? 'pointer' : undefined }} onClick={() => b.outflowDocs > 0 ? navStore.go?.('procurement') : b.inflowDocs > 0 ? navStore.go?.('revenue') : undefined}>
+              <td>{b.label}</td><td className="num">{b.inflow === '0' ? '' : `${formatMoney(b.inflow)} (${b.inflowDocs})`}</td><td className="num">{b.outflow === '0' ? '' : `${formatMoney(b.outflow)} (${b.outflowDocs})`}</td>
+              <td className="num">{b.outflowAccepted === '0' ? '' : formatMoney(b.outflowAccepted)}</td>
+              <td className="num" style={{ color: b.closingCash.startsWith('-') ? 'var(--danger)' : undefined, fontWeight: 600 }}>{formatMoney(b.closingCash)}</td></tr>))}
+          </tbody>
+          <tfoot><tr><td>Cộng</td><td className="num">{formatMoney(plan.totalInflow)}</td><td className="num">{formatMoney(plan.totalOutflow)}</td><td /><td className="num">{formatMoney(plan.endingCash)}</td></tr></tfoot>
+        </table>
+        {plan.buckets.some(b => b.closingCash.startsWith('-')) && <p style={{ color: 'var(--danger)' }}>Số dư tiền dự kiến âm ở một khoảng: cần chuẩn bị tiền, vay hoặc đàm phán lại hạn thanh toán.</p>}
+      </div>}
 
       {aging.length > 0 && <div className="panel">
         <strong>Tuổi nợ</strong>

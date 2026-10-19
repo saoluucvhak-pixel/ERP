@@ -13,6 +13,9 @@ namespace Hak.Application.Cycles;
 public sealed record ReceivableQueueRow(Guid InvoiceId, string Number, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly? DueDate, int DaysOverdue,
     Guid PartnerId, string PartnerCode, string PartnerName, decimal Total, decimal Open, Guid SettleJournalLineId);
 
+public sealed record OverdueInvoice(Guid InvoiceId, string Number, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly DueDate, int DaysOverdue, decimal Total, decimal Open);
+public sealed record OverdueNotice(Guid PartnerId, string PartnerCode, string PartnerName, string? Address, string? Phone, string? Email, decimal TotalOpen, int MaxDaysOverdue, IReadOnlyList<OverdueInvoice> Invoices);
+
 public sealed record SalesAnalysisRow(string Key, string Name, decimal Quantity, decimal Revenue, decimal Vat, int Invoices);
 public sealed record SalesAnalysis(DateOnly FromDate, DateOnly ToDate, IReadOnlyList<SalesAnalysisRow> ByItem, IReadOnlyList<SalesAnalysisRow> ByPartner, IReadOnlyList<SalesAnalysisRow> ByMonth,
     decimal TotalRevenue, decimal TotalVat);
@@ -50,6 +53,19 @@ public sealed class SalesReportService(HakDbContext db, SettlementService settle
                 inv.DueDate is { } d && d < asOf ? asOf.DayNumber - d.DayNumber : 0, inv.PartnerId, p.Code, p.Name, item.Amount, item.Open, line.Id));
         }
         return rows.OrderBy(r => r.DueDate ?? DateOnly.MaxValue).ThenBy(r => r.InvoiceDate).ThenBy(r => r.Number, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>Nợ quá hạn theo khách hàng (tệp mục V.1.1.2.9: thông báo cho khách về khoản nợ quá hạn); khách nợ lâu nhất trước.</summary>
+    public async Task<IReadOnlyList<OverdueNotice>> OverdueNoticesAsync(SessionContext ctx, DateOnly asOf)
+    {
+        var overdue = (await ReceivableQueueAsync(ctx, asOf)).Where(r => r.DaysOverdue > 0).ToList();
+        var partners = await db.BusinessPartners.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToDictionaryAsync(p => p.Id);
+        return overdue.GroupBy(r => r.PartnerId).Select(g =>
+        {
+            var p = partners[g.Key];
+            return new OverdueNotice(p.Id, p.Code, p.Name, p.Address, p.Phone, p.Email, g.Sum(x => x.Open), g.Max(x => x.DaysOverdue),
+                g.OrderBy(x => x.DueDate).Select(x => new OverdueInvoice(x.InvoiceId, x.Number, x.InvoiceSeries, x.InvoiceNo, x.InvoiceDate, x.DueDate!.Value, x.DaysOverdue, x.Total, x.Open)).ToList());
+        }).OrderByDescending(n => n.MaxDaysOverdue).ThenByDescending(n => n.TotalOpen).ToList();
     }
 
     public async Task<SalesAnalysis> AnalyseAsync(SessionContext ctx, DateOnly fromDate, DateOnly toDate)
