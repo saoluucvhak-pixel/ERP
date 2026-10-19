@@ -6,7 +6,11 @@ public sealed record DisposeAssetRequest(DateOnly Date, Guid ResidualAccountId, 
 
 public sealed record AssetDecisionRequest(bool Approve, string? Note);
 public sealed record AssetLinkRequest(Guid AssetId);
-public sealed record AssetRepairCompleteRequest(DateOnly CompletedDate, decimal ActualCost, string? Vendor, Guid? VoucherId, string? Note);
+public sealed record MaintenanceRequestInput(Guid AssetId, Hak.Domain.Assets.MaintenancePriority Priority, string Description);
+public sealed record RepairIssueRequest(Guid WarehouseId, Guid CounterAccountId, DateOnly Date);
+public sealed record RepairTestRequest(decimal ActualLaborCost, string? Note);
+public sealed record RepairAcceptRequest(bool Passed, string? Note);
+public sealed record PreventiveScheduleRequest(Guid? Id, Guid AssetId, string TaskName, int FrequencyDays, DateOnly NextDueDate, bool IsActive = true);
 public sealed record AssetAssignRequest(string Department, string? Custodian, string? Location, DateOnly Date, string? Note);
 public sealed record AssetCountCreateRequest(DateOnly Date, string? Note);
 
@@ -51,13 +55,25 @@ public static class AssetEndpoints
         api.MapPost("/counts/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, AssetCycleService s) =>
         { await s.CancelCountAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
 
-        // Bảo trì, sửa chữa và Nhật ký tài sản.
+        // Bảo trì, sửa chữa (CMMS) và Nhật ký tài sản.
+        api.MapGet("/maintenance/requests", async (HttpContext http, Guid? assetId, AssetRepairService s) => Results.Ok(await s.RequestsAsync(await http.SessionAsync(), assetId)));
+        api.MapPost("/maintenance/requests", async (HttpContext http, MaintenanceRequestInput i, AssetRepairService s) => Results.Ok(await s.RequestAsync(await http.SessionAsync(), i.AssetId, i.Priority, i.Description)));
+        api.MapPost("/maintenance/requests/{id:guid}/reject", async (HttpContext http, Guid id, ReasonRequest r, AssetRepairService s) => Results.Ok(await s.RejectRequestAsync(await http.SessionAsync(), id, r.Reason)));
         api.MapGet("/repairs", async (HttpContext http, Guid? assetId, AssetRepairService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), assetId)));
         api.MapPost("/repairs", async (HttpContext http, AssetRepairInput i, AssetRepairService s) => Results.Ok(await s.CreateAsync(await http.SessionAsync(), i)));
-        api.MapPost("/repairs/{id:guid}/complete", async (HttpContext http, Guid id, AssetRepairCompleteRequest r, AssetRepairService s) =>
-            Results.Ok(await s.CompleteAsync(await http.SessionAsync(), id, r.CompletedDate, r.ActualCost, r.Vendor, r.VoucherId, r.Note)));
-        api.MapPost("/repairs/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, AssetRepairService s) =>
-            Results.Ok(await s.CancelAsync(await http.SessionAsync(), id, r.Reason)));
+        api.MapPut("/repairs/{id:guid}/plan", async (HttpContext http, Guid id, AssetRepairInput i, AssetRepairService s) => Results.Ok(await s.UpdatePlanAsync(await http.SessionAsync(), id, i)));
+        api.MapPost("/repairs/{id:guid}/submit", async (HttpContext http, Guid id, AssetRepairService s) => Results.Ok(await s.SubmitAsync(await http.SessionAsync(), id)));
+        api.MapPost("/repairs/{id:guid}/decide", async (HttpContext http, Guid id, AssetDecisionRequest r, AssetRepairService s) => Results.Ok(await s.DecideAsync(await http.SessionAsync(), id, r.Approve, r.Note)));
+        api.MapPost("/repairs/{id:guid}/start", async (HttpContext http, Guid id, AssetRepairService s) => Results.Ok(await s.StartAsync(await http.SessionAsync(), id)));
+        api.MapPost("/repairs/{id:guid}/issue", async (HttpContext http, Guid id, RepairIssueRequest r, AssetRepairService s) => Results.Ok(await s.IssueMaterialsAsync(await http.SessionAsync(), id, r.WarehouseId, r.CounterAccountId, r.Date)));
+        api.MapPost("/repairs/{id:guid}/test", async (HttpContext http, Guid id, RepairTestRequest r, AssetRepairService s) => Results.Ok(await s.RequestAcceptanceAsync(await http.SessionAsync(), id, r.ActualLaborCost, r.Note)));
+        api.MapPost("/repairs/{id:guid}/accept", async (HttpContext http, Guid id, RepairAcceptRequest r, AssetRepairService s) => Results.Ok(await s.AcceptAsync(await http.SessionAsync(), id, r.Passed, r.Note)));
+        api.MapPost("/repairs/{id:guid}/close", async (HttpContext http, Guid id, AssetRepairService s) => Results.Ok(await s.CloseAsync(await http.SessionAsync(), id)));
+        api.MapPost("/repairs/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, AssetRepairService s) => Results.Ok(await s.CancelAsync(await http.SessionAsync(), id, r.Reason)));
+        api.MapGet("/maintenance/schedules", async (HttpContext http, DateOnly today, AssetRepairService s) => Results.Ok(await s.SchedulesAsync(await http.SessionAsync(), today)));
+        api.MapPost("/maintenance/schedules", async (HttpContext http, PreventiveScheduleRequest r, AssetRepairService s) => Results.Ok(await s.SaveScheduleAsync(await http.SessionAsync(), r.Id, r.AssetId, r.TaskName, r.FrequencyDays, r.NextDueDate, r.IsActive)));
+        api.MapPost("/maintenance/schedules/{id:guid}/work-order", async (HttpContext http, Guid id, DateOnly date, AssetRepairService s) => Results.Ok(await s.CreateFromScheduleAsync(await http.SessionAsync(), id, date)));
+        api.MapGet("/maintenance/kpi", async (HttpContext http, DateOnly from, DateOnly to, AssetRepairService s) => Results.Ok(await s.KpiAsync(await http.SessionAsync(), from, to)));
         api.MapGet("/{id:guid}/journal", async (HttpContext http, Guid id, AssetJournalService s) => Results.Ok(await s.GetAsync(await http.SessionAsync(), id)));
 
         api.MapGet("/depreciation-runs", async (HttpContext http, AssetService s) => Results.Ok(await s.RunsAsync(await http.SessionAsync())));

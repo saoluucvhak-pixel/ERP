@@ -239,26 +239,38 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<decimal?>("ActualCost")
+                    b.Property<decimal?>("ActualLaborCost")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)")
-                        .HasColumnName("actual_cost");
+                        .HasColumnName("actual_labor_cost");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_by");
 
                     b.Property<Guid>("AssetId")
                         .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
+                    b.Property<string>("AssignedTech")
+                        .HasColumnType("text")
+                        .HasColumnName("assigned_tech");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("closed_by");
+
                     b.Property<Guid>("CompanyId")
                         .HasColumnType("uuid")
                         .HasColumnName("company_id");
-
-                    b.Property<Guid?>("CompletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("completed_by");
-
-                    b.Property<DateOnly?>("CompletedDate")
-                        .HasColumnType("date")
-                        .HasColumnName("completed_date");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -273,14 +285,19 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<decimal>("EstimatedCost")
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<decimal>("EstimatedLaborCost")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)")
-                        .HasColumnName("estimated_cost");
+                        .HasColumnName("estimated_labor_cost");
 
-                    b.Property<int>("Kind")
-                        .HasColumnType("integer")
-                        .HasColumnName("kind");
+                    b.Property<decimal>("EstimatedMaterialCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("estimated_material_cost");
 
                     b.Property<string>("Note")
                         .HasColumnType("text")
@@ -295,28 +312,54 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("date")
                         .HasColumnName("reported_date");
 
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("RootCause")
+                        .HasColumnType("text")
+                        .HasColumnName("root_cause");
+
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
+                    b.Property<Guid?>("ScheduleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("schedule_id");
+
+                    b.Property<string>("SolutionPlan")
+                        .HasColumnType("text")
+                        .HasColumnName("solution_plan");
+
+                    b.Property<DateTime?>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer")
                         .HasColumnName("status");
 
+                    b.Property<int>("Type")
+                        .HasColumnType("integer")
+                        .HasColumnName("type");
+
                     b.Property<string>("Vendor")
                         .HasColumnType("text")
                         .HasColumnName("vendor");
-
-                    b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
                         .HasName("pk_asset_repairs");
 
                     b.HasIndex("AssetId")
                         .HasDatabaseName("ix_asset_repairs_asset_id");
+
+                    b.HasIndex("RequestId")
+                        .HasDatabaseName("ix_asset_repairs_request_id");
+
+                    b.HasIndex("ScheduleId")
+                        .HasDatabaseName("ix_asset_repairs_schedule_id");
 
                     b.HasIndex("CompanyId", "AssetId")
                         .HasDatabaseName("ix_asset_repairs_company_id_asset_id");
@@ -326,6 +369,60 @@ namespace Hak.Data.Postgres.Migrations
                         .HasDatabaseName("ix_asset_repairs_company_id_number");
 
                     b.ToTable("asset_repairs");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepairMaterial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<decimal>("QtyIssued")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("qty_issued");
+
+                    b.Property<decimal>("QtyRequested")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("qty_requested");
+
+                    b.Property<Guid>("RepairId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_id");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("StockDocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stock_document_id");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("unit_price");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_repair_materials");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_asset_repair_materials_item_id");
+
+                    b.HasIndex("RepairId")
+                        .HasDatabaseName("ix_asset_repair_materials_repair_id");
+
+                    b.ToTable("asset_repair_materials");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>
@@ -683,6 +780,125 @@ namespace Hak.Data.Postgres.Migrations
 
                             t.HasCheckConstraint("ck_long_term_assets_life", "useful_life_months > 0 AND (remaining_life_months IS NULL OR remaining_life_months > 0)");
                         });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.MaintenanceRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("number");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reported_at");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_maintenance_requests");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_maintenance_requests_asset_id");
+
+                    b.HasIndex("CompanyId", "AssetId")
+                        .HasDatabaseName("ix_maintenance_requests_company_id_asset_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_maintenance_requests_company_id_number");
+
+                    b.ToTable("maintenance_requests");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.PreventiveSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<int>("FrequencyDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("frequency_days");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateOnly?>("LastPerformedAt")
+                        .HasColumnType("date")
+                        .HasColumnName("last_performed_at");
+
+                    b.Property<DateOnly>("NextDueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("next_due_date");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("TaskName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("task_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_preventive_schedules");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_preventive_schedules_asset_id");
+
+                    b.HasIndex("CompanyId", "AssetId")
+                        .HasDatabaseName("ix_preventive_schedules_company_id_asset_id");
+
+                    b.ToTable("preventive_schedules");
                 });
 
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
@@ -6307,6 +6523,35 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_asset_repairs_long_term_assets_asset_id");
+
+                    b.HasOne("Hak.Domain.Assets.MaintenanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_asset_repairs_maintenance_requests_request_id");
+
+                    b.HasOne("Hak.Domain.Assets.PreventiveSchedule", null)
+                        .WithMany()
+                        .HasForeignKey("ScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_asset_repairs_preventive_schedules_schedule_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepairMaterial", b =>
+                {
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_repair_materials_items_item_id");
+
+                    b.HasOne("Hak.Domain.Assets.AssetRepair", null)
+                        .WithMany("Materials")
+                        .HasForeignKey("RepairId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_repair_materials_asset_repairs_repair_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>
@@ -6355,6 +6600,26 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_long_term_assets_accounts_expense_account_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.MaintenanceRequest", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_maintenance_requests_long_term_assets_asset_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.PreventiveSchedule", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_preventive_schedules_long_term_assets_asset_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
@@ -7297,6 +7562,11 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Assets.AssetCount", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepair", b =>
+                {
+                    b.Navigation("Materials");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.LongTermAsset", b =>

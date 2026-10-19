@@ -1,5 +1,6 @@
 using Hak.Application.Accounting;
 using Hak.Application.Assets;
+using Hak.Domain.Inventory;
 using Hak.Domain.Assets;
 using Hak.Domain.Common;
 using Hak.Domain.Vouchers;
@@ -98,38 +99,85 @@ public class AssetTests
     }
 
     [Fact]
-    public async Task AssetRepair_Complete_And_AssetJournal_ShowsEveryMovement()
+    public async Task Maintenance_WorkOrder_FullFlow_Schedule_Kpi_AndAssetJournal()
     {
         using var h = await HostAsync();
         using var s = h.NewScope();
-        var repairs = new AssetRepairService(s.Db, s.Audit, h.Clock);
+        var repairs = new AssetRepairService(s.Db, s.Stock, s.Audit, h.Clock);
         var cycle = new AssetCycleService(s.Db, s.Audit, h.Clock);
         var journal = new AssetJournalService(s.Db);
         var line = await BuyAsync(h, s, "FA", 120_000_000, new(2026, 1, 10));
         var asset = await ActiveAsync(h, s, FixedAsset(h, "TS020", line, 120_000_000, new(2026, 1, 15)));
         await cycle.AssignAsync(h.Preparer, asset.Id, "Xưởng 1", "Nguyễn Văn A", null, new(2026, 1, 16), null);
+        h.Acc["INV"] = (await s.Setup.CreateAccountAsync(h.Admin, "INV", "Phụ tùng (mã thử)")).Id;
+        var wh = (await s.Stock.CreateWarehouseAsync(h.Admin, "PT", "Kho phụ tùng")).Id;
+        var bearing = (await s.Stock.CreateItemAsync(h.Admin, "BD01", "Bạc đạn", "cái", "INV")).Id;
 
-        // Phiếu sửa chữa: cần nội dung; hoàn thành cần ngày hợp lệ, chứng từ phải đã ghi sổ.
-        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => repairs.CreateAsync(h.Preparer, new(asset.Id, AssetRepairKind.Repair, new(2026, 2, 3), " ", null, 0))));
-        var r = await repairs.CreateAsync(h.Preparer, new(asset.Id, AssetRepairKind.Repair, new(2026, 2, 3), "Hỏng bạc đạn trục chính", "Cơ khí Minh Phát", 8_000_000));
-        Assert.StartsWith("SCTS2026-", r.Number);
-        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => repairs.CompleteAsync(h.Preparer, r.Id, new(2026, 2, 1), 1, null, null, null)));
-        var cost = await h.PostedAsync(s, new VoucherInput(VoucherTypes.General, new(2026, 2, 9), new(2026, 2, 9), "Chi phí sửa máy",
-            [new VoucherLineInput(h.Acc["LOSS"], Side.Debit, 7_500_000), new VoucherLineInput(h.Acc["AP"], Side.Credit, 7_500_000, h.Partner["NCC01"])]));
-        var done = await repairs.CompleteAsync(h.Preparer, r.Id, new(2026, 2, 9), 7_500_000, null, cost.Id, "Đã thay bạc đạn");
-        Assert.Equal((AssetRepairStatus.Completed, 7_500_000m), (done.Status, done.ActualCost));
-        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => repairs.CancelAsync(h.Preparer, r.Id, "x")));
-        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+        // Yêu cầu sửa chữa (YCSC) → phiếu thi công Nháp.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => repairs.RequestAsync(h.Preparer, asset.Id, MaintenancePriority.High, " ")));
+        var req = await repairs.RequestAsync(h.Preparer, asset.Id, MaintenancePriority.High, "Máy rung mạnh, kêu to");
+        Assert.StartsWith("YCSC2026-", req.Number);
+        var wo = await repairs.CreateAsync(h.Preparer, new(asset.Id, RepairType.Emergency, new(2026, 2, 3), "Hỏng bạc đạn trục chính", req.Id, null, "Cơ khí Minh Phát", "Trần Văn B",
+            "Mòn bạc đạn", "Thay 2 bạc đạn, căn chỉnh trục", 1_000_000, [new(bearing, 2, 3_000_000)]));
+        Assert.StartsWith("SCTS2026-", wo.Number);
+        Assert.Equal((1_000_000m, 6_000_000m, 7_000_000m), (wo.EstimatedLaborCost, wo.EstimatedMaterialCost, wo.EstimatedTotal));
+        Assert.Equal(MaintenanceRequestStatus.Surveying, (await repairs.RequestsAsync(h.Auditor)).Single().Status);
 
+        // Gửi duyệt → duyệt (khác người lập) → thi công.
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => repairs.StartAsync(h.Preparer, wo.Id)));
+        await repairs.SubmitAsync(h.Preparer, wo.Id);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => repairs.UpdatePlanAsync(h.Preparer, wo.Id, new(asset.Id, RepairType.Emergency, new(2026, 2, 3), "x"))));
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => repairs.DecideAsync(h.Approver, wo.Id, false, " ")));
+        Assert.Equal(RepairStatus.Approved, (await repairs.DecideAsync(h.Approver, wo.Id, true, null)).Status);
+        h.Clock.UtcNow = new DateTime(2026, 2, 3, 8, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(RepairStatus.InProgress, (await repairs.StartAsync(h.Preparer, wo.Id)).Status);
+
+        // Xuất vật tư: phiếu xuất kho Nháp đối ứng TK chi phí; còn vật tư chờ xuất thì chưa nghiệm thu.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => repairs.RequestAcceptanceAsync(h.Preparer, wo.Id, 900_000, null)));
+        var keeper = h.Preparer with { Permissions = new HashSet<string>(h.Preparer.Permissions) { "stock.document" } };
+        var doc = await repairs.IssueMaterialsAsync(keeper, wo.Id, wh, h.Acc["LOSS"], new(2026, 2, 4));
+        Assert.Equal(StockDocumentType.Issue, doc.Type);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => repairs.IssueMaterialsAsync(keeper, wo.Id, wh, h.Acc["LOSS"], new(2026, 2, 4))));
+
+        // Nghiệm thu: không đạt thì trả về thi công; đạt thì Completed; người có quyền duyệt đóng.
+        h.Clock.UtcNow = new DateTime(2026, 2, 3, 14, 30, 0, DateTimeKind.Utc);
+        var tested = await repairs.RequestAcceptanceAsync(h.Preparer, wo.Id, 900_000, "Đã thay bạc đạn");
+        Assert.Equal((RepairStatus.Testing, 900_000m + 6_000_000m), (tested.Status, tested.ActualTotal));
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => repairs.AcceptAsync(h.Preparer, wo.Id, false, null)));
+        Assert.Equal(RepairStatus.InProgress, (await repairs.AcceptAsync(h.Preparer, wo.Id, false, "Còn rung")).Status);
+        await repairs.RequestAcceptanceAsync(h.Preparer, wo.Id, 900_000, null);
+        Assert.Equal(RepairStatus.Completed, (await repairs.AcceptAsync(h.Preparer, wo.Id, true, null)).Status);
+        Assert.Equal(RepairStatus.Closed, (await repairs.CloseAsync(h.Approver, wo.Id)).Status);
+        Assert.Equal(MaintenanceRequestStatus.Done, (await repairs.RequestsAsync(h.Auditor)).Single().Status);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => repairs.CancelAsync(h.Preparer, wo.Id, "x")));
+
+        // Lịch bảo trì: lập phiếu từ lịch đến hạn, đóng phiếu thì dời hạn kế tiếp.
+        var sch = await repairs.SaveScheduleAsync(h.Preparer, null, asset.Id, "Tra mỡ, kiểm tra dây curoa", 30, new(2026, 2, 10));
+        Assert.True(Assert.Single(await repairs.SchedulesAsync(h.Auditor, new(2026, 2, 20))).Overdue);
+        var pm = await repairs.CreateFromScheduleAsync(h.Preparer, sch.Id, new(2026, 2, 20));
+        Assert.Equal(RepairType.Preventive, pm.Type);
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => repairs.CreateFromScheduleAsync(h.Preparer, sch.Id, new(2026, 2, 21))));
+        await repairs.SubmitAsync(h.Preparer, pm.Id); await repairs.DecideAsync(h.Approver, pm.Id, true, null);
+        h.Clock.UtcNow = new DateTime(2026, 2, 20, 8, 0, 0, DateTimeKind.Utc); await repairs.StartAsync(h.Preparer, pm.Id);
+        h.Clock.UtcNow = new DateTime(2026, 2, 20, 10, 0, 0, DateTimeKind.Utc); await repairs.RequestAcceptanceAsync(h.Preparer, pm.Id, 200_000, null);
+        await repairs.AcceptAsync(h.Preparer, pm.Id, true, null); await repairs.CloseAsync(h.Approver, pm.Id);
+        var after = Assert.Single(await repairs.SchedulesAsync(h.Auditor, new(2026, 2, 20)));
+        Assert.Equal((new DateOnly(2026, 2, 20), new DateOnly(2026, 3, 22), false), (after.LastPerformedAt, after.NextDueDate, after.Overdue));
+
+        // KPI tháng 2: 1 sự cố, sửa 6,5 giờ; MTBF = (672 − 6,5) ÷ 1; chi phí gồm cả phiếu bảo trì.
+        var kpi = Assert.Single(await repairs.KpiAsync(h.Auditor, new(2026, 2, 1), new(2026, 2, 28)));
+        Assert.Equal((1, 6.5m, 6.5m, 665.5m, 1), (kpi.Failures, kpi.RepairHours, kpi.Mttr, kpi.Mtbf, kpi.PreventiveCount));
+        Assert.Equal((1_100_000m, 6_000_000m, 7_100_000m, "Xưởng 1"), (kpi.LaborCost, kpi.MaterialCost, kpi.TotalCost, kpi.Department));
+
+        // Nhật ký tài sản có đủ mọi biến động.
         var j = await journal.GetAsync(h.Auditor, asset.Id);
-        Assert.Equal((120_000_000m, 2_000_000m, 118_000_000m), (j.OriginalCost, j.Accumulated, j.NetBookValue));
-        Assert.Equal(("Xưởng 1", 1, 7_500_000m), (j.Department, j.RepairCount, j.RepairCost));
+        Assert.Equal(("Xưởng 1", 2, 7_100_000m), (j.Department, j.RepairCount, j.RepairCost));
         var titles = j.Events.Select(e => e.Title).ToList();
-        foreach (var expect in new[] { "Lập thẻ tài sản", "Nguồn nguyên giá", "Ghi tăng, đưa vào sử dụng", "Bàn giao / điều chuyển", "Lập phiếu sửa chữa", "Hoàn thành sửa chữa" })
+        foreach (var expect in new[] { "Lập thẻ tài sản", "Nguồn nguyên giá", "Ghi tăng, đưa vào sử dụng", "Bàn giao / điều chuyển", "Yêu cầu sửa chữa / báo sự cố", "Lập phiếu sửa chữa",
+                     "Duyệt phương án và dự toán", "Bắt đầu thi công", "Xuất vật tư sửa chữa", "Hoàn thành nghiệm thu", "Đóng phiếu", "Lập phiếu bảo trì" })
             Assert.Contains(expect, titles);
-        Assert.Contains(j.Events, e => e.Group == "Giá trị" && e.Title.StartsWith("Khấu hao kỳ") && e.Amount == 2_000_000m);
         Assert.Equal(j.Events.OrderBy(e => e.Date).Select(e => e.Date), j.Events.Select(e => e.Date));
-        Assert.Single(await repairs.ListAsync(h.Auditor, asset.Id));
+        Assert.Equal(2, (await repairs.ListAsync(h.Auditor, asset.Id)).Count);
     }
 
     [Fact]

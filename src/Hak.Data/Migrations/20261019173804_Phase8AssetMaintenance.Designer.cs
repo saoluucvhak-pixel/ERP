@@ -5,72 +5,67 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Hak.Data.Postgres.Migrations
+namespace Hak.Data.Migrations
 {
     [DbContext(typeof(HakDbContext))]
-    [Migration("20261019172752_Phase8AssetRepairs")]
-    partial class Phase8AssetRepairs
+    [Migration("20261019173804_Phase8AssetMaintenance")]
+    partial class Phase8AssetMaintenance
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
-
-            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("Hak.Domain.Assets.AssetAssignment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("asset_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Custodian")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("custodian");
 
                     b.Property<string>("Department")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("department");
 
                     b.Property<DateOnly?>("EndDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("end_date");
 
                     b.Property<string>("Location")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("location");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("start_date");
 
                     b.HasKey("Id")
@@ -89,24 +84,23 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("asset_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("JournalLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("journal_line_id");
 
                     b.HasKey("Id")
@@ -132,49 +126,49 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("completed_at");
 
                     b.Property<Guid?>("CompletedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("completed_by");
 
                     b.Property<DateOnly>("CountDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("count_date");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -191,35 +185,35 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("ActualDepartment")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("actual_department");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("asset_id");
 
                     b.Property<string>("BookDepartment")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("book_department");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("CountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("count_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<int>("Result")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("result");
 
                     b.HasKey("Id")
@@ -239,87 +233,127 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal?>("ActualCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
-                        .HasColumnName("actual_cost");
+                    b.Property<long?>("ActualLaborCost")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("actual_labor_cost");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_by");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("asset_id");
 
+                    b.Property<string>("AssignedTech")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("assigned_tech");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_by");
+
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
-                    b.Property<Guid?>("CompletedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("completed_by");
-
-                    b.Property<DateOnly?>("CompletedDate")
-                        .HasColumnType("date")
-                        .HasColumnName("completed_date");
-
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
-                    b.Property<decimal>("EstimatedCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
-                        .HasColumnName("estimated_cost");
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("end_time");
 
-                    b.Property<int>("Kind")
-                        .HasColumnType("integer")
-                        .HasColumnName("kind");
+                    b.Property<long>("EstimatedLaborCost")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("estimated_labor_cost");
+
+                    b.Property<long>("EstimatedMaterialCost")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("estimated_material_cost");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<DateOnly>("ReportedDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reported_date");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("RootCause")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("root_cause");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
+                    b.Property<Guid?>("ScheduleId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("schedule_id");
+
+                    b.Property<string>("SolutionPlan")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("solution_plan");
+
+                    b.Property<DateTime?>("StartTime")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("start_time");
+
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
-                    b.Property<string>("Vendor")
-                        .HasColumnType("text")
-                        .HasColumnName("vendor");
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("type");
 
-                    b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("voucher_id");
+                    b.Property<string>("Vendor")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("vendor");
 
                     b.HasKey("Id")
                         .HasName("pk_asset_repairs");
 
                     b.HasIndex("AssetId")
                         .HasDatabaseName("ix_asset_repairs_asset_id");
+
+                    b.HasIndex("RequestId")
+                        .HasDatabaseName("ix_asset_repairs_request_id");
+
+                    b.HasIndex("ScheduleId")
+                        .HasDatabaseName("ix_asset_repairs_schedule_id");
 
                     b.HasIndex("CompanyId", "AssetId")
                         .HasDatabaseName("ix_asset_repairs_company_id_asset_id");
@@ -331,80 +365,130 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("asset_repairs");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepairMaterial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("item_id");
+
+                    b.Property<long>("QtyIssued")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("qty_issued");
+
+                    b.Property<long>("QtyRequested")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("qty_requested");
+
+                    b.Property<Guid>("RepairId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("repair_id");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("StockDocumentId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stock_document_id");
+
+                    b.Property<long>("UnitPrice")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("unit_price");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_repair_materials");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_asset_repair_materials_item_id");
+
+                    b.HasIndex("RepairId")
+                        .HasDatabaseName("ix_asset_repair_materials_repair_id");
+
+                    b.ToTable("asset_repair_materials");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AssetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("asset_id");
 
                     b.Property<int>("Class")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("class");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateTime?>("DecidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("decided_at");
 
                     b.Property<Guid?>("DecidedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("decided_by");
 
                     b.Property<string>("DecisionNote")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("decision_note");
 
                     b.Property<string>("Department")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("department");
 
-                    b.Property<decimal>("EstimatedCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("EstimatedCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("estimated_cost");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<DateOnly>("NeededDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("needed_date");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reason");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -427,44 +511,43 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("asset_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<bool>("IsDisposal")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_disposal");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_end");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_start");
 
                     b.Property<Guid?>("RunId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("run_id");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_at");
 
                     b.HasKey("Id")
@@ -489,47 +572,47 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_start");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -550,115 +633,112 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AccumulatedAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("accumulated_account_id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_by");
 
                     b.Property<Guid>("AssetAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("asset_account_id");
 
                     b.Property<int>("Class")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("class");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly?>("DisposalDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("disposal_date");
 
                     b.Property<Guid?>("DisposalVoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("disposal_voucher_id");
 
                     b.Property<Guid>("ExpenseAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("expense_account_id");
 
                     b.Property<DateOnly>("InServiceDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("in_service_date");
 
                     b.Property<int>("Method")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("method");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(250)
-                        .HasColumnType("character varying(250)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
-                    b.Property<decimal>("OpeningAccumulated")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OpeningAccumulated")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("opening_accumulated");
 
-                    b.Property<decimal>("OriginalCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OriginalCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("original_cost");
 
                     b.Property<int>("Proration")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("proration");
 
                     b.Property<int?>("RemainingLifeMonths")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("remaining_life_months");
 
-                    b.Property<decimal>("ResidualValue")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("ResidualValue")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("residual_value");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<DateOnly>("ScheduleStartDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("schedule_start_date");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<int>("UsefulLifeMonths")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("useful_life_months");
 
                     b.HasKey("Id")
@@ -688,55 +768,172 @@ namespace Hak.Data.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.MaintenanceRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("priority");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reported_at");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_maintenance_requests");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_maintenance_requests_asset_id");
+
+                    b.HasIndex("CompanyId", "AssetId")
+                        .HasDatabaseName("ix_maintenance_requests_company_id_asset_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_maintenance_requests_company_id_number");
+
+                    b.ToTable("maintenance_requests");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.PreventiveSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<int>("FrequencyDays")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("frequency_days");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateOnly?>("LastPerformedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_performed_at");
+
+                    b.Property<DateOnly>("NextDueDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("next_due_date");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("TaskName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_preventive_schedules");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_preventive_schedules_asset_id");
+
+                    b.HasIndex("CompanyId", "AssetId")
+                        .HasDatabaseName("ix_preventive_schedules_company_id_asset_id");
+
+                    b.ToTable("preventive_schedules");
+                });
+
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("BankAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("bank_account_id");
 
-                    b.Property<decimal>("ClosingBalance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("ClosingBalance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("closing_balance");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly>("FromDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("from_date");
 
                     b.Property<DateTime>("ImportedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("imported_at");
 
                     b.Property<Guid>("ImportedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("imported_by");
 
-                    b.Property<decimal>("OpeningBalance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OpeningBalance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("opening_balance");
 
                     b.Property<string>("SourceName")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_name");
 
                     b.Property<string>("SourceSha256")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_sha256");
 
                     b.Property<DateOnly>("ToDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("to_date");
 
                     b.HasKey("Id")
@@ -756,58 +953,57 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("BankAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("bank_account_id");
 
                     b.Property<string>("BankReference")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("bank_reference");
 
                     b.Property<string>("CandidatesJson")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("candidates_json");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("CounterpartyAccount")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("counterparty_account");
 
                     b.Property<string>("CounterpartyName")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("counterparty_name");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<Guid>("StatementId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("statement_id");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<DateOnly>("TransactionDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("transaction_date");
 
                     b.HasKey("Id")
@@ -818,7 +1014,7 @@ namespace Hak.Data.Postgres.Migrations
 
                     b.HasIndex("CompanyId", "BankAccountId", "BankReference")
                         .IsUnique()
-                        .HasDatabaseName("ix_bank_statement_lines_company_id_bank_account_id_bank_refere~");
+                        .HasDatabaseName("ix_bank_statement_lines_company_id_bank_account_id_bank_reference");
 
                     b.HasIndex("CompanyId", "BankAccountId", "Status")
                         .HasDatabaseName("ix_bank_statement_lines_company_id_bank_account_id_status");
@@ -833,100 +1029,99 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<Guid?>("ApprovedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("approved_by");
 
                     b.Property<Guid>("BankAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("bank_account_id");
 
                     b.Property<string>("BankReference")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("bank_reference");
 
                     b.Property<string>("BeneficiaryAccountNo")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("beneficiary_account_no");
 
                     b.Property<string>("BeneficiaryBank")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("beneficiary_bank");
 
                     b.Property<string>("BusinessEvent")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("business_event");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("ExecutedDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("executed_date");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<DateOnly>("RequestedDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("requested_date");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<DateTime?>("SentAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("sent_at");
 
                     b.Property<Guid?>("SentBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("sent_by");
 
                     b.Property<Guid?>("SettleJournalLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("settle_journal_line_id");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -958,47 +1153,47 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("JournalLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("journal_line_id");
 
                     b.Property<int>("Origin")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("origin");
 
                     b.Property<int>("Score")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("score");
 
                     b.Property<Guid>("StatementLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("statement_line_id");
 
                     b.Property<string>("VoidReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("void_reason");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_at");
 
                     b.Property<Guid?>("VoidedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_by");
 
                     b.HasKey("Id")
@@ -1027,76 +1222,76 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<int>("BalanceDisplay")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("balance_display");
 
                     b.Property<int>("CashKind")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("cash_kind");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<bool>("IsPostable")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_postable");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<int>("NegativeBalancePolicy")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("negative_balance_policy");
 
                     b.Property<int>("OpenItemNature")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("open_item_nature");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("parent_id");
 
                     b.Property<Guid?>("RegimeVersionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("regime_version_id");
 
                     b.Property<string>("ReportTags")
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("report_tags");
 
                     b.Property<bool>("RequiresPartner")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("requires_partner");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -1116,83 +1311,82 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Address")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("address");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
-                    b.Property<decimal?>("CreditLimit")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("CreditLimit")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("credit_limit");
 
                     b.Property<string>("Email")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("email");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<int?>("PaymentTermsDays")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("payment_terms_days");
 
                     b.Property<string>("Phone")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("phone");
 
                     b.Property<int>("Roles")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("roles");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<DateTime?>("SupplierDecidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("supplier_decided_at");
 
                     b.Property<Guid?>("SupplierDecidedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("supplier_decided_by");
 
                     b.Property<int>("SupplierStatus")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("supplier_status");
 
                     b.Property<string>("SupplierStatusReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("supplier_status_reason");
 
                     b.Property<string>("TaxCode")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("tax_code");
 
                     b.HasKey("Id")
@@ -1212,58 +1406,58 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Conclusion")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("conclusion");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("InspectionDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("inspection_date");
 
                     b.Property<string>("Inspector")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("inspector");
 
                     b.Property<bool>("IsCancelled")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_cancelled");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<Guid>("StockDocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("stock_document_id");
 
                     b.HasKey("Id")
@@ -1286,37 +1480,35 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("AcceptedQty")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("AcceptedQty")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("accepted_qty");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("InspectionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("inspection_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
-                    b.Property<decimal>("ReceivedQty")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("ReceivedQty")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("received_qty");
 
                     b.Property<int>("StockLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("stock_line_no");
 
                     b.HasKey("Id")
@@ -1339,69 +1531,68 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("AcceptedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("accepted_at");
 
                     b.Property<Guid>("AcceptedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("accepted_by");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<string>("CloseReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("close_reason");
 
                     b.Property<DateTime?>("ClosedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("closed_at");
 
                     b.Property<Guid?>("ClosedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("closed_by");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("due_date");
 
                     b.Property<Guid>("InvoiceId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("invoice_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<Guid?>("PaymentOrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("payment_order_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<Guid>("SettleJournalLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("settle_journal_line_id");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -1429,69 +1620,69 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cancel_reason");
 
                     b.Property<string>("Carrier")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("carrier");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("DeliveryDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("delivery_date");
 
                     b.Property<string>("DeliveryStaff")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("delivery_staff");
 
                     b.Property<Guid>("DispatchOrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("dispatch_order_id");
 
                     b.Property<bool>("IsCancelled")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_cancelled");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<string>("ShipTo")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("ship_to");
 
                     b.Property<Guid>("StockDocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("stock_document_id");
 
                     b.Property<string>("WaybillNo")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("waybill_no");
 
                     b.HasKey("Id")
@@ -1520,36 +1711,35 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("DeliveryId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("delivery_id");
 
                     b.Property<int>("DispatchLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("dispatch_line_no");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("quantity");
 
                     b.Property<int>("StockLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("stock_line_no");
 
                     b.HasKey("Id")
@@ -1572,32 +1762,31 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("DispatchOrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("dispatch_order_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<int>("OrderLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("order_line_no");
 
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("quantity");
 
                     b.HasKey("Id")
@@ -1620,69 +1809,69 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("DispatchDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("dispatch_date");
 
                     b.Property<DateTime?>("IssuedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("issued_at");
 
                     b.Property<Guid?>("IssuedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("issued_by");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("order_id");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<string>("ShipTo")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("ship_to");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -1711,54 +1900,54 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("RateSource")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("rate_source");
 
                     b.Property<string>("RatesJson")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("rates_json");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("result_json");
 
                     b.Property<DateOnly>("RevaluationDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("revaluation_date");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -1774,30 +1963,30 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<string>("KeyId")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("key_id");
 
                     b.Property<string>("SecretBase64")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("secret_base64");
 
                     b.Property<string>("SourceSystem")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_system");
 
                     b.HasKey("Id")
@@ -1814,68 +2003,68 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Checksum")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("checksum");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<int>("CreatedCount")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("created_count");
 
                     b.Property<string>("DocumentType")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("document_type");
 
                     b.Property<int>("DuplicateCount")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("duplicate_count");
 
                     b.Property<int>("ErrorCount")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("error_count");
 
                     b.Property<int>("ItemCount")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("item_count");
 
                     b.Property<string>("PackageId")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("package_id");
 
                     b.Property<DateTime>("ReceivedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("received_at");
 
                     b.Property<Guid>("ReceivedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("received_by");
 
                     b.Property<string>("ResultJson")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("result_json");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("schema_version");
 
                     b.Property<string>("SourceSystem")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_system");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -1892,36 +2081,36 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_from");
 
                     b.Property<int>("Method")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("method");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -1941,56 +2130,56 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_start");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("result_json");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -2008,46 +2197,46 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("ApprovalNote")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("approval_note");
 
                     b.Property<DateTime>("ApprovedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("approved_at");
 
                     b.Property<Guid>("ApprovedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("approved_by");
 
                     b.Property<int>("BdmtDecimals")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("bdmt_decimals");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<int>("DrynessDecimals")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("dryness_decimals");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_from");
 
                     b.HasKey("Id")
@@ -2064,75 +2253,70 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal?>("AltFactor")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("AltFactor")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("alt_factor");
 
                     b.Property<string>("AltUnit")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("alt_unit");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
-                    b.Property<decimal?>("DefaultVatRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                    b.Property<long?>("DefaultVatRate")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("default_vat_rate");
 
                     b.Property<Guid>("InventoryAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("inventory_account_id");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
-                    b.Property<decimal?>("MinStock")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("MinStock")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("min_stock");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
-                    b.Property<decimal?>("ReorderQty")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("ReorderQty")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("reorder_qty");
 
-                    b.Property<decimal?>("SalePrice")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("SalePrice")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("sale_price");
 
                     b.Property<bool>("TracksDryness")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("tracks_dryness");
 
                     b.Property<string>("Unit")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("unit");
 
                     b.HasKey("Id")
@@ -2152,82 +2336,82 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<DateOnly>("DocumentDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("document_date");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<DateTime?>("PostedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid?>("PostedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posting_date");
 
                     b.Property<Guid?>("ReversalVoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversal_voucher_id");
 
                     b.Property<Guid?>("ReversesDocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reverses_document_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("ToWarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("to_warehouse_id");
 
                     b.Property<int>("Type")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("type");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -2255,49 +2439,47 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal?>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid?>("CounterAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("counter_account_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<Guid>("DocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("document_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("OrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("order_id");
 
                     b.Property<int?>("OrderLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("order_line_no");
 
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("quantity");
 
                     b.HasKey("Id")
@@ -2323,87 +2505,84 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("Bdmt")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Bdmt")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("bdmt");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("DocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("document_id");
 
-                    b.Property<decimal>("DrynessPercent")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("DrynessPercent")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("dryness_percent");
 
                     b.Property<DateOnly>("EvidenceDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("evidence_date");
 
                     b.Property<string>("EvidenceIssuer")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("evidence_issuer");
 
                     b.Property<string>("EvidenceNo")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("evidence_no");
 
                     b.Property<int>("EvidenceType")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("evidence_type");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("kind");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
-                    b.Property<decimal>("MeasuredMt")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("MeasuredMt")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("measured_mt");
 
                     b.Property<Guid>("MethodId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("method_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<string>("SupersedeReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("supersede_reason");
 
                     b.Property<DateTime?>("SupersededAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("superseded_at");
 
                     b.Property<Guid?>("SupersededBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("superseded_by");
 
                     b.HasKey("Id")
@@ -2425,7 +2604,7 @@ namespace Hak.Data.Postgres.Migrations
 
                     b.ToTable("stock_measurements", t =>
                         {
-                            t.HasCheckConstraint("ck_stock_measurements_dryness", "dryness_percent > 0 AND dryness_percent <= 100");
+                            t.HasCheckConstraint("ck_stock_measurements_dryness", "dryness_percent > 0 AND dryness_percent <= 1000000");
 
                             t.HasCheckConstraint("ck_stock_measurements_mt", "measured_mt > 0");
                         });
@@ -2435,52 +2614,51 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid?>("CounterAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("counter_account_id");
 
                     b.Property<Guid>("DocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("document_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<DateOnly>("MovementDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("movement_date");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("quantity");
 
                     b.Property<Guid?>("ReversesMovementId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reverses_movement_id");
 
                     b.Property<long>("Sequence")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("sequence");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -2512,32 +2690,31 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid?>("CostingRunId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("costing_run_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("MovementId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("movement_id");
 
-                    b.Property<decimal>("Value")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Value")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("value");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_at");
 
                     b.HasKey("Id")
@@ -2558,53 +2735,52 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateOnly>("AdjustmentDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("adjustment_date");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reason");
 
                     b.Property<long>("Sequence")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("sequence");
 
                     b.Property<Guid?>("SourceInvoiceId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_invoice_id");
 
                     b.Property<Guid>("TargetMovementId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("target_movement_id");
 
-                    b.Property<decimal>("Value")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Value")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("value");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -2618,7 +2794,7 @@ namespace Hak.Data.Postgres.Migrations
                         .HasDatabaseName("ix_stock_value_adjustments_company_id_sequence");
 
                     b.HasIndex("CompanyId", "WarehouseId", "ItemId", "Sequence")
-                        .HasDatabaseName("ix_stock_value_adjustments_company_id_warehouse_id_item_id_seq~");
+                        .HasDatabaseName("ix_stock_value_adjustments_company_id_warehouse_id_item_id_sequence");
 
                     b.ToTable("stock_value_adjustments", t =>
                         {
@@ -2630,33 +2806,33 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.HasKey("Id")
@@ -2673,50 +2849,50 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_id");
 
                     b.Property<DateTime>("PostedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid>("PostedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posting_date");
 
                     b.Property<Guid>("RegimeVersionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("regime_version_id");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.Property<string>("VoucherNumber")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_number");
 
                     b.Property<string>("VoucherType")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_type");
 
                     b.HasKey("Id")
@@ -2745,67 +2921,64 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("account_id");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<string>("CashFlowCode")
                         .HasMaxLength(4)
-                        .HasColumnType("character varying(4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cash_flow_code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("due_date");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("exchange_rate");
 
-                    b.Property<decimal?>("ForeignAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("ForeignAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("foreign_amount");
 
                     b.Property<string>("ForeignCurrency")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("foreign_currency");
 
                     b.Property<Guid>("JournalEntryId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("journal_entry_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posting_date");
 
                     b.Property<int>("Side")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("side");
 
                     b.HasKey("Id")
@@ -2838,89 +3011,88 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccruedInterestAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("accrued_interest_account_id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_by");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
-                    b.Property<decimal>("ContractAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("ContractAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("contract_amount");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Currency")
                         .HasMaxLength(3)
-                        .HasColumnType("character varying(3)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("currency");
 
                     b.Property<int>("DayCount")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("day_count");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<Guid>("InterestExpenseAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("interest_expense_account_id");
 
                     b.Property<DateOnly>("InterestFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("interest_from");
 
                     b.Property<Guid>("LenderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("lender_id");
 
                     b.Property<DateOnly>("MaturityDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("maturity_date");
 
                     b.Property<Guid>("PrincipalAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("principal_account_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("start_date");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -2952,45 +3124,43 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
-                    b.Property<decimal?>("ForeignAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("ForeignAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("foreign_amount");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("loan_id");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_end");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_start");
 
                     b.Property<Guid>("RunId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("run_id");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_at");
 
                     b.HasKey("Id")
@@ -3015,52 +3185,52 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_start");
 
                     b.Property<string>("RatesJson")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("rates_json");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -3081,27 +3251,27 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("JournalLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("journal_line_id");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("loan_id");
 
                     b.HasKey("Id")
@@ -3124,37 +3294,36 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("AnnualRatePercent")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("AnnualRatePercent")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("annual_rate_percent");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_from");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("loan_id");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.HasKey("Id")
@@ -3166,7 +3335,7 @@ namespace Hak.Data.Postgres.Migrations
 
                     b.ToTable("loan_rates", t =>
                         {
-                            t.HasCheckConstraint("ck_loan_rates_rate", "annual_rate_percent >= 0 AND annual_rate_percent <= 100");
+                            t.HasCheckConstraint("ck_loan_rates_rate", "annual_rate_percent >= 0 AND annual_rate_percent <= 1000000");
                         });
                 });
 
@@ -3174,33 +3343,31 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly>("DueDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("due_date");
 
-                    b.Property<decimal>("InterestDue")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("InterestDue")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("interest_due");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("loan_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
-                    b.Property<decimal>("PrincipalDue")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("PrincipalDue")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("principal_due");
 
                     b.HasKey("Id")
@@ -3216,44 +3383,44 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly>("EndDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("end_date");
 
                     b.Property<Guid>("FiscalYearId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("fiscal_year_id");
 
                     b.Property<DateTime?>("LockedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("locked_at");
 
                     b.Property<Guid?>("LockedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("locked_by");
 
                     b.Property<int>("PeriodNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("period_no");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("start_date");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -3276,42 +3443,42 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("parent_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -3331,58 +3498,58 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("FunctionalCurrency")
                         .IsRequired()
                         .HasMaxLength(3)
-                        .HasColumnType("character varying(3)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("functional_currency");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(250)
-                        .HasColumnType("character varying(250)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<Guid>("RegimeVersionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("regime_version_id");
 
                     b.Property<bool>("RequireDistinctApprover")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("require_distinct_approver");
 
                     b.Property<bool>("RequireSupplierApproval")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("require_supplier_approval");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<string>("TaxCode")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("tax_code");
 
                     b.HasKey("Id")
@@ -3405,16 +3572,16 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<string>("Code")
                         .HasMaxLength(3)
-                        .HasColumnType("character varying(3)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<int>("DecimalPlaces")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("decimal_places");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.HasKey("Code")
@@ -3430,32 +3597,32 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("EndDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("end_date");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("start_date");
 
                     b.HasKey("Id")
@@ -3475,63 +3642,63 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<string>("PackageId")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("package_id");
 
                     b.Property<DateOnly>("PeriodFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_from");
 
                     b.Property<DateOnly>("PeriodTo")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_to");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posting_date");
 
                     b.Property<string>("SourceId")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_id");
 
                     b.Property<string>("SourceSystem")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_system");
 
                     b.Property<string>("SourceVersion")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_version");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -3545,7 +3712,7 @@ namespace Hak.Data.Postgres.Migrations
 
                     b.HasIndex("CompanyId", "SourceSystem", "SourceId", "SourceVersion")
                         .IsUnique()
-                        .HasDatabaseName("ix_payroll_sheets_company_id_source_system_source_id_source_ve~");
+                        .HasDatabaseName("ix_payroll_sheets_company_id_source_system_source_id_source_version");
 
                     b.ToTable("payroll_sheets");
                 });
@@ -3554,82 +3721,71 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("employee_id");
 
-                    b.Property<decimal>("EmployerHealthInsurance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("EmployerHealthInsurance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("employer_health_insurance");
 
-                    b.Property<decimal>("EmployerSocialInsurance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("EmployerSocialInsurance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("employer_social_insurance");
 
-                    b.Property<decimal>("EmployerUnemploymentInsurance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("EmployerUnemploymentInsurance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("employer_unemployment_insurance");
 
-                    b.Property<decimal>("EmployerUnionFee")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("EmployerUnionFee")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("employer_union_fee");
 
                     b.Property<int>("ExpenseGroup")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("expense_group");
 
-                    b.Property<decimal>("Gross")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Gross")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("gross");
 
-                    b.Property<decimal>("HealthInsurance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("HealthInsurance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("health_insurance");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
-                    b.Property<decimal>("Net")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Net")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("net");
 
-                    b.Property<decimal>("OtherDeduction")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OtherDeduction")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("other_deduction");
 
-                    b.Property<decimal>("PersonalIncomeTax")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("PersonalIncomeTax")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("personal_income_tax");
 
                     b.Property<Guid>("SheetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("sheet_id");
 
-                    b.Property<decimal>("SocialInsurance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("SocialInsurance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("social_insurance");
 
-                    b.Property<decimal>("UnemploymentInsurance")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("UnemploymentInsurance")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("unemployment_insurance");
 
                     b.HasKey("Id")
@@ -3656,32 +3812,32 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("updated_at");
 
                     b.Property<Guid>("UpdatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("updated_by");
 
                     b.HasKey("Id")
@@ -3701,29 +3857,27 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("BomId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("bom_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
-                    b.Property<decimal>("QuantityPerUnit")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("QuantityPerUnit")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("quantity_per_unit");
 
                     b.Property<Guid>("RawItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("raw_item_id");
 
-                    b.Property<decimal>("ScrapRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                    b.Property<long>("ScrapRate")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("scrap_rate");
 
                     b.HasKey("Id")
@@ -3743,47 +3897,46 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
-                    b.Property<decimal>("PlannedUnitCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("PlannedUnitCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("planned_unit_cost");
 
                     b.Property<Guid>("WipAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("wip_account_id");
 
                     b.HasKey("Id")
@@ -3810,73 +3963,67 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
-                    b.Property<decimal>("LaborCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("LaborCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("labor_cost");
 
-                    b.Property<decimal>("LaborHours")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("LaborHours")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("labor_hours");
 
-                    b.Property<decimal>("LaborRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                    b.Property<long>("LaborRate")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("labor_rate");
 
-                    b.Property<decimal>("MachineHours")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("MachineHours")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("machine_hours");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("order_id");
 
-                    b.Property<decimal>("OverheadCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OverheadCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("overhead_cost");
 
-                    b.Property<decimal>("OverheadRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                    b.Property<long>("OverheadRate")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("overhead_rate");
 
                     b.Property<string>("VoidReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("void_reason");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_at");
 
                     b.Property<Guid>("WorkCenterId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("work_center_id");
 
                     b.Property<DateOnly>("WorkDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("work_date");
 
                     b.HasKey("Id")
@@ -3895,91 +4042,84 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("ActualCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("ActualCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("actual_cost");
 
-                    b.Property<decimal>("ClosingWip")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("ClosingWip")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("closing_wip");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("CostObjectId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cost_object_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
-                    b.Property<decimal>("Difference")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Difference")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("difference");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
-                    b.Property<decimal>("OutputQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OutputQuantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("output_quantity");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_start");
 
-                    b.Property<decimal>("ProvisionalValue")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("ProvisionalValue")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("provisional_value");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<decimal>("UnitCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("unit_cost");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
-                    b.Property<decimal>("WipBalanceBefore")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("WipBalanceBefore")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("wip_balance_before");
 
                     b.HasKey("Id")
@@ -3997,112 +4137,105 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal?>("ActualQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("ActualQuantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("actual_quantity");
 
                     b.Property<Guid?>("AllocationVoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("allocation_voucher_id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly?>("CompletedDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("completed_date");
 
                     b.Property<Guid>("CostObjectId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cost_object_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
-                    b.Property<decimal>("LaborCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("LaborCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("labor_cost");
 
-                    b.Property<decimal>("MaterialCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("MaterialCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("material_cost");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
-                    b.Property<decimal>("OverheadCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OverheadCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("overhead_cost");
 
-                    b.Property<decimal>("PlannedQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("PlannedQuantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("planned_quantity");
 
                     b.Property<DateOnly>("PlannedStart")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("planned_start");
 
                     b.Property<Guid?>("ReceiptDocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("receipt_document_id");
 
                     b.Property<DateTime?>("ReleasedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("released_at");
 
                     b.Property<Guid?>("ReleasedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("released_by");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
-                    b.Property<decimal>("TotalCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("TotalCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("total_cost");
 
-                    b.Property<decimal>("UnitCost")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("UnitCost")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("unit_cost");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -4131,19 +4264,19 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("order_id");
 
                     b.Property<Guid>("StockDocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("stock_document_id");
 
                     b.HasKey("Id")
@@ -4163,48 +4296,46 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
-                    b.Property<decimal>("LaborRatePerHour")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("LaborRatePerHour")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("labor_rate_per_hour");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
-                    b.Property<decimal>("OverheadRatePerHour")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OverheadRatePerHour")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("overhead_rate_per_hour");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -4221,17 +4352,17 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.HasKey("Id")
@@ -4248,40 +4379,40 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_from");
 
                     b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_to");
 
                     b.Property<Guid>("RegimeId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("regime_id");
 
                     b.Property<string>("VerificationNote")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("verification_note");
 
                     b.Property<int>("VerificationStatus")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("verification_status");
 
                     b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("verified_at");
 
                     b.Property<Guid?>("VerifiedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("verified_by");
 
                     b.Property<string>("VersionCode")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("version_code");
 
                     b.HasKey("Id")
@@ -4298,37 +4429,37 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Article")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("article");
 
                     b.Property<string>("CopySha256")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("copy_sha256");
 
                     b.Property<string>("DocumentNo")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("document_no");
 
                     b.Property<DateOnly?>("IssuedDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("issued_date");
 
                     b.Property<Guid>("RegimeVersionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("regime_version_id");
 
                     b.Property<string>("RuleGroup")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("rule_group");
 
                     b.Property<string>("Url")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("url");
 
                     b.HasKey("Id")
@@ -4344,25 +4475,25 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("DefinitionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("definition_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<string>("Message")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("message");
 
                     b.Property<string>("Rule")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("rule");
 
                     b.HasKey("Id")
@@ -4379,69 +4510,69 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Category")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("category");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<string>("Columns")
                         .HasMaxLength(600)
-                        .HasColumnType("character varying(600)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("columns");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("LegalReference")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("legal_reference");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<string>("VerificationNote")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("verification_note");
 
                     b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("verified_at");
 
                     b.Property<Guid?>("VerifiedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("verified_by");
 
                     b.Property<int>("Version")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("version");
 
                     b.HasKey("Id")
@@ -4458,42 +4589,42 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<bool>("Bold")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("bold");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("DefinitionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("definition_id");
 
                     b.Property<string>("Formula")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("formula");
 
                     b.Property<int>("Indent")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("indent");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.HasKey("Id")
@@ -4514,68 +4645,68 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly?>("CompareFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("compare_from");
 
                     b.Property<DateOnly?>("CompareTo")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("compare_to");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("DefinitionCode")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("definition_code");
 
                     b.Property<Guid>("DefinitionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("definition_id");
 
                     b.Property<bool>("DefinitionVerified")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("definition_verified");
 
                     b.Property<int>("DefinitionVersion")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("definition_version");
 
                     b.Property<DateOnly>("FromDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("from_date");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("result_json");
 
                     b.Property<string>("Sha256")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("sha256");
 
                     b.Property<DateOnly>("ToDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("to_date");
 
                     b.HasKey("Id")
@@ -4594,33 +4725,33 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("account_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("RoleCode")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("role_code");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -4640,52 +4771,52 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_by");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_from");
 
                     b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_to");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<int>("Version")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("version");
 
                     b.HasKey("Id")
@@ -4702,29 +4833,29 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<Guid>("RuleSetId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("rule_set_id");
 
                     b.Property<int>("Sequence")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("sequence");
 
                     b.Property<string>("SourcePrefixes")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_prefixes");
 
                     b.Property<Guid>("TargetAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("target_account_id");
 
                     b.HasKey("Id")
@@ -4743,89 +4874,89 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("activated_by");
 
                     b.Property<string>("BusinessEvent")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("business_event");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("DefinitionJson")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("definition_json");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<string>("DocumentType")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("document_type");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_from");
 
                     b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("effective_to");
 
                     b.Property<string>("LastTestRunJson")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("last_test_run_json");
 
                     b.Property<int>("Priority")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("priority");
 
                     b.Property<Guid?>("RegimeVersionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("regime_version_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<string>("TestCasesJson")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("test_cases_json");
 
                     b.Property<int>("Version")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("version");
 
                     b.HasKey("Id")
@@ -4845,68 +4976,68 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Action")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("action");
 
                     b.Property<DateTime>("At")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("at");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("DataJson")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("data_json");
 
                     b.Property<string>("Device")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("device");
 
                     b.Property<string>("EntityId")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("entity_id");
 
                     b.Property<long?>("EntityRowVersion")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("entity_row_version");
 
                     b.Property<string>("EntityType")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("entity_type");
 
                     b.Property<string>("Hash")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("hash");
 
                     b.Property<string>("PrevHash")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("prev_hash");
 
                     b.Property<string>("Result")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("result");
 
                     b.Property<long>("Seq")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("seq");
 
                     b.Property<Guid?>("SessionId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("session_id");
 
                     b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id")
@@ -4923,32 +5054,32 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<string>("Device")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("device");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("expires_at");
 
                     b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("revoked_at");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("token_hash");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id")
@@ -4968,17 +5099,17 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("code");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("name");
 
                     b.HasKey("Id")
@@ -4994,11 +5125,11 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Security.RolePermission", b =>
                 {
                     b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("role_id");
 
                     b.Property<string>("Permission")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("permission");
 
                     b.HasKey("RoleId", "Permission")
@@ -5011,52 +5142,52 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<int>("FailedLoginCount")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("failed_login_count");
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("full_name");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
                     b.Property<bool>("IsSystemAdmin")
-                        .HasColumnType("boolean")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("is_system_admin");
 
                     b.Property<DateTime?>("LockedUntil")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("locked_until");
 
                     b.Property<string>("NormalizedUserName")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("normalized_user_name");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("password_hash");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<string>("UserName")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("user_name");
 
                     b.HasKey("Id")
@@ -5072,15 +5203,15 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Security.UserCompanyRole", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("user_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("role_id");
 
                     b.HasKey("UserId", "CompanyId", "RoleId")
@@ -5099,70 +5230,68 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("account_id");
 
                     b.Property<DateOnly>("AllocationDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("allocation_date");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("CreditLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("credit_line_id");
 
                     b.Property<Guid>("DebitLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("debit_line_id");
 
-                    b.Property<decimal?>("ForeignAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("ForeignAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("foreign_amount");
 
                     b.Property<string>("Origin")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("origin");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<Guid?>("SourceVoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_voucher_id");
 
                     b.Property<string>("VoidReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("void_reason");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_at");
 
                     b.Property<Guid?>("VoidedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voided_by");
 
                     b.HasKey("Id")
@@ -5199,37 +5328,37 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<int>("Duplicates")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("duplicates");
 
                     b.Property<int>("Imported")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("imported");
 
                     b.Property<DateTime>("ImportedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("imported_at");
 
                     b.Property<Guid>("ImportedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("imported_by");
 
                     b.Property<string>("SourceName")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_name");
 
                     b.Property<string>("SourceSha256")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_sha256");
 
                     b.HasKey("Id")
@@ -5246,26 +5375,23 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("AmountBeforeVat")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("AmountBeforeVat")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount_before_vat");
 
                     b.Property<Guid>("EInvoiceId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("e_invoice_id");
 
-                    b.Property<decimal>("VatAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("VatAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("vat_amount");
 
                     b.Property<decimal?>("VatRate")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5281,99 +5407,95 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
-                    b.Property<decimal>("AmountBeforeVat")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("AmountBeforeVat")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount_before_vat");
 
                     b.Property<string>("BuyerName")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("buyer_name");
 
                     b.Property<string>("BuyerTaxCode")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("buyer_tax_code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Currency")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("currency");
 
                     b.Property<int>("Direction")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("direction");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("exchange_rate");
 
                     b.Property<Guid>("ImportBatchId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("import_batch_id");
 
                     b.Property<DateTime>("ImportedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("imported_at");
 
                     b.Property<Guid>("ImportedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("imported_by");
 
                     b.Property<DateOnly>("IssueDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("issue_date");
 
                     b.Property<string>("LookupCode")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("lookup_code");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<string>("RelatedNumber")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("related_number");
 
                     b.Property<string>("RelatedSeries")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("related_series");
 
                     b.Property<string>("SellerName")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("seller_name");
 
                     b.Property<string>("SellerTaxCode")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("seller_tax_code");
 
                     b.Property<string>("Series")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("series");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
-                    b.Property<decimal>("TotalPayment")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("TotalPayment")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("total_payment");
 
-                    b.Property<decimal>("VatAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("VatAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("vat_amount");
 
                     b.HasKey("Id")
@@ -5387,7 +5509,7 @@ namespace Hak.Data.Postgres.Migrations
 
                     b.HasIndex("CompanyId", "Direction", "SellerTaxCode", "Series", "Number")
                         .IsUnique()
-                        .HasDatabaseName("ix_e_invoice_records_company_id_direction_seller_tax_code_seri~");
+                        .HasDatabaseName("ix_e_invoice_records_company_id_direction_seller_tax_code_series_number");
 
                     b.ToTable("e_invoice_records");
                 });
@@ -5396,23 +5518,23 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("At")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("at");
 
                     b.Property<Guid>("EInvoiceId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("e_invoice_id");
 
                     b.Property<Guid>("ImportBatchId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("import_batch_id");
 
                     b.Property<int>("NewStatus")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("new_status");
 
                     b.HasKey("Id")
@@ -5428,49 +5550,49 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly?>("FiledDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("filed_date");
 
                     b.Property<string>("FilingReference")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("filing_reference");
 
                     b.Property<DateOnly>("PeriodFrom")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_from");
 
                     b.Property<DateOnly>("PeriodTo")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("period_to");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<string>("TaxType")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("tax_type");
 
                     b.HasKey("Id")
@@ -5487,35 +5609,33 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("DeclarationId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("declaration_id");
 
-                    b.Property<decimal>("DeclaredAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("DeclaredAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("declared_amount");
 
                     b.Property<string>("IndicatorCode")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("indicator_code");
 
                     b.Property<string>("Label")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("label");
 
                     b.Property<int>("Measure")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("measure");
 
                     b.Property<decimal?>("VatRate")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5532,97 +5652,96 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AdjustsInvoiceId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("adjusts_invoice_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Currency")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("currency");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("due_date");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("exchange_rate");
 
                     b.Property<DateOnly>("InvoiceDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("invoice_date");
 
                     b.Property<string>("InvoiceNo")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("invoice_no");
 
                     b.Property<string>("InvoiceSeries")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("invoice_series");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("kind");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<DateTime?>("PostedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid?>("PostedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posting_date");
 
                     b.Property<int>("Purpose")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("purpose");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -5642,7 +5761,7 @@ namespace Hak.Data.Postgres.Migrations
                         .HasDatabaseName("ix_commercial_invoices_company_id_number");
 
                     b.HasIndex("CompanyId", "Kind", "PartnerId", "InvoiceSeries", "InvoiceNo")
-                        .HasDatabaseName("ix_commercial_invoices_company_id_kind_partner_id_invoice_seri~");
+                        .HasDatabaseName("ix_commercial_invoices_company_id_kind_partner_id_invoice_series_invoice_no");
 
                     b.ToTable("commercial_invoices");
                 });
@@ -5651,90 +5770,83 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("account_id");
 
                     b.Property<int?>("AdjustsLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("adjusts_line_no");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<int>("Basis")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("basis");
 
-                    b.Property<decimal>("BasisQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("BasisQuantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("basis_quantity");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
-                    b.Property<decimal>("FunctionalAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("FunctionalAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("functional_amount");
 
                     b.Property<Guid>("InvoiceId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("invoice_id");
 
                     b.Property<Guid?>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("OrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("order_id");
 
                     b.Property<int?>("OrderLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("order_line_no");
 
                     b.Property<Guid?>("StockDocumentId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("stock_document_id");
 
                     b.Property<int?>("StockLineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("stock_line_no");
 
-                    b.Property<decimal?>("StockQuantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("StockQuantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("stock_quantity");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("unit_price");
 
-                    b.Property<decimal>("VatAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("VatAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("vat_amount");
 
                     b.Property<decimal?>("VatRate")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5745,7 +5857,7 @@ namespace Hak.Data.Postgres.Migrations
                         .HasDatabaseName("ix_commercial_invoice_lines_invoice_id_line_no");
 
                     b.HasIndex("CompanyId", "StockDocumentId", "StockLineNo")
-                        .HasDatabaseName("ix_commercial_invoice_lines_company_id_stock_document_id_stock~");
+                        .HasDatabaseName("ix_commercial_invoice_lines_company_id_stock_document_id_stock_line_no");
 
                     b.ToTable("commercial_invoice_lines", t =>
                         {
@@ -5757,79 +5869,78 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime?>("ConfirmedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("confirmed_at");
 
                     b.Property<Guid?>("ConfirmedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("confirmed_by");
 
                     b.Property<string>("ContractNo")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("contract_no");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Currency")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("currency");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("ExpectedDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("expected_date");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("kind");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<DateOnly>("OrderDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("order_date");
 
-                    b.Property<decimal>("OverDeliveryTolerancePercent")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("OverDeliveryTolerancePercent")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("over_delivery_tolerance_percent");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<string>("StatusReason")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("status_reason");
 
                     b.HasKey("Id")
@@ -5847,7 +5958,7 @@ namespace Hak.Data.Postgres.Migrations
 
                     b.ToTable("trade_orders", t =>
                         {
-                            t.HasCheckConstraint("ck_trade_orders_tolerance", "over_delivery_tolerance_percent >= 0 AND over_delivery_tolerance_percent <= 100");
+                            t.HasCheckConstraint("ck_trade_orders_tolerance", "over_delivery_tolerance_percent >= 0 AND over_delivery_tolerance_percent <= 1000000");
                         });
                 });
 
@@ -5855,46 +5966,43 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<int>("Basis")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("basis");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("order_id");
 
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("quantity");
 
-                    b.Property<decimal>("UnitPrice")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("UnitPrice")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("unit_price");
 
                     b.Property<decimal?>("VatRate")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5917,133 +6025,133 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AdjustsVoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("adjusts_voucher_id");
 
                     b.Property<Guid?>("ApprovedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("approved_by");
 
                     b.Property<Guid?>("BranchId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("branch_id");
 
                     b.Property<string>("BusinessEvent")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("business_event");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("CounterpartyName")
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("counterparty_name");
 
                     b.Property<string>("CounterpartyUnit")
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("counterparty_unit");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
                     b.Property<string>("CurrencyCode")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("currency_code");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<Guid>("FiscalYearId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("fiscal_year_id");
 
                     b.Property<Guid?>("MainAccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("main_account_id");
 
                     b.Property<string>("Number")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("number");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<DateTime?>("PostedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid?>("PostedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posting_date");
 
                     b.Property<Guid?>("PostingRuleId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("posting_rule_id");
 
                     b.Property<int?>("PostingRuleVersion")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("posting_rule_version");
 
                     b.Property<Guid?>("ReversesVoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("reverses_voucher_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<string>("SourceId")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_id");
 
                     b.Property<string>("SourceSystem")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_system");
 
                     b.Property<string>("SourceVersion")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("source_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("SubmittedBy")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("submitted_by");
 
                     b.Property<DateOnly>("VoucherDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_date");
 
                     b.Property<string>("VoucherType")
                         .IsRequired()
                         .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_type");
 
                     b.HasKey("Id")
@@ -6082,44 +6190,44 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<string>("Action")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("action");
 
                     b.Property<DateTime>("At")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("TEXT")
                         .HasColumnName("at");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<int?>("FromStatus")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("from_status");
 
                     b.Property<string>("Note")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("note");
 
                     b.Property<int>("ToStatus")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("to_status");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("user_id");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.Property<long>("VoucherRowVersion")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("voucher_row_version");
 
                     b.HasKey("Id")
@@ -6135,67 +6243,64 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("account_id");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("amount");
 
                     b.Property<string>("CashFlowCode")
                         .HasMaxLength(4)
-                        .HasColumnType("character varying(4)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("cash_flow_code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("date")
+                        .HasColumnType("TEXT")
                         .HasColumnName("due_date");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
+                        .HasColumnType("TEXT")
                         .HasColumnName("exchange_rate");
 
-                    b.Property<decimal?>("ForeignAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("numeric(19,4)")
+                    b.Property<long?>("ForeignAmount")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("foreign_amount");
 
                     b.Property<string>("ForeignCurrency")
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("foreign_currency");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
                     b.Property<Guid?>("SettleJournalLineId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("settle_journal_line_id");
 
                     b.Property<int>("Side")
-                        .HasColumnType("integer")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("side");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -6223,29 +6328,29 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("FiscalYearId")
-                        .HasColumnType("uuid")
+                        .HasColumnType("TEXT")
                         .HasColumnName("fiscal_year_id");
 
                     b.Property<long>("LastNumber")
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("last_number");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint")
+                        .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
                     b.Property<string>("VoucherType")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasColumnType("TEXT")
                         .HasColumnName("voucher_type");
 
                     b.HasKey("Id")
@@ -6253,7 +6358,7 @@ namespace Hak.Data.Postgres.Migrations
 
                     b.HasIndex("CompanyId", "FiscalYearId", "VoucherType")
                         .IsUnique()
-                        .HasDatabaseName("ix_voucher_number_sequences_company_id_fiscal_year_id_voucher_~");
+                        .HasDatabaseName("ix_voucher_number_sequences_company_id_fiscal_year_id_voucher_type");
 
                     b.ToTable("voucher_number_sequences");
                 });
@@ -6310,6 +6415,35 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_asset_repairs_long_term_assets_asset_id");
+
+                    b.HasOne("Hak.Domain.Assets.MaintenanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_asset_repairs_maintenance_requests_request_id");
+
+                    b.HasOne("Hak.Domain.Assets.PreventiveSchedule", null)
+                        .WithMany()
+                        .HasForeignKey("ScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_asset_repairs_preventive_schedules_schedule_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepairMaterial", b =>
+                {
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_repair_materials_items_item_id");
+
+                    b.HasOne("Hak.Domain.Assets.AssetRepair", null)
+                        .WithMany("Materials")
+                        .HasForeignKey("RepairId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_repair_materials_asset_repairs_repair_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>
@@ -6358,6 +6492,26 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_long_term_assets_accounts_expense_account_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.MaintenanceRequest", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_maintenance_requests_long_term_assets_asset_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.PreventiveSchedule", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_preventive_schedules_long_term_assets_asset_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
@@ -6411,7 +6565,7 @@ namespace Hak.Data.Postgres.Migrations
                         .HasForeignKey("StatementLineId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_reconciliation_matches_bank_statement_lines_statement_line_~");
+                        .HasConstraintName("fk_reconciliation_matches_bank_statement_lines_statement_line_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Catalog.Account", b =>
@@ -7300,6 +7454,11 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Assets.AssetCount", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepair", b =>
+                {
+                    b.Navigation("Materials");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.LongTermAsset", b =>

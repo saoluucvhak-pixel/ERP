@@ -5,67 +5,72 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Hak.Data.Migrations
+namespace Hak.Data.Postgres.Migrations
 {
     [DbContext(typeof(HakDbContext))]
-    [Migration("20261019172730_Phase8AssetRepairs")]
-    partial class Phase8AssetRepairs
+    [Migration("20261019173826_Phase8AssetMaintenance")]
+    partial class Phase8AssetMaintenance
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Hak.Domain.Assets.AssetAssignment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Custodian")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("custodian");
 
                     b.Property<string>("Department")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("department");
 
                     b.Property<DateOnly?>("EndDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("end_date");
 
                     b.Property<string>("Location")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("location");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("start_date");
 
                     b.HasKey("Id")
@@ -84,23 +89,24 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("JournalLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("journal_line_id");
 
                     b.HasKey("Id")
@@ -126,49 +132,49 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
 
                     b.Property<Guid?>("CompletedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("completed_by");
 
                     b.Property<DateOnly>("CountDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("count_date");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -185,35 +191,35 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("ActualDepartment")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("actual_department");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
                     b.Property<string>("BookDepartment")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("book_department");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("CountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("count_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<int>("Result")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("result");
 
                     b.HasKey("Id")
@@ -233,85 +239,130 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long?>("ActualCost")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("actual_cost");
+                    b.Property<decimal?>("ActualLaborCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("actual_labor_cost");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approved_by");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
+                    b.Property<string>("AssignedTech")
+                        .HasColumnType("text")
+                        .HasColumnName("assigned_tech");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("closed_by");
+
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
-                    b.Property<Guid?>("CompletedBy")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("completed_by");
-
-                    b.Property<DateOnly?>("CompletedDate")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("completed_date");
-
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<long>("EstimatedCost")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("estimated_cost");
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_time");
 
-                    b.Property<int>("Kind")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("kind");
+                    b.Property<decimal>("EstimatedLaborCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("estimated_labor_cost");
+
+                    b.Property<decimal>("EstimatedMaterialCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("estimated_material_cost");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<DateOnly>("ReportedDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("reported_date");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("RootCause")
+                        .HasColumnType("text")
+                        .HasColumnName("root_cause");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
+                    b.Property<Guid?>("ScheduleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("schedule_id");
+
+                    b.Property<string>("SolutionPlan")
+                        .HasColumnType("text")
+                        .HasColumnName("solution_plan");
+
+                    b.Property<DateTime?>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
-                    b.Property<string>("Vendor")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("vendor");
+                    b.Property<int>("Type")
+                        .HasColumnType("integer")
+                        .HasColumnName("type");
 
-                    b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("voucher_id");
+                    b.Property<string>("Vendor")
+                        .HasColumnType("text")
+                        .HasColumnName("vendor");
 
                     b.HasKey("Id")
                         .HasName("pk_asset_repairs");
 
                     b.HasIndex("AssetId")
                         .HasDatabaseName("ix_asset_repairs_asset_id");
+
+                    b.HasIndex("RequestId")
+                        .HasDatabaseName("ix_asset_repairs_request_id");
+
+                    b.HasIndex("ScheduleId")
+                        .HasDatabaseName("ix_asset_repairs_schedule_id");
 
                     b.HasIndex("CompanyId", "AssetId")
                         .HasDatabaseName("ix_asset_repairs_company_id_asset_id");
@@ -323,79 +374,134 @@ namespace Hak.Data.Migrations
                     b.ToTable("asset_repairs");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepairMaterial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<decimal>("QtyIssued")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("qty_issued");
+
+                    b.Property<decimal>("QtyRequested")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("qty_requested");
+
+                    b.Property<Guid>("RepairId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repair_id");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("StockDocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stock_document_id");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("unit_price");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_repair_materials");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_asset_repair_materials_item_id");
+
+                    b.HasIndex("RepairId")
+                        .HasDatabaseName("ix_asset_repair_materials_repair_id");
+
+                    b.ToTable("asset_repair_materials");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AssetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
                     b.Property<int>("Class")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("class");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateTime?>("DecidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("decided_at");
 
                     b.Property<Guid?>("DecidedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("decided_by");
 
                     b.Property<string>("DecisionNote")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("decision_note");
 
                     b.Property<string>("Department")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("department");
 
-                    b.Property<long>("EstimatedCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("EstimatedCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("estimated_cost");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.Property<DateOnly>("NeededDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("needed_date");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("reason");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -418,43 +524,44 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("AssetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("asset_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<bool>("IsDisposal")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_disposal");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_end");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_start");
 
                     b.Property<Guid?>("RunId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("run_id");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("voided_at");
 
                     b.HasKey("Id")
@@ -479,47 +586,47 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_start");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -540,112 +647,115 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AccumulatedAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("accumulated_account_id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("activated_by");
 
                     b.Property<Guid>("AssetAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("asset_account_id");
 
                     b.Property<int>("Class")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("class");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly?>("DisposalDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("disposal_date");
 
                     b.Property<Guid?>("DisposalVoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("disposal_voucher_id");
 
                     b.Property<Guid>("ExpenseAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("expense_account_id");
 
                     b.Property<DateOnly>("InServiceDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("in_service_date");
 
                     b.Property<int>("Method")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("method");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(250)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(250)")
                         .HasColumnName("name");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<long>("OpeningAccumulated")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OpeningAccumulated")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("opening_accumulated");
 
-                    b.Property<long>("OriginalCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OriginalCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("original_cost");
 
                     b.Property<int>("Proration")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("proration");
 
                     b.Property<int?>("RemainingLifeMonths")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("remaining_life_months");
 
-                    b.Property<long>("ResidualValue")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ResidualValue")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("residual_value");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<DateOnly>("ScheduleStartDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("schedule_start_date");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<int>("UsefulLifeMonths")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("useful_life_months");
 
                     b.HasKey("Id")
@@ -675,53 +785,174 @@ namespace Hak.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.MaintenanceRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("number");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reported_at");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_maintenance_requests");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_maintenance_requests_asset_id");
+
+                    b.HasIndex("CompanyId", "AssetId")
+                        .HasDatabaseName("ix_maintenance_requests_company_id_asset_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_maintenance_requests_company_id_number");
+
+                    b.ToTable("maintenance_requests");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.PreventiveSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<int>("FrequencyDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("frequency_days");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateOnly?>("LastPerformedAt")
+                        .HasColumnType("date")
+                        .HasColumnName("last_performed_at");
+
+                    b.Property<DateOnly>("NextDueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("next_due_date");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("TaskName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("task_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_preventive_schedules");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_preventive_schedules_asset_id");
+
+                    b.HasIndex("CompanyId", "AssetId")
+                        .HasDatabaseName("ix_preventive_schedules_company_id_asset_id");
+
+                    b.ToTable("preventive_schedules");
+                });
+
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("BankAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("bank_account_id");
 
-                    b.Property<long>("ClosingBalance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ClosingBalance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("closing_balance");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly>("FromDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("from_date");
 
                     b.Property<DateTime>("ImportedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("imported_at");
 
                     b.Property<Guid>("ImportedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("imported_by");
 
-                    b.Property<long>("OpeningBalance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OpeningBalance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("opening_balance");
 
                     b.Property<string>("SourceName")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_name");
 
                     b.Property<string>("SourceSha256")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_sha256");
 
                     b.Property<DateOnly>("ToDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("to_date");
 
                     b.HasKey("Id")
@@ -741,57 +972,58 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("BankAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("bank_account_id");
 
                     b.Property<string>("BankReference")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("bank_reference");
 
                     b.Property<string>("CandidatesJson")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("candidates_json");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("CounterpartyAccount")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("counterparty_account");
 
                     b.Property<string>("CounterpartyName")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("counterparty_name");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<Guid>("StatementId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("statement_id");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<DateOnly>("TransactionDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("transaction_date");
 
                     b.HasKey("Id")
@@ -802,7 +1034,7 @@ namespace Hak.Data.Migrations
 
                     b.HasIndex("CompanyId", "BankAccountId", "BankReference")
                         .IsUnique()
-                        .HasDatabaseName("ix_bank_statement_lines_company_id_bank_account_id_bank_reference");
+                        .HasDatabaseName("ix_bank_statement_lines_company_id_bank_account_id_bank_refere~");
 
                     b.HasIndex("CompanyId", "BankAccountId", "Status")
                         .HasDatabaseName("ix_bank_statement_lines_company_id_bank_account_id_status");
@@ -817,99 +1049,100 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<Guid?>("ApprovedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("approved_by");
 
                     b.Property<Guid>("BankAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("bank_account_id");
 
                     b.Property<string>("BankReference")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("bank_reference");
 
                     b.Property<string>("BeneficiaryAccountNo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("beneficiary_account_no");
 
                     b.Property<string>("BeneficiaryBank")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("beneficiary_bank");
 
                     b.Property<string>("BusinessEvent")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("business_event");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("ExecutedDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("executed_date");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<DateOnly>("RequestedDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("requested_date");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<DateTime?>("SentAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("sent_at");
 
                     b.Property<Guid?>("SentBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("sent_by");
 
                     b.Property<Guid?>("SettleJournalLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("settle_journal_line_id");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -941,47 +1174,47 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("JournalLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("journal_line_id");
 
                     b.Property<int>("Origin")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("origin");
 
                     b.Property<int>("Score")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("score");
 
                     b.Property<Guid>("StatementLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("statement_line_id");
 
                     b.Property<string>("VoidReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("void_reason");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("voided_at");
 
                     b.Property<Guid?>("VoidedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voided_by");
 
                     b.HasKey("Id")
@@ -1010,76 +1243,76 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<int>("BalanceDisplay")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("balance_display");
 
                     b.Property<int>("CashKind")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("cash_kind");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<bool>("IsPostable")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_postable");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.Property<int>("NegativeBalancePolicy")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("negative_balance_policy");
 
                     b.Property<int>("OpenItemNature")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("open_item_nature");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("parent_id");
 
                     b.Property<Guid?>("RegimeVersionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("regime_version_id");
 
                     b.Property<string>("ReportTags")
                         .HasMaxLength(200)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(200)")
                         .HasColumnName("report_tags");
 
                     b.Property<bool>("RequiresPartner")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("requires_partner");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -1099,82 +1332,83 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Address")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("address");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<long?>("CreditLimit")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("CreditLimit")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("credit_limit");
 
                     b.Property<string>("Email")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("email");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.Property<int?>("PaymentTermsDays")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("payment_terms_days");
 
                     b.Property<string>("Phone")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("phone");
 
                     b.Property<int>("Roles")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("roles");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<DateTime?>("SupplierDecidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("supplier_decided_at");
 
                     b.Property<Guid?>("SupplierDecidedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("supplier_decided_by");
 
                     b.Property<int>("SupplierStatus")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("supplier_status");
 
                     b.Property<string>("SupplierStatusReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("supplier_status_reason");
 
                     b.Property<string>("TaxCode")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("tax_code");
 
                     b.HasKey("Id")
@@ -1194,58 +1428,58 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Conclusion")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("conclusion");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("InspectionDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("inspection_date");
 
                     b.Property<string>("Inspector")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("inspector");
 
                     b.Property<bool>("IsCancelled")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_cancelled");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<Guid>("StockDocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("stock_document_id");
 
                     b.HasKey("Id")
@@ -1268,35 +1502,37 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("AcceptedQty")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("AcceptedQty")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("accepted_qty");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("InspectionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("inspection_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<long>("ReceivedQty")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ReceivedQty")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("received_qty");
 
                     b.Property<int>("StockLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("stock_line_no");
 
                     b.HasKey("Id")
@@ -1319,68 +1555,69 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("AcceptedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("accepted_at");
 
                     b.Property<Guid>("AcceptedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("accepted_by");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<string>("CloseReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("close_reason");
 
                     b.Property<DateTime?>("ClosedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("closed_at");
 
                     b.Property<Guid?>("ClosedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("closed_by");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("due_date");
 
                     b.Property<Guid>("InvoiceId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("invoice_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<Guid?>("PaymentOrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("payment_order_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<Guid>("SettleJournalLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("settle_journal_line_id");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -1408,69 +1645,69 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("cancel_reason");
 
                     b.Property<string>("Carrier")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("carrier");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("DeliveryDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("delivery_date");
 
                     b.Property<string>("DeliveryStaff")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("delivery_staff");
 
                     b.Property<Guid>("DispatchOrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("dispatch_order_id");
 
                     b.Property<bool>("IsCancelled")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_cancelled");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<string>("ShipTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("ship_to");
 
                     b.Property<Guid>("StockDocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("stock_document_id");
 
                     b.Property<string>("WaybillNo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("waybill_no");
 
                     b.HasKey("Id")
@@ -1499,35 +1736,36 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("DeliveryId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("delivery_id");
 
                     b.Property<int>("DispatchLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("dispatch_line_no");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
-                    b.Property<long>("Quantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("quantity");
 
                     b.Property<int>("StockLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("stock_line_no");
 
                     b.HasKey("Id")
@@ -1550,31 +1788,32 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("DispatchOrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("dispatch_order_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<int>("OrderLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("order_line_no");
 
-                    b.Property<long>("Quantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("quantity");
 
                     b.HasKey("Id")
@@ -1597,69 +1836,69 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("DispatchDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("dispatch_date");
 
                     b.Property<DateTime?>("IssuedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("issued_at");
 
                     b.Property<Guid?>("IssuedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("issued_by");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<string>("ShipTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("ship_to");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -1688,54 +1927,54 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("RateSource")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("rate_source");
 
                     b.Property<string>("RatesJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("rates_json");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("result_json");
 
                     b.Property<DateOnly>("RevaluationDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("revaluation_date");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -1751,30 +1990,30 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<string>("KeyId")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("key_id");
 
                     b.Property<string>("SecretBase64")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("secret_base64");
 
                     b.Property<string>("SourceSystem")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_system");
 
                     b.HasKey("Id")
@@ -1791,68 +2030,68 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Checksum")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("checksum");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<int>("CreatedCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("created_count");
 
                     b.Property<string>("DocumentType")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("document_type");
 
                     b.Property<int>("DuplicateCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("duplicate_count");
 
                     b.Property<int>("ErrorCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("error_count");
 
                     b.Property<int>("ItemCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("item_count");
 
                     b.Property<string>("PackageId")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("package_id");
 
                     b.Property<DateTime>("ReceivedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("received_at");
 
                     b.Property<Guid>("ReceivedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("received_by");
 
                     b.Property<string>("ResultJson")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("result_json");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("schema_version");
 
                     b.Property<string>("SourceSystem")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_system");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -1869,36 +2108,36 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_from");
 
                     b.Property<int>("Method")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("method");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -1918,56 +2157,56 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_start");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("result_json");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -1985,46 +2224,46 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("ApprovalNote")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("approval_note");
 
                     b.Property<DateTime>("ApprovedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("approved_at");
 
                     b.Property<Guid>("ApprovedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("approved_by");
 
                     b.Property<int>("BdmtDecimals")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("bdmt_decimals");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<int>("DrynessDecimals")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("dryness_decimals");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_from");
 
                     b.HasKey("Id")
@@ -2041,70 +2280,75 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long?>("AltFactor")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("AltFactor")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("alt_factor");
 
                     b.Property<string>("AltUnit")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("alt_unit");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<long?>("DefaultVatRate")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("DefaultVatRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("default_vat_rate");
 
                     b.Property<Guid>("InventoryAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("inventory_account_id");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
-                    b.Property<long?>("MinStock")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("MinStock")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("min_stock");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<long?>("ReorderQty")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("ReorderQty")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("reorder_qty");
 
-                    b.Property<long?>("SalePrice")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("SalePrice")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("sale_price");
 
                     b.Property<bool>("TracksDryness")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("tracks_dryness");
 
                     b.Property<string>("Unit")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("unit");
 
                     b.HasKey("Id")
@@ -2124,82 +2368,82 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<DateOnly>("DocumentDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("document_date");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<DateTime?>("PostedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid?>("PostedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("posting_date");
 
                     b.Property<Guid?>("ReversalVoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reversal_voucher_id");
 
                     b.Property<Guid?>("ReversesDocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reverses_document_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("ToWarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("to_warehouse_id");
 
                     b.Property<int>("Type")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("type");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -2227,47 +2471,49 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long?>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid?>("CounterAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("counter_account_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<Guid>("DocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("document_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("OrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<int?>("OrderLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("order_line_no");
 
-                    b.Property<long>("Quantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("quantity");
 
                     b.HasKey("Id")
@@ -2293,84 +2539,87 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("Bdmt")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Bdmt")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("bdmt");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("DocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("document_id");
 
-                    b.Property<long>("DrynessPercent")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("DrynessPercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("dryness_percent");
 
                     b.Property<DateOnly>("EvidenceDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("evidence_date");
 
                     b.Property<string>("EvidenceIssuer")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("evidence_issuer");
 
                     b.Property<string>("EvidenceNo")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("evidence_no");
 
                     b.Property<int>("EvidenceType")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("evidence_type");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("kind");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
-                    b.Property<long>("MeasuredMt")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("MeasuredMt")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("measured_mt");
 
                     b.Property<Guid>("MethodId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("method_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<string>("SupersedeReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("supersede_reason");
 
                     b.Property<DateTime?>("SupersededAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("superseded_at");
 
                     b.Property<Guid?>("SupersededBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("superseded_by");
 
                     b.HasKey("Id")
@@ -2392,7 +2641,7 @@ namespace Hak.Data.Migrations
 
                     b.ToTable("stock_measurements", t =>
                         {
-                            t.HasCheckConstraint("ck_stock_measurements_dryness", "dryness_percent > 0 AND dryness_percent <= 1000000");
+                            t.HasCheckConstraint("ck_stock_measurements_dryness", "dryness_percent > 0 AND dryness_percent <= 100");
 
                             t.HasCheckConstraint("ck_stock_measurements_mt", "measured_mt > 0");
                         });
@@ -2402,51 +2651,52 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid?>("CounterAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("counter_account_id");
 
                     b.Property<Guid>("DocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("document_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<DateOnly>("MovementDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("movement_date");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
-                    b.Property<long>("Quantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("quantity");
 
                     b.Property<Guid?>("ReversesMovementId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reverses_movement_id");
 
                     b.Property<long>("Sequence")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("sequence");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -2478,31 +2728,32 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid?>("CostingRunId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("costing_run_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("MovementId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("movement_id");
 
-                    b.Property<long>("Value")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Value")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("value");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("voided_at");
 
                     b.HasKey("Id")
@@ -2523,52 +2774,53 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateOnly>("AdjustmentDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("adjustment_date");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("reason");
 
                     b.Property<long>("Sequence")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("sequence");
 
                     b.Property<Guid?>("SourceInvoiceId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("source_invoice_id");
 
                     b.Property<Guid>("TargetMovementId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("target_movement_id");
 
-                    b.Property<long>("Value")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Value")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("value");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -2582,7 +2834,7 @@ namespace Hak.Data.Migrations
                         .HasDatabaseName("ix_stock_value_adjustments_company_id_sequence");
 
                     b.HasIndex("CompanyId", "WarehouseId", "ItemId", "Sequence")
-                        .HasDatabaseName("ix_stock_value_adjustments_company_id_warehouse_id_item_id_sequence");
+                        .HasDatabaseName("ix_stock_value_adjustments_company_id_warehouse_id_item_id_seq~");
 
                     b.ToTable("stock_value_adjustments", t =>
                         {
@@ -2594,33 +2846,33 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.HasKey("Id")
@@ -2637,50 +2889,50 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("period_id");
 
                     b.Property<DateTime>("PostedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid>("PostedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("posting_date");
 
                     b.Property<Guid>("RegimeVersionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("regime_version_id");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.Property<string>("VoucherNumber")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("voucher_number");
 
                     b.Property<string>("VoucherType")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("voucher_type");
 
                     b.HasKey("Id")
@@ -2709,64 +2961,67 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<string>("CashFlowCode")
                         .HasMaxLength(4)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(4)")
                         .HasColumnName("cash_flow_code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("due_date");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("exchange_rate");
 
-                    b.Property<long?>("ForeignAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("ForeignAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("foreign_amount");
 
                     b.Property<string>("ForeignCurrency")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("foreign_currency");
 
                     b.Property<Guid>("JournalEntryId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("journal_entry_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("posting_date");
 
                     b.Property<int>("Side")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("side");
 
                     b.HasKey("Id")
@@ -2799,88 +3054,89 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccruedInterestAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("accrued_interest_account_id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("activated_by");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
-                    b.Property<long>("ContractAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ContractAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("contract_amount");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Currency")
                         .HasMaxLength(3)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(3)")
                         .HasColumnName("currency");
 
                     b.Property<int>("DayCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("day_count");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<Guid>("InterestExpenseAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("interest_expense_account_id");
 
                     b.Property<DateOnly>("InterestFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("interest_from");
 
                     b.Property<Guid>("LenderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("lender_id");
 
                     b.Property<DateOnly>("MaturityDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("maturity_date");
 
                     b.Property<Guid>("PrincipalAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("principal_account_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("start_date");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -2912,43 +3168,45 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<long?>("ForeignAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("ForeignAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("foreign_amount");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("loan_id");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_end");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_start");
 
                     b.Property<Guid>("RunId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("run_id");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("voided_at");
 
                     b.HasKey("Id")
@@ -2973,52 +3231,52 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_start");
 
                     b.Property<string>("RatesJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("rates_json");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -3039,27 +3297,27 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("JournalLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("journal_line_id");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("loan_id");
 
                     b.HasKey("Id")
@@ -3082,36 +3340,37 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("AnnualRatePercent")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("AnnualRatePercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("annual_rate_percent");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_from");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("loan_id");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.HasKey("Id")
@@ -3123,7 +3382,7 @@ namespace Hak.Data.Migrations
 
                     b.ToTable("loan_rates", t =>
                         {
-                            t.HasCheckConstraint("ck_loan_rates_rate", "annual_rate_percent >= 0 AND annual_rate_percent <= 1000000");
+                            t.HasCheckConstraint("ck_loan_rates_rate", "annual_rate_percent >= 0 AND annual_rate_percent <= 100");
                         });
                 });
 
@@ -3131,31 +3390,33 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly>("DueDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("due_date");
 
-                    b.Property<long>("InterestDue")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("InterestDue")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("interest_due");
 
                     b.Property<Guid>("LoanId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("loan_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<long>("PrincipalDue")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("PrincipalDue")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("principal_due");
 
                     b.HasKey("Id")
@@ -3171,44 +3432,44 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly>("EndDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("end_date");
 
                     b.Property<Guid>("FiscalYearId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("fiscal_year_id");
 
                     b.Property<DateTime?>("LockedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("locked_at");
 
                     b.Property<Guid?>("LockedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("locked_by");
 
                     b.Property<int>("PeriodNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("period_no");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("start_date");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.HasKey("Id")
@@ -3231,42 +3492,42 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("parent_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -3286,58 +3547,58 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(20)")
                         .HasColumnName("code");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("FunctionalCurrency")
                         .IsRequired()
                         .HasMaxLength(3)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(3)")
                         .HasColumnName("functional_currency");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(250)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(250)")
                         .HasColumnName("name");
 
                     b.Property<Guid>("RegimeVersionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("regime_version_id");
 
                     b.Property<bool>("RequireDistinctApprover")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("require_distinct_approver");
 
                     b.Property<bool>("RequireSupplierApproval")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("require_supplier_approval");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<string>("TaxCode")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("tax_code");
 
                     b.HasKey("Id")
@@ -3360,16 +3621,16 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<string>("Code")
                         .HasMaxLength(3)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(3)")
                         .HasColumnName("code");
 
                     b.Property<int>("DecimalPlaces")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("decimal_places");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.HasKey("Code")
@@ -3385,32 +3646,32 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly>("EndDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("end_date");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("start_date");
 
                     b.HasKey("Id")
@@ -3430,63 +3691,63 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<string>("PackageId")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("package_id");
 
                     b.Property<DateOnly>("PeriodFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_from");
 
                     b.Property<DateOnly>("PeriodTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_to");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("posting_date");
 
                     b.Property<string>("SourceId")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("source_id");
 
                     b.Property<string>("SourceSystem")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("source_system");
 
                     b.Property<string>("SourceVersion")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("source_version");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -3500,7 +3761,7 @@ namespace Hak.Data.Migrations
 
                     b.HasIndex("CompanyId", "SourceSystem", "SourceId", "SourceVersion")
                         .IsUnique()
-                        .HasDatabaseName("ix_payroll_sheets_company_id_source_system_source_id_source_version");
+                        .HasDatabaseName("ix_payroll_sheets_company_id_source_system_source_id_source_ve~");
 
                     b.ToTable("payroll_sheets");
                 });
@@ -3509,71 +3770,82 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("EmployeeId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("employee_id");
 
-                    b.Property<long>("EmployerHealthInsurance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("EmployerHealthInsurance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("employer_health_insurance");
 
-                    b.Property<long>("EmployerSocialInsurance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("EmployerSocialInsurance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("employer_social_insurance");
 
-                    b.Property<long>("EmployerUnemploymentInsurance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("EmployerUnemploymentInsurance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("employer_unemployment_insurance");
 
-                    b.Property<long>("EmployerUnionFee")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("EmployerUnionFee")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("employer_union_fee");
 
                     b.Property<int>("ExpenseGroup")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("expense_group");
 
-                    b.Property<long>("Gross")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Gross")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("gross");
 
-                    b.Property<long>("HealthInsurance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("HealthInsurance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("health_insurance");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
-                    b.Property<long>("Net")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Net")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("net");
 
-                    b.Property<long>("OtherDeduction")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OtherDeduction")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("other_deduction");
 
-                    b.Property<long>("PersonalIncomeTax")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("PersonalIncomeTax")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("personal_income_tax");
 
                     b.Property<Guid>("SheetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("sheet_id");
 
-                    b.Property<long>("SocialInsurance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("SocialInsurance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("social_insurance");
 
-                    b.Property<long>("UnemploymentInsurance")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("UnemploymentInsurance")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("unemployment_insurance");
 
                     b.HasKey("Id")
@@ -3600,32 +3872,32 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.Property<Guid>("UpdatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("updated_by");
 
                     b.HasKey("Id")
@@ -3645,27 +3917,29 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("BomId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("bom_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
-                    b.Property<long>("QuantityPerUnit")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("QuantityPerUnit")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("quantity_per_unit");
 
                     b.Property<Guid>("RawItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("raw_item_id");
 
-                    b.Property<long>("ScrapRate")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ScrapRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("scrap_rate");
 
                     b.HasKey("Id")
@@ -3685,46 +3959,47 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<long>("PlannedUnitCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("PlannedUnitCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("planned_unit_cost");
 
                     b.Property<Guid>("WipAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("wip_account_id");
 
                     b.HasKey("Id")
@@ -3751,67 +4026,73 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<long>("LaborCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("LaborCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("labor_cost");
 
-                    b.Property<long>("LaborHours")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("LaborHours")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("labor_hours");
 
-                    b.Property<long>("LaborRate")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("LaborRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("labor_rate");
 
-                    b.Property<long>("MachineHours")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("MachineHours")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("machine_hours");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
-                    b.Property<long>("OverheadCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OverheadCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("overhead_cost");
 
-                    b.Property<long>("OverheadRate")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OverheadRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("overhead_rate");
 
                     b.Property<string>("VoidReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("void_reason");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("voided_at");
 
                     b.Property<Guid>("WorkCenterId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("work_center_id");
 
                     b.Property<DateOnly>("WorkDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("work_date");
 
                     b.HasKey("Id")
@@ -3830,84 +4111,91 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("ActualCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ActualCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("actual_cost");
 
-                    b.Property<long>("ClosingWip")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ClosingWip")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("closing_wip");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("CostObjectId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("cost_object_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<long>("Difference")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Difference")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("difference");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<long>("OutputQuantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OutputQuantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("output_quantity");
 
                     b.Property<DateOnly>("PeriodEnd")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_end");
 
                     b.Property<Guid>("PeriodId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("period_id");
 
                     b.Property<DateOnly>("PeriodStart")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_start");
 
-                    b.Property<long>("ProvisionalValue")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("ProvisionalValue")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("provisional_value");
 
                     b.Property<DateTime?>("ReversedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("reversed_at");
 
                     b.Property<Guid?>("ReversedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reversed_by");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<decimal>("UnitCost")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("unit_cost");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
-                    b.Property<long>("WipBalanceBefore")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("WipBalanceBefore")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("wip_balance_before");
 
                     b.HasKey("Id")
@@ -3925,105 +4213,112 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long?>("ActualQuantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("ActualQuantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("actual_quantity");
 
                     b.Property<Guid?>("AllocationVoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("allocation_voucher_id");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("cancel_reason");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly?>("CompletedDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("completed_date");
 
                     b.Property<Guid>("CostObjectId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("cost_object_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
-                    b.Property<long>("LaborCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("LaborCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("labor_cost");
 
-                    b.Property<long>("MaterialCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("MaterialCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("material_cost");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
-                    b.Property<long>("OverheadCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OverheadCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("overhead_cost");
 
-                    b.Property<long>("PlannedQuantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("PlannedQuantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("planned_quantity");
 
                     b.Property<DateOnly>("PlannedStart")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("planned_start");
 
                     b.Property<Guid?>("ReceiptDocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("receipt_document_id");
 
                     b.Property<DateTime?>("ReleasedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("released_at");
 
                     b.Property<Guid?>("ReleasedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("released_by");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
-                    b.Property<long>("TotalCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("TotalCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("total_cost");
 
-                    b.Property<long>("UnitCost")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("unit_cost");
 
                     b.Property<Guid>("WarehouseId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("warehouse_id");
 
                     b.HasKey("Id")
@@ -4052,19 +4347,19 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<Guid>("StockDocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("stock_document_id");
 
                     b.HasKey("Id")
@@ -4084,46 +4379,48 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
-                    b.Property<long>("LaborRatePerHour")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("LaborRatePerHour")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("labor_rate_per_hour");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<long>("OverheadRatePerHour")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OverheadRatePerHour")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("overhead_rate_per_hour");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -4140,17 +4437,17 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.HasKey("Id")
@@ -4167,40 +4464,40 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_from");
 
                     b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_to");
 
                     b.Property<Guid>("RegimeId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("regime_id");
 
                     b.Property<string>("VerificationNote")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("verification_note");
 
                     b.Property<int>("VerificationStatus")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("verification_status");
 
                     b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("verified_at");
 
                     b.Property<Guid?>("VerifiedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("verified_by");
 
                     b.Property<string>("VersionCode")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("version_code");
 
                     b.HasKey("Id")
@@ -4217,37 +4514,37 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Article")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("article");
 
                     b.Property<string>("CopySha256")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("copy_sha256");
 
                     b.Property<string>("DocumentNo")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("document_no");
 
                     b.Property<DateOnly?>("IssuedDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("issued_date");
 
                     b.Property<Guid>("RegimeVersionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("regime_version_id");
 
                     b.Property<string>("RuleGroup")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("rule_group");
 
                     b.Property<string>("Url")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("url");
 
                     b.HasKey("Id")
@@ -4263,25 +4560,25 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("DefinitionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("definition_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<string>("Message")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("message");
 
                     b.Property<string>("Rule")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("rule");
 
                     b.HasKey("Id")
@@ -4298,69 +4595,69 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Category")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("category");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("code");
 
                     b.Property<string>("Columns")
                         .HasMaxLength(600)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(600)")
                         .HasColumnName("columns");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("LegalReference")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("legal_reference");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<string>("VerificationNote")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("verification_note");
 
                     b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("verified_at");
 
                     b.Property<Guid?>("VerifiedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("verified_by");
 
                     b.Property<int>("Version")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("version");
 
                     b.HasKey("Id")
@@ -4377,42 +4674,42 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<bool>("Bold")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("bold");
 
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("code");
 
                     b.Property<Guid>("DefinitionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("definition_id");
 
                     b.Property<string>("Formula")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("formula");
 
                     b.Property<int>("Indent")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("indent");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.HasKey("Id")
@@ -4433,68 +4730,68 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateOnly?>("CompareFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("compare_from");
 
                     b.Property<DateOnly?>("CompareTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("compare_to");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("DefinitionCode")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("definition_code");
 
                     b.Property<Guid>("DefinitionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("definition_id");
 
                     b.Property<bool>("DefinitionVerified")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("definition_verified");
 
                     b.Property<int>("DefinitionVersion")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("definition_version");
 
                     b.Property<DateOnly>("FromDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("from_date");
 
                     b.Property<string>("Note")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("result_json");
 
                     b.Property<string>("Sha256")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("sha256");
 
                     b.Property<DateOnly>("ToDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("to_date");
 
                     b.HasKey("Id")
@@ -4513,33 +4810,33 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("RoleCode")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("role_code");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.HasKey("Id")
@@ -4559,52 +4856,52 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("activated_by");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_from");
 
                     b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_to");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<int>("Version")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("version");
 
                     b.HasKey("Id")
@@ -4621,29 +4918,29 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<Guid>("RuleSetId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("rule_set_id");
 
                     b.Property<int>("Sequence")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("sequence");
 
                     b.Property<string>("SourcePrefixes")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_prefixes");
 
                     b.Property<Guid>("TargetAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("target_account_id");
 
                     b.HasKey("Id")
@@ -4662,89 +4959,89 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateTime?>("ActivatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("activated_at");
 
                     b.Property<Guid?>("ActivatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("activated_by");
 
                     b.Property<string>("BusinessEvent")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("business_event");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("DefinitionJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("definition_json");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<string>("DocumentType")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("document_type");
 
                     b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_from");
 
                     b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("effective_to");
 
                     b.Property<string>("LastTestRunJson")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("last_test_run_json");
 
                     b.Property<int>("Priority")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("priority");
 
                     b.Property<Guid?>("RegimeVersionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("regime_version_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<string>("TestCasesJson")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("test_cases_json");
 
                     b.Property<int>("Version")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("version");
 
                     b.HasKey("Id")
@@ -4764,68 +5061,68 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Action")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("action");
 
                     b.Property<DateTime>("At")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("at");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("DataJson")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("data_json");
 
                     b.Property<string>("Device")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("device");
 
                     b.Property<string>("EntityId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("entity_id");
 
                     b.Property<long?>("EntityRowVersion")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("entity_row_version");
 
                     b.Property<string>("EntityType")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("entity_type");
 
                     b.Property<string>("Hash")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("hash");
 
                     b.Property<string>("PrevHash")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("prev_hash");
 
                     b.Property<string>("Result")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("result");
 
                     b.Property<long>("Seq")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("seq");
 
                     b.Property<Guid?>("SessionId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("session_id");
 
                     b.Property<Guid?>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id")
@@ -4842,32 +5139,32 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<string>("Device")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("device");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
                     b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("token_hash");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id")
@@ -4887,17 +5184,17 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("code");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("name");
 
                     b.HasKey("Id")
@@ -4913,11 +5210,11 @@ namespace Hak.Data.Migrations
             modelBuilder.Entity("Hak.Domain.Security.RolePermission", b =>
                 {
                     b.Property<Guid>("RoleId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
                     b.Property<string>("Permission")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("permission");
 
                     b.HasKey("RoleId", "Permission")
@@ -4930,52 +5227,52 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<int>("FailedLoginCount")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("failed_login_count");
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("full_name");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
                     b.Property<bool>("IsSystemAdmin")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("boolean")
                         .HasColumnName("is_system_admin");
 
                     b.Property<DateTime?>("LockedUntil")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("locked_until");
 
                     b.Property<string>("NormalizedUserName")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("normalized_user_name");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("password_hash");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<string>("UserName")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("user_name");
 
                     b.HasKey("Id")
@@ -4991,15 +5288,15 @@ namespace Hak.Data.Migrations
             modelBuilder.Entity("Hak.Domain.Security.UserCompanyRole", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("RoleId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("role_id");
 
                     b.HasKey("UserId", "CompanyId", "RoleId")
@@ -5018,68 +5315,70 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
                     b.Property<DateOnly>("AllocationDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("allocation_date");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<Guid>("CreditLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("credit_line_id");
 
                     b.Property<Guid>("DebitLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("debit_line_id");
 
-                    b.Property<long?>("ForeignAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("ForeignAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("foreign_amount");
 
                     b.Property<string>("Origin")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("origin");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<Guid?>("SourceVoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("source_voucher_id");
 
                     b.Property<string>("VoidReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("void_reason");
 
                     b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("voided_at");
 
                     b.Property<Guid?>("VoidedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voided_by");
 
                     b.HasKey("Id")
@@ -5116,37 +5415,37 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<int>("Duplicates")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("duplicates");
 
                     b.Property<int>("Imported")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("imported");
 
                     b.Property<DateTime>("ImportedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("imported_at");
 
                     b.Property<Guid>("ImportedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("imported_by");
 
                     b.Property<string>("SourceName")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_name");
 
                     b.Property<string>("SourceSha256")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_sha256");
 
                     b.HasKey("Id")
@@ -5163,23 +5462,26 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("AmountBeforeVat")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("AmountBeforeVat")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount_before_vat");
 
                     b.Property<Guid>("EInvoiceId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("e_invoice_id");
 
-                    b.Property<long>("VatAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("vat_amount");
 
                     b.Property<decimal?>("VatRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5195,95 +5497,99 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<long>("AmountBeforeVat")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("AmountBeforeVat")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount_before_vat");
 
                     b.Property<string>("BuyerName")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("buyer_name");
 
                     b.Property<string>("BuyerTaxCode")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("buyer_tax_code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Currency")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("currency");
 
                     b.Property<int>("Direction")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("direction");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("exchange_rate");
 
                     b.Property<Guid>("ImportBatchId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("import_batch_id");
 
                     b.Property<DateTime>("ImportedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("imported_at");
 
                     b.Property<Guid>("ImportedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("imported_by");
 
                     b.Property<DateOnly>("IssueDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("issue_date");
 
                     b.Property<string>("LookupCode")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("lookup_code");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<string>("RelatedNumber")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("related_number");
 
                     b.Property<string>("RelatedSeries")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("related_series");
 
                     b.Property<string>("SellerName")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("seller_name");
 
                     b.Property<string>("SellerTaxCode")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("seller_tax_code");
 
                     b.Property<string>("Series")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("series");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
-                    b.Property<long>("TotalPayment")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("TotalPayment")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("total_payment");
 
-                    b.Property<long>("VatAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("vat_amount");
 
                     b.HasKey("Id")
@@ -5297,7 +5603,7 @@ namespace Hak.Data.Migrations
 
                     b.HasIndex("CompanyId", "Direction", "SellerTaxCode", "Series", "Number")
                         .IsUnique()
-                        .HasDatabaseName("ix_e_invoice_records_company_id_direction_seller_tax_code_series_number");
+                        .HasDatabaseName("ix_e_invoice_records_company_id_direction_seller_tax_code_seri~");
 
                     b.ToTable("e_invoice_records");
                 });
@@ -5306,23 +5612,23 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("At")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("at");
 
                     b.Property<Guid>("EInvoiceId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("e_invoice_id");
 
                     b.Property<Guid>("ImportBatchId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("import_batch_id");
 
                     b.Property<int>("NewStatus")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("new_status");
 
                     b.HasKey("Id")
@@ -5338,49 +5644,49 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<DateOnly?>("FiledDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("filed_date");
 
                     b.Property<string>("FilingReference")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("filing_reference");
 
                     b.Property<DateOnly>("PeriodFrom")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_from");
 
                     b.Property<DateOnly>("PeriodTo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("period_to");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<string>("TaxType")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("tax_type");
 
                     b.HasKey("Id")
@@ -5397,33 +5703,35 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("DeclarationId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("declaration_id");
 
-                    b.Property<long>("DeclaredAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("DeclaredAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("declared_amount");
 
                     b.Property<string>("IndicatorCode")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("indicator_code");
 
                     b.Property<string>("Label")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("label");
 
                     b.Property<int>("Measure")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("measure");
 
                     b.Property<decimal?>("VatRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5440,96 +5748,97 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AdjustsInvoiceId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("adjusts_invoice_id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Currency")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("currency");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("due_date");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("exchange_rate");
 
                     b.Property<DateOnly>("InvoiceDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("invoice_date");
 
                     b.Property<string>("InvoiceNo")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("invoice_no");
 
                     b.Property<string>("InvoiceSeries")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("invoice_series");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("kind");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<DateTime?>("PostedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid?>("PostedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("posting_date");
 
                     b.Property<int>("Purpose")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("purpose");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -5549,7 +5858,7 @@ namespace Hak.Data.Migrations
                         .HasDatabaseName("ix_commercial_invoices_company_id_number");
 
                     b.HasIndex("CompanyId", "Kind", "PartnerId", "InvoiceSeries", "InvoiceNo")
-                        .HasDatabaseName("ix_commercial_invoices_company_id_kind_partner_id_invoice_series_invoice_no");
+                        .HasDatabaseName("ix_commercial_invoices_company_id_kind_partner_id_invoice_seri~");
 
                     b.ToTable("commercial_invoices");
                 });
@@ -5558,83 +5867,90 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
                     b.Property<int?>("AdjustsLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("adjusts_line_no");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<int>("Basis")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("basis");
 
-                    b.Property<long>("BasisQuantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("BasisQuantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("basis_quantity");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<long>("FunctionalAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("FunctionalAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("functional_amount");
 
                     b.Property<Guid>("InvoiceId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("invoice_id");
 
                     b.Property<Guid?>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("OrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
                     b.Property<int?>("OrderLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("order_line_no");
 
                     b.Property<Guid?>("StockDocumentId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("stock_document_id");
 
                     b.Property<int?>("StockLineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("stock_line_no");
 
-                    b.Property<long?>("StockQuantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("StockQuantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("stock_quantity");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("unit_price");
 
-                    b.Property<long>("VatAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("vat_amount");
 
                     b.Property<decimal?>("VatRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5645,7 +5961,7 @@ namespace Hak.Data.Migrations
                         .HasDatabaseName("ix_commercial_invoice_lines_invoice_id_line_no");
 
                     b.HasIndex("CompanyId", "StockDocumentId", "StockLineNo")
-                        .HasDatabaseName("ix_commercial_invoice_lines_company_id_stock_document_id_stock_line_no");
+                        .HasDatabaseName("ix_commercial_invoice_lines_company_id_stock_document_id_stock~");
 
                     b.ToTable("commercial_invoice_lines", t =>
                         {
@@ -5657,78 +5973,79 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<DateTime?>("ConfirmedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("confirmed_at");
 
                     b.Property<Guid?>("ConfirmedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("confirmed_by");
 
                     b.Property<string>("ContractNo")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("contract_no");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("Currency")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("currency");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("ExpectedDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("expected_date");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("kind");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("number");
 
                     b.Property<DateOnly>("OrderDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("order_date");
 
-                    b.Property<long>("OverDeliveryTolerancePercent")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("OverDeliveryTolerancePercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("over_delivery_tolerance_percent");
 
                     b.Property<Guid>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<string>("StatusReason")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("status_reason");
 
                     b.HasKey("Id")
@@ -5746,7 +6063,7 @@ namespace Hak.Data.Migrations
 
                     b.ToTable("trade_orders", t =>
                         {
-                            t.HasCheckConstraint("ck_trade_orders_tolerance", "over_delivery_tolerance_percent >= 0 AND over_delivery_tolerance_percent <= 1000000");
+                            t.HasCheckConstraint("ck_trade_orders_tolerance", "over_delivery_tolerance_percent >= 0 AND over_delivery_tolerance_percent <= 100");
                         });
                 });
 
@@ -5754,43 +6071,46 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<int>("Basis")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("basis");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<Guid>("ItemId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<Guid>("OrderId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("order_id");
 
-                    b.Property<long>("Quantity")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("quantity");
 
-                    b.Property<long>("UnitPrice")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("unit_price");
 
                     b.Property<decimal?>("VatRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("vat_rate");
 
                     b.HasKey("Id")
@@ -5813,133 +6133,133 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid?>("AdjustsVoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("adjusts_voucher_id");
 
                     b.Property<Guid?>("ApprovedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("approved_by");
 
                     b.Property<Guid?>("BranchId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("branch_id");
 
                     b.Property<string>("BusinessEvent")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("business_event");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("CounterpartyName")
                         .HasMaxLength(200)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(200)")
                         .HasColumnName("counterparty_name");
 
                     b.Property<string>("CounterpartyUnit")
                         .HasMaxLength(300)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(300)")
                         .HasColumnName("counterparty_unit");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
                     b.Property<Guid>("CreatedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
                     b.Property<string>("CurrencyCode")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("currency_code");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
                     b.Property<Guid>("FiscalYearId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("fiscal_year_id");
 
                     b.Property<Guid?>("MainAccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("main_account_id");
 
                     b.Property<string>("Number")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("number");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<DateTime?>("PostedAt")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("posted_at");
 
                     b.Property<Guid?>("PostedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("posted_by");
 
                     b.Property<DateOnly>("PostingDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("posting_date");
 
                     b.Property<Guid?>("PostingRuleId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("posting_rule_id");
 
                     b.Property<int?>("PostingRuleVersion")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("posting_rule_version");
 
                     b.Property<Guid?>("ReversesVoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("reverses_voucher_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<string>("SourceId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_id");
 
                     b.Property<string>("SourceSystem")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_system");
 
                     b.Property<string>("SourceVersion")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("source_version");
 
                     b.Property<int>("Status")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("status");
 
                     b.Property<Guid?>("SubmittedBy")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("submitted_by");
 
                     b.Property<DateOnly>("VoucherDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("voucher_date");
 
                     b.Property<string>("VoucherType")
                         .IsRequired()
                         .HasMaxLength(10)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(10)")
                         .HasColumnName("voucher_type");
 
                     b.HasKey("Id")
@@ -5978,44 +6298,44 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<string>("Action")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("action");
 
                     b.Property<DateTime>("At")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("at");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<int?>("FromStatus")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("from_status");
 
                     b.Property<string>("Note")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("note");
 
                     b.Property<int>("ToStatus")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("to_status");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.Property<long>("VoucherRowVersion")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("voucher_row_version");
 
                     b.HasKey("Id")
@@ -6031,64 +6351,67 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("AccountId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("account_id");
 
-                    b.Property<long>("Amount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("amount");
 
                     b.Property<string>("CashFlowCode")
                         .HasMaxLength(4)
-                        .HasColumnType("TEXT")
+                        .HasColumnType("character varying(4)")
                         .HasColumnName("cash_flow_code");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<string>("Description")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("description");
 
                     b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("date")
                         .HasColumnName("due_date");
 
                     b.Property<decimal?>("ExchangeRate")
-                        .HasColumnType("TEXT")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
                         .HasColumnName("exchange_rate");
 
-                    b.Property<long?>("ForeignAmount")
-                        .HasColumnType("INTEGER")
+                    b.Property<decimal?>("ForeignAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
                         .HasColumnName("foreign_amount");
 
                     b.Property<string>("ForeignCurrency")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("foreign_currency");
 
                     b.Property<int>("LineNo")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("line_no");
 
                     b.Property<Guid?>("PartnerId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
                     b.Property<Guid?>("SettleJournalLineId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("settle_journal_line_id");
 
                     b.Property<int>("Side")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("integer")
                         .HasColumnName("side");
 
                     b.Property<Guid>("VoucherId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("voucher_id");
 
                     b.HasKey("Id")
@@ -6116,29 +6439,29 @@ namespace Hak.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<Guid>("CompanyId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("company_id");
 
                     b.Property<Guid>("FiscalYearId")
-                        .HasColumnType("TEXT")
+                        .HasColumnType("uuid")
                         .HasColumnName("fiscal_year_id");
 
                     b.Property<long>("LastNumber")
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("last_number");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER")
+                        .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
                     b.Property<string>("VoucherType")
                         .IsRequired()
-                        .HasColumnType("TEXT")
+                        .HasColumnType("text")
                         .HasColumnName("voucher_type");
 
                     b.HasKey("Id")
@@ -6146,7 +6469,7 @@ namespace Hak.Data.Migrations
 
                     b.HasIndex("CompanyId", "FiscalYearId", "VoucherType")
                         .IsUnique()
-                        .HasDatabaseName("ix_voucher_number_sequences_company_id_fiscal_year_id_voucher_type");
+                        .HasDatabaseName("ix_voucher_number_sequences_company_id_fiscal_year_id_voucher_~");
 
                     b.ToTable("voucher_number_sequences");
                 });
@@ -6203,6 +6526,35 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_asset_repairs_long_term_assets_asset_id");
+
+                    b.HasOne("Hak.Domain.Assets.MaintenanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_asset_repairs_maintenance_requests_request_id");
+
+                    b.HasOne("Hak.Domain.Assets.PreventiveSchedule", null)
+                        .WithMany()
+                        .HasForeignKey("ScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_asset_repairs_preventive_schedules_schedule_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepairMaterial", b =>
+                {
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_repair_materials_items_item_id");
+
+                    b.HasOne("Hak.Domain.Assets.AssetRepair", null)
+                        .WithMany("Materials")
+                        .HasForeignKey("RepairId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_repair_materials_asset_repairs_repair_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>
@@ -6251,6 +6603,26 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_long_term_assets_accounts_expense_account_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.MaintenanceRequest", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_maintenance_requests_long_term_assets_asset_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.PreventiveSchedule", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_preventive_schedules_long_term_assets_asset_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
@@ -6304,7 +6676,7 @@ namespace Hak.Data.Migrations
                         .HasForeignKey("StatementLineId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_reconciliation_matches_bank_statement_lines_statement_line_id");
+                        .HasConstraintName("fk_reconciliation_matches_bank_statement_lines_statement_line_~");
                 });
 
             modelBuilder.Entity("Hak.Domain.Catalog.Account", b =>
@@ -7193,6 +7565,11 @@ namespace Hak.Data.Migrations
             modelBuilder.Entity("Hak.Domain.Assets.AssetCount", b =>
                 {
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepair", b =>
+                {
+                    b.Navigation("Materials");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.LongTermAsset", b =>

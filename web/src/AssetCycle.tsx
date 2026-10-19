@@ -2,23 +2,23 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, FlowStrip, useAction } from './common'
 import { formatMoney, parseMoney, today } from './money'
+import { MaintenancePanels } from './AssetMaintenance'
 
 interface Req { id: string; number: string; class: 'FixedAsset' | 'Tool'; name: string; department: string | null; estimatedCost: string; neededDate: string; reason: string; status: 'Pending' | 'Approved' | 'Rejected' | 'Fulfilled' | 'Cancelled'; decisionNote: string | null; assetId: string | null }
 interface Cur { assetId: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; department: string | null; custodian: string | null; location: string | null; since: string | null }
 interface CountLine { assetId: string; code: string; name: string; bookDepartment: string | null; result: 'NotCounted' | 'Found' | 'Missing' | 'Damaged'; actualDepartment: string | null; note: string | null; netBookValue: string }
 interface Count { id: string; number: string; countDate: string; note: string | null; status: 'Draft' | 'Completed' | 'Cancelled'; total: number; counted: number; missing: number; damaged: number; moved: number; missingNetBookValue: string; lines: CountLine[] }
-interface Repair { id: string; number: string; assetId: string; assetCode: string; assetName: string; kind: 'Maintenance' | 'Repair'; status: 'Open' | 'Completed' | 'Cancelled'; reportedDate: string; description: string; vendor: string | null; estimatedCost: string; actualCost: string | null; completedDate: string | null; voucherNumber: string | null; note: string | null }
 export interface AssetRef { id: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; status: string }
 
 const CLASS_VI = { FixedAsset: 'TSCĐ', Tool: 'CCDC' } as const
 const REQ_VI = { Pending: 'Chờ duyệt', Approved: 'Đã duyệt, chờ mua / lập thẻ', Rejected: 'Bị từ chối', Fulfilled: 'Đã lập thẻ', Cancelled: 'Đã hủy' } as const
-const REPAIR_STATUS_VI = { Open: 'Đang sửa', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy' } as const
 const RESULT_VI = { NotCounted: 'Chưa kiểm', Found: 'Có, đúng sổ', Missing: 'Không thấy', Damaged: 'Hỏng' } as const
 
 /** Chu trình quản lý TSCĐ / CCDC (tệp phân tích ERP): đề nghị mua sắm → mua → ghi tăng → bàn giao → khấu hao → kiểm kê → ghi giảm. */
 export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRef[]; depreciationNote: string }) {
   const [reqs, setReqs] = useState<Req[]>([])
   const [cur, setCur] = useState<Cur[]>([])
+  const [openWo, setOpenWo] = useState(0)
   const [counts, setCounts] = useState<Count[]>([])
   const [repairs, setRepairs] = useState<Repair[]>([])
   const [rform, setRform] = useState({ assetId: '', kind: 'Repair', description: '', vendor: '', cost: '', date: today() })
@@ -32,7 +32,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
   const { busy, error, run, setError } = useAction()
 
   const load = useCallback(() => run(async () => {
-    setReqs(await get<Req[]>('/assets/requests')); setCur(await get<Cur[]>('/assets/assignments')); setCounts(await get<Count[]>('/assets/counts')); setRepairs(await get<Repair[]>('/assets/repairs'))
+    setReqs(await get<Req[]>('/assets/requests')); setCur(await get<Cur[]>('/assets/assignments')); setCounts(await get<Count[]>('/assets/counts'))
   }), [run])
   useEffect(() => { load() }, [load])
   const act = (msg: string, fn: () => Promise<unknown>) => run(async () => { await fn(); setInfo(msg); await load() })
@@ -53,7 +53,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
         { label: 'Lập thẻ, ghi tăng (nguyên giá từ bút toán đã ghi sổ)', journal: true, note: 'ghi Nhật ký khi hóa đơn mua ghi sổ; ghi tăng chỉ đóng băng thẻ' },
         { label: 'Bàn giao cho bộ phận / người sử dụng', journal: false, count: `${unassigned} tài sản chưa bàn giao` },
         { label: 'Khấu hao / phân bổ hằng kỳ → chi phí', journal: true, count: depreciationNote },
-        { label: 'Bảo trì, sửa chữa', journal: false, count: `${repairs.filter(r => r.status === 'Open').length} phiếu đang sửa` },
+        { label: 'Bảo trì, sửa chữa (YCSC → duyệt → thi công → nghiệm thu)', journal: false, count: openWo ? `${openWo} phiếu đang xử lý` : 'xem mục Bảo trì, sửa chữa' },
         { label: 'Kiểm kê định kỳ', journal: false, count: draftCount ? `phiếu ${draftCount.number} đang kiểm` : 'chưa có phiếu đang kiểm' },
         { label: 'Ghi giảm / thanh lý', journal: true },
       ]} />
@@ -106,43 +106,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
           <button onClick={() => setAssign(null)}>Đóng</button></div>}
       </section>
 
-      <section className="panel">
-        <h3>Bảo trì, sửa chữa <span className="muted">· không ghi Nhật ký; chi phí ghi sổ bằng hóa đơn mua / phiếu chi, phiếu này theo dõi sự cố, đơn vị sửa và chi phí. Mọi phiếu hiện trong Nhật ký của tài sản.</span></h3>
-        <div className="form-row">
-          <label>Tài sản<select aria-label="Tài sản sửa chữa" value={rform.assetId} onChange={e => setRform({ ...rform, assetId: e.target.value })}><option value="">—</option>
-            {assets.filter(a => a.status === 'Active').map(a => <option key={a.id} value={a.id}>{a.code} – {a.name}</option>)}</select></label>
-          <label>Loại<select value={rform.kind} onChange={e => setRform({ ...rform, kind: e.target.value })}><option value="Repair">Sửa chữa</option><option value="Maintenance">Bảo trì định kỳ</option></select></label>
-          <label>Ngày<input type="date" value={rform.date} onChange={e => setRform({ ...rform, date: e.target.value })} /></label>
-          <label>Sự cố / công việc<input aria-label="Nội dung sửa chữa" value={rform.description} onChange={e => setRform({ ...rform, description: e.target.value })} /></label>
-          <label>Đơn vị sửa<input value={rform.vendor} onChange={e => setRform({ ...rform, vendor: e.target.value })} /></label>
-          <label>Chi phí dự kiến<input inputMode="decimal" value={rform.cost} onChange={e => setRform({ ...rform, cost: e.target.value })} /></label>
-          <button className="primary" disabled={busy || !rform.assetId || !rform.description.trim()} onClick={() => {
-            const cost = rform.cost.trim() ? parseMoney(rform.cost) : '0'
-            if (cost == null) { setError(new Error('Chi phí dự kiến không hợp lệ.')); return }
-            act('Đã lập phiếu sửa chữa.', async () => { await post('/assets/repairs', { assetId: rform.assetId, kind: rform.kind, reportedDate: rform.date, description: rform.description, vendor: rform.vendor || null, estimatedCost: cost }); setRform({ ...rform, description: '', vendor: '', cost: '' }) })
-          }}>Lập phiếu</button>
-        </div>
-        <table className="grid"><thead><tr><th>Số</th><th>Tài sản</th><th>Loại</th><th>Ngày</th><th>Nội dung</th><th>Đơn vị sửa</th><th className="num">Dự kiến</th><th className="num">Thực tế</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{repairs.map(r => <tr key={r.id}><td>{r.number}</td><td>{r.assetCode} – {r.assetName}</td><td>{r.kind === 'Repair' ? 'Sửa chữa' : 'Bảo trì'}</td><td>{r.reportedDate}</td><td>{r.description}</td><td>{r.vendor ?? ''}</td>
-            <td className="num">{formatMoney(r.estimatedCost)}</td><td className="num">{r.actualCost == null ? '' : formatMoney(r.actualCost)}</td>
-            <td>{REPAIR_STATUS_VI[r.status]}{r.completedDate ? ` ${r.completedDate}` : ''}{r.status === 'Cancelled' && r.note ? ` — ${r.note}` : ''}</td>
-            <td style={{ display: 'flex', gap: 6 }}>{r.status === 'Open' && <>
-              <button disabled={busy} onClick={() => setFinishing({ id: r.id, number: r.number, date: today(), cost: r.estimatedCost === '0' ? '' : formatMoney(r.estimatedCost), vendor: r.vendor ?? '', note: '' })}>Hoàn thành</button>
-              <button disabled={busy} onClick={() => { const reason = ask('Lý do hủy phiếu:'); if (reason) act(`Đã hủy ${r.number}.`, () => post(`/assets/repairs/${r.id}/cancel`, { reason })) }}>Hủy</button></>}</td></tr>)}
-            {repairs.length === 0 && <tr><td colSpan={10} className="muted">Chưa có phiếu bảo trì, sửa chữa.</td></tr>}</tbody></table>
-        {finishing && <div className="form-row">
-          <strong>{finishing.number}</strong>
-          <label>Ngày hoàn thành<input type="date" value={finishing.date} onChange={e => setFinishing({ ...finishing, date: e.target.value })} /></label>
-          <label>Chi phí thực tế<input aria-label="Chi phí thực tế" inputMode="decimal" value={finishing.cost} onChange={e => setFinishing({ ...finishing, cost: e.target.value })} /></label>
-          <label>Đơn vị sửa<input value={finishing.vendor} onChange={e => setFinishing({ ...finishing, vendor: e.target.value })} /></label>
-          <label>Ghi chú<input value={finishing.note} onChange={e => setFinishing({ ...finishing, note: e.target.value })} /></label>
-          <button className="primary" disabled={busy} onClick={() => {
-            const cost = finishing.cost.trim() ? parseMoney(finishing.cost) : '0'
-            if (cost == null) { setError(new Error('Chi phí thực tế không hợp lệ.')); return }
-            act(`Đã hoàn thành ${finishing.number}.`, async () => { await post(`/assets/repairs/${finishing.id}/complete`, { completedDate: finishing.date, actualCost: cost, vendor: finishing.vendor || null, voucherId: null, note: finishing.note || null }); setFinishing(null) })
-          }}>Lưu</button>
-          <button onClick={() => setFinishing(null)}>Đóng</button></div>}
-      </section>
+      <MaintenancePanels assets={assets} onOpenCount={setOpenWo} />
 
       <section className="panel">
         <h3>Kiểm kê tài sản <span className="muted">· kiểm soát phát hiện; không ghi Nhật ký. Tài sản mất / hỏng xử lý tiếp bằng ghi giảm sau khi điều tra.</span></h3>

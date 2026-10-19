@@ -52,17 +52,21 @@ public sealed class AssetJournalService(HakDbContext db)
             ev.Add(new(s.StartDate, s.CreatedAt, "Sử dụng", "Bàn giao / điều chuyển",
                 string.Join("; ", new[] { $"Bộ phận {s.Department}", s.Custodian is null ? null : $"người giữ {s.Custodian}", s.Location is null ? null : $"vị trí {s.Location}", s.Note }.Where(x => x != null)), null, null, Who(s.CreatedBy)));
 
-        var repairs = await db.AssetRepairs.AsNoTracking().Where(r => r.AssetId == assetId).ToListAsync();
-        var vids = repairs.Where(r => r.VoucherId != null).Select(r => r.VoucherId!.Value).ToList();
-        var vnum = await db.Vouchers.AsNoTracking().Where(v => vids.Contains(v.Id)).ToDictionaryAsync(v => v.Id, v => v.Number);
+        foreach (var q in await db.MaintenanceRequests.AsNoTracking().Where(x => x.AssetId == assetId).ToListAsync())
+            ev.Add(new(D(q.ReportedAt), q.ReportedAt, "Sửa chữa", "Yêu cầu sửa chữa / báo sự cố", $"[{q.Priority}] {q.Description}", null, q.Number, Who(q.CreatedBy), q.Status is MaintenanceRequestStatus.Rejected or MaintenanceRequestStatus.Cancelled));
+        var repairs = await db.AssetRepairs.AsNoTracking().Include(r => r.Materials).Where(r => r.AssetId == assetId).ToListAsync();
         foreach (var r in repairs)
         {
-            var kind = r.Kind == AssetRepairKind.Maintenance ? "Bảo trì" : "Sửa chữa";
-            ev.Add(new(r.ReportedDate, r.CreatedAt, "Sửa chữa", $"Lập phiếu {kind.ToLowerInvariant()}", r.Description, r.EstimatedCost, r.Number, Who(r.CreatedBy)));
-            if (r.Status == AssetRepairStatus.Completed && r.CompletedDate is { } cd)
-                ev.Add(new(cd, r.CreatedAt.AddTicks(1), "Sửa chữa", $"Hoàn thành {kind.ToLowerInvariant()}", string.Join("; ", new[] { r.Vendor is null ? null : $"đơn vị: {r.Vendor}", r.Note }.Where(x => x != null)),
-                    r.ActualCost, r.VoucherId is { } v && vnum.TryGetValue(v, out var n) ? $"{r.Number} · CT {n}" : r.Number, Who(r.CompletedBy)));
-            if (r.Status == AssetRepairStatus.Cancelled) ev.Add(new(r.ReportedDate, r.CreatedAt.AddTicks(1), "Sửa chữa", "Hủy phiếu", r.Note, null, r.Number, null, true));
+            var kind = r.Type == RepairType.Emergency ? "sửa chữa" : "bảo trì";
+            ev.Add(new(r.ReportedDate, r.CreatedAt, "Sửa chữa", $"Lập phiếu {kind}", r.Description, r.EstimatedTotal, r.Number, Who(r.CreatedBy), r.Status is RepairStatus.Cancelled or RepairStatus.Rejected));
+            if (r.ApprovedAt is { } ap) ev.Add(new(D(ap), ap, "Sửa chữa", r.Status == RepairStatus.Rejected ? "Từ chối phương án" : "Duyệt phương án và dự toán", r.RootCause, r.EstimatedTotal, r.Number, Who(r.ApprovedBy)));
+            if (r.StartTime is { } st) ev.Add(new(D(st), st, "Sửa chữa", "Bắt đầu thi công", r.AssignedTech is null ? null : $"Kỹ thuật viên: {r.AssignedTech}", null, r.Number, null));
+            foreach (var g in r.Materials.Where(m => m.StockDocumentId != null).GroupBy(m => m.StockDocumentId!.Value))
+                ev.Add(new(D(r.StartTime ?? r.CreatedAt), (r.StartTime ?? r.CreatedAt).AddTicks(1), "Sửa chữa", "Xuất vật tư sửa chữa", $"{g.Count()} loại vật tư", g.Sum(m => m.QtyIssued * m.UnitPrice), r.Number, null));
+            if (r.EndTime is { } en && r.Status is RepairStatus.Testing or RepairStatus.Completed or RepairStatus.Closed)
+                ev.Add(new(D(en), en, "Sửa chữa", r.Status == RepairStatus.Testing ? "Chờ nghiệm thu" : "Hoàn thành nghiệm thu", string.Join("; ", new[] { r.Vendor is null ? null : $"đơn vị: {r.Vendor}", r.Note }.Where(x => x != null)), r.ActualTotal, r.Number, null));
+            if (r.ClosedAt is { } cl) ev.Add(new(D(cl), cl, "Sửa chữa", "Đóng phiếu", null, null, r.Number, Who(r.ClosedBy)));
+            if (r.Status == RepairStatus.Cancelled) ev.Add(new(r.ReportedDate, r.CreatedAt.AddTicks(2), "Sửa chữa", "Hủy phiếu", r.Note, null, r.Number, null, true));
         }
 
         var counts = await (from l in db.AssetCountLines join c in db.AssetCounts on l.CountId equals c.Id
@@ -88,9 +92,9 @@ public sealed class AssetJournalService(HakDbContext db)
 
         var accumulated = a.OpeningAccumulated + dep.Where(e => e.VoidedAt == null).Sum(e => e.Amount);
         var cur = await db.AssetAssignments.AsNoTracking().Where(x => x.AssetId == assetId && x.EndDate == null).FirstOrDefaultAsync();
-        var done = repairs.Where(r => r.Status == AssetRepairStatus.Completed).ToList();
+        var done = repairs.Where(r => r.Status is RepairStatus.Completed or RepairStatus.Closed).ToList();
         return new AssetJournal(a.Id, a.Code, a.Name, a.Class, a.Status, a.OriginalCost, accumulated, a.OriginalCost - accumulated, cur?.Department, cur?.Custodian,
-            done.Sum(r => r.ActualCost ?? 0), done.Count, ev.OrderBy(e => e.Date).ThenBy(e => e.At).ToList());
+            done.Sum(r => r.ActualTotal), done.Count, ev.OrderBy(e => e.Date).ThenBy(e => e.At).ToList());
     }
 
     private static string? ReasonOf(string? json)
