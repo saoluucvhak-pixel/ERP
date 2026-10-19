@@ -55,6 +55,49 @@ public class AssetTests
     }
 
     [Fact]
+    public async Task AssetCycle_Request_Assign_Count()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var cycle = new AssetCycleService(s.Db, s.Audit, h.Clock);
+
+        // Đề nghị mua sắm: người duyệt khác người lập; từ chối cần lý do; chỉ đề nghị đã duyệt mới gắn được thẻ.
+        var req = await cycle.RequestAsync(h.Preparer, new AssetRequestInput(AssetClass.FixedAsset, "Máy nghiền dăm", "Xưởng 1", 120_000_000, new(2026, 1, 5), "Thay máy cũ"));
+        Assert.StartsWith("DNMS2026-", req.Number);
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => cycle.DecideAsync(h.Preparer with { Permissions = new HashSet<string>(h.Preparer.Permissions) { "voucher.approve" } }, req.Id, true, null)));
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => cycle.DecideAsync(h.Approver, req.Id, false, " ")));
+        var line = await BuyAsync(h, s, "FA", 120_000_000, new(2026, 1, 10));
+        var asset = await ActiveAsync(h, s, FixedAsset(h, "TS010", line, 120_000_000, new(2026, 1, 15)));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => cycle.LinkAssetAsync(h.Preparer, req.Id, asset.Id)));
+        Assert.Equal(AssetRequestStatus.Approved, (await cycle.DecideAsync(h.Approver, req.Id, true, "Đồng ý")).Status);
+        var done = await cycle.LinkAssetAsync(h.Preparer, req.Id, asset.Id);
+        Assert.Equal((AssetRequestStatus.Fulfilled, asset.Id), (done.Status, done.AssetId));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => cycle.CancelRequestAsync(h.Preparer, req.Id, "x")));
+
+        // Bàn giao: lần sau đóng lần trước.
+        Assert.Null(Assert.Single(await cycle.CurrentAsync(h.Auditor)).Department);
+        await cycle.AssignAsync(h.Preparer, asset.Id, "Xưởng 1", "Nguyễn Văn A", "Nhà máy", new(2026, 1, 16), null);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => cycle.AssignAsync(h.Preparer, asset.Id, "Xưởng 2", null, null, new(2026, 1, 1), null)));
+        await cycle.AssignAsync(h.Preparer, asset.Id, "Xưởng 2", "Trần Văn B", null, new(2026, 3, 1), "Điều chuyển");
+        Assert.Equal("Xưởng 2", Assert.Single(await cycle.CurrentAsync(h.Auditor)).Department);
+        var hist = await cycle.AssignmentHistoryAsync(h.Auditor, asset.Id);
+        Assert.Equal((2, new DateOnly(2026, 3, 1)), (hist.Count, hist[0].StartDate));
+        Assert.Equal(new DateOnly(2026, 3, 1), hist[1].EndDate);
+
+        // Kiểm kê tại 31/03: phải ghi nhận hết mới chốt; mất cần ghi chú; người chốt khác người lập.
+        var cnt = await cycle.CreateCountAsync(h.Preparer, new(2026, 3, 31), "Kiểm kê quý 1");
+        Assert.StartsWith("KKTS2026-", cnt.Number);
+        Assert.Equal(("Xưởng 2", 1), (Assert.Single(cnt.Lines).BookDepartment, cnt.Total));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => cycle.CompleteAsync(h.Approver, cnt.Id)));   // chưa kiểm
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => cycle.RecordAsync(h.Preparer, cnt.Id, [new(asset.Id, AssetCountResult.Missing)])));
+        var rec = await cycle.RecordAsync(h.Preparer, cnt.Id, [new(asset.Id, AssetCountResult.Found, "Xưởng 3", "Chuyển chưa làm thủ tục")]);
+        Assert.Equal((1, 0, 1), (rec.Counted, rec.Missing, rec.Moved));
+        var finished = await cycle.CompleteAsync(h.Approver, cnt.Id);
+        Assert.Equal(AssetCountStatus.Completed, finished.Status);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => cycle.RecordAsync(h.Preparer, cnt.Id, [new(asset.Id, AssetCountResult.Found)])));
+    }
+
+    [Fact]
     public async Task FixedAsset_Lifecycle_FullMonth_RunsInOrder_DisposeAndReverse()
     {
         using var h = await HostAsync();

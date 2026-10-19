@@ -90,6 +90,10 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<LongTermAsset> LongTermAssets => Set<LongTermAsset>();
     public DbSet<AssetCostSource> AssetCostSources => Set<AssetCostSource>();
     public DbSet<DepreciationRun> DepreciationRuns => Set<DepreciationRun>();
+    public DbSet<AssetRequest> AssetRequests => Set<AssetRequest>();
+    public DbSet<AssetAssignment> AssetAssignments => Set<AssetAssignment>();
+    public DbSet<AssetCount> AssetCounts => Set<AssetCount>();
+    public DbSet<AssetCountLine> AssetCountLines => Set<AssetCountLine>();
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
     public DbSet<FxRevaluationRun> FxRevaluationRuns => Set<FxRevaluationRun>();
     public DbSet<LoanContract> LoanContracts => Set<LoanContract>();
@@ -515,6 +519,29 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasOne<JournalLine>().WithMany().HasForeignKey(x => x.JournalLineId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("ck_asset_cost_sources_amount", "amount > 0"));
         });
+        b.Entity<AssetRequest>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<AssetAssignment>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.AssetId, x.StartDate });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AssetCount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.CountId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<AssetCountLine>(e =>
+        {
+            e.HasIndex(x => new { x.CountId, x.AssetId }).IsUnique();
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<DepreciationRun>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.PeriodId }).IsUnique().HasFilter("status = 1");
@@ -684,6 +711,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<EInvoiceRateLine>().Property(x => x.AmountBeforeVat).HasConversion(money);
         b.Entity<EInvoiceRateLine>().Property(x => x.VatAmount).HasConversion(money);
         b.Entity<TaxDeclarationLine>().Property(x => x.DeclaredAmount).HasConversion(money);
+        b.Entity<AssetRequest>().Property(x => x.EstimatedCost).HasConversion(money);
         b.Entity<LongTermAsset>().Property(x => x.OriginalCost).HasConversion(money);
         b.Entity<LongTermAsset>().Property(x => x.ResidualValue).HasConversion(money);
         b.Entity<LongTermAsset>().Property(x => x.OpeningAccumulated).HasConversion(money);

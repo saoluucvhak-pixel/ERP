@@ -105,7 +105,7 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 - **Biên bản kiểm nghiệm** (`BBKN{năm}-{số}`, không ghi Nhật ký): ghi số lượng thực nhận đạt từng dòng phiếu nhập kho; dòng không nêu thì đạt toàn bộ; mỗi phiếu nhập có tối đa một biên bản còn hiệu lực (hủy kèm lý do để lập lại); in biên bản. Phần không đạt xử lý bằng hàng mua trả lại / giảm giá hàng mua đã có. Màn Mua hàng → Thanh toán có danh sách phiếu nhập và nút lập biên bản.
 - **Đối chiếu nhiều bên** (`PurchaseMatchService`, tệp mục V.2.2.3): hóa đơn ↔ đơn đặt hàng ↔ phiếu nhập ↔ biên bản kiểm nghiệm. Cờ **chặn**: số lượng hóa đơn vượt số lượng đạt trên biên bản; đơn giá hóa đơn khác đơn giá đơn đặt hàng (cùng cơ sở tính giá). Cờ thông tin: không gắn phiếu nhập, không theo đơn, chưa có biên bản.
 - **Chấp nhận thanh toán bị chặn khi còn lệch** (`PAYMENT_MATCH_FAILED`, ở `PaymentAcceptanceService`, tức ở backend): người có quyền chỉ chấp nhận được khi xác nhận lệch **kèm lý do**, được ghi nhật ký kiểm toán (`mismatchAcknowledged`). Hàng chờ thanh toán hiện số chỗ lệch từng hóa đơn.
-- **Menu theo chu trình**: Doanh thu (Đơn hàng, Bán hàng → Thu tiền, Công nợ) · Cung ứng (Mua hàng → Thanh toán, Hóa đơn mua/bán, Kho) · Chuyển đổi (Giá thành, Tài sản/CCDC) · Nhân sự – tiền lương (Lương) · Tài chính, thanh toán (Thu/Chi tiền, Ngân hàng, Ngoại tệ, Vay, Thuế GTGT) · Kế toán tổng hợp (Chứng từ, Sổ Nhật ký chung, Sổ chi tiết, Cân đối phát sinh, Báo cáo theo mẫu) · Danh mục và hệ thống.
+- **Menu theo chu trình**: Doanh thu (Đơn hàng, Bán hàng → Thu tiền, Công nợ) · Cung ứng (Mua hàng → Thanh toán, Hóa đơn mua/bán, Kho) · Chuyển đổi (Giá thành) · Nhân sự – tiền lương (Lương) · Tài chính, thanh toán (Thu/Chi tiền, Ngân hàng, Ngoại tệ, Vay, Thuế GTGT, Tài sản/CCDC — chuyển từ Chuyển đổi ở đợt 8) · Kế toán tổng hợp (Chứng từ, Sổ Nhật ký chung, Sổ chi tiết, Cân đối phát sinh, Báo cáo theo mẫu) · Danh mục và hệ thống.
 - Bảng `goods_inspections`, `goods_inspection_lines` (migration `Phase7Inspection`, SQLite và PostgreSQL). Test: 1 test tích hợp (183 → 184); thử tay trên trình duyệt.
 
 ## 9e. Đã làm đợt 5 (19/10/2026): kế hoạch tiền và thông báo nợ quá hạn
@@ -125,6 +125,21 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 - **Dải các khâu** (`FlowStrip` dùng chung) cho Nhân sự – lương (màn Lương: nhận bảng lương → kiểm tra gói → chứng từ lương → hàng chờ trả lương → ngân hàng chi) và Tài chính – thanh toán (màn Ngân hàng: lệnh Nháp → duyệt → gửi ngân hàng → ngân hàng chi + chứng từ → đối chiếu sao kê), mỗi khâu ghi rõ có/không ghi Nhật ký và số chứng từ đang chờ. Chu trình chuyển đổi chưa có dải khâu vì còn chờ mô tả quy trình dăm.
 - Không có migration mới. Test: 1 test tích hợp mới + mở rộng test doanh thu (186 → 187). Thử tay trên trình duyệt (dữ liệu dev-seed): duyệt/chặn nhà cung cấp, tạo đơn mua nháp từ danh mục cần đặt (tạo được đơn DMH2026-000001; nhà cung cấp bị chặn thì không chọn được), dải khâu lương và ngân hàng hiện đúng. Chưa thử tay hàng chờ trả lương có dữ liệu và cột giá vốn.
 
+## 9h. Đã làm đợt 8 (19/10/2026): chu trình quản lý tài sản cố định, công cụ dụng cụ
+Trước đợt này phân hệ Tài sản / CCDC mới có thẻ, khấu hao, phân bổ, ghi giảm (làm ngày 15/10, theo phân hệ) và bị xếp nhầm vào menu "Chuyển đổi". Tệp phân tích xếp **mua sắm tài sản cố định, đầu tư xây dựng vào chu trình tài chính**, "quản lý tài sản cố định" là một phân hệ ERP riêng, và **kiểm kê tài sản định kỳ** là kiểm soát phát hiện. Đợt này dựng thành chu trình đủ khâu (`AssetCycleService`, `AssetRequest`, `AssetAssignment`, `AssetCount`):
+| Khâu | Ghi Nhật ký | Trạng thái |
+|---|---|---|
+| Đề nghị mua sắm / đầu tư (duyệt, người duyệt khác người lập, từ chối cần lý do) | Không | mới |
+| Mua qua chu trình cung ứng (hóa đơn mua ghi sổ → bút toán nợ TK tài sản) | Có | đã có |
+| Lập thẻ, ghi tăng (nguyên giá lấy từ bút toán đã ghi sổ); gắn thẻ vào đề nghị đã duyệt → "Đã lập thẻ" | Ghi tăng chỉ đóng băng thẻ | gắn đề nghị: mới |
+| Bàn giao / điều chuyển cho bộ phận, người giữ, vị trí (lần sau đóng lần trước, giữ lịch sử) | Không | mới |
+| Khấu hao / phân bổ hằng kỳ | Có | đã có |
+| Kiểm kê tài sản (phiếu lập sẵn từ tài sản còn hiệu lực tại ngày kiểm; kết quả Có / Không thấy / Hỏng, bộ phận thực tế; mất / hỏng bắt buộc ghi chú; chốt khi đã kiểm hết, người chốt khác người lập; báo số mất, hỏng, khác bộ phận và giá trị còn lại của tài sản mất) | Không | mới |
+| Ghi giảm / thanh lý (tài sản mất sau điều tra xử lý ở đây, không tự ghi sổ từ kiểm kê) | Có | đã có |
+- API dưới `/api/assets` (`/requests`, `/assignments`, `/{id}/assign`, `/counts`); màn Tài sản / CCDC có dải khâu và ba bảng mới; **menu chuyển sang nhóm Tài chính, thanh toán** theo tệp. Khấu hao vẫn là chi phí của chu trình chuyển đổi nên khâu đó ghi rõ "→ chi phí".
+- Migration `Phase7AssetCycle` (SQLite + PostgreSQL). Bảng mới không có trigger bất biến vì không phải dữ liệu sổ. 1 test tích hợp (187 → 188); thử tay trên trình duyệt (lập đề nghị, bàn giao, kiểm kê có chênh lệch bộ phận).
+- Chưa làm: in biên bản kiểm kê / biên bản bàn giao; đề nghị sửa chữa, nâng cấp, thay đổi thông số thẻ (thẻ đã ghi tăng đang bị đóng băng); gắn thẻ CCDC với nhiều người giữ; tự gợi ý ghi giảm từ kiểm kê mất.
+
 ### Bảng xếp các phân hệ vào khâu của chu trình (ghi / không ghi Nhật ký)
 | Màn hình | Chu trình, khâu | Ghi Nhật ký |
 |---|---|---|
@@ -134,7 +149,8 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 | Đơn hàng (mua), Mua hàng → Thanh toán | Cung ứng: danh mục cần đặt, đơn mua (không); biên bản kiểm nghiệm (không); chấp nhận thanh toán (không); lệnh thanh toán (không); ngân hàng chi (có) | Theo khâu |
 | Kho | Cung ứng / Doanh thu: phiếu nhập (có), phiếu xuất (có), kiểm kê (phiếu điều chỉnh: có), tính giá cuối tháng (có) | Có |
 | Hóa đơn mua / bán | Cung ứng, Doanh thu: hóa đơn (có), hàng trả lại, giảm giá (có) | Có |
-| Giá thành sản xuất, Tài sản / CCDC | Chuyển đổi: nhập thành phẩm, tính giá thành, khấu hao, phân bổ (có) | Có |
+| Giá thành sản xuất | Chuyển đổi: nhập thành phẩm, tính giá thành (có) | Có |
+| Tài sản / CCDC | Tài chính: đề nghị mua sắm (không), mua (có), bàn giao (không), khấu hao / phân bổ (có), kiểm kê (không), ghi giảm (có) — chi tiết ở mục 9h | Theo khâu |
 | Lương | Nhân sự – lương: nhận bảng lương → chứng từ (có) | Có |
 | Thu / Chi tiền, Ngân hàng, Ngoại tệ, Vay | Tài chính: phiếu thu/chi, lệnh thanh toán, sao kê, đánh giá lại, trích lãi (có, riêng lệnh thanh toán và sao kê chưa ghi) | Theo chứng từ |
 | Thuế GTGT | Báo cáo (kết quả): đối chiếu 3 nguồn, bảng kê; không ghi Nhật ký | Không |
@@ -147,5 +163,5 @@ Chuỗi trên màn hình **Bán hàng → Thu tiền**: Đơn đặt hàng (+ ki
 **Chuyển đổi**: kế hoạch sản xuất, định mức, lệnh sản xuất, phân bổ chi phí chung (chờ mô tả quy trình dăm).
 **Nền**: chiều phân tích (hợp đồng/lô tàu, bộ phận, khoản mục phí, đối tượng tập hợp chi phí) kế thừa dọc chuỗi; quy tắc bộ mã và mã tự kiểm tra; khóa màn hình khi rời máy.
 **Các phân hệ làm trước khi theo chu trình** đã xếp vào menu theo chu trình và có bảng khâu ở mục 9d; còn thiếu màn hình dòng chảy cho Chuyển đổi (Nhân sự – lương và Tài chính đã có dải khâu ở mục 9g).
-**Còn dang dở từ các đợt trước:** tạm ứng/hoàn ứng, kiểm kê quỹ, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.
+**Còn dang dở từ các đợt trước:** in biên bản kiểm kê / bàn giao tài sản, đề nghị sửa chữa – nâng cấp tài sản, tạm ứng/hoàn ứng, kiểm kê quỹ, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
+import { AssetCyclePanels } from './AssetCycle'
 import { addMoney, formatMoney, parseMoney, today } from './money'
 
 interface RegisterRow {
@@ -63,6 +64,7 @@ export function AssetsView() {
           rows={rows.map(r => [r.code, r.name, CLASS_VI[r.class], STATUS_VI[r.status], r.assetAccountCode, r.inServiceDate, String(r.usefulLifeMonths), r.originalCost, r.accumulated, r.netBookValue, r.disposalDate])} />
       </div>
       <p className="muted">Nguyên giá lấy từ bút toán đã ghi sổ (hóa đơn mua, chứng từ, số dư đầu) nên sổ tài sản luôn khớp sổ cái. Phương pháp đường thẳng; cách tính tháng đầu/cuối là cấu hình [CẦN XÁC MINH căn cứ pháp lý].</p>
+      <AssetCyclePanels assets={rows} depreciationNote={lastActive ? `kỳ gần nhất đến ${lastActive.periodEnd}` : 'chưa chạy kỳ nào'} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 
