@@ -225,6 +225,12 @@ Chị chốt: dăm gỗ vẫn theo chu trình bình thường, chỉ khác là t
 - Theo thời điểm: BDMT = MT × độ khô. Xuất/chuyển kho chưa đo được **ước tính theo độ khô bình quân thời điểm** (BDMT tồn ÷ MT tồn lúc xuất), báo riêng với phần đã đo.
 - Chưa làm (chờ chị quyết): chính sách "Thực tế / Bình quân thời điểm" theo kho, phiếu chênh lệch CL, lô, mượn/trả như HAK_KHO_OFFLINE.
 
+## 9m. Đã làm đợt 12 (19/10/2026): bảo trì, sửa chữa tài sản và Nhật ký tài sản
+
+- **Phiếu bảo trì / sửa chữa** (`AssetRepair`, SCTS{năm}-{số}): lập cho tài sản đang sử dụng → hoàn thành (ngày, chi phí thực tế, đơn vị sửa, chứng từ chi phí đã ghi sổ — tùy chọn) hoặc hủy (cần lý do). **Không ghi Nhật ký**: chi phí ghi sổ bằng hóa đơn mua / phiếu chi thông thường; phiếu không đổi nguyên giá hay lịch khấu hao (thẻ đã đóng băng). Màn hình: mục "Bảo trì, sửa chữa" ở tab Tài sản / CCDC (khâu mới trong dải quy trình).
+- **Nhật ký tài sản** (`AssetJournalService`, nút "Nhật ký" ở từng dòng sổ tài sản): một dòng thời gian gộp mọi thông tin và biến động của tài sản — lập thẻ, đề nghị mua sắm (lập/duyệt), nguồn nguyên giá, ghi tăng, bàn giao/điều chuyển, phiếu sửa chữa (lập/hoàn thành/hủy), kiểm kê đã chốt, khấu hao/phân bổ từng kỳ (kể cả dòng đã hủy, gạch ngang), ghi giảm, hủy ghi giảm, hủy thẻ; kèm tóm tắt nguyên giá, hao mòn, giá trị còn lại, số lần và chi phí sửa chữa; lọc theo nhóm. Dựng từ dữ liệu gốc, không lưu thêm.
+- Còn lại: chọn chứng từ chi phí ngay trên màn hình hoàn thành sửa chữa (API đã có `voucherId`), kế hoạch bảo trì định kỳ tự nhắc, sửa chữa lớn làm tăng nguyên giá (cần chị xác nhận cách hạch toán).
+
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).

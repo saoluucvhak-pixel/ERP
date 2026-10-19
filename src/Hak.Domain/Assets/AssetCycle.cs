@@ -90,3 +90,35 @@ public sealed class AssetCountLine
     public string? ActualDepartment { get; set; }
     public string? Note { get; set; }
 }
+
+public enum AssetRepairKind { Maintenance = 1, Repair = 2 }
+
+public enum AssetRepairStatus { Open = 1, Completed = 2, Cancelled = 9 }
+
+/// <summary>
+/// Phiếu bảo trì / sửa chữa tài sản: ghi nhận sự cố, đơn vị sửa, chi phí dự kiến và thực tế. Không ghi Nhật ký — chi phí được ghi sổ bằng hóa đơn mua / phiếu chi thông thường,
+/// phiếu chỉ gắn số chứng từ đó để Nhật ký tài sản đối chiếu. Không làm đổi nguyên giá hay lịch khấu hao (thẻ đã đóng băng).
+/// </summary>
+public sealed class AssetRepair
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    /// <summary>SCTS{năm}-{số}.</summary>
+    public string Number { get; set; } = "";
+    public Guid AssetId { get; set; }
+    public AssetRepairKind Kind { get; set; }
+    public AssetRepairStatus Status { get; set; } = AssetRepairStatus.Open;
+    public DateOnly ReportedDate { get; set; }
+    public string Description { get; set; } = "";
+    public string? Vendor { get; set; }
+    public decimal EstimatedCost { get; set; }
+    public decimal? ActualCost { get; set; }
+    public DateOnly? CompletedDate { get; set; }
+    /// <summary>Chứng từ đã ghi sổ ghi nhận chi phí sửa chữa (nếu có).</summary>
+    public Guid? VoucherId { get; set; }
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public Guid CreatedBy { get; set; }
+    public Guid? CompletedBy { get; set; }
+    public long RowVersion { get; set; }
+}

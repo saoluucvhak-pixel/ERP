@@ -98,6 +98,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<ProductionConfirmation> ProductionConfirmations => Set<ProductionConfirmation>();
     public DbSet<AssetRequest> AssetRequests => Set<AssetRequest>();
     public DbSet<AssetAssignment> AssetAssignments => Set<AssetAssignment>();
+    public DbSet<AssetRepair> AssetRepairs => Set<AssetRepair>();
     public DbSet<AssetCount> AssetCounts => Set<AssetCount>();
     public DbSet<AssetCountLine> AssetCountLines => Set<AssetCountLine>();
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
@@ -583,6 +584,13 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.AssetId, x.StartDate });
             e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
         });
+        b.Entity<AssetRepair>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.AssetId });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
         b.Entity<AssetCount>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
@@ -765,6 +773,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<EInvoiceRateLine>().Property(x => x.VatAmount).HasConversion(money);
         b.Entity<TaxDeclarationLine>().Property(x => x.DeclaredAmount).HasConversion(money);
         b.Entity<AssetRequest>().Property(x => x.EstimatedCost).HasConversion(money);
+        b.Entity<AssetRepair>().Property(x => x.EstimatedCost).HasConversion(money);
+        b.Entity<AssetRepair>().Property(x => x.ActualCost).HasConversion(moneyNullable);
         b.Entity<BomLine>().Property(x => x.QuantityPerUnit).HasConversion(money);
         b.Entity<BomLine>().Property(x => x.ScrapRate).HasConversion(money);
         b.Entity<WorkCenter>().Property(x => x.LaborRatePerHour).HasConversion(money);

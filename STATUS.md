@@ -115,3 +115,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 6. (Đã xử lý 15/10/2026) Danh sách chứng từ phân trang (200 dòng/trang, tối đa 1.000), lọc theo loại, tài khoản, từ khóa (số/diễn giải). Trên SQLite tìm không phân biệt hoa/thường chỉ với chữ không dấu.
 
 | 19/10/2026 | 2 đơn vị tính (cố định + BDMT theo thời điểm), migration Phase8ItemAltUnit | 195 tích hợp, web 20 | docs/10 mục 9l |
+
+| 19/10/2026 | Bảo trì/sửa chữa tài sản + Nhật ký tài sản (migration Phase8AssetRepairs) | 196 tích hợp, web 20 | docs/10 mục 9m |

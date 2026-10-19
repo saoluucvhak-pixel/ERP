@@ -98,6 +98,41 @@ public class AssetTests
     }
 
     [Fact]
+    public async Task AssetRepair_Complete_And_AssetJournal_ShowsEveryMovement()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var repairs = new AssetRepairService(s.Db, s.Audit, h.Clock);
+        var cycle = new AssetCycleService(s.Db, s.Audit, h.Clock);
+        var journal = new AssetJournalService(s.Db);
+        var line = await BuyAsync(h, s, "FA", 120_000_000, new(2026, 1, 10));
+        var asset = await ActiveAsync(h, s, FixedAsset(h, "TS020", line, 120_000_000, new(2026, 1, 15)));
+        await cycle.AssignAsync(h.Preparer, asset.Id, "Xưởng 1", "Nguyễn Văn A", null, new(2026, 1, 16), null);
+
+        // Phiếu sửa chữa: cần nội dung; hoàn thành cần ngày hợp lệ, chứng từ phải đã ghi sổ.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => repairs.CreateAsync(h.Preparer, new(asset.Id, AssetRepairKind.Repair, new(2026, 2, 3), " ", null, 0))));
+        var r = await repairs.CreateAsync(h.Preparer, new(asset.Id, AssetRepairKind.Repair, new(2026, 2, 3), "Hỏng bạc đạn trục chính", "Cơ khí Minh Phát", 8_000_000));
+        Assert.StartsWith("SCTS2026-", r.Number);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => repairs.CompleteAsync(h.Preparer, r.Id, new(2026, 2, 1), 1, null, null, null)));
+        var cost = await h.PostedAsync(s, new VoucherInput(VoucherTypes.General, new(2026, 2, 9), new(2026, 2, 9), "Chi phí sửa máy",
+            [new VoucherLineInput(h.Acc["LOSS"], Side.Debit, 7_500_000), new VoucherLineInput(h.Acc["AP"], Side.Credit, 7_500_000, h.Partner["NCC01"])]));
+        var done = await repairs.CompleteAsync(h.Preparer, r.Id, new(2026, 2, 9), 7_500_000, null, cost.Id, "Đã thay bạc đạn");
+        Assert.Equal((AssetRepairStatus.Completed, 7_500_000m), (done.Status, done.ActualCost));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => repairs.CancelAsync(h.Preparer, r.Id, "x")));
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+
+        var j = await journal.GetAsync(h.Auditor, asset.Id);
+        Assert.Equal((120_000_000m, 2_000_000m, 118_000_000m), (j.OriginalCost, j.Accumulated, j.NetBookValue));
+        Assert.Equal(("Xưởng 1", 1, 7_500_000m), (j.Department, j.RepairCount, j.RepairCost));
+        var titles = j.Events.Select(e => e.Title).ToList();
+        foreach (var expect in new[] { "Lập thẻ tài sản", "Nguồn nguyên giá", "Ghi tăng, đưa vào sử dụng", "Bàn giao / điều chuyển", "Lập phiếu sửa chữa", "Hoàn thành sửa chữa" })
+            Assert.Contains(expect, titles);
+        Assert.Contains(j.Events, e => e.Group == "Giá trị" && e.Title.StartsWith("Khấu hao kỳ") && e.Amount == 2_000_000m);
+        Assert.Equal(j.Events.OrderBy(e => e.Date).Select(e => e.Date), j.Events.Select(e => e.Date));
+        Assert.Single(await repairs.ListAsync(h.Auditor, asset.Id));
+    }
+
+    [Fact]
     public async Task FixedAsset_Lifecycle_FullMonth_RunsInOrder_DisposeAndReverse()
     {
         using var h = await HostAsync();

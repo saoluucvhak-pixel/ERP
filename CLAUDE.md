@@ -74,3 +74,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 3. GĐ5 đa công ty/LAN (PostgreSQL), GĐ6 Report Engine + BCTC (cần TT99 đã xác minh), GĐ7 đối chiếu dữ liệu thực, GĐ8 bộ cài.
 
 - 19/10 đợt 11: 2 đơn vị tính (Item.AltUnit/AltFactor cố định; BDMT ước tính bình quân thời điểm cho xuất chưa đo) — docs/10 mục 9l. Chờ chị quyết: chính sách theo kho, phiếu chênh lệch CL, lô, mượn/trả (như HAK_KHO_OFFLINE).
+
+- 19/10 đợt 12: bảo trì/sửa chữa tài sản (AssetRepairService) + Nhật ký tài sản (AssetJournalService, nút "Nhật ký") — docs/10 mục 9m.

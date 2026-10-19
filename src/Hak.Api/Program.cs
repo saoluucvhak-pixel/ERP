@@ -69,6 +69,8 @@ builder.Services.AddScoped<Hak.Application.Reports.FinancialAnalysisService>();
 builder.Services.AddScoped<Hak.Application.Reports.DashboardOverviewService>();
 builder.Services.AddScoped<PayrollPaymentService>();
 builder.Services.AddScoped<Hak.Application.Assets.AssetCycleService>();
+builder.Services.AddScoped<Hak.Application.Assets.AssetRepairService>();
+builder.Services.AddScoped<Hak.Application.Assets.AssetJournalService>();
 builder.Services.AddScoped<SalesDispatchService>();
 builder.Services.AddScoped<GoodsInspectionService>();
 builder.Services.AddScoped<PurchaseMatchService>();

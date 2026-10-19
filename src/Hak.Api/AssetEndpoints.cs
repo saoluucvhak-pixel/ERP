@@ -6,6 +6,7 @@ public sealed record DisposeAssetRequest(DateOnly Date, Guid ResidualAccountId, 
 
 public sealed record AssetDecisionRequest(bool Approve, string? Note);
 public sealed record AssetLinkRequest(Guid AssetId);
+public sealed record AssetRepairCompleteRequest(DateOnly CompletedDate, decimal ActualCost, string? Vendor, Guid? VoucherId, string? Note);
 public sealed record AssetAssignRequest(string Department, string? Custodian, string? Location, DateOnly Date, string? Note);
 public sealed record AssetCountCreateRequest(DateOnly Date, string? Note);
 
@@ -49,6 +50,15 @@ public static class AssetEndpoints
         api.MapPost("/counts/{id:guid}/complete", async (HttpContext http, Guid id, AssetCycleService s) => Results.Ok(await s.CompleteAsync(await http.SessionAsync(), id)));
         api.MapPost("/counts/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, AssetCycleService s) =>
         { await s.CancelCountAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
+
+        // Bảo trì, sửa chữa và Nhật ký tài sản.
+        api.MapGet("/repairs", async (HttpContext http, Guid? assetId, AssetRepairService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), assetId)));
+        api.MapPost("/repairs", async (HttpContext http, AssetRepairInput i, AssetRepairService s) => Results.Ok(await s.CreateAsync(await http.SessionAsync(), i)));
+        api.MapPost("/repairs/{id:guid}/complete", async (HttpContext http, Guid id, AssetRepairCompleteRequest r, AssetRepairService s) =>
+            Results.Ok(await s.CompleteAsync(await http.SessionAsync(), id, r.CompletedDate, r.ActualCost, r.Vendor, r.VoucherId, r.Note)));
+        api.MapPost("/repairs/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, AssetRepairService s) =>
+            Results.Ok(await s.CancelAsync(await http.SessionAsync(), id, r.Reason)));
+        api.MapGet("/{id:guid}/journal", async (HttpContext http, Guid id, AssetJournalService s) => Results.Ok(await s.GetAsync(await http.SessionAsync(), id)));
 
         api.MapGet("/depreciation-runs", async (HttpContext http, AssetService s) => Results.Ok(await s.RunsAsync(await http.SessionAsync())));
         api.MapPost("/depreciation-runs", async (HttpContext http, Guid periodId, AssetService s) => Results.Ok(await s.RunAsync(await http.SessionAsync(), periodId)));

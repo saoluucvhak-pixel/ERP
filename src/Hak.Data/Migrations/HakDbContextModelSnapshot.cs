@@ -226,6 +226,100 @@ namespace Hak.Data.Migrations
                     b.ToTable("asset_count_lines");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepair", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long?>("ActualCost")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("actual_cost");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid?>("CompletedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("completed_by");
+
+                    b.Property<DateOnly?>("CompletedDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("completed_date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<long>("EstimatedCost")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("estimated_cost");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<DateOnly>("ReportedDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reported_date");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Vendor")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("vendor");
+
+                    b.Property<Guid?>("VoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("voucher_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_repairs");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_asset_repairs_asset_id");
+
+                    b.HasIndex("CompanyId", "AssetId")
+                        .HasDatabaseName("ix_asset_repairs_company_id_asset_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asset_repairs_company_id_number");
+
+                    b.ToTable("asset_repairs");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6096,6 +6190,16 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_asset_count_lines_asset_counts_count_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetRepair", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_repairs_long_term_assets_asset_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.AssetRequest", b =>

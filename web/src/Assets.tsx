@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
 import { AssetCyclePanels } from './AssetCycle'
+import { AssetJournal } from './AssetJournal'
 import { addMoney, formatMoney, parseMoney, today } from './money'
 
 interface RegisterRow {
@@ -31,6 +32,7 @@ export function AssetsView() {
   const [periods, setPeriods] = useState<Period[]>([])
   const [recon, setRecon] = useState<ReconRow[] | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
+  const [journalId, setJournalId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [disposing, setDisposing] = useState<RegisterRow | null>(null)
   const [info, setInfo] = useState('')
@@ -81,6 +83,7 @@ export function AssetsView() {
             <td className="num">{formatMoney(r.originalCost)}</td><td className="num">{formatMoney(r.accumulated)}</td><td className="num">{formatMoney(r.netBookValue)}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => run(async () => setDetail(await get<Detail>(`/assets/${r.id}`)))}>Chi tiết</button>
+              <button onClick={() => { setJournalId(r.id); setDetail(null) }}>Nhật ký</button>
               {r.status === 'Draft' && <>
                 <button disabled={busy} onClick={() => act(() => post(`/assets/${r.id}/activate`), `Đã ghi tăng ${r.code}.`)}>Ghi tăng</button>
                 <button disabled={busy} onClick={() => { const reason = prompt('Lý do hủy thẻ:'); if (reason) act(() => post(`/assets/${r.id}/cancel`, { reason }), `Đã hủy thẻ ${r.code}.`) }}>Hủy</button>
@@ -100,6 +103,8 @@ export function AssetsView() {
           await post(`/assets/${disposing.id}/dispose`, { date, residualAccountId, description }); setDisposing(null)
         }, `Đã ghi giảm ${disposing.code}.`)}
         onCancel={() => setDisposing(null)} />}
+
+      {journalId && <AssetJournal key={journalId} assetId={journalId} onClose={() => setJournalId(null)} />}
 
       {detail && (
         <section className="panel">
