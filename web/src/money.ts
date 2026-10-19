@@ -148,3 +148,9 @@ export function compareMoney(a: string | null | undefined, b: string | null | un
 
 /** Bỏ dấu tiếng Việt + chữ thường để tìm "nguyen" ra "Nguyễn" (theo HAK Smart Filter). */
 export const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
+
+/** yyyy-mm[-dd] → mm/yyyy (kỳ kế toán). */
+export function formatMonth(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})/.exec(iso ?? '')
+  return m ? `${m[2]}/${m[1]}` : (iso ?? '')
+}

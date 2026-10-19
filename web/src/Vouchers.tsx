@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
-import { AccountSelect, CASHFLOW_VI, ErrorBox, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog, DateInput } from './common'
+import { AccountSelect, CASHFLOW_VI, ErrorBox, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog, DateInput, promptDate } from './common'
 import { addMoney, amountInWords, formatMoney, parseMoney, today, formatDate } from './money'
 import { DataGrid } from './DataGrid'
 
@@ -112,7 +112,7 @@ export function VouchersView() {
             {v.status === 'Approved' && <button className="primary" onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
             {v.status === 'Posted' && <button className="danger" onClick={() => {
               const reason = prompt('Lý do đảo bút toán:'); if (!reason) return
-              const date = prompt('Ngày đảo (yyyy-mm-dd):', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }))
+              const date = promptDate('Ngày đảo', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }))
             }}>Đảo</button>}
             {(v.status === 'Draft' || v.status === 'Submitted') && <button className="danger" onClick={() => {
               const reason = prompt('Lý do hủy:'); if (reason) act('Đã hủy', () => post(`/vouchers/${v.id}/cancel?rowVersion=${v.rowVersion}`, { reason }))

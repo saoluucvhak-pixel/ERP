@@ -174,3 +174,12 @@ export function DateInput({ value, onChange, disabled, 'aria-label': ariaLabel, 
     </span>
   )
 }
+
+/** Hỏi ngày bằng hộp thoại, nhập/hiện dd/MM/yyyy; trả về yyyy-MM-dd, hoặc null nếu hủy / nhập sai (có báo lỗi). */
+export function promptDate(message: string, defaultIso: string): string | null {
+  const text = prompt(`${message} (dd/mm/yyyy):`, formatDate(defaultIso))
+  if (text === null || text.trim() === '') return null
+  const iso = parseDate(text)
+  if (!iso) alert('Ngày không hợp lệ. Nhập theo dạng dd/mm/yyyy, ví dụ 31/03/2026.')
+  return iso
+}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, DateInput } from './common'
-import { formatMoney, parseMoney, today, formatDate } from './money'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, DateInput, promptDate } from './common'
+import { formatMoney, parseMoney, today, formatDate, formatMonth } from './money'
 import type { Order } from './Orders'
 import { DataGrid } from './DataGrid'
 
@@ -127,7 +127,7 @@ function StockDocs() {
                 {d.status === 'Draft' && <button className="danger" onClick={() => { const r = prompt('Lý do hủy phiếu nháp:'); if (r) act(() => post(`/stock-documents/${d.id}/cancel`, { reason: r }), `Đã hủy ${d.number}.`) }}>Hủy</button>}
                 {d.status === 'Posted' && !d.number.startsWith('DP') && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo phiếu:'); if (!reason) return
-                  const dt = prompt('Ngày đảo (yyyy-mm-dd):', d.postingDate); if (dt) act(() => post(`/stock-documents/${d.id}/reverse`, { reversalDate: dt, reason }), `Đã đảo ${d.number}.`)
+                  const dt = promptDate('Ngày đảo', d.postingDate); if (dt) act(() => post(`/stock-documents/${d.id}/reverse`, { reversalDate: dt, reason }), `Đã đảo ${d.number}.`)
                 }}>Đảo</button>}
               </td></>)} />
     </>
@@ -226,7 +226,7 @@ function Costing() {
       <table className="grid">
         <thead><tr><th>Kỳ</th><th>Kho</th><th>Trạng thái</th><th>Kết quả</th><th /></tr></thead>
         <tbody>{runs.map(r => (
-          <tr key={r.id}><td>{r.periodStart.slice(0, 7)}</td><td>{warehouses.find(w => w.id === r.warehouseId)?.code}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
+          <tr key={r.id}><td>{formatMonth(r.periodStart)}</td><td>{warehouses.find(w => w.id === r.warehouseId)?.code}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
             <td style={{ whiteSpace: 'normal' }}>{(JSON.parse(r.resultJson || '[]') as { item: string; issuedQty: number | string; issuedValue: number | string }[])
               .map(x => `${x.item}: xuất ${formatMoney(String(x.issuedQty))} = ${formatMoney(String(x.issuedValue))}`).join('; ')}</td>
             <td>{r.status === 'Active' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy lần tính giá:'); if (reason) run(async () => { await post(`/costing-runs/${r.id}/reverse`, { reason }); await load() }) }}>Hủy</button>}</td></tr>))}
@@ -336,7 +336,7 @@ function Bdmt() {
             <tr key={m.id} style={m.supersededAt ? { opacity: .6 } : undefined}><td>{m.documentNumber}/{m.lineNo}</td><td>{KIND_VI[m.kind]}</td>
               <td className="num">{formatMoney(m.measuredMt)}{m.measuredMt !== m.lineMt ? ` (phiếu ${formatMoney(m.lineMt)})` : ''}</td>
               <td className="num">{formatMoney(m.drynessPercent)}</td><td className="num">{formatMoney(m.bdmt)}</td>
-              <td>{m.evidenceType === 'Certificate' ? 'Chứng thư' : 'Phiếu đo'} {m.evidenceNo}{m.evidenceIssuer ? ` · ${m.evidenceIssuer}` : ''} · {m.evidenceDate}</td>
+              <td>{m.evidenceType === 'Certificate' ? 'Chứng thư' : 'Phiếu đo'} {m.evidenceNo}{m.evidenceIssuer ? ` · ${m.evidenceIssuer}` : ''} · {formatDate(m.evidenceDate)}</td>
               <td>{m.supersededAt ? `Đã thay thế: ${m.supersedeReason}` : 'Hiệu lực'}</td>
               <td>{!m.supersededAt && <button onClick={() => supersede(m)}>Thay thế</button>}</td></tr>))}
           </tbody>

@@ -105,7 +105,7 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
             var date = doc.PostingDate;
             var method = await db.DrynessMethods.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.EffectiveFrom <= date)
                              .OrderByDescending(m => m.EffectiveFrom).FirstOrDefaultAsync()
-                         ?? throw new DomainException(ErrorCodes.CostingPolicyMissing, $"Chưa có phương pháp quy đổi MT→BDMT được phê duyệt hiệu lực ngày {date}.");
+                         ?? throw new DomainException(ErrorCodes.CostingPolicyMissing, $"Chưa có phương pháp quy đổi MT→BDMT được phê duyệt hiệu lực ngày {date:dd/MM/yyyy}.");
             var mt = input.MeasuredMt ?? line.Quantity;
             var bdmt = DrynessCalculator.Bdmt(mt, input.DrynessPercent, method);
 

@@ -306,7 +306,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             throw new DomainException(ErrorCodes.RegimeNotVerified,
                 $"Chế độ kế toán {regime.VersionCode} chưa được xác minh với văn bản pháp luật gốc; không được ghi sổ ở môi trường Production.");
         if (v.PostingDate < regime.EffectiveFrom || (regime.EffectiveTo is { } to && v.PostingDate > to))
-            throw new DomainException(ErrorCodes.RegimeNotEffective, $"Ngày hạch toán {v.PostingDate} ngoài hiệu lực của chế độ kế toán {regime.VersionCode}.");
+            throw new DomainException(ErrorCodes.RegimeNotEffective, $"Ngày hạch toán {v.PostingDate:dd/MM/yyyy} ngoài hiệu lực của chế độ kế toán {regime.VersionCode}.");
 
         var now = clock.UtcNow;
         var entry = new JournalEntry
@@ -475,7 +475,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
     {
         var p = await db.AccountingPeriods.AsNoTracking()
                     .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.StartDate <= date && x.EndDate >= date)
-                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date}.");
+                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date:dd/MM/yyyy}.");
         if (p.Status == PeriodStatus.Locked)
             throw new DomainException(ErrorCodes.PeriodLocked, $"Kỳ {p.StartDate:MM/yyyy} đã khóa sổ.");
         return p;
@@ -483,7 +483,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
 
     private async Task<FiscalYear> FiscalYearForAsync(Guid companyId, DateOnly date)
         => await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-           ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date}.");
+           ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date:dd/MM/yyyy}.");
 
     private async Task<Company> LoadCompanyAsync(Guid companyId)
         => await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == companyId)

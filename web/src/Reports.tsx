@@ -152,7 +152,7 @@ export function ReceivablesView() {
       {recon && <div className={`msg ${recon.isReconciled ? 'ok' : 'error'}`}>{recon.isReconciled ? 'Sổ chi tiết công nợ khớp sổ cái.' : `Sổ chi tiết lệch sổ cái: ${recon.rows.length} dòng cần kiểm tra.`}</div>}
       {aging && (
         <div className="panel">
-          <strong>Tuổi nợ đến {asOf}</strong>
+          <strong>Tuổi nợ đến {formatDate(asOf)}</strong>
           <table className="grid">
             <thead><tr><th>Đối tượng</th><th className="num">Chưa đến hạn</th>{aging.bucketLabels.map(b => <th key={b} className="num">Quá hạn {b} ngày</th>)}<th className="num">Tổng còn nợ</th><th className="num">Trả trước chưa phân bổ</th><th className="num">Thuần</th></tr></thead>
             <tbody>{aging.rows.map(r => (
@@ -249,8 +249,8 @@ function AllocateDialog({ debit, credit, asOf, onClose, onDone }: { debit: OpenI
     footer={<><button onClick={onClose} disabled={busy}>Hủy</button><button className="primary" disabled={busy || mixed} onClick={save}>Phân bổ</button></>}>
     <ErrorBox error={error} />
     {mixed && <div className="msg error">Hai khoản khác loại tiền ({debit.foreignCurrency ?? 'VND'} và {credit.foreignCurrency ?? 'VND'}): không khớp tay được vì phát sinh chênh lệch tỷ giá — dùng "Thu/chi ngoại tệ theo hóa đơn" ở màn hình Ngoại tệ.</div>}
-    <p>Bên Nợ: <b>{debit.voucherNumber}</b> ngày {debit.postingDate}, còn {formatMoney(debit.open)}<br />
-      Bên Có: <b>{credit.voucherNumber}</b> ngày {credit.postingDate}, còn {formatMoney(credit.open)}</p>
+    <p>Bên Nợ: <b>{debit.voucherNumber}</b> ngày {formatDate(debit.postingDate)}, còn {formatMoney(debit.open)}<br />
+      Bên Có: <b>{credit.voucherNumber}</b> ngày {formatDate(credit.postingDate)}, còn {formatMoney(credit.open)}</p>
     <div className="form-row">
       <label>Số tiền<input value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" /></label>
       {foreign && <label>Nguyên tệ ({foreign})<input value={foreignAmount} onChange={e => setForeignAmount(e.target.value)} inputMode="decimal" /></label>}
@@ -267,7 +267,7 @@ function VoidAllocationDialog({ alloc, onClose, onDone }: { alloc: AllocationRow
   return <Modal title="Hủy phân bổ" onClose={onClose} busy={busy} onSubmit={reason.trim() ? save : undefined}
     footer={<><button onClick={onClose} disabled={busy}>Không hủy</button><button className="primary" disabled={busy || !reason.trim()} onClick={save}>Hủy phân bổ</button></>}>
     <ErrorBox error={error} />
-    <p>Phân bổ {formatMoney(alloc.amount)} giữa <b>{alloc.debitVoucherNumber}</b> và <b>{alloc.creditVoucherNumber}</b> ngày {alloc.allocationDate}.
+    <p>Phân bổ {formatMoney(alloc.amount)} giữa <b>{alloc.debitVoucherNumber}</b> và <b>{alloc.creditVoucherNumber}</b> ngày {formatDate(alloc.allocationDate)}.
       Sau khi hủy, hai chứng từ trở lại trạng thái còn mở; bản ghi phân bổ và lý do hủy vẫn được lưu trong nhật ký.</p>
     <label>Lý do hủy<input value={reason} onChange={e => setReason(e.target.value)} /></label>
   </Modal>

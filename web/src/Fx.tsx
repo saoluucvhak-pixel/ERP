@@ -36,7 +36,7 @@ export function FxView() {
       return { currency: c, debitBalanceRate: debit, creditBalanceRate: credit }
     })
     await post('/fx/revaluations', { date: asOf, rates: payload, rateSource: source })
-  }, `Đã đánh giá lại số dư ngoại tệ ngày ${asOf} và ghi sổ.`)
+  }, `Đã đánh giá lại số dư ngoại tệ ngày ${formatDate(asOf)} và ghi sổ.`)
 
   return (
     <>
@@ -64,7 +64,7 @@ export function FxView() {
       <FxPaymentPanel date={asOf} onDone={msg => { setInfo(msg); load() }} />
 
       <section className="panel">
-        <h3>Đánh giá lại ngày {asOf}</h3>
+        <h3>Đánh giá lại ngày {formatDate(asOf)}</h3>
         {currencies.length === 0 && <p className="muted">Không còn số dư nguyên tệ cần tỷ giá; chạy đánh giá lại vẫn xử lý phần quy đổi còn sót trên số dư nguyên tệ bằng 0.</p>}
         <div className="form-grid">
           {currencies.map(c => <div key={c}>

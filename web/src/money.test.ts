@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addMoney, amountInWords, compareMoney, fold, formatDate, formatDateTime, formatMoney, parseDate, parseMoney, parseRate, today } from './money.ts'
+import { addMoney, amountInWords, compareMoney, fold, formatDate, formatMonth, formatDateTime, formatMoney, parseDate, parseMoney, parseRate, today } from './money.ts'
 
 test('formatMoney groups with dots and uses comma decimals, never via Number', () => {
   assert.equal(formatMoney('1234567'), '1.234.567')
@@ -96,4 +96,9 @@ test('compareMoney compares exactly, including negatives and fractions', () => {
 test('fold ignores Vietnamese diacritics and case', () => {
   assert.equal(fold('Nguyễn Đức'), 'nguyen duc')
   assert.ok(fold('Công ty CP HAK').includes(fold('CONG TY')))
+})
+
+test('formatMonth shows accounting period as mm/yyyy', () => {
+  assert.equal(formatMonth('2026-03-01'), '03/2026')
+  assert.equal(formatMonth(''), '')
 })

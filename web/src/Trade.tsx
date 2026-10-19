@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput, promptDate } from './common'
 import { formatMoney, parseMoney, today, formatDate } from './money'
 import { DataGrid } from './DataGrid'
 
@@ -139,7 +139,7 @@ export function TradeView() {
                 {i.status === 'Posted' && i.purpose === 'Normal' && <button onClick={() => setAdjusting(i)}>Điều chỉnh</button>}
                 {i.status === 'Posted' && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo hóa đơn:'); if (!reason) return
-                  const d = prompt('Ngày đảo (yyyy-mm-dd):', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`)
+                  const d = promptDate('Ngày đảo', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`)
                 }}>Đảo</button>}
               </td></>)} />
     </>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog, DateInput } from './common'
-import { addMoney, formatMoney, parseMoney, today, formatDate } from './money'
+import { addMoney, formatMoney, parseMoney, today, formatDate, formatMonth } from './money'
 import { DataGrid } from './DataGrid'
 
 interface RegisterRow {
@@ -85,7 +85,7 @@ export function AssetsView() {
         ]}
         rowRender={r => (<>
             <td>{r.code}</td><td>{r.name}</td><td>{CLASS_VI[r.class]}</td>
-            <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${r.disposalDate}` : ''}</span></td>
+            <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${formatDate(r.disposalDate)}` : ''}</span></td>
             <td>{r.assetAccountCode}</td><td>{formatDate(r.inServiceDate)}</td><td>{r.usefulLifeMonths}</td>
             <td className="num">{formatMoney(r.originalCost)}</td><td className="num">{formatMoney(r.accumulated)}</td><td className="num">{formatMoney(r.netBookValue)}</td>
             <td style={{ display: 'flex', gap: 6 }}>
@@ -111,7 +111,7 @@ export function AssetsView() {
       {detail && (
         <section className="panel">
           <div className="toolbar"><h3>{detail.asset.code} – {detail.asset.name}</h3><button onClick={() => setDetail(null)}>Đóng</button></div>
-          <p className="muted">Bắt đầu khấu hao {detail.asset.scheduleStartDate}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}
+          <p className="muted">Bắt đầu khấu hao {formatDate(detail.asset.scheduleStartDate)}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}
             {detail.asset.remainingLifeMonths ? `; chuyển từ hệ thống cũ: hao mòn đầu ${formatMoney(detail.asset.openingAccumulated)}, còn ${detail.asset.remainingLifeMonths} tháng` : ''}</p>
           {detail.asset.expenseSplits && detail.asset.expenseSplits.length > 0 && <p className="muted">Chi phí chia theo: {detail.asset.expenseSplits
             .map(x => `${accounts.find(a => a.id === x.expenseAccountId)?.code ?? '?'} ${bpToPercent(x.basisPoints)}%`).join(' · ')}</p>}
@@ -121,7 +121,7 @@ export function AssetsView() {
               <td className="num">{formatMoney(x.lineAmount)}</td><td className="num">{formatMoney(x.amount)}</td></tr>)}</tbody></table>
           <h4>Kế hoạch khấu hao / phân bổ</h4>
           <table className="grid"><thead><tr><th>Tháng</th><th className="num">Kế hoạch</th><th className="num">Lũy kế</th><th className="num">Đã ghi sổ</th></tr></thead>
-            <tbody>{detail.schedule.map(x => <tr key={x.periodEnd}><td>{x.periodEnd.slice(0, 7)}</td><td className="num">{formatMoney(x.planned)}</td>
+            <tbody>{detail.schedule.map(x => <tr key={x.periodEnd}><td>{formatMonth(x.periodEnd)}</td><td className="num">{formatMoney(x.planned)}</td>
               <td className="num">{formatMoney(x.cumulative)}</td><td className="num">{x.booked == null ? '' : formatMoney(x.booked)}</td></tr>)}</tbody></table>
         </section>
       )}
@@ -141,7 +141,7 @@ export function AssetsView() {
           }}>Chạy khấu hao</button>
         </div>
         <table className="grid"><thead><tr><th>Kỳ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{r.periodStart.slice(0, 7)}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}{r.status === 'Active' && !r.voucherId ? ' (không phát sinh)' : ''}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{formatMonth(r.periodStart)}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}{r.status === 'Active' && !r.voucherId ? ' (không phát sinh)' : ''}</td>
             <td>{r.id === lastActive?.id && <button disabled={busy} onClick={() => {
               const reason = prompt('Lý do hủy lần chạy khấu hao:')
               if (reason) act(() => post(`/assets/depreciation-runs/${r.id}/reverse`, { reason }), 'Đã hủy lần chạy khấu hao.')
@@ -149,7 +149,7 @@ export function AssetsView() {
       </section>
 
       <section className="panel">
-        <div className="toolbar"><h3>Đối chiếu sổ tài sản ↔ sổ cái tại {asOf}</h3>
+        <div className="toolbar"><h3>Đối chiếu sổ tài sản ↔ sổ cái tại {formatDate(asOf)}</h3>
           <button onClick={() => run(async () => setRecon(await get<ReconRow[]>(`/assets/reconciliation?asOf=${asOf}`)))}>Đối chiếu</button></div>
         {recon && <table className="grid"><thead><tr><th>TK</th><th>Nội dung</th><th className="num">Sổ tài sản</th><th className="num">Sổ cái</th><th className="num">Chênh lệch</th></tr></thead>
           <tbody>{recon.map(r => <tr key={r.accountId} className={r.difference !== '0' ? 'warn' : ''}><td>{r.accountCode}</td><td>{r.kind}</td>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, DateInput } from './common'
-import { formatMoney, parseMoney, parseRate, today, formatDate } from './money'
+import { formatMoney, parseMoney, parseRate, today, formatDate, formatMonth } from './money'
 import { DataGrid } from './DataGrid'
 
 interface LoanRow {
@@ -63,7 +63,7 @@ export function LoansView() {
         <button className="primary" onClick={() => setCreating(true)}>Thêm khế ước</button>
         <ExportButton fileName={'So_vay_' + asOf} sheet="Sổ theo dõi vay" columns={[{ header: 'Khế ước' }, { header: 'Nội dung', width: 30 }, { header: 'Bên cho vay' }, { header: 'TK' }, { header: 'Tiền' }, { header: 'Trạng thái' },
           ...['Hạn mức', 'Đã giải ngân', 'Đã trả', 'Dư nợ', 'Dư nợ nguyên tệ', 'Lãi suất %'].map(h => ({ header: h, numeric: true })), { header: 'Đáo hạn' }, { header: 'Đến hạn ≤ 12 tháng' }, { header: 'Lãi đã trích', numeric: true }]}
-          rows={rows.map(r => [r.code, r.description, r.lenderCode, r.accountCode, r.currency ?? 'VND', STATUS_VI[r.status], r.contractAmount, r.drawn, r.repaid, r.outstanding, r.outstandingForeign, r.currentRatePercent, r.maturityDate, r.dueWithin12Months ? 'Có' : '', r.interestAccrued])} />
+          rows={rows.map(r => [r.code, r.description, r.lenderCode, r.accountCode, r.currency ?? 'VND', STATUS_VI[r.status], r.contractAmount, r.drawn, r.repaid, r.outstanding, r.outstandingForeign, r.currentRatePercent, formatDate(r.maturityDate), r.dueWithin12Months ? 'Có' : '', r.interestAccrued])} />
       </div>
       <p className="muted">Giải ngân / trả nợ hạch toán bằng chứng từ thông thường (Nợ tiền / Có TK vay chi tiết bên cho vay) rồi gắn vào khế ước. Lãi tính theo dư nợ từng ngày × lãi suất từng ngày ÷ số ngày cơ sở; ngày giải ngân tính lãi, ngày trả nợ không tính [CẦN XÁC MINH theo hợp đồng].</p>
       <ErrorBox error={error} />
@@ -138,7 +138,7 @@ export function LoansView() {
           <button className="primary" disabled={busy} onClick={accrue}>Trích lãi</button>
         </div>
         <table className="grid"><thead><tr><th>Kỳ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{r.periodStart.slice(0, 7)}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{formatMonth(r.periodStart)}</td>
             <td>{r.status === 'Active' ? (r.voucherId ? 'Hiệu lực' : 'Hiệu lực (không phát sinh)') : 'Đã hủy'}</td>
             <td>{r.id === lastActive?.id && <button disabled={busy} onClick={() => {
               const reason = prompt('Lý do hủy lần trích lãi:')
@@ -147,7 +147,7 @@ export function LoansView() {
       </section>
 
       <section className="panel">
-        <div className="toolbar"><h3>Đối chiếu sổ vay ↔ sổ cái tại {asOf}</h3>
+        <div className="toolbar"><h3>Đối chiếu sổ vay ↔ sổ cái tại {formatDate(asOf)}</h3>
           <button onClick={() => run(async () => setRecon(await get<ReconRow[]>(`/loans/reconciliation?asOf=${asOf}`)))}>Đối chiếu</button></div>
         {recon && <table className="grid"><thead><tr><th>TK</th><th>Bên cho vay</th><th className="num">Sổ cái (dư Có)</th><th className="num">Theo khế ước</th><th className="num">Đánh giá lại tỷ giá</th><th className="num">Chênh lệch</th></tr></thead>
           <tbody>{recon.map(r => <tr key={`${r.accountId}|${r.lenderId}`} className={r.difference !== '0' ? 'warn' : ''}><td>{r.accountCode}</td><td>{r.lenderCode}</td>

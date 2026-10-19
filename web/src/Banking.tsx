@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput } from './common'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, DateInput, promptDate } from './common'
 import { addMoney, formatMoney, parseMoney, today, formatDate } from './money'
 import { DataGrid } from './DataGrid'
 
@@ -76,7 +76,7 @@ function PaymentOrders() {
                 {p.status === 'Approved' && <button onClick={() => act(() => post(`/payment-orders/${p.id}/send`), `Đã ghi nhận gửi ngân hàng ${p.number}.`)}>Đã gửi NH</button>}
                 {p.status === 'SentToBank' && <button onClick={() => {
                   const ref = prompt('Mã giao dịch ngân hàng:'); if (!ref) return
-                  const date = prompt('Ngày ngân hàng thực hiện (yyyy-mm-dd):', today()); if (!date) return
+                  const date = promptDate('Ngày ngân hàng thực hiện', today()); if (!date) return
                   act(() => post(`/payment-orders/${p.id}/execute`, { executedDate: date, bankReference: ref }),
                     `Đã ghi nhận ngân hàng thực hiện ${p.number}; đã tạo báo Nợ (Nháp) — duyệt và ghi sổ ở màn hình Chứng từ.`)
                 }}>NH đã thực hiện</button>}
@@ -171,7 +171,7 @@ function Reconciliation() {
             <table className="grid">
               <thead><tr><th>Ngày</th><th>Mã GD</th><th>Nội dung</th><th className="num">Số tiền</th><th>Trạng thái / ứng viên</th></tr></thead>
               <tbody>{report.statementOnly.map(l => (
-                <tr key={l.id}><td>{l.transactionDate}</td><td>{l.bankReference}</td><td>{l.description}</td><td className="num">{formatMoney(l.amount)}</td>
+                <tr key={l.id}><td>{formatDate(l.transactionDate)}</td><td>{l.bankReference}</td><td>{l.description}</td><td className="num">{formatMoney(l.amount)}</td>
                   <td>{l.candidates.length === 0 ? <span className="muted">Chưa có bút toán tương ứng </span> : l.candidates.map(c => (
                     <button key={c.journalLineId} onClick={() => run(async () => { await post('/bank-reconciliation/confirm', { statementLineId: l.id, journalLineId: c.journalLineId }); await load() })}>
                       Khớp {c.voucherNumber} ({formatDate(c.postingDate)}, điểm {c.score})</button>))}
@@ -203,7 +203,7 @@ function Reconciliation() {
             <table className="grid">
               <thead><tr><th>Ngày</th><th>Mã GD</th><th>Số CT</th><th className="num">Số tiền</th><th>Cách khớp</th><th /></tr></thead>
               <tbody>{matches.map(m => (
-                <tr key={m.id}><td>{m.transactionDate}</td><td>{m.bankReference}</td><td>{m.voucherNumber}</td><td className="num">{formatMoney(m.amount)}</td>
+                <tr key={m.id}><td>{formatDate(m.transactionDate)}</td><td>{m.bankReference}</td><td>{m.voucherNumber}</td><td className="num">{formatMoney(m.amount)}</td>
                   <td>{m.origin === 'Auto' ? `Tự động (điểm ${m.score})` : 'Thủ công'}</td>
                   <td><button className="danger" onClick={() => { const reason = prompt('Lý do hủy đối chiếu:'); if (reason) run(async () => { await post(`/bank-reconciliation/${m.id}/unmatch`, { reason }); await load() }) }}>Hủy khớp</button></td></tr>))}
               </tbody>

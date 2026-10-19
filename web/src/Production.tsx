@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, formatDate } from './money'
+import { formatMoney, parseMoney, formatDate, formatMonth } from './money'
 
 interface CostObject { id: string; code: string; name: string; itemId: string; wipAccountId: string; plannedUnitCost: string; isActive: boolean }
 interface Item { id: string; code: string; name: string; unit: string }
@@ -97,7 +97,7 @@ export function ProductionView() {
       <section className="panel">
         <h3>Các lần tính giá thành</h3>
         <table className="grid"><thead><tr><th>Đối tượng</th><th>Kỳ</th><th className="num">Sản lượng</th><th className="num">Giá thành</th><th className="num">Đơn vị</th><th className="num">Dở dang cuối</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{objName(r.costObjectId)}</td><td>{r.periodStart.slice(0, 7)}</td><td className="num">{formatMoney(r.outputQuantity)}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{objName(r.costObjectId)}</td><td>{formatMonth(r.periodStart)}</td><td className="num">{formatMoney(r.outputQuantity)}</td>
             <td className="num">{formatMoney(r.actualCost)}</td><td className="num">{formatMoney(r.unitCost)}</td><td className="num">{formatMoney(r.closingWip)}</td>
             <td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
             <td>{r.status === 'Active' && latest(r) && <button disabled={busy} onClick={() => {
