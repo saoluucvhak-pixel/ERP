@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DateInput } from './common'
-import { addMoney, compareMoney, formatDate, formatMoney, parseMoney, today } from './money'
+import { addMoney, compareMoney, fold, formatDate, formatMoney, parseMoney, today } from './money'
 
 export type ColType = 'text' | 'number' | 'date' | 'select'
 
@@ -47,7 +47,7 @@ export function presetRange(preset: string, now = today()): [string, string] {
 function matches<T>(col: Col<T>, row: T, c: Cond): boolean {
   const raw = col.value(row) ?? ''
   if (col.type === 'text') {
-    const t = raw.toLowerCase(), q = c.a.trim().toLowerCase()
+    const t = fold(raw), q = fold(c.a.trim())
     if (q === '') return true
     return c.op === 'notContains' ? !t.includes(q) : c.op === 'starts' ? t.startsWith(q) : c.op === 'eq' ? t === q : t.includes(q)
   }
@@ -105,10 +105,10 @@ export function DataGrid<T>({ columns, rows, rowKey, storageKey, onRowClick, row
   const textOf = (c: Col<T>, r: T) => c.display ? c.display(r) : c.type === 'date' ? formatDate(c.value(r)) : c.type === 'number' ? formatMoney(c.value(r)) : (c.value(r) ?? '')
 
   const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const needle = fold(q.trim())
     const active = conds.filter(c => colOf(c.col))
     let out = rows.filter(r => {
-      if (needle && !filterable.some(c => textOf(c, r).toLowerCase().includes(needle))) return false
+      if (needle && !filterable.some(c => fold(textOf(c, r)).includes(needle))) return false
       if (active.length === 0) return true
       const test = (c: Cond) => matches(colOf(c.col)!, r, c)
       return mode === 'and' ? active.every(test) : active.some(test)

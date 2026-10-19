@@ -145,3 +145,6 @@ export function compareMoney(a: string | null | undefined, b: string | null | un
   const x = scaled(a), y = scaled(b)
   return x < y ? -1 : x > y ? 1 : 0
 }
+
+/** Bỏ dấu tiếng Việt + chữ thường để tìm "nguyen" ra "Nguyễn" (theo HAK Smart Filter). */
+export const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase()
