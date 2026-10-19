@@ -51,6 +51,10 @@ Trạng thái: `NOT_STARTED` · `DESIGNED` · `IN_PROGRESS` (code + test, thiế
 | CI GitHub Actions (backend SQLite + backend PostgreSQL + frontend, ubuntu) | IN_PROGRESS | | | | Đã sửa 19/10/2026 (trước: windows, không có job PG); **chưa xác nhận chạy xanh trên GitHub** |
 | Môi trường: Rust 1.99 (rustup, người dùng), Git 2.56 portable, PostgreSQL 18.6 portable (127.0.0.1:5433) | — | | | | Rust MSVC cần thêm bộ “Desktop development with C++” của VS Build Tools (cần quyền admin) trước khi build Tauri |
 
+## Kiểm thử tay 19/10/2026 (trình duyệt tự động, dữ liệu thử `dev-seed`, SQLite, Linux)
+
+Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với sổ), sao chép chứng từ, dòng cân đối, tạo → sửa (giữ liên kết hóa đơn) → in phiếu thu, duyệt/ghi sổ hàng loạt (chặn đúng người duyệt ≠ người lập), ghép tay + hủy phân bổ công nợ, biên bản đối chiếu công nợ, kiểm kê kho (lập phiếu xuất thiếu, in biên bản), chi tiết + in phiếu kho, nhập XML hóa đơn (tệp đúng nhập được, tệp lệch tổng bị từ chối), BCĐPS → sổ chi tiết, xuất Excel, in bản chính thức. **Chưa xem bản in ra giấy/PDF; chưa thử trên PostgreSQL và dữ liệu thật; XML dùng tệp tự soạn, chưa phải tệp nhà cung cấp HĐĐT.**
+
 ## Kết quả test gần nhất (chạy thật trên máy này, 14/10/2026)
 
 - `dotnet test`: **256/256 đạt** (84 unit + 172 integration, gồm test API qua HTTP và test ghi sổ đồng thời). PostgreSQL: 143/143 tích hợp đạt (trước khi thêm test cộng dồn).
