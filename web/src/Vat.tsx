@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, get, post, session } from './api'
-import { ErrorBox, useAction } from './common'
+import { ErrorBox, ExportButton, useAction } from './common'
+import { eInvoiceFromXml, type EInvoiceJson } from './einvoicexml'
 import { formatMoney, parseMoney, today } from './money'
 
 const DIFF_VI: Record<string, string> = {
@@ -43,6 +44,9 @@ function Reconciliation() {
         <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
         <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" disabled={busy} onClick={load}>Đối chiếu</button>
+        <ExportButton fileName={`Doi_chieu_GTGT_${from}_${to}`} sheet="Đối chiếu GTGT" disabled={!data}
+          columns={[{ header: 'Loại sai lệch', width: 26 }, { header: 'Hóa đơn / chỉ tiêu', width: 30 }, { header: 'Tiền HĐĐT', numeric: true }, { header: 'Tiền sổ', numeric: true }, { header: 'Thuế HĐĐT', numeric: true }, { header: 'Thuế sổ', numeric: true }, { header: 'Chênh lệch', numeric: true }, { header: 'Hướng xử lý', width: 60 }]}
+          rows={(data?.differences ?? []).map(d => [DIFF_VI[d.type] ?? d.type, d.key, d.eInvoiceAmount, d.booksAmount, d.eInvoiceVat, d.booksVat, d.difference, d.suggestion])} />
       </div>
       <ErrorBox error={error} />
       {sum && <div className="panel">Thuế đầu ra <strong>{formatMoney(sum.outputVat)}</strong> − đầu vào <strong>{formatMoney(sum.inputVat)}</strong> = <strong>{formatMoney(sum.netPayable)}</strong> <span className="muted">· {sum.note}</span></div>}
@@ -74,6 +78,9 @@ function Listing() {
         <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
         <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" disabled={busy} onClick={load}>Xem</button>
+        <ExportButton fileName={`Bang_ke_${direction === 'Input' ? 'vao' : 'ra'}_${from}_${to}`} sheet={direction === 'Input' ? 'Bảng kê vào' : 'Bảng kê ra'} disabled={!rows}
+          columns={[{ header: 'Ký hiệu', width: 12 }, { header: 'Số HĐ', width: 12 }, { header: 'Ngày HĐ' }, { header: 'Ngày hạch toán' }, { header: 'MST', width: 16 }, { header: 'Tên', width: 36 }, { header: 'Thuế suất' }, { header: 'Tiền hàng', numeric: true }, { header: 'Thuế', numeric: true }]}
+          rows={(rows ?? []).flatMap(r => r.byRate.map(b => [r.series, r.invoiceNo, r.invoiceDate, r.postingDate, r.counterpartyTaxCode ?? '', r.counterpartyName, b.rate === 'KCT' ? 'KCT' : b.rate + '%', b.amount, b.vat]))} />
       </div>
       <ErrorBox error={error} />
       {rows && <div className="scroll"><table className="grid">
@@ -85,10 +92,26 @@ function Listing() {
   )
 }
 
+interface XmlRow { file: string; invoice?: EInvoiceJson; errors: string[] }
+
 function ImportEInvoices() {
+  const [direction, setDirection] = useState<'Input' | 'Output'>('Input')
+  const [xmlRows, setXmlRows] = useState<XmlRow[]>([])
+  const pickXml = async (files: FileList | null) => {
+    if (!files) return
+    setXmlRows(await Promise.all([...files].map(async f => ({ file: f.name, ...eInvoiceFromXml(await f.text(), direction) }))))
+  }
   const [text, setText] = useState('')
   const [result, setResult] = useState<{ imported: number; duplicates: number; statusChanges: number; rejected: string[] } | null>(null)
   const { busy, error, setError, run } = useAction()
+  const sendXml = () => run(async () => {
+    const good = xmlRows.filter(r => r.invoice)
+    const res = await fetch('/api/vat/einvoices/import', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.token}`, 'X-Company-Id': session.companyId ?? '' },
+      body: JSON.stringify({ sourceName: `XML ${good.length} tệp: ${good.map(r => r.file).join(', ').slice(0, 200)}`, invoices: good.map(r => ({ ...r.invoice, direction })) }) })
+    const body = await res.json()
+    if (!res.ok) throw new ApiError(res.status, body.code, body.message, body.errors ?? [])
+    setResult(body); setXmlRows([])
+  })
   const send = () => run(async () => {
     try { JSON.parse(text) } catch { setError(new Error('Nội dung không phải JSON hợp lệ.')); return }
     // Send the raw text: the server fingerprints the exact file content to block re-import.
@@ -103,7 +126,25 @@ function ImportEInvoices() {
       {result && <div className={`msg ${result.rejected.length ? 'error' : 'ok'}`}>Đã nhập {result.imported}, trùng {result.duplicates}, đổi trạng thái {result.statusChanges}, từ chối {result.rejected.length}.
         {result.rejected.length > 0 && <ul>{result.rejected.map((r, i) => <li key={i}>{r}</li>)}</ul>}</div>}
       <div className="panel">
-        <p className="muted">Dán JSON theo <code>schemas/e-invoice-import.schema.json</code>: {'{ "sourceName": "...", "invoices": [ { "direction": "Input", "sellerTaxCode": "...", "series": "...", "number": "...", "issueDate": "2026-10-01", "amountBeforeVat": "...", "vatAmount": "...", "totalPayment": "...", "status": "Original", "rates": [...] } ] }'}. Số tiền dạng chuỗi.</p>
+        <strong>Nhập từ tệp XML hóa đơn điện tử</strong>
+        <div className="form-row">
+          <label>Loại hóa đơn<select value={direction} onChange={e => { setDirection(e.target.value as typeof direction); setXmlRows([]) }}><option value="Input">Đầu vào (mua)</option><option value="Output">Đầu ra (bán)</option></select></label>
+          <label>Chọn các tệp .xml<input type="file" accept=".xml,text/xml" multiple onChange={e => pickXml(e.target.files)} /></label>
+        </div>
+        {xmlRows.length > 0 && <>
+          <table className="grid">
+            <thead><tr><th>Tệp</th><th>Ký hiệu/Số</th><th>Ngày</th><th>Người bán</th><th className="num">Tiền hàng</th><th className="num">Thuế</th><th>Tính chất</th><th>Kết quả đọc</th></tr></thead>
+            <tbody>{xmlRows.map((r, i) => <tr key={i}><td>{r.file}</td><td>{r.invoice ? `${r.invoice.series}/${r.invoice.number}` : ''}</td><td>{r.invoice?.issueDate}</td>
+              <td>{r.invoice ? `${r.invoice.sellerTaxCode} – ${r.invoice.sellerName}` : ''}</td><td className="num">{formatMoney(r.invoice?.amountBeforeVat)}</td><td className="num">{formatMoney(r.invoice?.vatAmount)}</td>
+              <td>{r.invoice && ({ Original: 'Gốc', Replacement: 'Thay thế', Adjustment: 'Điều chỉnh' })[r.invoice.status]}</td>
+              <td style={{ whiteSpace: 'normal', color: r.errors.length ? 'var(--danger)' : 'var(--ok)' }}>{r.errors.length ? r.errors.join(' ') : 'Đọc được'}</td></tr>)}</tbody>
+          </table>
+          <button className="primary" style={{ marginTop: 8 }} disabled={busy || !xmlRows.some(r => r.invoice)} onClick={sendXml}>Nhập {xmlRows.filter(r => r.invoice).length} hóa đơn đọc được</button>
+          <p className="muted">Hãy đối chiếu vài dòng với hóa đơn gốc trước khi nhập. Tệp lỗi không được nhập. Định dạng XML chưa được kiểm chứng trên tệp thật của nhà cung cấp HĐĐT của HAK [CẦN XÁC MINH].</p>
+        </>}
+      </div>
+      <div className="panel">
+        <p className="muted">Hoặc dán JSON theo <code>schemas/e-invoice-import.schema.json</code>: {'{ "sourceName": "...", "invoices": [ { "direction": "Input", "sellerTaxCode": "...", "series": "...", "number": "...", "issueDate": "2026-10-01", "amountBeforeVat": "...", "vatAmount": "...", "totalPayment": "...", "status": "Original", "rates": [...] } ] }'}. Số tiền dạng chuỗi.</p>
         <textarea aria-label="Dữ liệu hóa đơn điện tử" rows={12} style={{ width: '100%', fontFamily: 'monospace' }} value={text} onChange={e => setText(e.target.value)} />
         <button className="primary" disabled={busy || !text.trim()} onClick={send}>Nhập</button>
       </div>
