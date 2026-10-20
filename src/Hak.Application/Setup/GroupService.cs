@@ -14,10 +14,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Application.Setup;
 
-public sealed record GroupInput(GroupDomain Domain, string Code, string Name, Guid? ParentId, string? Note = null, decimal? DefaultCreditLimit = null, int? DefaultPaymentTermsDays = null);
-public sealed record GroupRow(Guid Id, GroupDomain Domain, string Code, string Name, Guid? ParentId, int Level, bool IsActive, string? Note, int DirectMembers, int AllMembers, int Children, decimal? DefaultCreditLimit = null, int? DefaultPaymentTermsDays = null);
+public sealed record GroupInput(GroupDomain Domain, string Code, string Name, Guid? ParentId, string? Note = null, decimal? DefaultCreditLimit = null, int? DefaultPaymentTermsDays = null, decimal? DefaultVatRate = null);
+public sealed record GroupRow(Guid Id, GroupDomain Domain, string Code, string Name, Guid? ParentId, int Level, bool IsActive, string? Note, int DirectMembers, int AllMembers, int Children, decimal? DefaultCreditLimit = null, int? DefaultPaymentTermsDays = null, decimal? DefaultVatRate = null);
 public sealed record GroupMemberRow(Guid EntityId, string Code, string Name, IReadOnlyList<Guid> OtherGroupIds);
-public sealed record EntityGroupLink(Guid EntityId, Guid GroupId);
+public sealed record EntityGroupLink(Guid EntityId, Guid GroupId, bool IsPrimary = false);
 public sealed record GroupSummaryColumn(string Key, string Label);
 public sealed record GroupSummaryRow(Guid? GroupId, string Code, string Name, int Level, int Count, IReadOnlyDictionary<string, decimal> Values);
 public sealed record GroupSummary(IReadOnlyList<GroupSummaryColumn> Columns, IReadOnlyList<GroupSummaryRow> Rows, IReadOnlyDictionary<string, decimal> UngroupedValues, int UngroupedCount);
@@ -44,7 +44,8 @@ public sealed class GroupService(HakDbContext db, AuditService audit, IClock clo
             if (await db.CatalogGroups.AnyAsync(g => g.CompanyId == ctx.CompanyId && g.Domain == input.Domain && g.Code == code))
                 throw new DomainException(ErrorCodes.DuplicateCode, $"Mã nhóm {code} đã tồn tại.");
             if (input.ParentId is { } pid) await ParentAsync(ctx, input.Domain, pid, null);
-            var g = new CatalogGroup { Id = Ids.New(), CompanyId = ctx.CompanyId, Domain = input.Domain, Code = code, Name = input.Name.Trim(), ParentId = input.ParentId, Note = input.Note, DefaultCreditLimit = Defaults(input.Domain, input.DefaultCreditLimit, input.DefaultPaymentTermsDays).limit, DefaultPaymentTermsDays = Defaults(input.Domain, input.DefaultCreditLimit, input.DefaultPaymentTermsDays).days, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            var g = new CatalogGroup { Id = Ids.New(), CompanyId = ctx.CompanyId, Domain = input.Domain, Code = code, Name = input.Name.Trim(), ParentId = input.ParentId, Note = input.Note, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            (g.DefaultCreditLimit, g.DefaultPaymentTermsDays, g.DefaultVatRate) = Defaults(input.Domain, input.DefaultCreditLimit, input.DefaultPaymentTermsDays, input.DefaultVatRate);
             db.CatalogGroups.Add(g);
             await audit.AppendAsync(ctx.CompanyId, ctx, "group.create", "catalog_group", g.Id.ToString(), new { input.Domain, code, g.Name, input.ParentId });
             await db.SaveChangesAsync();
@@ -53,7 +54,7 @@ public sealed class GroupService(HakDbContext db, AuditService audit, IClock clo
     }
 
     /// <summary>Đổi tên, nhóm cha (không tạo vòng), ghi chú, ngừng dùng. Mã không đổi sau khi tạo.</summary>
-    public async Task UpdateAsync(SessionContext ctx, Guid id, string name, Guid? parentId, string? note, bool isActive, decimal? defaultCreditLimit = null, int? defaultPaymentTermsDays = null)
+    public async Task UpdateAsync(SessionContext ctx, Guid id, string name, Guid? parentId, string? note, bool isActive, decimal? defaultCreditLimit = null, int? defaultPaymentTermsDays = null, decimal? defaultVatRate = null)
     {
         ctx.Require(Permissions.CatalogManage);
         if (string.IsNullOrWhiteSpace(name)) throw new DomainException(ErrorCodes.ValidationFailed, "Tên nhóm bắt buộc.");
@@ -62,8 +63,8 @@ public sealed class GroupService(HakDbContext db, AuditService audit, IClock clo
             var g = await db.CatalogGroups.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Nhóm không tồn tại.");
             if (parentId is { } pid) await ParentAsync(ctx, g.Domain, pid, g.Id);
             g.Name = name.Trim(); g.ParentId = parentId; g.Note = note; g.IsActive = isActive;
-            (g.DefaultCreditLimit, g.DefaultPaymentTermsDays) = Defaults(g.Domain, defaultCreditLimit, defaultPaymentTermsDays);
-            await audit.AppendAsync(ctx.CompanyId, ctx, "group.update", "catalog_group", g.Id.ToString(), new { g.Code, g.Name, parentId, isActive, g.DefaultCreditLimit, g.DefaultPaymentTermsDays });
+            (g.DefaultCreditLimit, g.DefaultPaymentTermsDays, g.DefaultVatRate) = Defaults(g.Domain, defaultCreditLimit, defaultPaymentTermsDays, defaultVatRate);
+            await audit.AppendAsync(ctx.CompanyId, ctx, "group.update", "catalog_group", g.Id.ToString(), new { g.Code, g.Name, parentId, isActive, g.DefaultCreditLimit, g.DefaultPaymentTermsDays, g.DefaultVatRate });
             await db.SaveChangesAsync();
         });
     }
@@ -83,13 +84,14 @@ public sealed class GroupService(HakDbContext db, AuditService audit, IClock clo
         });
     }
 
-    /// <summary>Mặc định chỉ có nghĩa với nhóm đối tượng; giá trị phải không âm.</summary>
-    private static (decimal? limit, int? days) Defaults(GroupDomain domain, decimal? limit, int? days)
+    /// <summary>Mặc định chỉ có nghĩa theo loại danh mục (đối tượng: hạn mức, hạn thanh toán; vật tư: thuế suất GTGT); giá trị phải không âm.</summary>
+    private static (decimal? limit, int? days, decimal? vat) Defaults(GroupDomain domain, decimal? limit, int? days, decimal? vat)
     {
-        if (limit is null && days is null) return (null, null);
-        if (domain != GroupDomain.Partner) throw new DomainException(ErrorCodes.ValidationFailed, "Hạn mức tín dụng và hạn thanh toán mặc định chỉ khai báo cho nhóm đối tượng.");
-        if (limit is < 0 || days is < 0) throw new DomainException(ErrorCodes.ValidationFailed, "Hạn mức và số ngày hạn thanh toán không được âm.");
-        return (limit, days);
+        if (limit is null && days is null && vat is null) return (null, null, null);
+        if ((limit is not null || days is not null) && domain != GroupDomain.Partner) throw new DomainException(ErrorCodes.ValidationFailed, "Hạn mức tín dụng và hạn thanh toán mặc định chỉ khai báo cho nhóm đối tượng.");
+        if (vat is not null && domain != GroupDomain.Item) throw new DomainException(ErrorCodes.ValidationFailed, "Thuế suất GTGT mặc định chỉ khai báo cho nhóm vật tư.");
+        if (limit is < 0 || days is < 0 || vat is < 0 or > 100) throw new DomainException(ErrorCodes.ValidationFailed, "Giá trị mặc định không hợp lệ (không âm; thuế suất 0–100%).");
+        return (limit, days, vat);
     }
 
     private async Task ParentAsync(SessionContext ctx, GroupDomain domain, Guid parentId, Guid? self)
@@ -114,7 +116,7 @@ public sealed class GroupService(HakDbContext db, AuditService audit, IClock clo
             {
                 var ids = DescendantIds(g.Id, kids);
                 rows.Add(new GroupRow(g.Id, g.Domain, g.Code, g.Name, g.ParentId, level, g.IsActive, g.Note, members.Count(m => m.GroupId == g.Id),
-                    members.Where(m => ids.Contains(m.GroupId)).Select(m => m.EntityId).Distinct().Count(), kids.GetValueOrDefault(g.Id)?.Count ?? 0, g.DefaultCreditLimit, g.DefaultPaymentTermsDays));
+                    members.Where(m => ids.Contains(m.GroupId)).Select(m => m.EntityId).Distinct().Count(), kids.GetValueOrDefault(g.Id)?.Count ?? 0, g.DefaultCreditLimit, g.DefaultPaymentTermsDays, g.DefaultVatRate));
                 Walk(g.Id, level + 1);
             }
         }
@@ -149,6 +151,21 @@ public sealed class GroupService(HakDbContext db, AuditService audit, IClock clo
             foreach (var gid in wanted.Where(g => !current.Any(m => m.GroupId == g)))
                 db.CatalogGroupMembers.Add(new CatalogGroupMember { Id = Ids.New(), CompanyId = ctx.CompanyId, GroupId = gid, EntityId = entityId });
             await audit.AppendAsync(ctx.CompanyId, ctx, "group.assign", "catalog_group", entityId.ToString(), new { domain, groups = wanted.Select(g => groups[g].Code).OrderBy(c => c).ToArray() });
+            await db.SaveChangesAsync();
+        });
+    }
+
+    /// <summary>Chọn nhóm chính của mục (null = bỏ chọn); mặc định theo nhóm lấy từ nhóm chính. Phải là nhóm mục đang thuộc.</summary>
+    public async Task SetPrimaryGroupAsync(SessionContext ctx, GroupDomain domain, Guid entityId, Guid? groupId)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        await db.InTransactionAsync(async () =>
+        {
+            await EnsureEntityAsync(ctx, domain, entityId);
+            var mine = await (from m in db.CatalogGroupMembers join g in db.CatalogGroups on m.GroupId equals g.Id where m.CompanyId == ctx.CompanyId && g.Domain == domain && m.EntityId == entityId select m).ToListAsync();
+            if (groupId is { } gid && mine.All(m => m.GroupId != gid)) throw new DomainException(ErrorCodes.ValidationFailed, "Nhóm chính phải là một nhóm mà mục đang thuộc.");
+            foreach (var m in mine) m.IsPrimary = m.GroupId == groupId;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "group.primary", "catalog_group", entityId.ToString(), new { domain, groupId });
             await db.SaveChangesAsync();
         });
     }
@@ -192,7 +209,7 @@ public sealed class GroupService(HakDbContext db, AuditService audit, IClock clo
     {
         ctx.Require(Permissions.VoucherView);
         return await (from m in db.CatalogGroupMembers join g in db.CatalogGroups on m.GroupId equals g.Id where g.CompanyId == ctx.CompanyId && g.Domain == domain
-                      select new EntityGroupLink(m.EntityId, m.GroupId)).AsNoTracking().ToListAsync();
+                      select new EntityGroupLink(m.EntityId, m.GroupId, m.IsPrimary)).AsNoTracking().ToListAsync();
     }
 
     /// <summary>Thành viên của nhóm (gồm cả nhóm con khi <paramref name="includeDescendants"/>), kèm các nhóm khác mà mục đó thuộc.</summary>

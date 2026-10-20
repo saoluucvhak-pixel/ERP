@@ -3,8 +3,8 @@ import { get, put } from './api'
 import { ErrorBox, Modal, useAction } from './common'
 
 export type GroupDomain = 'Partner' | 'Item' | 'Asset' | 'Warehouse'
-export interface GroupRow { id: string; domain: GroupDomain; code: string; name: string; parentId: string | null; level: number; isActive: boolean; note: string | null; directMembers: number; allMembers: number; children: number; defaultCreditLimit?: string | null; defaultPaymentTermsDays?: number | null }
-export interface GroupLink { entityId: string; groupId: string }
+export interface GroupRow { id: string; domain: GroupDomain; code: string; name: string; parentId: string | null; level: number; isActive: boolean; note: string | null; directMembers: number; allMembers: number; children: number; defaultCreditLimit?: string | null; defaultPaymentTermsDays?: number | null; defaultVatRate?: string | null }
+export interface GroupLink { entityId: string; groupId: string; isPrimary?: boolean }
 export const DOMAIN_VI: Record<GroupDomain, string> = { Partner: 'Đối tượng', Item: 'Vật tư, hàng hóa', Asset: 'Tài sản, CCDC', Warehouse: 'Kho' }
 
 /** Cây nhóm và quan hệ mục – nhóm của một loại danh mục; lọc "thuộc nhóm" tính cả mọi nhóm con. */
@@ -34,16 +34,18 @@ export function useGroups(domain: GroupDomain) {
 export function EntityGroupsButton({ g, domain, entityId, title, onSaved }: { g: ReturnType<typeof useGroups>; domain: GroupDomain; entityId: string; title: string; onSaved?: () => void }) {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [primary, setPrimary] = useState('')
   const { busy, error, run } = useAction()
   const mine = g.groupsOf(entityId)
   return <>
-    <button type="button" onClick={() => { setPicked(new Set(mine.map(x => x.id))); setOpen(true) }} title="Xếp mục này vào các nhóm">{mine.length ? mine.map(x => x.code).join(', ') : 'Nhóm…'}</button>
+    <button type="button" onClick={() => { setPicked(new Set(mine.map(x => x.id))); setPrimary(g.links.find(l => l.entityId === entityId && l.isPrimary)?.groupId ?? ''); setOpen(true) }} title="Xếp mục này vào các nhóm">{mine.length ? mine.map(x => x.code).join(', ') : 'Nhóm…'}</button>
     {open && <Modal title={`Nhóm của ${title}`} onClose={() => setOpen(false)} busy={busy}
-      footer={<><button onClick={() => setOpen(false)}>Đóng</button><button className="primary" disabled={busy} onClick={() => run(async () => { await put(`/groups/${domain}/entity/${entityId}`, { groupIds: [...picked] }); setOpen(false); await g.reload(); onSaved?.() })}>Lưu</button></>}>
+      footer={<><button onClick={() => setOpen(false)}>Đóng</button><button className="primary" disabled={busy} onClick={() => run(async () => { await put(`/groups/${domain}/entity/${entityId}`, { groupIds: [...picked] }); await put(`/groups/${domain}/entity/${entityId}/primary`, { groupId: primary && picked.has(primary) ? primary : null }); setOpen(false); await g.reload(); onSaved?.() })}>Lưu</button></>}>
       <ErrorBox error={error} />
       {g.tree.length === 0 && <p className="muted">Chưa có nhóm nào cho loại danh mục này — tạo ở Danh mục, hệ thống › Nhóm danh mục.</p>}
       {g.tree.map(x => <label key={x.id} className="check" style={{ paddingLeft: 18 * x.level, display: 'block', opacity: x.isActive ? 1 : 0.6 }}>
         <input type="checkbox" checked={picked.has(x.id)} disabled={!x.isActive && !picked.has(x.id)} onChange={e => setPicked(s => { const n = new Set(s); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} /> {x.code} – {x.name}</label>)}
+      {picked.size > 1 && <label style={{ display: 'block', marginTop: 8 }}>Nhóm chính (lấy mặc định theo nhóm)<select value={picked.has(primary) ? primary : ''} onChange={e => setPrimary(e.target.value)}><option value="">— chưa chọn: nhóm sâu nhất, giá trị chặt nhất —</option>{g.tree.filter(x => picked.has(x.id)).map(x => <option key={x.id} value={x.id}>{x.code} – {x.name}</option>)}</select></label>}
       <p className="muted">Một mục thuộc được nhiều nhóm; lọc và báo cáo theo nhóm cha gồm cả các nhóm con.</p>
     </Modal>}
   </>

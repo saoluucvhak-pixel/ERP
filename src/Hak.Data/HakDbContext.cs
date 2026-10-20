@@ -932,6 +932,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<SalesDeliveryLine>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<BusinessPartner>().Property(x => x.CreditLimit).HasConversion(moneyNullable);
         b.Entity<CatalogGroup>().Property(x => x.DefaultCreditLimit).HasConversion(moneyNullable);
+        b.Entity<CatalogGroup>().Property(x => x.DefaultVatRate).HasConversion(moneyNullable);
         b.Entity<BusinessPartner>().Property(x => x.PaymentDiscountPercent).HasConversion(moneyNullable);
         b.Entity<CommercialInvoice>().Property(x => x.PaymentDiscountPercent).HasConversion(moneyNullable);
         b.Entity<Item>().Property(x => x.SalePrice).HasConversion(moneyNullable);

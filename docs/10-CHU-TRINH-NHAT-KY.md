@@ -332,9 +332,9 @@ Mỗi thẻ chọn **phương pháp** (căn cứ pháp lý từng phương pháp
 **Còn dang dở từ các đợt trước:** đề nghị sửa chữa – nâng cấp tài sản, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.
 
 
-## 9z. Đợt 25 (20/10/2026): mặc định theo nhóm cho đối tượng
-Chị giao em đề xuất quy tắc ưu tiên. Nhóm đối tượng khai thêm **hạn mức tín dụng** và **hạn thanh toán (ngày)** mặc định (`CatalogGroup.DefaultCreditLimit/DefaultPaymentTermsDays`); `GroupDefaults.PartnerTermsAsync` quyết định giá trị hiệu lực cho từng chỉ tiêu:
-1. giá trị khai trên chính đối tượng;
-2. nhóm **sâu nhất** có khai giá trị (nhóm con thắng nhóm cha);
-3. cùng độ sâu thì lấy giá trị **chặt nhất** (hạn mức thấp nhất, hạn thanh toán ngắn nhất).
-Nhóm ngừng dùng bị bỏ qua. Áp dụng khi xác nhận đơn bán (kiểm tra tín dụng) và khi lập hóa đơn từ phiếu giao hàng (ngày đến hạn). Chưa làm: mặc định thuế suất / TK / khấu hao theo nhóm vật tư, tài sản (cần chị chốt cùng quy tắc), tiền tố mã theo nhóm. Mã đối tượng: giữ như hiện tại (chỉ khuyến nghị, docs/11).
+## 9z. Đợt 25 (20/10/2026): mặc định theo nhóm (đối tượng, vật tư)
+Chị giao em tham khảo các ERP khác để chọn thứ tự ưu tiên. SAP (nhóm hàng), Odoo (danh mục sản phẩm), ERPNext (Item Group), Dynamics (item group) đều: giá trị khai trên chính mục thắng; nếu không thì lấy từ **một nhóm chính** và **kế thừa lên nhóm cha**. Ở đây một mục thuộc nhiều nhóm nên thêm khái niệm **nhóm chính** (`CatalogGroupMember.IsPrimary`; mục chỉ ở một nhóm thì nhóm đó mặc nhiên là nhóm chính). Thứ tự cho từng chỉ tiêu (`GroupDefaults.ResolveAsync`):
+1. giá trị khai trên chính mục;
+2. nhóm chính của mục; nhóm chính chưa khai thì kế thừa nhóm cha gần nhất có khai;
+3. chưa chọn nhóm chính: mọi nhóm đang dùng (cũng kế thừa nhóm cha), nhóm sâu nhất thắng, cùng độ sâu lấy giá trị **chặt nhất** (hạn mức thấp nhất, hạn thanh toán ngắn nhất, thuế suất cao nhất).
+Nhóm ngừng dùng bị bỏ qua. Mặc định đã có: nhóm đối tượng — hạn mức tín dụng, hạn thanh toán (kiểm tra tín dụng khi xác nhận đơn bán, ngày đến hạn hóa đơn từ phiếu giao hàng); nhóm vật tư — thuế suất GTGT (hóa đơn từ phiếu giao hàng). Chưa làm: mặc định TK, khấu hao theo nhóm tài sản (cần chị chốt TK/vai trò), tiền tố mã theo nhóm. Mã đối tượng: giữ như hiện tại (chỉ khuyến nghị, docs/11).

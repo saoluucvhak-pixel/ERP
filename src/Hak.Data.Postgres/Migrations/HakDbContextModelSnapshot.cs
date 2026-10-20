@@ -2065,6 +2065,11 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("default_payment_terms_days");
 
+                    b.Property<decimal?>("DefaultVatRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("default_vat_rate");
+
                     b.Property<int>("Domain")
                         .HasColumnType("integer")
                         .HasColumnName("domain");
@@ -2117,6 +2122,10 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid")
                         .HasColumnName("group_id");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_primary");
 
                     b.HasKey("Id")
                         .HasName("pk_catalog_group_members");

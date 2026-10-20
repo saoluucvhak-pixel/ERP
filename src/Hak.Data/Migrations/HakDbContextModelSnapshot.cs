@@ -2029,6 +2029,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("default_payment_terms_days");
 
+                    b.Property<long?>("DefaultVatRate")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_vat_rate");
+
                     b.Property<int>("Domain")
                         .HasColumnType("INTEGER")
                         .HasColumnName("domain");
@@ -2081,6 +2085,10 @@ namespace Hak.Data.Migrations
                     b.Property<Guid>("GroupId")
                         .HasColumnType("TEXT")
                         .HasColumnName("group_id");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_primary");
 
                     b.HasKey("Id")
                         .HasName("pk_catalog_group_members");

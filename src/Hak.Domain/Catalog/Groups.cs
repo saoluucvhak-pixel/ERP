@@ -22,6 +22,8 @@ public sealed class CatalogGroup
     /// <summary>Mặc định cho nhóm đối tượng: hạn mức tín dụng (VND) và số ngày hạn thanh toán, dùng khi chính đối tượng chưa khai báo. Xem GroupDefaults.</summary>
     public decimal? DefaultCreditLimit { get; set; }
     public int? DefaultPaymentTermsDays { get; set; }
+    /// <summary>Mặc định cho nhóm vật tư: thuế suất GTGT (%) khi vật tư chưa khai.</summary>
+    public decimal? DefaultVatRate { get; set; }
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
 }
@@ -33,4 +35,6 @@ public sealed class CatalogGroupMember
     public Guid CompanyId { get; set; }
     public Guid GroupId { get; set; }
     public Guid EntityId { get; set; }
+    /// <summary>Nhóm chính của mục (như nhóm hàng / danh mục chính ở SAP, Odoo, ERPNext): mặc định theo nhóm lấy từ nhóm chính. Mục chỉ ở một nhóm thì nhóm đó mặc nhiên là nhóm chính.</summary>
+    public bool IsPrimary { get; set; }
 }

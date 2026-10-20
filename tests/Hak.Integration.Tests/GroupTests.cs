@@ -103,7 +103,13 @@ public class GroupTests
         await svc.SetGroupsOfAsync(h.Admin, GroupDomain.Partner, p.Id, [con.Id, ngCon.Id]);       // cùng độ sâu 1: lấy giá trị chặt nhất
         var t = await GroupDefaults.PartnerTermsAsync(s.Db, h.Admin.CompanyId, p);
         Assert.Equal(150_000_000m, t.CreditLimit);         // min(200tr, 150tr)
-        Assert.Equal(45, t.PaymentTermsDays);              // KV-DN không khai ngày → nhóm Ngành A
+        Assert.Equal(30, t.PaymentTermsDays);              // KV-DN không khai ngày → kế thừa nhóm cha KV (30); min(30, 45)
+        await svc.SetPrimaryGroupAsync(h.Admin, GroupDomain.Partner, p.Id, con.Id);               // nhóm chính thắng, không xét nhóm khác
+        t = await GroupDefaults.PartnerTermsAsync(s.Db, h.Admin.CompanyId, p);
+        Assert.Equal(200_000_000m, t.CreditLimit); Assert.Equal(30, t.PaymentTermsDays);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.SetPrimaryGroupAsync(h.Admin, GroupDomain.Partner, p.Id, nganh.Id)));   // không thuộc nhóm đó
+        await svc.SetPrimaryGroupAsync(h.Admin, GroupDomain.Partner, p.Id, null);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.CreateAsync(h.Admin, new(GroupDomain.Partner, "VAT", "Sai loại", null, null, null, null, 10m))));   // thuế suất chỉ cho nhóm vật tư
         await svc.SetGroupsOfAsync(h.Admin, GroupDomain.Partner, p.Id, [cha.Id, ngCon.Id]);      // nhóm sâu hơn thắng nhóm cha
         t = await GroupDefaults.PartnerTermsAsync(s.Db, h.Admin.CompanyId, p);
         Assert.Equal(150_000_000m, t.CreditLimit); Assert.Equal(45, t.PaymentTermsDays);

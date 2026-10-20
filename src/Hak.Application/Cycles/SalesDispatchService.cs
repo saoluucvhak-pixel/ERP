@@ -208,6 +208,8 @@ public sealed class SalesDispatchService(HakDbContext db, StockService stock, In
         var partner = await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == d.PartnerId);
         var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
 
+        var vatDefaults = new Dictionary<Guid, decimal?>();
+        foreach (var it in items.Values) vatDefaults[it.Id] = (await Hak.Application.Setup.GroupDefaults.ItemVatRateAsync(db, ctx.CompanyId, it)).Value;
         var lines = del.Lines.OrderBy(l => l.LineNo).Select(l =>
         {
             var dl = d.Lines.First(x => x.LineNo == l.DispatchLineNo);
@@ -215,7 +217,7 @@ public sealed class SalesDispatchService(HakDbContext db, StockService stock, In
             var item = items[l.ItemId];
             var price = ol.UnitPrice > 0 ? ol.UnitPrice : item.SalePrice ?? 0;
             if (price <= 0) throw new DomainException(ErrorCodes.ValidationFailed, $"Chưa có giá bán cho {item.Code}: nhập giá ở đơn hàng hoặc danh mục hàng hóa.");
-            return new InvoiceLineInput(price, doc.Id, l.StockLineNo, l.Quantity, ol.Basis, VatRate: ol.VatRate ?? item.DefaultVatRate, OrderId: order.Id, OrderLineNo: ol.LineNo);
+            return new InvoiceLineInput(price, doc.Id, l.StockLineNo, l.Quantity, ol.Basis, VatRate: ol.VatRate ?? vatDefaults[item.Id], OrderId: order.Id, OrderLineNo: ol.LineNo);
         }).ToList();
         DateOnly? due = (await Hak.Application.Setup.GroupDefaults.PartnerTermsAsync(db, ctx.CompanyId, partner)).PaymentTermsDays is { } days ? invoiceDate.AddDays(days) : null;
         return await invoices.CreateAsync(ctx, new InvoiceInput(InvoiceKind.Sales, d.PartnerId, invoiceSeries, invoiceNo, invoiceDate, invoiceDate,
