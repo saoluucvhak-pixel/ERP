@@ -213,7 +213,7 @@ function NewAsset({ accounts, groups, onDone }: { accounts: ReturnType<typeof us
   const [groupId, setGroupId] = useState('')
   const [f, setF] = useState({
     code: '', name: '', class: 'FixedAsset' as 'FixedAsset' | 'Tool', assetAccountId: '', accumulatedAccountId: '', expenseAccountId: '',
-    proration: 'Daily', frequency: 'Monthly', method: 'StraightLine', scheduleEndDate: '', decliningFactor: '', totalUnits: '', unitName: '', residualValue: '0', usefulLifeMonths: '60', inServiceDate: today(), note: '',
+    proration: 'FullMonth', frequency: 'Monthly', method: 'StraightLine', scheduleEndDate: '', decliningFactor: '', totalUnits: '', unitName: '', residualValue: '0', usefulLifeMonths: '60', inServiceDate: today(), note: '',
     takenOver: false, openingAccumulated: '0', remainingLifeMonths: '', scheduleStartDate: '',
   })
   const [candidates, setCandidates] = useState<Candidate[]>([])
