@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, get, post } from './api'
 import { ErrorBox, useAction } from './common'
-import { formatDate, formatDateTime, today } from './money'
+import { formatDate, formatDateTime, parseMoney, today } from './money'
 import { Photos, uploadPhoto } from './Photos'
 import { assetCodeFromScan } from './qr'
 
@@ -110,7 +110,7 @@ function MobileTimesheet() {
         const h = Number(f.hours)
         if (!h || h <= 0 || h > 24) { setError(new Error('Số giờ phải lớn hơn 0 và không quá 24.')); return }
         run(async () => {
-          await post('/service-progress/time', { orderId: sel!.orderId, orderLineNo: sel!.lineNo, workDate: f.date, worker: f.worker, hours: h, note: f.note || null })
+          await post('/service-progress/time', { orderId: sel!.orderId, orderLineNo: sel!.lineNo, workDate: f.date, worker: f.worker, hours: parseMoney(f.hours), note: f.note || null })
           try { localStorage.setItem('hak.worker', f.worker) } catch { /* bỏ qua */ }
           setF({ ...f, hours: '', note: '' }); setInfo('Đã ghi giờ.'); await load()
         })
