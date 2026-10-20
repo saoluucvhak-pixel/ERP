@@ -102,6 +102,7 @@ builder.Services.AddScoped<Hak.Application.Banking.BankAccountService>();
 builder.Services.AddScoped<Hak.Application.Equity.EquityService>();
 builder.Services.AddScoped<Hak.Application.Advances.CashCountService>();
 builder.Services.AddScoped<VatService>();
+builder.Services.AddScoped<VatOffsetService>();
 builder.Services.AddScoped<Hak.Application.Assets.AssetService>();
 builder.Services.AddScoped<Hak.Application.Fx.FxService>();
 builder.Services.AddScoped<Hak.Application.Fx.FxPaymentService>();
