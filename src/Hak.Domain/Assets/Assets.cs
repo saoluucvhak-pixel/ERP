@@ -149,3 +149,47 @@ public static class DepreciationCalculator
     public static DateOnly LastDepreciationDay(DateOnly disposalDate, ProrationPolicy proration)
         => proration == ProrationPolicy.FullMonth ? new DateOnly(disposalDate.Year, disposalDate.Month, 1).AddDays(-1) : disposalDate.AddDays(-1);
 }
+
+/// <summary>
+/// Chia chi phí khấu hao / phân bổ của một thẻ cho nhiều bộ phận hưởng lợi (ví dụ bảo hiểm, tiền thuê nhà xưởng trả trước). Mỗi dòng là một tài khoản chi phí (và nhãn bộ phận) kèm tỷ lệ %;
+/// tổng các dòng đúng 100. Không có dòng nào thì dùng tài khoản chi phí của thẻ. Đổi cách chia chỉ áp dụng cho các kỳ chạy sau; các kỳ đã chạy giữ nguyên (xem <see cref="DepreciationEntrySplit"/>).
+/// </summary>
+public sealed class AssetExpenseSplit
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid AssetId { get; set; }
+    public Guid ExpenseAccountId { get; set; }
+    /// <summary>Tên bộ phận / đối tượng hưởng lợi (hiển thị trên diễn giải bút toán và báo cáo).</summary>
+    public string? Label { get; set; }
+    public decimal Percent { get; set; }
+}
+
+/// <summary>Phần chi phí của một dòng khấu hao / phân bổ chia cho từng tài khoản và bộ phận, ghi lại lúc chạy kỳ. Chỉ thêm, không sửa, không xóa; bị hủy cùng dòng khấu hao cha.</summary>
+public sealed class DepreciationEntrySplit
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid EntryId { get; set; }
+    public Guid ExpenseAccountId { get; set; }
+    public string? Label { get; set; }
+    public decimal Amount { get; set; }
+}
+
+/// <summary>Chia một số tiền theo tỷ lệ phần trăm: mỗi phần làm tròn tới <c>decimals</c> chữ số, phần chênh do làm tròn dồn vào dòng có tỷ lệ lớn nhất (dòng đầu khi bằng nhau) nên tổng luôn đúng số gốc.</summary>
+public static class ExpenseSplitter
+{
+    public static List<(int Index, decimal Amount)> Split(decimal amount, IReadOnlyList<decimal> percents, int decimals)
+    {
+        if (percents.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Chưa có tỷ lệ chia.");
+        if (percents.Sum() != 100m) throw new DomainException(ErrorCodes.ValidationFailed, "Tổng tỷ lệ chia phải đúng 100%.");
+        var parts = percents.Select((p, i) => (Index: i, Amount: MoneyMath.Round(amount * p / 100m, decimals))).ToList();
+        var diff = amount - parts.Sum(x => x.Amount);
+        if (diff != 0)
+        {
+            var big = percents.Select((p, i) => (p, i)).OrderByDescending(x => x.p).ThenBy(x => x.i).First().i;
+            parts[big] = (big, parts[big].Amount + diff);
+        }
+        return parts;
+    }
+}

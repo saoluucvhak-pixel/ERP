@@ -31,6 +31,9 @@ public static class AssetEndpoints
             Results.Ok(await s.ReverseDisposalAsync(await http.SessionAsync(), id, r.Reason)));
         api.MapGet("/cost-candidates", async (HttpContext http, Guid accountId, AssetService s) =>
             Results.Ok(await s.CostCandidatesAsync(await http.SessionAsync(), accountId)));
+        api.MapGet("/{id:guid}/expense-splits", async (HttpContext http, Guid id, AssetService s) => Results.Ok(await s.ExpenseSplitsAsync(await http.SessionAsync(), id)));
+        api.MapPut("/{id:guid}/expense-splits", async (HttpContext http, Guid id, IReadOnlyList<ExpenseSplitInput> r, AssetService s) => Results.Ok(await s.SetExpenseSplitsAsync(await http.SessionAsync(), id, r)));
+        api.MapGet("/expense-allocation", async (HttpContext http, DateOnly from, DateOnly to, AssetService s) => Results.Ok(await s.ExpenseAllocationAsync(await http.SessionAsync(), from, to)));
         api.MapGet("/reconciliation", async (HttpContext http, DateOnly asOf, AssetService s) =>
             Results.Ok(await s.ReconcileAsync(await http.SessionAsync(), asOf)));
 

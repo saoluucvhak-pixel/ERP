@@ -110,6 +110,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<AssetCount> AssetCounts => Set<AssetCount>();
     public DbSet<AssetCountLine> AssetCountLines => Set<AssetCountLine>();
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
+    public DbSet<AssetExpenseSplit> AssetExpenseSplits => Set<AssetExpenseSplit>();
+    public DbSet<DepreciationEntrySplit> DepreciationEntrySplits => Set<DepreciationEntrySplit>();
     public DbSet<FxRevaluationRun> FxRevaluationRuns => Set<FxRevaluationRun>();
     public DbSet<LoanContract> LoanContracts => Set<LoanContract>();
     public DbSet<LoanRate> LoanRates => Set<LoanRate>();
@@ -663,6 +665,19 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.PeriodId }).IsUnique().HasFilter("status = 1");
             e.HasIndex(x => new { x.CompanyId, x.PeriodStart });
         });
+        b.Entity<AssetExpenseSplit>(e =>
+        {
+            e.HasIndex(x => new { x.AssetId, x.ExpenseAccountId, x.Label }).IsUnique();
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<DepreciationEntrySplit>(e =>
+        {
+            e.HasIndex(x => x.EntryId);
+            e.HasIndex(x => new { x.CompanyId, x.ExpenseAccountId });
+            e.HasOne<DepreciationEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<DepreciationEntry>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.AssetId });
@@ -863,6 +878,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<LongTermAsset>().Property(x => x.OpeningAccumulated).HasConversion(money);
         b.Entity<AssetCostSource>().Property(x => x.Amount).HasConversion(money);
         b.Entity<DepreciationEntry>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<AssetExpenseSplit>().Property(x => x.Percent).HasConversion(money);
+        b.Entity<DepreciationEntrySplit>().Property(x => x.Amount).HasConversion(money);
         b.Entity<LoanContract>().Property(x => x.ContractAmount).HasConversion(money);
         b.Entity<LoanScheduleItem>().Property(x => x.PrincipalDue).HasConversion(money);
         b.Entity<LoanScheduleItem>().Property(x => x.InterestDue).HasConversion(money);

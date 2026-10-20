@@ -131,7 +131,7 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                     throw Immutable("Tờ khai đã nộp không được sửa/xóa; lập tờ khai bổ sung theo quy định.");
 
                 case Domain.Assets.LongTermAsset when entry.State == EntityState.Deleted:
-                case Domain.Assets.AssetCostSource when entry.State is EntityState.Modified or EntityState.Deleted:
+                case Domain.Assets.AssetCostSource or Domain.Assets.DepreciationEntrySplit when entry.State is EntityState.Modified or EntityState.Deleted:
                 case Domain.Assets.DepreciationRun or Domain.Assets.DepreciationEntry or Domain.Fx.FxRevaluationRun when entry.State == EntityState.Deleted:
                     throw Immutable("Thẻ tài sản, nguồn nguyên giá và số khấu hao đã ghi không được sửa hoặc xóa.");
 

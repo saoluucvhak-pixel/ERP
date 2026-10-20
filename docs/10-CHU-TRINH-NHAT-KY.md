@@ -259,6 +259,14 @@ Chị chốt: dăm gỗ vẫn theo chu trình bình thường, chỉ khác là t
 - **Mặc định ngày ở mọi màn cũ** cũng đã thống nhất đầu tháng → hôm nay (Doanh thu, Kho, Lương, Nhật ký kiểm toán). **Riêng Báo cáo theo mẫu (B01, B02, B03…) giữ mặc định từ đầu năm đến hôm nay** (báo cáo tài chính xem lũy kế; chị chốt 20/10), kỳ so sánh là cùng kỳ năm trước. Đã quét tự động toàn bộ tab: không còn ô "Từ ngày" nào khác mặc định.
 - **Thiết kế**: quét 45 tab ở 1500px và 390px: không còn tràn ngang. Sửa: nội dung rộng (Hóa đơn, Kho) cuộn trong khung; tab Quy trình xếp dọc trên điện thoại; thẻ Tổng quan và biểu đồ co theo bề rộng.
 
+## 9q. Đợt 16 (20/10/2026): chia chi phí khấu hao, phân bổ trả trước cho nhiều bộ phận
+
+- **Cách chia** (`AssetExpenseSplit`): mỗi thẻ (TSCĐ hoặc CCDC / chi phí trả trước như bảo hiểm, thuê nhà xưởng) có thể khai nhiều dòng "tài khoản chi phí + bộ phận + tỷ lệ %", tổng đúng 100% (tối đa 4 chữ số thập phân, không trùng tài khoản + bộ phận, tài khoản phải là chi tiết, không phải tiền / công nợ / bắt buộc đối tượng). Không khai thì dùng tài khoản chi phí của thẻ. Đặt được khi thẻ Nháp hoặc đang dùng; ghi nhật ký kiểm toán. Màn "Tài sản, CCDC" → nút "Chia chi phí" ở từng thẻ.
+- **Khi chạy kỳ**: số khấu hao / phân bổ của thẻ được ghi Nợ vào từng tài khoản chi phí theo tỷ lệ (một dòng bút toán mỗi phần, diễn giải kèm tên bộ phận), Có vẫn một dòng vào tài khoản trả trước / hao mòn. Làm tròn từng phần theo số lẻ của công ty, **phần chênh dồn vào dòng có tỷ lệ lớn nhất** (bằng nhau thì dòng đầu) nên tổng luôn đúng. Phần phân bổ cuối khi ghi giảm cũng chia theo cách đang đặt. Đổi cách chia chỉ áp dụng cho các kỳ chạy sau; kỳ đã chạy giữ nguyên.
+- **Bất biến**: mỗi dòng khấu hao có bản ghi chia (`DepreciationEntrySplit`) chỉ thêm, không sửa, không xóa (interceptor SQLite + trigger PostgreSQL); hủy kỳ thì bản ghi chia theo dòng cha bị loại khỏi báo cáo.
+- **Báo cáo** "Chi phí khấu hao, phân bổ theo bộ phận": theo tài khoản và bộ phận, lọc khoảng ngày (mặc định đầu tháng → hôm nay; lấy các kỳ khấu hao giao với khoảng ngày).
+- Chưa làm: chia theo đối tượng chi phí / sản phẩm (chiều phân tích đang hoãn), chia theo số lượng (vd diện tích, số người) thay vì tỷ lệ cố định, nhập tỷ lệ theo bộ phận ở danh mục để dùng chung nhiều thẻ.
+
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).

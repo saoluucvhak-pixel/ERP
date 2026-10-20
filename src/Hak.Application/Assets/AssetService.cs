@@ -28,6 +28,12 @@ public sealed record AssetSourceRow(Guid JournalLineId, string VoucherNumber, Da
 
 public sealed record AssetDetail(LongTermAsset Asset, IReadOnlyList<AssetSourceRow> Sources, IReadOnlyList<DepreciationEntry> Entries, IReadOnlyList<AssetScheduleRow> Schedule);
 
+public sealed record ExpenseSplitInput(Guid ExpenseAccountId, string? Label, decimal Percent);
+
+public sealed record ExpenseSplitView(Guid ExpenseAccountId, string AccountCode, string AccountName, string? Label, decimal Percent);
+
+public sealed record ExpenseAllocationRow(Guid ExpenseAccountId, string AccountCode, string AccountName, string? Label, decimal Amount);
+
 public sealed record AssetReconcileRow(Guid AccountId, string AccountCode, string Kind, decimal RegisterBalance, decimal LedgerBalance, decimal Difference);
 
 /// <summary>Posted journal line on an asset account that is not yet (fully) assigned to an asset card.</summary>
@@ -202,6 +208,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
 
             var booked = await BookedAsync(ctx.CompanyId, assets.Select(a => a.Id).ToList());
             var dp = await DecimalsAsync(ctx.CompanyId);
+            var splits = await SplitsByAssetAsync(assets.Select(a => a.Id).ToList());
             var run = new DepreciationRun
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, PeriodId = period.Id, PeriodStart = period.StartDate, PeriodEnd = period.EndDate,
@@ -216,13 +223,18 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
                 var amount = target - booked.GetValueOrDefault(a.Id);
                 if (amount < 0) throw new DomainException(ErrorCodes.AssetCostMismatch, $"Số khấu hao đã ghi của {a.Code} vượt kế hoạch; kiểm tra dữ liệu.");
                 if (amount == 0) continue;
+                var entryId = Ids.New();
                 db.DepreciationEntries.Add(new DepreciationEntry
                 {
-                    Id = Ids.New(), CompanyId = ctx.CompanyId, AssetId = a.Id, RunId = run.Id, PeriodStart = period.StartDate, PeriodEnd = period.EndDate,
+                    Id = entryId, CompanyId = ctx.CompanyId, AssetId = a.Id, RunId = run.Id, PeriodStart = period.StartDate, PeriodEnd = period.EndDate,
                     Amount = amount, CreatedAt = clock.UtcNow,
                 });
                 var label = $"{(a.Class == AssetClass.FixedAsset ? "Khấu hao" : "Phân bổ")} {a.Code} {period.StartDate:MM/yyyy}";
-                gl.Add(new VoucherLineInput(a.ExpenseAccountId, Side.Debit, amount, Description: label));
+                foreach (var part in ExpensePartsFor(a, amount, splits, dp))
+                {
+                    gl.Add(new VoucherLineInput(part.AccountId, Side.Debit, part.Amount, Description: part.Label is null ? label : $"{label} – {part.Label}"));
+                    db.DepreciationEntrySplits.Add(new DepreciationEntrySplit { Id = Ids.New(), CompanyId = ctx.CompanyId, EntryId = entryId, ExpenseAccountId = part.AccountId, Label = part.Label, Amount = part.Amount });
+                }
                 gl.Add(new VoucherLineInput(a.AccumulatedAccountId ?? a.AssetAccountId, Side.Credit, amount, Description: label));
                 result.Add(new { asset = a.Code, amount });
             }
@@ -303,6 +315,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var remaining = asset.OriginalCost - accumulated;
 
             var disposalId = Ids.New();
+            var splits = await SplitsByAssetAsync([asset.Id]);
             if (final > 0)
                 db.DepreciationEntries.Add(new DepreciationEntry
                 {
@@ -313,7 +326,11 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var credit = asset.AccumulatedAccountId ?? asset.AssetAccountId;
             if (final > 0)
             {
-                gl.Add(new VoucherLineInput(asset.ExpenseAccountId, Side.Debit, final, Description: $"Khấu hao tháng ghi giảm {asset.Code}"));
+                foreach (var part in ExpensePartsFor(asset, final, splits, dp))
+                {
+                    gl.Add(new VoucherLineInput(part.AccountId, Side.Debit, part.Amount, Description: part.Label is null ? $"Khấu hao tháng ghi giảm {asset.Code}" : $"Khấu hao tháng ghi giảm {asset.Code} – {part.Label}"));
+                    db.DepreciationEntrySplits.Add(new DepreciationEntrySplit { Id = Ids.New(), CompanyId = ctx.CompanyId, EntryId = disposalId, ExpenseAccountId = part.AccountId, Label = part.Label, Amount = part.Amount });
+                }
                 gl.Add(new VoucherLineInput(credit, Side.Credit, final, Description: $"Khấu hao tháng ghi giảm {asset.Code}"));
             }
             if (asset.Class == AssetClass.FixedAsset)
@@ -492,6 +509,66 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
     }
 
     // ------------------------------------------------------------------ helpers
+
+    // ------------------------------------------------------------------ chia chi phí cho nhiều bộ phận
+
+    /// <summary>Đặt cách chia chi phí khấu hao / phân bổ cho nhiều tài khoản chi phí (bộ phận). Danh sách rỗng = dùng tài khoản chi phí của thẻ. Chỉ áp dụng cho các kỳ chạy sau.</summary>
+    public async Task<IReadOnlyList<ExpenseSplitView>> SetExpenseSplitsAsync(SessionContext ctx, Guid assetId, IReadOnlyList<ExpenseSplitInput> input)
+    {
+        ctx.Require(Permissions.AssetManage);
+        if (input.Count > 0)
+        {
+            if (input.Any(x => x.Percent <= 0 || x.Percent > 100 || !MoneyMath.HasAtMostDecimals(x.Percent, 4))) throw new DomainException(ErrorCodes.ValidationFailed, "Tỷ lệ chia phải lớn hơn 0, không quá 100 và tối đa 4 chữ số thập phân.");
+            if (input.Sum(x => x.Percent) != 100m) throw new DomainException(ErrorCodes.ValidationFailed, $"Tổng tỷ lệ chia phải đúng 100% (hiện {input.Sum(x => x.Percent).Vn()}%).");
+            if (input.GroupBy(x => (x.ExpenseAccountId, Label: string.IsNullOrWhiteSpace(x.Label) ? null : x.Label.Trim().ToLowerInvariant())).Any(g => g.Count() > 1))
+                throw new DomainException(ErrorCodes.ValidationFailed, "Trùng tài khoản chi phí và bộ phận trong danh sách chia.");
+        }
+        return await db.InTransactionAsync(async () =>
+        {
+            var asset = await LoadAsync(ctx, assetId, tracking: false);
+            if (asset.Status is not (AssetStatus.Draft or AssetStatus.Active)) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Tài sản {asset.Code} đã ghi giảm hoặc hủy; không đổi cách chia chi phí.");
+            foreach (var x in input)
+            {
+                var acc = await PostableAccountAsync(ctx, x.ExpenseAccountId);
+                if (acc.CashKind != CashKind.None || acc.OpenItemNature != OpenItemNature.None || acc.RequiresPartner)
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Tài khoản {acc.Code} là tài khoản tiền / công nợ, không dùng làm tài khoản chi phí chia.");
+            }
+            db.AssetExpenseSplits.RemoveRange(await db.AssetExpenseSplits.Where(x => x.AssetId == assetId).ToListAsync());
+            foreach (var x in input)
+                db.AssetExpenseSplits.Add(new AssetExpenseSplit { Id = Ids.New(), CompanyId = ctx.CompanyId, AssetId = assetId, ExpenseAccountId = x.ExpenseAccountId, Label = string.IsNullOrWhiteSpace(x.Label) ? null : x.Label.Trim(), Percent = x.Percent });
+            await audit.AppendAsync(ctx.CompanyId, ctx, "asset.expense_split", "asset", assetId.ToString(), new { asset.Code, splits = input.Select(x => new { x.ExpenseAccountId, x.Label, x.Percent }) });
+            await db.SaveChangesAsync();
+            return await ExpenseSplitsAsync(ctx, assetId);
+        });
+    }
+
+    public async Task<IReadOnlyList<ExpenseSplitView>> ExpenseSplitsAsync(SessionContext ctx, Guid assetId)
+    {
+        ctx.Require(Permissions.ReportView);
+        return await (from x in db.AssetExpenseSplits join a in db.Accounts on x.ExpenseAccountId equals a.Id
+                      where x.AssetId == assetId && x.CompanyId == ctx.CompanyId orderby a.Code, x.Label
+                      select new ExpenseSplitView(x.ExpenseAccountId, a.Code, a.Name, x.Label, x.Percent)).AsNoTracking().ToListAsync();
+    }
+
+    /// <summary>Chi phí khấu hao / phân bổ đã ghi sổ theo tài khoản chi phí và bộ phận trong khoảng ngày (kỳ khấu hao giao với khoảng ngày; không tính các dòng đã hủy).</summary>
+    public async Task<IReadOnlyList<ExpenseAllocationRow>> ExpenseAllocationAsync(SessionContext ctx, DateOnly fromDate, DateOnly toDate)
+    {
+        ctx.Require(Permissions.ReportView);
+        var rows = await (from sp in db.DepreciationEntrySplits join e in db.DepreciationEntries on sp.EntryId equals e.Id join a in db.Accounts on sp.ExpenseAccountId equals a.Id
+                          where sp.CompanyId == ctx.CompanyId && e.VoidedAt == null && e.PeriodEnd >= fromDate && e.PeriodStart <= toDate
+                          select new { sp.ExpenseAccountId, a.Code, a.Name, sp.Label, sp.Amount }).AsNoTracking().ToListAsync();
+        return rows.GroupBy(r => (r.ExpenseAccountId, r.Code, r.Name, r.Label)).OrderBy(g => g.Key.Code, StringComparer.Ordinal).ThenBy(g => g.Key.Label, StringComparer.Ordinal)
+            .Select(g => new ExpenseAllocationRow(g.Key.ExpenseAccountId, g.Key.Code, g.Key.Name, g.Key.Label, g.Sum(r => r.Amount))).ToList();
+    }
+
+    private async Task<Dictionary<Guid, List<AssetExpenseSplit>>> SplitsByAssetAsync(IReadOnlyList<Guid> assetIds)
+        => (await db.AssetExpenseSplits.AsNoTracking().Where(x => assetIds.Contains(x.AssetId)).ToListAsync()).GroupBy(x => x.AssetId).ToDictionary(g => g.Key, g => g.OrderBy(x => x.Id).ToList());
+
+    private static List<(Guid AccountId, string? Label, decimal Amount)> ExpensePartsFor(LongTermAsset a, decimal amount, Dictionary<Guid, List<AssetExpenseSplit>> splits, int dp)
+    {
+        if (!splits.TryGetValue(a.Id, out var list) || list.Count == 0) return [(a.ExpenseAccountId, null, amount)];
+        return ExpenseSplitter.Split(amount, list.Select(x => x.Percent).ToList(), dp).Where(p => p.Amount != 0).Select(p => (list[p.Index].ExpenseAccountId, list[p.Index].Label, p.Amount)).ToList();
+    }
 
     private async Task<LongTermAsset> LoadAsync(SessionContext ctx, Guid id, bool tracking)
     {

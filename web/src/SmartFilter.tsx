@@ -31,19 +31,19 @@ export const isFiltering = (s: FilterState, withDates = false) => !!s.q.trim() |
  * Thanh lọc dùng chung: ô tìm thông minh (không dấu, nhiều từ, "cụm", so sánh tiền như >500tr), danh sách chọn, nút lọc nhanh có số đếm,
  * nút Xóa lọc và bộ đếm kết quả. Việc lọc dữ liệu do màn hình gọi (matchesQuery trong filter.ts).
  */
-export function SmartFilter({ label, state, patch, clear, selects = [], chips = [], shown, total, placeholder, hint, dateLabel }: {
-  dateLabel?: string; label: string; state: FilterState; patch: (p: Partial<FilterState>) => void; clear: () => void
+export function SmartFilter({ label, state, patch, clear, selects = [], chips = [], shown, total, placeholder, hint, dateLabel, noSearch }: {
+  dateLabel?: string; noSearch?: boolean; label: string; state: FilterState; patch: (p: Partial<FilterState>) => void; clear: () => void
   selects?: FilterSelect[]; chips?: FilterChip[]; shown: number; total: number; placeholder?: string; hint?: string
 }) {
   return (
     <div className="smart-filter" role="search" aria-label={label}>
       <div className="sf-row">
-        <label className="sf-search">
+        {!noSearch && <label className="sf-search">
           <span className="sf-icon" aria-hidden>🔎</span>
           <input type="search" aria-label={`Tìm trong ${label.toLowerCase()}`} value={state.q} placeholder={placeholder ?? 'Tìm: nhiều từ, không cần dấu, ví dụ >500tr'}
             title={hint ?? 'Gõ nhiều từ để lọc (không cần dấu); "cụm từ" để khớp nguyên cụm; >500tr, <=2ty, =100k để lọc theo số tiền.'}
             onChange={e => patch({ q: e.target.value })} />
-        </label>
+        </label>}
         {selects.map(s => <label key={s.key} className="sf-select">{s.label}
           <select aria-label={`Lọc theo ${s.label.toLowerCase()}`} value={state.sel[s.key] ?? ''} onChange={e => patch({ sel: { ...state.sel, [s.key]: e.target.value } })}>
             <option value="">Tất cả</option>{s.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}

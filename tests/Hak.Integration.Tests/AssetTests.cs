@@ -181,6 +181,73 @@ public class AssetTests
     }
 
     [Fact]
+    public async Task PrepaidCost_SplitAcrossDepartments_RoundingReportReverseAndDisposal()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        foreach (var code in new[] { "EXP_A", "EXP_B", "EXP_C" }) h.Acc[code] = (await s.Setup.CreateAccountAsync(h.Admin, code, $"Chi phí bộ phận {code} (mã thử)")).Id;
+        var line = await BuyAsync(h, s, "PREPAID", 12_000_000, new(2026, 1, 5));
+        var asset = await ActiveAsync(h, s, new AssetInput("BH001", "Bảo hiểm cháy nổ 12 tháng", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 12,
+            new(2026, 1, 15), [new AssetCostSourceInput(line, 12_000_000)]));
+
+        // Kiểm tra đầu vào: tổng 100%, không trùng, tỷ lệ hợp lệ.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["EXP_A"], "Xưởng 1", 60), new(h.Acc["EXP_B"], "Xưởng 2", 39)])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["EXP_A"], "Xưởng 1", 50), new(h.Acc["EXP_A"], "xưởng 1", 50)])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["EXP_A"], "Xưởng 1", 100), new(h.Acc["EXP_B"], "Xưởng 2", 0)])));
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["AP"], "Công nợ", 50), new(h.Acc["EXP_B"], "Xưởng 2", 50)])));   // TK công nợ không làm TK chi phí
+
+        // Kỳ 1: chia 33,3333 / 33,3333 / 33,3334 → phần lẻ dồn vào dòng lớn nhất, tổng đúng 1.000.000.
+        await s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["EXP_A"], "Kho", 33.3333m), new(h.Acc["EXP_B"], "Xưởng", 33.3333m), new(h.Acc["EXP_C"], "Văn phòng", 33.3334m)]);
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+        Assert.Equal((333_333m, 333_333m, 333_334m, 0m), (await BalanceAsync(s, h.Acc["EXP_A"]), await BalanceAsync(s, h.Acc["EXP_B"]), await BalanceAsync(s, h.Acc["EXP_C"]), await BalanceAsync(s, h.Acc["DEP_EXP"])));
+        Assert.Equal(-1_000_000m + 12_000_000m, await BalanceAsync(s, h.Acc["PREPAID"]));
+
+        // Kỳ 2: đổi cách chia (chỉ áp dụng từ kỳ này); kỳ 1 giữ nguyên.
+        await s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["EXP_A"], "Kho", 50), new(h.Acc["EXP_B"], "Xưởng", 50)]);
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 2));
+        Assert.Equal((833_333m, 833_333m, 333_334m), (await BalanceAsync(s, h.Acc["EXP_A"]), await BalanceAsync(s, h.Acc["EXP_B"]), await BalanceAsync(s, h.Acc["EXP_C"])));
+        var report = await s.Assets.ExpenseAllocationAsync(h.Auditor, new(2026, 1, 1), new(2026, 2, 28));
+        Assert.Equal(2_000_000m, report.Sum(r => r.Amount));
+        Assert.Equal(833_333m, report.Single(r => r.Label == "Kho").Amount);
+        Assert.Equal(333_334m, report.Single(r => r.Label == "Văn phòng").Amount);
+        Assert.Equal(1_000_000m, (await s.Assets.ExpenseAllocationAsync(h.Auditor, new(2026, 2, 1), new(2026, 2, 28))).Sum(r => r.Amount));
+
+        // Hủy kỳ 2: số chia của kỳ 2 không còn trong báo cáo.
+        var run2 = await s.Db.DepreciationRuns.SingleAsync(r => r.PeriodStart == new DateOnly(2026, 2, 1) && r.Status == DepreciationRunStatus.Active);
+        await s.Assets.ReverseRunAsync(h.Approver, run2.Id, "Chạy nhầm kỳ");
+        Assert.Equal(1_000_000m, (await s.Assets.ExpenseAllocationAsync(h.Auditor, new(2026, 1, 1), new(2026, 12, 31))).Sum(r => r.Amount));
+
+        // Chạy lại kỳ 2 theo cách chia đang đặt: kết quả như cũ.
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 2));
+        Assert.Equal((833_333m, 833_333m, 333_334m), (await BalanceAsync(s, h.Acc["EXP_A"]), await BalanceAsync(s, h.Acc["EXP_B"]), await BalanceAsync(s, h.Acc["EXP_C"])));
+        Assert.Equal(2_000_000m, (await s.Assets.ExpenseAllocationAsync(h.Auditor, new(2026, 1, 1), new(2026, 12, 31))).Sum(r => r.Amount));
+    }
+
+    [Fact]
+    public async Task DisposalPartialAllocation_FollowsTheExpenseSplit()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        foreach (var code in new[] { "EXP_A", "EXP_B" }) h.Acc[code] = (await s.Setup.CreateAccountAsync(h.Admin, code, $"Chi phí bộ phận {code} (mã thử)")).Id;
+        var line = await BuyAsync(h, s, "PREPAID", 12_000_000, new(2026, 1, 2));
+        var asset = await ActiveAsync(h, s, new AssetInput("TN001", "Tiền thuê nhà xưởng", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.Daily, 0, 12,
+            new(2026, 1, 1), [new AssetCostSourceInput(line, 12_000_000)]));
+        await s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["EXP_A"], "Xưởng 1", 50), new(h.Acc["EXP_B"], "Xưởng 2", 50)]);
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+        Assert.Equal((500_000m, 500_000m), (await BalanceAsync(s, h.Acc["EXP_A"]), await BalanceAsync(s, h.Acc["EXP_B"])));
+
+        // Ghi giảm 11/02: phân bổ theo ngày đến 10/02 = 1.357.143 lũy kế, phần cuối 357.143 chia 50/50 (phần lẻ dồn vào dòng đầu).
+        await s.Assets.DisposeAsync(h.Approver, asset.Id, new(2026, 2, 11), h.Acc["LOSS"], "Chấm dứt thuê");
+        var a = await BalanceAsync(s, h.Acc["EXP_A"]); var b = await BalanceAsync(s, h.Acc["EXP_B"]);
+        Assert.Equal(1_357_143m, a + b);
+        Assert.Equal(357_143m, (await s.Assets.ExpenseAllocationAsync(h.Auditor, new(2026, 2, 1), new(2026, 2, 28))).Sum(r => r.Amount));
+        Assert.Equal(12_000_000m - 1_357_143m, await BalanceAsync(s, h.Acc["LOSS"]));
+        Assert.Equal(0m, await BalanceAsync(s, h.Acc["PREPAID"]));
+        Assert.Equal(0m, await BalanceAsync(s, h.Acc["DEP_EXP"]));
+    }
+
+    [Fact]
     public async Task FixedAsset_Lifecycle_FullMonth_RunsInOrder_DisposeAndReverse()
     {
         using var h = await HostAsync();

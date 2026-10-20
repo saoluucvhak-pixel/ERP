@@ -232,6 +232,47 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("asset_count_lines");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetExpenseSplit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expense_account_id");
+
+                    b.Property<string>("Label")
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("percent");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_expense_splits");
+
+                    b.HasIndex("ExpenseAccountId")
+                        .HasDatabaseName("ix_asset_expense_splits_expense_account_id");
+
+                    b.HasIndex("AssetId", "ExpenseAccountId", "Label")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asset_expense_splits_asset_id_expense_account_id_label");
+
+                    b.ToTable("asset_expense_splits");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetRepair", b =>
                 {
                     b.Property<Guid>("Id")
@@ -577,6 +618,49 @@ namespace Hak.Data.Postgres.Migrations
                         {
                             t.HasCheckConstraint("ck_depreciation_entries_amount", "amount > 0");
                         });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntrySplit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("EntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entry_id");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expense_account_id");
+
+                    b.Property<string>("Label")
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.HasKey("Id")
+                        .HasName("pk_depreciation_entry_splits");
+
+                    b.HasIndex("EntryId")
+                        .HasDatabaseName("ix_depreciation_entry_splits_entry_id");
+
+                    b.HasIndex("ExpenseAccountId")
+                        .HasDatabaseName("ix_depreciation_entry_splits_expense_account_id");
+
+                    b.HasIndex("CompanyId", "ExpenseAccountId")
+                        .HasDatabaseName("ix_depreciation_entry_splits_company_id_expense_account_id");
+
+                    b.ToTable("depreciation_entry_splits");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.DepreciationRun", b =>
@@ -6869,6 +6953,23 @@ namespace Hak.Data.Postgres.Migrations
                         .HasConstraintName("fk_asset_count_lines_asset_counts_count_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetExpenseSplit", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_expense_splits_long_term_assets_asset_id");
+
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_expense_splits_accounts_expense_account_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetRepair", b =>
                 {
                     b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
@@ -6931,6 +7032,23 @@ namespace Hak.Data.Postgres.Migrations
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_depreciation_entries_depreciation_runs_run_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntrySplit", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.DepreciationEntry", null)
+                        .WithMany()
+                        .HasForeignKey("EntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_depreciation_entry_splits_depreciation_entries_entry_id");
+
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_depreciation_entry_splits_accounts_expense_account_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.LongTermAsset", b =>

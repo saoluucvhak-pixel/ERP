@@ -84,3 +84,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 đợt 15: số hiển thị kiểu 1.234.567,5 (server: VnNumber.Vn(), web: formatMoney); mọi bộ lọc ngày mặc định đầu tháng → hôm nay (SmartFilter dateLabel, monthStart() trong money.ts) — docs/10 mục 9p. Ngày trong bảng còn dạng ISO.
 
 - 20/10 (chị chốt): ngày hiển thị dd/MM/yyyy (web formatDate, server DateOnly.Vn()); Báo cáo theo mẫu mặc định từ đầu năm, các bộ lọc ngày khác đầu tháng → hôm nay.
+
+- 20/10 đợt 16: chia chi phí khấu hao/phân bổ cho nhiều bộ phận (AssetExpenseSplit, ExpenseSplitter, báo cáo theo bộ phận) — docs/10 mục 9q.

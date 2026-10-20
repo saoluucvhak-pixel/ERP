@@ -3,6 +3,7 @@ import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
 import { AssetCyclePanels } from './AssetCycle'
 import { AssetJournal } from './AssetJournal'
+import { ExpenseAllocationReport, ExpenseSplitEditor } from './AssetExpenseSplit'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
@@ -36,6 +37,7 @@ export function AssetsView() {
   const [detail, setDetail] = useState<Detail | null>(null)
   const [f, pf, cf] = useFilterState('assets')
   const [journalId, setJournalId] = useState<string | null>(null)
+  const [splitFor, setSplitFor] = useState<RegisterRow | null>(null)
   const [creating, setCreating] = useState(false)
   const [disposing, setDisposing] = useState<RegisterRow | null>(null)
   const [info, setInfo] = useState('')
@@ -92,6 +94,7 @@ export function AssetsView() {
                 <button disabled={busy} onClick={() => act(() => post(`/assets/${r.id}/activate`), `Đã ghi tăng ${r.code}.`)}>Ghi tăng</button>
                 <button disabled={busy} onClick={() => { const reason = prompt('Lý do hủy thẻ:'); if (reason) act(() => post(`/assets/${r.id}/cancel`, { reason }), `Đã hủy thẻ ${r.code}.`) }}>Hủy</button>
               </>}
+              {(r.status === 'Active' || r.status === 'Draft') && <button disabled={busy} onClick={() => { setSplitFor(r); setDetail(null); setJournalId(null) }}>Chia chi phí</button>}
               {r.status === 'Active' && <button disabled={busy} onClick={() => setDisposing(r)}>Ghi giảm</button>}
               {r.status === 'Disposed' && <button disabled={busy} onClick={() => {
                 const reason = prompt('Lý do hủy ghi giảm:')
@@ -115,6 +118,7 @@ export function AssetsView() {
         }, `Đã ghi giảm ${disposing.code}.`)}
         onCancel={() => setDisposing(null)} />}
 
+      {splitFor && <ExpenseSplitEditor key={splitFor.id} assetId={splitFor.id} assetLabel={`${splitFor.code} – ${splitFor.name}`} accounts={accounts} onClose={() => setSplitFor(null)} />}
       {journalId && <AssetJournal key={journalId} assetId={journalId} onClose={() => setJournalId(null)} />}
 
       {detail && (
@@ -132,6 +136,8 @@ export function AssetsView() {
               <td className="num">{formatMoney(x.cumulative)}</td><td className="num">{x.booked == null ? '' : formatMoney(x.booked)}</td></tr>)}</tbody></table>
         </section>
       )}
+
+      <ExpenseAllocationReport />
 
       <section className="panel">
         <h3>Chạy khấu hao / phân bổ theo kỳ</h3>
