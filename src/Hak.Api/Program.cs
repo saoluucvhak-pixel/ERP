@@ -92,6 +92,12 @@ if (loginLimit > 0)
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new DecimalAsStringConverter()));
 
+// Khóa chủ mã hóa bí mật trong CSDL (khóa trao đổi): Hak:SecretKey (base64 32 byte, nên đặt bằng biến môi trường), hoặc tệp secret.key
+// cạnh thư mục dữ liệu. Phải sao lưu RIÊNG khỏi CSDL; mất khóa chủ thì phải cấp lại khóa trao đổi.
+if (runtime.Environment != "Test" || builder.Configuration["Hak:SecretKey"] is not null)
+    SecretProtector.Configure(SecretProtector.LoadOrCreateKey(builder.Configuration["Hak:SecretKey"],
+        builder.Configuration["Hak:SecretKeyFile"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "secret.key")));
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -99,6 +105,8 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<HakDbContext>();
     HakDb.Migrate(db);
     await scope.ServiceProvider.GetRequiredService<SetupService>().EnsureReferenceDataAsync();
+    var upgraded = await SecretProtector.UpgradeStoredKeysAsync(db);
+    if (upgraded > 0) app.Logger.LogInformation("Đã mã hóa {Count} khóa trao đổi đang lưu dạng thường.", upgraded);
 
     // Local administrator recovery (docs/08 §8): Hak.Api.exe --reset-admin-password <user>; the password is typed twice, never echoed.
     var at = Array.IndexOf(args, "--reset-admin-password");

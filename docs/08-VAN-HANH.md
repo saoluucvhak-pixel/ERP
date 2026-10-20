@@ -44,6 +44,7 @@ Gói **chưa ký số** — Windows SmartScreen có thể cảnh báo. Ký mã b
 | `Hak:BackupPath` | Thư mục bản sao lưu (SQLite) | `%LOCALAPPDATA%\HAK\<môi trường>\backups` |
 | `AllowedHosts` | Tên máy được phép trong header Host, ngăn cách bằng `;` | `localhost;127.0.0.1;[::1]` (nếu cho máy khác truy cập API/giao diện, thêm tên máy: `AllowedHosts=localhost;may-chu`) |
 | `Hak:LoginRateLimitPerMinute` | Số lần gọi đăng nhập / tạo quản trị đầu tiên tối đa mỗi phút trên một IP (quá thì trả 429); `0` = tắt | `30` |
+| `Hak:SecretKey` | Khóa chủ (base64 của 32 byte) mã hóa khóa trao đổi lương/chứng từ trong CSDL; nên đặt bằng biến môi trường `Hak__SecretKey` | Không đặt → tự tạo tệp `secret.key` (`Hak:SecretKeyFile`, mặc định `%LOCALAPPDATA%\HAK\<môi trường>\secret.key`). Môi trường `Test` không mã hóa |
 | `--urls` | Địa chỉ API | Nên giữ `http://127.0.0.1:<cổng>` (chỉ máy này truy cập) |
 
 Mọi phản hồi kèm header bảo mật (CSP, X-Frame-Options, nosniff, Referrer-Policy); ở Production có thêm HSTS khi truy cập qua HTTPS.
@@ -96,6 +97,9 @@ setx Hak__Environment Production
 API trên máy trạm chỉ nghe `127.0.0.1`. Không mở cổng API ra mạng.
 
 ## 5. Sao lưu và khôi phục
+
+### Khóa chủ (secret.key)
+Khóa trao đổi (HMAC) trong CSDL được mã hóa AES-256-GCM bằng khóa chủ nằm **ngoài** CSDL và ngoài bản sao lưu `.hakbk`. Lưu `secret.key` (hoặc giá trị `Hak__SecretKey`) ở nơi an toàn, tách khỏi bản sao lưu CSDL. Mất khóa chủ thì khôi phục CSDL xong phải cấp lại các khóa trao đổi (Lương → Khóa trao đổi). Khi nâng cấp, khóa đang lưu dạng thường tự được mã hóa ở lần khởi động đầu. Chế độ LAN: mỗi máy chạy API cần cùng khóa chủ.
 
 ### SQLite (một máy)
 - **Quản trị → Sao lưu**: tạo bản `.hakbk` (ảnh chụp trực tuyến, không cần dừng phần mềm), mã hóa AES-256-GCM bằng mật khẩu sao lưu ≥ 12 ký tự. **Mất mật khẩu sao lưu là mất bản sao lưu** — lưu mật khẩu tách biệt (két / quản lý mật khẩu).

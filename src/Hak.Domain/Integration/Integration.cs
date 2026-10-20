@@ -29,7 +29,7 @@ public sealed class ExchangePartnerKey
     public Guid CompanyId { get; set; }
     public string SourceSystem { get; set; } = "";
     public string KeyId { get; set; } = "";
-    /// <summary>Base64 secret. TODO(GĐ5): protect with Windows DPAPI at rest.</summary>
+    /// <summary>Base64 secret; "enc1:..." khi đã mã hóa bằng khóa chủ ngoài CSDL (SecretProtector).</summary>
     public string SecretBase64 { get; set; } = "";
     public bool IsActive { get; set; } = true;
 }
