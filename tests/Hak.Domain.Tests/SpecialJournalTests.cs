@@ -19,11 +19,11 @@ public class SpecialJournalTests
     }
 
     [Fact]
-    public void AdvanceSettlementForMaterials_WithCashRefund_IsPurchaseAndReceipt_MainIsPurchases()
+    public void AdvanceSettlementForMaterials_WithCashRefund_IsReceiptAndPurchase_MainIsCashReceipts()
     {
         var t = Touch(VoucherTypes.General, (Inv, Side.Debit), (Cash, Side.Debit), (Adv, Side.Credit));   // hoàn ứng mua vật tư kèm hoàn tiền thừa
-        Assert.Equal([SpecialJournal.Purchases, SpecialJournal.CashReceipts], t);
-        Assert.Equal(SpecialJournal.Purchases, SpecialJournals.Main(t));
+        Assert.Equal([SpecialJournal.CashReceipts, SpecialJournal.Purchases], t);
+        Assert.Equal(SpecialJournal.CashReceipts, SpecialJournals.Main(t));      // ưu tiên tiền mặt
     }
 
     [Fact]

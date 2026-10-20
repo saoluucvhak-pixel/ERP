@@ -30,7 +30,7 @@ export function SpecialJournalsView() {
         <section className="panel">
           <p>Tổng Nhật ký (Nợ): <b>{formatMoney(report.journalTotal)}</b> · Tổng các sổ sau khi loại bút toán trùng: <b>{formatMoney(report.booksTotal)}</b> · {report.balanced ? <b style={{ color: 'var(--accent)' }}>Khớp</b> : <b style={{ color: 'var(--danger, #b42318)' }}>Lệch — cần kiểm tra</b>}
             {' '}· Bút toán trùng: <b>{report.duplicateEntries}</b></p>
-          <p className="muted">Mỗi bút toán chỉ có một sổ chính (ưu tiên bán hàng → mua hàng → thu tiền → chi tiền) và chỉ cộng vào sổ đó; ở sổ khác bút toán vẫn hiện để tra cứu, đánh dấu "trùng" và không cộng — nên Nhật ký chung dồn từ các sổ không bị cộng hai lần.</p>
+          <p className="muted">Mỗi bút toán chỉ có một sổ chính (ưu tiên tiền mặt: thu tiền → chi tiền → bán hàng → mua hàng) và chỉ cộng vào sổ đó; ở sổ khác bút toán vẫn hiện để tra cứu, đánh dấu "trùng" và không cộng — nên Nhật ký chung dồn từ các sổ không bị cộng hai lần.</p>
         </section>
         <div className="toolbar">{report.books.map(b => <button key={b.journal} className={tab === b.journal ? 'primary' : ''} onClick={() => setTab(b.journal)}>{J_VI[b.journal]} ({b.count}{b.duplicateCount ? ` + ${b.duplicateCount} trùng` : ''})</button>)}
           {book && <ExportButton fileName={`${book.name.replace(/ /g, '_')}_${range.from}_${range.to}`} sheet={J_VI[book.journal]} title={book.name} subtitle={`Từ ngày ${formatDate(range.from)} đến ngày ${formatDate(range.to)}`}

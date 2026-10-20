@@ -106,4 +106,4 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 
 - 20/10 đợt 27: báo cáo dịch vụ (ServiceReportService), lịch nghiệm thu theo hợp đồng (ContractServicePlanService), mốc + chấm giờ (ServiceProgressService) — docs/10 mục 9ab.
 
-- 20/10 đợt 28: sổ nhật ký đặc biệt + xử lý bút toán trùng (rút tiền, hoàn ứng mua vật tư: mỗi bút toán một sổ chính, sổ khác đánh dấu trùng không cộng; SpecialJournalService, Domain/Ledger/SpecialJournals.cs) — docs/10 mục 9ac.
+- 20/10 đợt 28: sổ nhật ký đặc biệt + xử lý bút toán trùng (rút tiền, hoàn ứng mua vật tư: mỗi bút toán một sổ chính — chị chốt ưu tiên tiền mặt: thu tiền → chi tiền → bán hàng → mua hàng, sổ khác đánh dấu trùng không cộng; SpecialJournalService, Domain/Ledger/SpecialJournals.cs) — docs/10 mục 9ac.

@@ -1192,16 +1192,16 @@ public class TradeTests
 
         var r = await new SpecialJournalService(s.Db).ReportAsync(h.Auditor, D(3, 1), D(3, 31));
         var b = r.Books.ToDictionary(x => x.Journal);
-        // Mỗi bút toán chỉ cộng một lần: rút tiền ở thu tiền, hoàn ứng ở mua hàng.
+        // Mỗi bút toán chỉ cộng một lần, ưu tiên tiền mặt: rút tiền và hoàn ứng (có hoàn tiền thừa) đều cộng ở thu tiền.
         Assert.Equal((5_000_000m, 1, 0), (b[Hak.Domain.Ledger.SpecialJournal.Sales].Total, b[Hak.Domain.Ledger.SpecialJournal.Sales].Count, b[Hak.Domain.Ledger.SpecialJournal.Sales].DuplicateCount));
-        Assert.Equal((10_000_000m, 1, 0), (b[Hak.Domain.Ledger.SpecialJournal.Purchases].Total, b[Hak.Domain.Ledger.SpecialJournal.Purchases].Count, b[Hak.Domain.Ledger.SpecialJournal.Purchases].DuplicateCount));
-        Assert.Equal((13_000_000m, 2, 1), (b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Total, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Count, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].DuplicateCount));   // rút tiền 10tr + thu khách 3tr; hoàn ứng hiện kèm dấu trùng
+        Assert.Equal((0m, 0, 1), (b[Hak.Domain.Ledger.SpecialJournal.Purchases].Total, b[Hak.Domain.Ledger.SpecialJournal.Purchases].Count, b[Hak.Domain.Ledger.SpecialJournal.Purchases].DuplicateCount));    // hoàn ứng hiện ở mua hàng nhưng trùng
+        Assert.Equal((23_000_000m, 3, 0), (b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Total, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Count, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].DuplicateCount));   // rút tiền 10tr + hoàn ứng 10tr + thu khách 3tr
         Assert.Equal((0m, 0, 1), (b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Total, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Count, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].DuplicateCount));   // rút tiền hiện ở chi tiền nhưng trùng
         Assert.Equal((1_000_000m, 1), (b[Hak.Domain.Ledger.SpecialJournal.General].Total, b[Hak.Domain.Ledger.SpecialJournal.General].Count));
         var dup = b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Entries.Single();
         Assert.True(dup.Duplicate); Assert.Equal(Hak.Domain.Ledger.SpecialJournal.CashReceipts, dup.MainJournal);
         // Đối chiếu: tổng Nhật ký = tổng các sổ sau khi loại bút toán trùng.
         Assert.Equal(29_000_000m, r.JournalTotal);
-        Assert.Equal(r.JournalTotal, r.BooksTotal); Assert.True(r.Balanced); Assert.Equal(2, r.DuplicateEntries);
+        Assert.Equal(r.JournalTotal, r.BooksTotal); Assert.True(r.Balanced); Assert.Equal(2, r.DuplicateEntries);   // 1 ở chi tiền (rút tiền) + 1 ở mua hàng (hoàn ứng)
     }
 }

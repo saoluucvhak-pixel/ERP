@@ -53,7 +53,7 @@ public sealed class SpecialJournalService(HakDbContext db)
                     homes.Where(x => x != j).ToList(), lines));
             entries.Add(perJournal[main].Last());
         }
-        var books = new[] { SpecialJournal.Sales, SpecialJournal.Purchases, SpecialJournal.CashReceipts, SpecialJournal.CashPayments, SpecialJournal.General }
+        var books = new[] { SpecialJournal.CashReceipts, SpecialJournal.CashPayments, SpecialJournal.Sales, SpecialJournal.Purchases, SpecialJournal.General }
             .Select(j => new SpecialJournalBook(j, SpecialJournals.Name(j), perJournal[j], perJournal[j].Where(e => !e.Duplicate).Sum(e => e.Amount), perJournal[j].Count(e => !e.Duplicate), perJournal[j].Count(e => e.Duplicate))).ToList();
         var journalTotal = raw.Where(r => r.Side == Side.Debit).Sum(r => r.Amount);
         var booksTotal = books.Sum(b => b.Total);
