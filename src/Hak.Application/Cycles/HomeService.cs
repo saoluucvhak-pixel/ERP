@@ -21,7 +21,7 @@ public sealed record WorkItem(string Screen, int Count, string Hint);
 /// Việc đang chờ xử lý theo phân hệ: mỗi chu trình tự nhận việc từ khâu trước (ví dụ hóa đơn mua chờ chấp nhận thanh toán, lệnh chi chờ duyệt).
 /// Tính khi xem từ chính chứng từ nguồn, không lưu. Phân hệ nào người dùng không có quyền xem thì bỏ qua, không báo lỗi.
 /// </summary>
-public sealed class HomeService(HakDbContext db, PaymentAcceptanceService acceptances, SalesReportService sales, PayrollPaymentService payroll, ReorderService reorder, LoanScheduleService loans, IClock clock)
+public sealed class HomeService(HakDbContext db, PaymentAcceptanceService acceptances, SalesReportService sales, PayrollPaymentService payroll, ReorderService reorder, LoanScheduleService loans, IClock clock, Hak.Application.Trade.ContractServicePlanService? servicePlans = null)
 {
     public async Task<IReadOnlyList<WorkItem>> WorkQueueAsync(SessionContext ctx)
     {
@@ -50,6 +50,15 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
             var awaiting = (await acceptances.InboxAsync(ctx)).Count(r => r.Stage == "AWAITING_ORDER");
             var low = (await reorder.ListAsync(ctx)).Count;
             return (notAccepted + awaiting + low, Join((notAccepted, "hóa đơn mua chờ chấp nhận thanh toán"), (awaiting, "bàn giao chờ tạo lệnh chi"), (low, "vật tư dưới tồn tối thiểu")));
+        });
+        await Add("services", async () =>
+        {
+            var waiting = await db.ServiceAcceptances.CountAsync(a => a.CompanyId == cid && a.Status == ApprovalStatus.Requested);
+            var live = db.ServiceAcceptances.Where(a => a.CompanyId == cid && (a.Status == ApprovalStatus.Requested || a.Status == ApprovalStatus.Approved)).Select(a => a.Id);
+            var lateMilestones = await db.ServiceMilestones.CountAsync(m => m.CompanyId == cid && m.DueDate < today && (m.AcceptanceId == null || !live.Contains(m.AcceptanceId.Value)));
+            var latePlans = servicePlans is null ? 0 : (await servicePlans.OverdueAsync(ctx, null, today)).Count;
+            var n = waiting + lateMilestones + latePlans;
+            return (n, Join((waiting, "biên bản nghiệm thu dịch vụ chờ xác nhận"), (lateMilestones, "mốc dịch vụ quá hạn"), (latePlans, "đợt nghiệm thu theo hợp đồng quá hạn")));
         });
         await Add("trade", async () => { var n = await db.CommercialInvoices.CountAsync(i => i.CompanyId == cid && i.Status == InvoiceStatus.Draft); return (n, $"{n} hóa đơn nháp chờ ghi sổ"); });
         await Add("stock", async () => { var n = await db.StockDocuments.CountAsync(d => d.CompanyId == cid && d.Status == StockDocumentStatus.Draft); return (n, $"{n} phiếu kho nháp chờ ghi sổ"); });

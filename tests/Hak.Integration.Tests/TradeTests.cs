@@ -645,7 +645,7 @@ public class TradeTests
         using var fx = await SetupAsync();
         var (h, s) = (fx.H, fx.S);
         var home = new Hak.Application.Cycles.HomeService(s.Db, s.PaymentAcceptances, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement),
-            new Hak.Application.Cycles.PayrollPaymentService(s.Db, s.Settlement, s.PaymentOrders, s.Audit), new Hak.Application.Cycles.ReorderService(s.Db), new Hak.Application.Loans.LoanScheduleService(s.Db, s.Audit, h.Clock), h.Clock);
+            new Hak.Application.Cycles.PayrollPaymentService(s.Db, s.Settlement, s.PaymentOrders, s.Audit), new Hak.Application.Cycles.ReorderService(s.Db), new Hak.Application.Loans.LoanScheduleService(s.Db, s.Audit, h.Clock), h.Clock, new ContractServicePlanService(s.Db, s.Audit, h.Clock));
         Assert.Empty(await home.WorkQueueAsync(h.Auditor));
 
         await DraftReceiptAsync(fx, 10, D(3, 2));                                           // 1 phiếu kho nháp
@@ -1134,6 +1134,11 @@ public class TradeTests
         Assert.Equal(["OVERDUE", "PENDING", "PENDING"], ms.Select(m => m.Status).ToArray());
         Assert.Equal(0.3m, ms[0].Quantity);
         var a1 = await prog.CompleteMilestoneAsync(fx.H.Preparer, ms[0].Id, D(3, 10));
+        var (hh, ss) = (fx.H, fx.S);
+        var home = new Hak.Application.Cycles.HomeService(ss.Db, ss.PaymentAcceptances, new Hak.Application.Cycles.SalesReportService(ss.Db, ss.Settlement),
+            new Hak.Application.Cycles.PayrollPaymentService(ss.Db, ss.Settlement, ss.PaymentOrders, ss.Audit), new Hak.Application.Cycles.ReorderService(ss.Db), new Hak.Application.Loans.LoanScheduleService(ss.Db, ss.Audit, hh.Clock), hh.Clock,
+            new ContractServicePlanService(ss.Db, ss.Audit, hh.Clock));
+        Assert.Contains("1 biên bản nghiệm thu dịch vụ chờ xác nhận", (await home.WorkQueueAsync(hh.Auditor)).Single(w => w.Screen == "services").Hint);
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => prog.CompleteMilestoneAsync(fx.H.Preparer, ms[0].Id, D(3, 11))));   // đã hoàn thành
         Assert.Equal("WAITING", (await prog.MilestonesAsync(fx.H.Auditor, order.Id, D(3, 15)))[0].Status);
         await acc.DecideAsync(fx.H.Approver, a1.Id, true, null);

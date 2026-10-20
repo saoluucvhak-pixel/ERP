@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { get, post } from './api'
+import { api, get, post } from './api'
 import { ErrorBox, useAction } from './common'
-import { formatDateTime, today } from './money'
+import { formatDate, formatDateTime, today } from './money'
 import { Photos, uploadPhoto } from './Photos'
 import { assetCodeFromScan } from './qr'
 
@@ -60,6 +60,7 @@ function Home() {
     return () => { stop = true; stream?.getTracks().forEach(t => t.stop()) }
   }, [scanning])
   return (
+    <>
     <section className="panel">
       <h2>Quét mã QR trên máy</h2>
       {canScan ? <>
@@ -69,6 +70,53 @@ function Home() {
       {msg && <div className="msg error">{msg}</div>}
       <label>Hoặc nhập mã tài sản<input value={manual} onChange={e => setManual(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && manual.trim()) go(manual) }} placeholder="Ví dụ TSCD-001" autoCapitalize="characters" /></label>
       <button disabled={!manual.trim()} onClick={() => go(manual)}>Mở máy</button>
+    </section>
+    <MobileTimesheet />
+    </>
+  )
+}
+
+interface SvcOrder { id: string; number: string; kind: string; status: string; description: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
+interface SvcItem { id: string; code: string; name: string; unit: string; isService?: boolean }
+interface TimeRow { id: string; orderNumber: string; orderLineNo: number; itemCode: string; workDate: string; worker: string; hours: string; locked: boolean }
+
+/** Chấm giờ dịch vụ nhanh trên điện thoại: chọn dòng dịch vụ của đơn bán đã xác nhận, ghi người thực hiện và số giờ; xem và xóa các dòng chưa chốt. */
+function MobileTimesheet() {
+  const [lines, setLines] = useState<{ key: string; orderId: string; lineNo: number; label: string }[]>([])
+  const [rows, setRows] = useState<TimeRow[]>([])
+  const [f, setF] = useState({ key: '', date: today(), worker: localStorage.getItem('hak.worker') ?? '', hours: '', note: '' })
+  const [info, setInfo] = useState('')
+  const { busy, error, run, setError } = useAction()
+  const load = useCallback(() => run(async () => {
+    const items = await get<SvcItem[]>('/items')
+    const orders = (await get<SvcOrder[]>('/orders?kind=Sales')).filter(o => o.status === 'Confirmed')
+    setLines(orders.flatMap(o => o.lines.filter(l => items.find(i => i.id === l.itemId)?.isService).map(l => { const it = items.find(i => i.id === l.itemId)!; return { key: `${o.id}:${l.lineNo}`, orderId: o.id, lineNo: l.lineNo, label: `${o.number} · ${it.name} (${it.unit})` } })))
+    setRows((await get<TimeRow[]>('/service-progress/time?openOnly=true')).slice(0, 15))
+  }), [run])
+  useEffect(() => { load() }, [load])
+  const sel = lines.find(l => l.key === f.key)
+  if (lines.length === 0) return null
+  return (
+    <section className="panel">
+      <h2>Chấm giờ dịch vụ</h2>
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+      <label>Dịch vụ<select aria-label="Dịch vụ chấm giờ" value={f.key} onChange={e => setF({ ...f, key: e.target.value })}><option value="">— chọn —</option>{lines.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}</select></label>
+      <label>Ngày<input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></label>
+      <label>Người thực hiện<input value={f.worker} onChange={e => setF({ ...f, worker: e.target.value })} /></label>
+      <label>Số giờ<input inputMode="decimal" value={f.hours} onChange={e => setF({ ...f, hours: e.target.value.replace(/[^0-9.]/g, '') })} placeholder="Ví dụ 4 hoặc 1.5" /></label>
+      <label>Ghi chú<input value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></label>
+      <button className="primary" disabled={busy || !sel || !f.worker.trim() || !f.hours} onClick={() => {
+        const h = Number(f.hours)
+        if (!h || h <= 0 || h > 24) { setError(new Error('Số giờ phải lớn hơn 0 và không quá 24.')); return }
+        run(async () => {
+          await post('/service-progress/time', { orderId: sel!.orderId, orderLineNo: sel!.lineNo, workDate: f.date, worker: f.worker, hours: h, note: f.note || null })
+          try { localStorage.setItem('hak.worker', f.worker) } catch { /* bỏ qua */ }
+          setF({ ...f, hours: '', note: '' }); setInfo('Đã ghi giờ.'); await load()
+        })
+      }}>Ghi giờ</button>
+      {rows.length > 0 && <><h3>Giờ chưa chốt gần đây</h3>
+        <ul>{rows.map(r => <li key={r.id}>{formatDate(r.workDate)} · {r.itemCode} · {r.worker} · <b>{r.hours} giờ</b> <button aria-label="Xóa dòng giờ" disabled={busy} onClick={() => run(async () => { await api('DELETE', `/service-progress/time/${r.id}`); await load() })}>✕</button></li>)}</ul></>}
     </section>
   )
 }
