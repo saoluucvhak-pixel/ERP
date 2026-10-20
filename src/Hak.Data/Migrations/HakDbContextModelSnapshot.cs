@@ -544,6 +544,50 @@ namespace Hak.Data.Migrations
                     b.ToTable("asset_requests");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetUsage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("PeriodId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("period_id");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quantity");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid>("RecordedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("recorded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_usages");
+
+                    b.HasIndex("PeriodId")
+                        .HasDatabaseName("ix_asset_usages_period_id");
+
+                    b.HasIndex("AssetId", "PeriodId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asset_usages_asset_id_period_id");
+
+                    b.ToTable("asset_usages");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -757,6 +801,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
+                    b.Property<long?>("DecliningFactor")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("declining_factor");
+
                     b.Property<DateOnly?>("DisposalDate")
                         .HasColumnType("TEXT")
                         .HasColumnName("disposal_date");
@@ -812,6 +860,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("row_version");
 
+                    b.Property<DateOnly?>("ScheduleEndDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("schedule_end_date");
+
                     b.Property<DateOnly>("ScheduleStartDate")
                         .HasColumnType("TEXT")
                         .HasColumnName("schedule_start_date");
@@ -819,6 +871,14 @@ namespace Hak.Data.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER")
                         .HasColumnName("status");
+
+                    b.Property<long?>("TotalUnits")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_units");
+
+                    b.Property<string>("UnitName")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("unit_name");
 
                     b.Property<int>("UsefulLifeMonths")
                         .HasColumnType("INTEGER")
@@ -6896,6 +6956,23 @@ namespace Hak.Data.Migrations
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_asset_requests_long_term_assets_asset_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetUsage", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_usages_long_term_assets_asset_id");
+
+                    b.HasOne("Hak.Domain.Organization.AccountingPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_usages_accounting_periods_period_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntry", b =>

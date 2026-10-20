@@ -558,6 +558,51 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("asset_requests");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Assets.AssetUsage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("PeriodId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("period_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid>("RecordedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recorded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_asset_usages");
+
+                    b.HasIndex("PeriodId")
+                        .HasDatabaseName("ix_asset_usages_period_id");
+
+                    b.HasIndex("AssetId", "PeriodId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asset_usages_asset_id_period_id");
+
+                    b.ToTable("asset_usages");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -773,6 +818,11 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<decimal?>("DecliningFactor")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("declining_factor");
+
                     b.Property<DateOnly?>("DisposalDate")
                         .HasColumnType("date")
                         .HasColumnName("disposal_date");
@@ -831,6 +881,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("row_version");
 
+                    b.Property<DateOnly?>("ScheduleEndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("schedule_end_date");
+
                     b.Property<DateOnly>("ScheduleStartDate")
                         .HasColumnType("date")
                         .HasColumnName("schedule_start_date");
@@ -838,6 +892,15 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer")
                         .HasColumnName("status");
+
+                    b.Property<decimal?>("TotalUnits")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("total_units");
+
+                    b.Property<string>("UnitName")
+                        .HasColumnType("text")
+                        .HasColumnName("unit_name");
 
                     b.Property<int>("UsefulLifeMonths")
                         .HasColumnType("integer")
@@ -7020,6 +7083,23 @@ namespace Hak.Data.Postgres.Migrations
                         .HasForeignKey("AssetId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_asset_requests_long_term_assets_asset_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Assets.AssetUsage", b =>
+                {
+                    b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_usages_long_term_assets_asset_id");
+
+                    b.HasOne("Hak.Domain.Organization.AccountingPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_asset_usages_accounting_periods_period_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Assets.DepreciationEntry", b =>

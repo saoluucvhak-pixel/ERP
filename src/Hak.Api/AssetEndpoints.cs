@@ -11,6 +11,8 @@ public sealed record RepairIssueRequest(Guid WarehouseId, Guid CounterAccountId,
 public sealed record RepairTestRequest(decimal ActualLaborCost, string? Note);
 public sealed record RepairAcceptRequest(bool Passed, string? Note);
 public sealed record PreventiveScheduleRequest(Guid? Id, Guid AssetId, string TaskName, int FrequencyDays, DateOnly NextDueDate, bool IsActive = true);
+public sealed record AssetUsageRequest(Guid PeriodId, decimal Quantity);
+public sealed record AssetFrequencyRequest(Hak.Domain.Assets.AllocationFrequency Frequency);
 public sealed record AssetAssignRequest(string Department, string? Custodian, string? Location, DateOnly Date, string? Note);
 public sealed record AssetCountCreateRequest(DateOnly Date, string? Note);
 
@@ -33,6 +35,9 @@ public static class AssetEndpoints
             Results.Ok(await s.CostCandidatesAsync(await http.SessionAsync(), accountId)));
         api.MapGet("/{id:guid}/expense-splits", async (HttpContext http, Guid id, AssetService s) => Results.Ok(await s.ExpenseSplitsAsync(await http.SessionAsync(), id)));
         api.MapPut("/{id:guid}/expense-splits", async (HttpContext http, Guid id, IReadOnlyList<ExpenseSplitInput> r, AssetService s) => Results.Ok(await s.SetExpenseSplitsAsync(await http.SessionAsync(), id, r)));
+        api.MapGet("/{id:guid}/usage", async (HttpContext http, Guid id, AssetService s) => Results.Ok(await s.UsageAsync(await http.SessionAsync(), id)));
+        api.MapPut("/{id:guid}/usage", async (HttpContext http, Guid id, AssetUsageRequest r, AssetService s) => Results.Ok(await s.RecordUsageAsync(await http.SessionAsync(), id, r.PeriodId, r.Quantity)));
+        api.MapPut("/{id:guid}/frequency", async (HttpContext http, Guid id, AssetFrequencyRequest r, AssetService s) => { await s.SetFrequencyAsync(await http.SessionAsync(), id, r.Frequency); return Results.NoContent(); });
         api.MapGet("/expense-allocation", async (HttpContext http, DateOnly from, DateOnly to, AssetService s) => Results.Ok(await s.ExpenseAllocationAsync(await http.SessionAsync(), from, to)));
         api.MapGet("/reconciliation", async (HttpContext http, DateOnly asOf, AssetService s) =>
             Results.Ok(await s.ReconcileAsync(await http.SessionAsync(), asOf)));

@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, post, type Period } from './api'
+import { get, post, put, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
 import { AssetCyclePanels } from './AssetCycle'
 import { AssetJournal } from './AssetJournal'
 import { ExpenseAllocationReport, ExpenseSplitEditor } from './AssetExpenseSplit'
+import { AssetUsagePanel } from './AssetUsage'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 
 interface RegisterRow {
+  method?: 'StraightLine' | 'TimeBased' | 'UnitsOfProduction' | 'DecliningBalance'; frequency?: 'Monthly' | 'Quarterly' | 'Yearly'; totalUnits?: string | null; unitName?: string | null; scheduleEndDate?: string | null
   id: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; status: 'Draft' | 'Active' | 'Disposed' | 'Cancelled'
   assetAccountCode: string; inServiceDate: string; scheduleStartDate: string; usefulLifeMonths: number; originalCost: string; accumulated: string; netBookValue: string; disposalDate: string | null
 }
@@ -16,12 +18,14 @@ interface Candidate { journalLineId: string; voucherNumber: string; postingDate:
 interface Run { id: string; periodStart: string; periodEnd: string; status: 'Active' | 'Reversed'; voucherId: string | null }
 interface ReconRow { accountId: string; accountCode: string; kind: string; registerBalance: string; ledgerBalance: string; difference: string }
 interface Detail {
-  asset: { id: string; code: string; name: string; proration: string; allocationFrequency: string; scheduleStartDate: string; openingAccumulated: string; remainingLifeMonths: number | null }
+  asset: { id: string; code: string; name: string; status?: string; method?: string; proration: string; allocationFrequency: string; scheduleStartDate: string; openingAccumulated: string; remainingLifeMonths: number | null }
   sources: { journalLineId: string; voucherNumber: string; postingDate: string; accountCode: string; lineAmount: string; amount: string }[]
   schedule: { periodEnd: string; planned: string; cumulative: string; booked: string | null }[]
 }
 
 const CLASS_VI = { FixedAsset: 'TSCĐ', Tool: 'CCDC' } as const
+const METHOD_VI: Record<string, string> = { StraightLine: 'Đường thẳng', TimeBased: 'Theo thời gian (số ngày)', UnitsOfProduction: 'Theo sản lượng', DecliningBalance: 'Số dư giảm dần' }
+const FREQ_VI: Record<string, string> = { Monthly: 'hàng tháng', Quarterly: 'hàng quý', Yearly: 'hàng năm' }
 const STATUS_VI = { Draft: 'Nháp', Active: 'Đang dùng', Disposed: 'Đã ghi giảm', Cancelled: 'Đã hủy' } as const
 
 /** Amount of a candidate line not yet assigned (exact string arithmetic). */
@@ -79,13 +83,13 @@ export function AssetsView() {
         chips={[{ key: 'active', label: 'Đang dùng', count: rows.filter(assetChips.active).length }, { key: 'fullyDepreciated', label: 'Đã khấu hao hết', count: rows.filter(assetChips.fullyDepreciated).length },
           { key: 'draft', label: 'Chưa ghi tăng', count: rows.filter(assetChips.draft).length }, { key: 'disposed', label: 'Đã ghi giảm', count: rows.filter(assetChips.disposed).length }]} />
       <table className="grid">
-        <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>TK</th><th>Ngày sử dụng</th><th>Tháng</th>
+        <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>TK</th><th>Ngày sử dụng</th><th>Phương pháp, kỳ ghi sổ</th><th>Tháng</th>
           <th className="num">Nguyên giá</th><th className="num">Hao mòn / đã phân bổ</th><th className="num">Còn lại</th><th>Thao tác</th></tr></thead>
         <tbody>{shown.map(r => (
           <tr key={r.id}>
             <td>{r.code}</td><td>{r.name}</td><td>{CLASS_VI[r.class]}</td>
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${formatDate(r.disposalDate)}` : ''}</span></td>
-            <td>{r.assetAccountCode}</td><td>{formatDate(r.inServiceDate)}</td><td>{r.usefulLifeMonths}</td>
+            <td>{r.assetAccountCode}</td><td>{formatDate(r.inServiceDate)}</td><td title={r.method === 'UnitsOfProduction' && r.totalUnits ? `Tổng sản lượng dự kiến ${formatMoney(r.totalUnits)} ${r.unitName ?? ''}` : r.method === 'TimeBased' && r.scheduleEndDate ? `Phân bổ đến ${formatDate(r.scheduleEndDate)}` : undefined}>{METHOD_VI[r.method ?? 'StraightLine']} · {FREQ_VI[r.frequency ?? 'Monthly']}</td><td>{r.method === 'UnitsOfProduction' ? '—' : r.usefulLifeMonths}</td>
             <td className="num">{formatMoney(r.originalCost)}</td><td className="num">{formatMoney(r.accumulated)}</td><td className="num">{formatMoney(r.netBookValue)}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => run(async () => setDetail(await get<Detail>(`/assets/${r.id}`)))}>Chi tiết</button>
@@ -126,6 +130,10 @@ export function AssetsView() {
           <div className="toolbar"><h3>{detail.asset.code} – {detail.asset.name}</h3><button onClick={() => setDetail(null)}>Đóng</button></div>
           <p className="muted">Bắt đầu khấu hao {formatDate(detail.asset.scheduleStartDate)}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}; ghi sổ {({ Monthly: 'hàng tháng', Quarterly: 'hàng quý', Yearly: 'hàng năm' } as Record<string, string>)[detail.asset.allocationFrequency] ?? 'hàng tháng'}
             {detail.asset.remainingLifeMonths ? `; chuyển từ hệ thống cũ: hao mòn đầu ${formatMoney(detail.asset.openingAccumulated)}, còn ${detail.asset.remainingLifeMonths} tháng` : ''}</p>
+          {detail.asset.method !== 'UnitsOfProduction' && ['Active', 'Draft'].includes(detail.asset.status ?? '') && <div className="form-row">
+            <label title="Áp dụng từ lần chạy sau; số phải ghi là lũy kế kế hoạch trừ số đã ghi nên không mất, không trùng">Kỳ ghi sổ khấu hao / phân bổ
+              <select aria-label="Đổi kỳ ghi sổ" value={detail.asset.allocationFrequency} disabled={busy} onChange={e => act(() => put(`/assets/${detail.asset.id}/frequency`, { frequency: e.target.value }), `Đã đổi kỳ ghi sổ của ${detail.asset.code}; áp dụng từ lần chạy sau.`)}>
+                <option value="Monthly">Hàng tháng</option><option value="Quarterly">Hàng quý</option><option value="Yearly">Hàng năm</option></select></label></div>}
           <h4>Nguồn nguyên giá</h4>
           <table className="grid"><thead><tr><th>Chứng từ</th><th>Ngày</th><th>TK</th><th className="num">Dòng bút toán</th><th className="num">Gán cho tài sản</th></tr></thead>
             <tbody>{detail.sources.map(x => <tr key={x.journalLineId}><td>{x.voucherNumber}</td><td>{formatDate(x.postingDate)}</td><td>{x.accountCode}</td>
@@ -136,6 +144,8 @@ export function AssetsView() {
               <td className="num">{formatMoney(x.cumulative)}</td><td className="num">{x.booked == null ? '' : formatMoney(x.booked)}</td></tr>)}</tbody></table>
         </section>
       )}
+
+      <AssetUsagePanel assets={rows.filter(r => r.method === 'UnitsOfProduction' && r.status === 'Active').map(r => ({ id: r.id, code: r.code, name: r.name, unitName: r.unitName ?? null, totalUnits: r.totalUnits ?? null }))} periods={periods} />
 
       <ExpenseAllocationReport />
 
@@ -198,7 +208,7 @@ function Dispose({ row, accounts, busy, onSubmit, onCancel }: {
 function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog>['accounts']; onDone: (msg?: string) => void }) {
   const [f, setF] = useState({
     code: '', name: '', class: 'FixedAsset' as 'FixedAsset' | 'Tool', assetAccountId: '', accumulatedAccountId: '', expenseAccountId: '',
-    proration: 'FullMonth', frequency: 'Monthly', residualValue: '0', usefulLifeMonths: '60', inServiceDate: today(), note: '',
+    proration: 'FullMonth', frequency: 'Monthly', method: 'StraightLine', scheduleEndDate: '', decliningFactor: '', totalUnits: '', unitName: '', residualValue: '0', usefulLifeMonths: '60', inServiceDate: today(), note: '',
     takenOver: false, openingAccumulated: '0', remainingLifeMonths: '', scheduleStartDate: '',
   })
   const [candidates, setCandidates] = useState<Candidate[]>([])
@@ -219,7 +229,10 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
     const a = await post<{ code: string }>('/assets', {
       code: f.code, name: f.name, class: f.class, assetAccountId: f.assetAccountId,
       accumulatedAccountId: f.class === 'FixedAsset' ? f.accumulatedAccountId || null : null, expenseAccountId: f.expenseAccountId,
-      proration: f.proration, frequency: f.frequency, residualValue: money(f.residualValue, 'Giá trị thu hồi'), usefulLifeMonths: Number(f.usefulLifeMonths),
+      proration: f.proration, frequency: f.frequency, residualValue: money(f.residualValue, 'Giá trị thu hồi'), usefulLifeMonths: f.method === 'TimeBased' || f.method === 'UnitsOfProduction' ? (Number(f.usefulLifeMonths) || 1) : Number(f.usefulLifeMonths),
+      method: f.method, scheduleEndDate: f.method === 'TimeBased' ? f.scheduleEndDate || null : null,
+      decliningFactor: f.method === 'DecliningBalance' && f.decliningFactor.trim() ? money(f.decliningFactor, 'Hệ số') : null,
+      totalUnits: f.method === 'UnitsOfProduction' ? money(f.totalUnits, 'Tổng sản lượng dự kiến') : null, unitName: f.method === 'UnitsOfProduction' ? f.unitName || null : null,
       inServiceDate: f.inServiceDate, costSources, note: f.note || null,
       openingAccumulated: f.takenOver ? money(f.openingAccumulated, 'Hao mòn lũy kế đầu') : '0',
       remainingLifeMonths: f.takenOver ? Number(f.remainingLifeMonths) : null,
@@ -235,16 +248,23 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
       <div className="form-grid">
         <label>Mã <input value={f.code} onChange={e => set('code', e.target.value)} /></label>
         <label>Tên <input value={f.name} onChange={e => set('name', e.target.value)} /></label>
-        <label>Loại <select value={f.class} onChange={e => set('class', e.target.value)}><option value="FixedAsset">TSCĐ</option><option value="Tool">CCDC / chi phí trả trước</option></select></label>
+        <label>Loại <select value={f.class} onChange={e => setF(x => ({ ...x, class: e.target.value as 'FixedAsset' | 'Tool', ...(e.target.value === 'Tool' && x.method === 'DecliningBalance' ? { method: 'StraightLine' } : {}) }))}><option value="FixedAsset">TSCĐ</option><option value="Tool">CCDC / chi phí trả trước</option></select></label>
         <label>TK tài sản <AccountSelect accounts={accounts} value={f.assetAccountId} onChange={v => set('assetAccountId', v)} filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK tài sản" /></label>
         {f.class === 'FixedAsset' && <label>TK hao mòn <AccountSelect accounts={accounts} value={f.accumulatedAccountId} onChange={v => set('accumulatedAccountId', v)} ariaLabel="TK hao mòn" /></label>}
         <label>TK chi phí <AccountSelect accounts={accounts} value={f.expenseAccountId} onChange={v => set('expenseAccountId', v)} ariaLabel="TK chi phí" /></label>
         <label>Ngày đưa vào sử dụng <input type="date" value={f.inServiceDate} onChange={e => set('inServiceDate', e.target.value)} /></label>
-        <label>Thời gian sử dụng (tháng) <input inputMode="numeric" value={f.usefulLifeMonths} onChange={e => set('usefulLifeMonths', e.target.value)} /></label>
+        <label>Phương pháp <select aria-label="Phương pháp khấu hao" value={f.method} onChange={e => setF(x => ({ ...x, method: e.target.value, ...(e.target.value === 'UnitsOfProduction' ? { frequency: 'Monthly' } : {}) }))}>
+          <option value="StraightLine">Đường thẳng theo tháng</option><option value="TimeBased">Theo thời gian (số ngày thực tế)</option>
+          <option value="UnitsOfProduction">Theo sản lượng</option>{f.class === 'FixedAsset' && <option value="DecliningBalance">Số dư giảm dần (có điều chỉnh)</option>}</select></label>
+        {(f.method === 'StraightLine' || f.method === 'DecliningBalance') && <label>Thời gian sử dụng (tháng) <input inputMode="numeric" value={f.usefulLifeMonths} onChange={e => set('usefulLifeMonths', e.target.value)} /></label>}
+        {f.method === 'TimeBased' && <label>Phân bổ đến ngày <input type="date" aria-label="Ngày kết thúc phân bổ" value={f.scheduleEndDate} onChange={e => set('scheduleEndDate', e.target.value)} /></label>}
+        {f.method === 'DecliningBalance' && <label title="Để trống: tự chọn theo thời gian sử dụng (≤ 4 năm 1,5; trên 4 đến 6 năm 2,0; trên 6 năm 2,5) [CẦN XÁC MINH]">Hệ số điều chỉnh <input inputMode="decimal" aria-label="Hệ số số dư giảm dần" placeholder="tự động" value={f.decliningFactor} onChange={e => set('decliningFactor', e.target.value)} /></label>}
+        {f.method === 'UnitsOfProduction' && <><label>Tổng sản lượng dự kiến <input inputMode="decimal" aria-label="Tổng sản lượng dự kiến" value={f.totalUnits} onChange={e => set('totalUnits', e.target.value)} /></label>
+          <label>Đơn vị sản lượng <input aria-label="Đơn vị sản lượng" placeholder="tấn, giờ máy, km…" value={f.unitName} onChange={e => set('unitName', e.target.value)} /></label></>}
         <label>Giá trị thu hồi ước tính <input inputMode="decimal" value={f.residualValue} onChange={e => set('residualValue', e.target.value)} /></label>
-        <label>Tính tháng đầu/cuối <select value={f.proration} onChange={e => set('proration', e.target.value)}>
-          <option value="FullMonth">Tròn tháng (tính tháng tăng, không tính tháng giảm)</option><option value="Daily">Theo số ngày sử dụng</option></select></label>
-        <label title="Số phải ghi mỗi kỳ là lũy kế theo kế hoạch trừ số đã ghi, nên ghi theo quý hoặc năm thì dồn đủ các tháng trước đó; thẻ kết thúc giữa quý / năm thì ghi nốt ở tháng kết thúc">Ghi sổ khấu hao / phân bổ <select aria-label="Kỳ ghi sổ" value={f.frequency} onChange={e => set('frequency', e.target.value)}>
+        {(f.method === 'StraightLine' || f.method === 'DecliningBalance') && <label>Tính tháng đầu/cuối <select value={f.proration} onChange={e => set('proration', e.target.value)}>
+          <option value="FullMonth">Tròn tháng (tính tháng tăng, không tính tháng giảm)</option><option value="Daily">Theo số ngày sử dụng</option></select></label>}
+        <label title="Số phải ghi mỗi kỳ là lũy kế theo kế hoạch trừ số đã ghi, nên ghi theo quý hoặc năm thì dồn đủ các tháng trước đó; thẻ kết thúc giữa quý / năm thì ghi nốt ở tháng kết thúc">Ghi sổ khấu hao / phân bổ <select aria-label="Kỳ ghi sổ" value={f.frequency} disabled={f.method === 'UnitsOfProduction'} onChange={e => set('frequency', e.target.value)}>
           <option value="Monthly">Hàng tháng</option><option value="Quarterly">Hàng quý (cuối quý của năm tài chính)</option><option value="Yearly">Hàng năm (cuối năm tài chính)</option></select></label>
         <label><input type="checkbox" checked={f.takenOver} onChange={e => set('takenOver', e.target.checked)} /> Chuyển từ hệ thống cũ (đã khấu hao một phần)</label>
         {f.takenOver && <>

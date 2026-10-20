@@ -74,4 +74,77 @@ public class DepreciationTests
         Assert.True(DepreciationCalculator.IsBookingPeriod(AllocationFrequency.Yearly, s, e, new DateOnly(2027, 1, 31), false));
         Assert.False(DepreciationCalculator.IsBookingPeriod(AllocationFrequency.Yearly, s, e, new DateOnly(2026, 12, 31), false));
     }
+
+    // ---------------------------------------------------------------- các phương pháp khác
+
+    [Fact]
+    public void Declining_FiveYears_Factor2_SwitchesToStraightLineWhenBetter()
+    {
+        var years = DepreciationCalculator.DecliningYears(100_000_000m, 60, 2.0m);
+        Assert.Equal([40_000_000m, 24_000_000m, 14_400_000m, 10_800_000m, 10_800_000m], years.Select(y => y.Amount));
+        Assert.Equal(100_000_000m, years.Sum(y => y.Amount));
+        var start = new DateOnly(2026, 1, 1);
+        decimal T(DateOnly through) => DepreciationCalculator.CumulativeTargetDeclining(100_000_000m, 60, start, through, ProrationPolicy.FullMonth, 2.0m, 0);
+        Assert.Equal(20_000_000m, T(new(2026, 6, 30)));          // nửa năm đầu
+        Assert.Equal(40_000_000m, T(new(2026, 12, 31)));
+        Assert.Equal(64_000_000m, T(new(2027, 12, 31)));
+        Assert.Equal(78_400_000m, T(new(2028, 12, 31)));
+        Assert.Equal(89_200_000m, T(new(2029, 12, 31)));
+        Assert.Equal(100_000_000m, T(new(2030, 12, 31)));
+        Assert.Equal(100_000_000m, T(new(2035, 1, 31)));
+        Assert.Equal(0m, T(new(2025, 12, 31)));
+    }
+
+    [Fact]
+    public void Declining_PartialLastYear_SumsExactlyToBase()
+    {
+        var years = DepreciationCalculator.DecliningYears(90_000_000m, 30, 1.5m);
+        Assert.Equal(6, years[^1].Months);
+        Assert.Equal(90_000_000m, years.Sum(y => y.Amount));
+    }
+
+    [Theory]
+    [InlineData(36, 1.5)]
+    [InlineData(48, 1.5)]
+    [InlineData(60, 2.0)]
+    [InlineData(72, 2.0)]
+    [InlineData(73, 2.5)]
+    public void Declining_DefaultFactorByLife(int months, double expected) => Assert.Equal((decimal)expected, DepreciationCalculator.DefaultDecliningFactor(months));
+
+    [Fact]
+    public void TimeBased_AllocatesByExactDays()
+    {
+        var (s, e) = (new DateOnly(2026, 3, 15), new DateOnly(2027, 3, 14));   // 365 ngày
+        Assert.Equal(1_700_000m, DepreciationCalculator.CumulativeTargetByTime(36_500_000m, s, e, new(2026, 3, 31), 0));   // 17 ngày
+        Assert.Equal(4_700_000m, DepreciationCalculator.CumulativeTargetByTime(36_500_000m, s, e, new(2026, 4, 30), 0));   // 47 ngày
+        Assert.Equal(36_500_000m, DepreciationCalculator.CumulativeTargetByTime(36_500_000m, s, e, new(2027, 3, 14), 0));
+        Assert.Equal(36_500_000m, DepreciationCalculator.CumulativeTargetByTime(36_500_000m, s, e, new(2028, 1, 1), 0));
+        Assert.Equal(0m, DepreciationCalculator.CumulativeTargetByTime(36_500_000m, s, e, new(2026, 3, 14), 0));
+        Assert.Equal(ErrorCodes.ValidationFailed, Assert.Throws<DomainException>(() => DepreciationCalculator.CumulativeTargetByTime(1, e, s, e, 0)).Code);
+    }
+
+    [Fact]
+    public void UnitsOfProduction_FollowsActualOutput()
+    {
+        Assert.Equal(2_500_000m, DepreciationCalculator.CumulativeTargetByUnits(10_000_000m, 1_000m, 250m, 0));
+        Assert.Equal(0m, DepreciationCalculator.CumulativeTargetByUnits(10_000_000m, 1_000m, 0m, 0));
+        Assert.Equal(10_000_000m, DepreciationCalculator.CumulativeTargetByUnits(10_000_000m, 1_000m, 1_000m, 0));
+        Assert.Equal(10_000_000m, DepreciationCalculator.CumulativeTargetByUnits(10_000_000m, 1_000m, 1_200m, 0));
+        Assert.Equal(ErrorCodes.ValidationFailed, Assert.Throws<DomainException>(() => DepreciationCalculator.CumulativeTargetByUnits(1, 0, 1, 0)).Code);
+    }
+
+    [Fact]
+    public void Target_DispatchesByMethod_AndLastDayFollowsMethod()
+    {
+        var a = new LongTermAsset { Code = "T1", OriginalCost = 36_500_000m, Method = DepreciationMethod.TimeBased, ScheduleStartDate = new(2026, 3, 15), ScheduleEndDate = new(2027, 3, 14) };
+        Assert.Equal(1_700_000m, DepreciationCalculator.Target(a, new(2026, 3, 31), 0));
+        Assert.Equal(new DateOnly(2026, 5, 19), DepreciationCalculator.LastDay(a, new(2026, 5, 20)));
+        a.Method = DepreciationMethod.UnitsOfProduction; a.TotalUnits = 100;
+        Assert.Equal(7_300_000m, DepreciationCalculator.Target(a, new(2026, 12, 31), 0, 20m));
+        Assert.Equal(new DateOnly(2026, 4, 30), DepreciationCalculator.LastDay(a, new(2026, 5, 20)));
+        a.Method = DepreciationMethod.DecliningBalance; a.UsefulLifeMonths = 60; a.ScheduleStartDate = new(2026, 1, 1); a.OriginalCost = 100_000_000m;
+        Assert.Equal(40_000_000m, DepreciationCalculator.Target(a, new(2026, 12, 31), 0));
+        a.Method = DepreciationMethod.StraightLine; a.Proration = ProrationPolicy.FullMonth;
+        Assert.Equal(new DateOnly(2026, 4, 30), DepreciationCalculator.LastDay(a, new(2026, 5, 20)));
+    }
 }

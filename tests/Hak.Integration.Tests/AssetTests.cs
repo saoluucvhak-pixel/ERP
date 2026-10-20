@@ -296,6 +296,104 @@ public class AssetTests
     }
 
     [Fact]
+    public async Task Method_TimeBased_ByActualDays_AndDisposal()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var line = await BuyAsync(h, s, "PREPAID", 36_500_000, new(2026, 1, 2));
+        var a = await ActiveAsync(h, s, new AssetInput("BH365", "Bảo hiểm 15/01/2026 – 14/01/2027", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 1,
+            new(2026, 1, 15), [new AssetCostSourceInput(line, 36_500_000)], Method: DepreciationMethod.TimeBased, ScheduleEndDate: new(2027, 1, 14)));
+        Assert.Equal(13, a.UsefulLifeMonths);                                                     // 13 tháng dương lịch phủ khoảng ngày
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.CreateAsync(h.Preparer, new AssetInput("X1", "thiếu ngày kết thúc", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 1,
+            new(2026, 1, 15), [new AssetCostSourceInput(line, 1)], Method: DepreciationMethod.TimeBased))));
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+        Assert.Equal(1_700_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                         // 17 ngày × 100.000
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 2));
+        Assert.Equal(4_500_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                         // + 28 ngày
+        await s.Assets.DisposeAsync(h.Approver, a.Id, new(2026, 3, 10), h.Acc["LOSS"], "Hủy bảo hiểm");
+        Assert.Equal(5_400_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                         // thêm 9 ngày đến hết 09/03
+        Assert.Equal(31_100_000m, await BalanceAsync(s, h.Acc["LOSS"]));
+        Assert.Equal(0m, await BalanceAsync(s, h.Acc["PREPAID"]));
+    }
+
+    [Fact]
+    public async Task Method_DecliningBalance_FiveYears_Factor2()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var line = await BuyAsync(h, s, "FA", 100_000_000, new(2026, 1, 2));
+        var input = FixedAsset(h, "SD001", line, 100_000_000, new(2026, 1, 1), 60) with { Method = DepreciationMethod.DecliningBalance };
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.CreateAsync(h.Preparer, input with { Code = "SD0", Class = AssetClass.Tool, AccumulatedAccountId = null })));   // chỉ TSCĐ
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.CreateAsync(h.Preparer, input with { Code = "SD0", DecliningFactor = 9 })));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.CreateAsync(h.Preparer, input with { Code = "SD0", OpeningAccumulated = 1_000_000, RemainingLifeMonths = 30, ScheduleStartDate = new(2026, 1, 1) })));
+        var a = await ActiveAsync(h, s, input);
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+        Assert.Equal(3_333_333m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                         // 40.000.000 ÷ 12
+        for (var m = 2; m <= 12; m++) await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, m));
+        Assert.Equal(40_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                        // năm 1: 100 triệu × 2 ÷ 5 năm
+        Assert.Equal(-40_000_000m, await BalanceAsync(s, h.Acc["FA_ACC"]));
+        var detail = await s.Assets.DetailAsync(h.Auditor, a.Id);
+        Assert.Equal(64_000_000m, detail.Schedule.First(r => r.PeriodEnd == new DateOnly(2027, 12, 31)).Cumulative);
+        Assert.Equal(100_000_000m, detail.Schedule.Last().Cumulative);
+    }
+
+    [Fact]
+    public async Task Method_UnitsOfProduction_ByActualOutput_PerPeriod()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var line = await BuyAsync(h, s, "FA", 10_000_000, new(2026, 1, 2));
+        var a = await ActiveAsync(h, s, FixedAsset(h, "SL001", line, 10_000_000, new(2026, 1, 1), 1) with { Method = DepreciationMethod.UnitsOfProduction, TotalUnits = 1_000, UnitName = "tấn" });
+        var jan = await PeriodAsync(h, s, 1); var feb = await PeriodAsync(h, s, 2); var mar = await PeriodAsync(h, s, 3);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.RunAsync(h.Approver, jan)));                   // chưa nhập sản lượng
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.RecordUsageAsync(h.Preparer, a.Id, jan, 1_100)));   // vượt tổng dự kiến
+        await s.Assets.RecordUsageAsync(h.Preparer, a.Id, jan, 100);
+        await s.Assets.RunAsync(h.Approver, jan);
+        Assert.Equal(1_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));
+        Assert.Equal(ErrorCodes.PeriodDepreciated, await CodeOf(() => s.Assets.RecordUsageAsync(h.Preparer, a.Id, jan, 120)));   // kỳ đã chạy, không sửa
+        await s.Assets.RecordUsageAsync(h.Preparer, a.Id, feb, 150);
+        await s.Assets.RunAsync(h.Approver, feb);
+        Assert.Equal(2_500_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                                                  // lũy kế 250 ÷ 1.000
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.RecordUsageAsync(h.Preparer, a.Id, mar, 800)));   // 250 + 800 > 1.000
+        // Hủy kỳ 2 → sửa lại sản lượng → chạy lại.
+        var run2 = await s.Db.DepreciationRuns.SingleAsync(r => r.PeriodId == feb && r.Status == DepreciationRunStatus.Active);
+        await s.Assets.ReverseRunAsync(h.Approver, run2.Id, "Sai sản lượng");
+        await s.Assets.RecordUsageAsync(h.Preparer, a.Id, feb, 200);
+        await s.Assets.RunAsync(h.Approver, feb);
+        Assert.Equal(3_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                                                  // lũy kế 300
+        var usage = await s.Assets.UsageAsync(h.Auditor, a.Id);
+        Assert.Equal((300m, 700m, true), (usage[1].Cumulative, usage[1].Remaining ?? 0, usage[1].Locked));
+        // Ghi giảm: giá trị còn lại 7.000.000 chuyển vào TK đã chọn.
+        await s.Assets.DisposeAsync(h.Approver, a.Id, new(2026, 3, 20), h.Acc["LOSS"], "Thanh lý máy");
+        Assert.Equal(7_000_000m, await BalanceAsync(s, h.Acc["LOSS"]));
+        Assert.Equal(0m, await BalanceAsync(s, h.Acc["FA"]));
+    }
+
+    [Fact]
+    public async Task SetFrequency_AfterActivation_CatchesUpWithoutLossOrDuplicate()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var line = await BuyAsync(h, s, "PREPAID", 12_000_000, new(2026, 1, 2));
+        var a = await ActiveAsync(h, s, new AssetInput("F001", "Thuê kho", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 12, new(2026, 1, 1), [new AssetCostSourceInput(line, 12_000_000)]));
+        async Task Run(int m) => await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, m));
+        await Run(1);
+        Assert.Equal(1_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                                        // hàng tháng
+        await s.Assets.SetFrequencyAsync(h.Preparer, a.Id, AllocationFrequency.Quarterly);                          // đổi sau khi ghi tăng và đã chạy
+        await Run(2);
+        Assert.Equal(1_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                                        // tháng 2 chưa đến cuối quý
+        await Run(3);
+        Assert.Equal(3_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                                        // dồn đủ tháng 2 và 3
+        await s.Assets.SetFrequencyAsync(h.Preparer, a.Id, AllocationFrequency.Monthly);
+        await Run(4);
+        Assert.Equal(4_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));
+        Assert.Equal(AllocationFrequency.Monthly, (await s.Assets.DetailAsync(h.Auditor, a.Id)).Asset.AllocationFrequency);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Assets.SetFrequencyAsync(h.Preparer, a.Id, (AllocationFrequency)9)));
+        await s.Assets.DisposeAsync(h.Approver, a.Id, new(2026, 5, 20), h.Acc["LOSS"], "Chấm dứt");
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => s.Assets.SetFrequencyAsync(h.Preparer, a.Id, AllocationFrequency.Yearly)));
+    }
+
+    [Fact]
     public async Task FixedAsset_Lifecycle_FullMonth_RunsInOrder_DisposeAndReverse()
     {
         using var h = await HostAsync();

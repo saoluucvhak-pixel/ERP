@@ -267,13 +267,16 @@ Chị chốt: dăm gỗ vẫn theo chu trình bình thường, chỉ khác là t
 - **Báo cáo** "Chi phí khấu hao, phân bổ theo bộ phận": theo tài khoản và bộ phận, lọc khoảng ngày (mặc định đầu tháng → hôm nay; lấy các kỳ khấu hao giao với khoảng ngày).
 - Chưa làm: chia theo đối tượng chi phí / sản phẩm (chiều phân tích đang hoãn), chia theo số lượng (vd diện tích, số người) thay vì tỷ lệ cố định, nhập tỷ lệ theo bộ phận ở danh mục để dùng chung nhiều thẻ.
 
-## 9r. Đợt 17 (20/10/2026): kỳ ghi sổ khấu hao, phân bổ — hàng tháng, hàng quý, hàng năm
+## 9r. Đợt 17 (20/10/2026): phương pháp khấu hao, phân bổ tùy chọn theo từng thẻ + kỳ ghi sổ tháng, quý, năm
 
-- Mỗi thẻ chọn **kỳ ghi sổ** (`AllocationFrequency`): hàng tháng (mặc định, như trước), hàng quý hoặc hàng năm. Đóng băng khi thẻ đã ghi tăng (interceptor SQLite; trigger PostgreSQL đã cập nhật trong migration Phase9AllocationFrequency). Thẻ cũ giữ hàng tháng.
-- Cách chạy: số phải ghi mỗi kỳ vẫn là lũy kế theo kế hoạch trừ số đã ghi, nên thẻ ghi theo quý chỉ phát sinh bút toán ở **tháng cuối quý của năm tài chính** (dồn đủ 3 tháng), theo năm ở **tháng cuối năm tài chính**; các tháng còn lại lần chạy bỏ qua thẻ đó. Nếu kế hoạch hoàn tất giữa quý / năm (ví dụ thẻ 4 tháng) thì ghi nốt ở tháng hoàn tất. Quý và năm tính theo ngày đầu năm tài chính của công ty, không cứng theo lịch.
-- Ghi giảm giữa quý / năm: phần các tháng chưa ghi đến ngày ghi giảm được ghi nốt khi ghi giảm (cơ chế sẵn có). Chia chi phí theo bộ phận (9q) hoạt động như cũ trên số ghi mỗi kỳ.
-- Màn "Tài sản, CCDC": ô "Ghi sổ khấu hao / phân bổ" khi lập thẻ; chi tiết thẻ hiển thị kỳ ghi sổ; ghi chú ở mục chạy khấu hao.
-- Chưa làm: phân bổ theo số ngày thực tế giữa ngày bắt đầu và kết thúc (hiện tính tháng đầu / cuối theo tháng tròn hoặc theo ngày như trước), theo sản lượng, số dư giảm dần; đổi kỳ ghi sổ sau khi ghi tăng.
+Mỗi thẻ chọn **phương pháp** (căn cứ pháp lý từng phương pháp vẫn [CẦN XÁC MINH]) và **kỳ ghi sổ**. Mọi phương pháp dùng chung cơ chế "số lũy kế theo kế hoạch trừ số đã ghi" nên làm tròn không dồn lại, kỳ trễ tự bù, hủy kỳ và ghi giảm chạy như nhau.
+- **Đường thẳng theo tháng** (như trước; tháng đầu / cuối tròn tháng hoặc theo ngày).
+- **Theo thời gian (số ngày thực tế)**: nhập ngày bắt đầu và "phân bổ đến ngày"; mỗi kỳ = số ngày của kỳ ÷ tổng số ngày (ví dụ bảo hiểm 15/01/2026–14/01/2027: kỳ 1 = 17 ngày). Ghi giảm: phân bổ đến hết ngày trước ngày ghi giảm.
+- **Theo sản lượng**: nhập tổng sản lượng dự kiến và đơn vị; mỗi kỳ **nhập sản lượng thực tế** (bảng "Sản lượng thực tế"; nhập 0 nếu không phát sinh); số lũy kế = nguyên giá × sản lượng lũy kế ÷ tổng. Chưa nhập sản lượng kỳ thì không chạy được; kỳ đã chạy khóa (hủy lần chạy mới sửa lại); lũy kế không vượt tổng dự kiến. Ghi sổ hàng tháng.
+- **Số dư giảm dần có điều chỉnh** (chỉ TSCĐ): mỗi năm = giá trị còn lại đầu năm × (hệ số ÷ số năm); khi mức này nhỏ hơn mức đường thẳng của phần còn lại thì các năm còn lại chia đều. Hệ số để trống = tự chọn theo thời gian sử dụng (≤ 4 năm 1,5; trên 4 đến 6 năm 2,0; trên 6 năm 2,5), sửa được từng thẻ. Ví dụ 100 triệu / 5 năm / hệ số 2: 40; 24; 14,4; 10,8; 10,8 triệu. Chưa hỗ trợ tài sản chuyển từ hệ thống cũ.
+- **Kỳ ghi sổ hàng tháng / hàng quý / hàng năm** (theo năm tài chính): thẻ ghi theo quý chỉ phát sinh bút toán ở tháng cuối quý, theo năm ở tháng cuối năm, dồn đủ các tháng trước; kế hoạch hoàn tất giữa kỳ thì ghi nốt. **Đổi được sau khi ghi tăng** (nút chọn trong chi tiết thẻ): áp dụng từ lần chạy sau, không mất không trùng.
+- Thông số phương pháp (phương pháp, ngày kết thúc, hệ số, tổng sản lượng) đóng băng khi ghi tăng (interceptor SQLite; trigger PostgreSQL cập nhật trong migration Phase9DepreciationMethods; kỳ ghi sổ không còn bị đóng băng). Chia chi phí theo bộ phận (9q) chạy như cũ trên số ghi mỗi kỳ.
+- Chưa làm: số dư giảm dần cho tài sản chuyển từ hệ thống cũ; sản lượng nhập hàng loạt từ file / từ màn sản xuất; đổi phương pháp sau khi ghi tăng; hệ số số dư giảm dần cần đối chiếu văn bản hiện hành.
 
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.

@@ -87,4 +87,4 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 
 - 20/10 đợt 16: chia chi phí khấu hao/phân bổ cho nhiều bộ phận (AssetExpenseSplit, ExpenseSplitter, báo cáo theo bộ phận) — docs/10 mục 9q.
 
-- 20/10 đợt 17: kỳ ghi sổ khấu hao/phân bổ tháng, quý, năm theo năm tài chính (AllocationFrequency, DepreciationCalculator.IsBookingPeriod) — docs/10 mục 9r.
+- 20/10 đợt 17: phương pháp khấu hao/phân bổ tùy chọn từng thẻ (đường thẳng, theo thời gian số ngày, theo sản lượng, số dư giảm dần) + kỳ ghi sổ tháng/quý/năm đổi được sau ghi tăng (DepreciationCalculator.Target/IsBookingPeriod, AssetUsage) — docs/10 mục 9r.
