@@ -9,7 +9,7 @@ import { formatMoney, parseMoney } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
 
-const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', banks: 'Tài khoản ngân hàng', numbering: 'Bộ mã chứng từ', import: 'Nhập từ Excel/CSV' } as const
+const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', approval: 'Quy trình duyệt', banks: 'Tài khoản ngân hàng', numbering: 'Bộ mã chứng từ', import: 'Nhập từ Excel/CSV' } as const
 
 /** Thiết lập công ty: catalogue the modules depend on. Codes are the company's own (legal chart [CẦN XÁC MINH TT99]). */
 export function SetupView() {
@@ -25,6 +25,7 @@ export function SetupView() {
       {tab === 'years' && <Years />}
       {tab === 'banks' && <CompanyBanks />}
       {tab === 'numbering' && <NumberingView />}
+      {tab === 'approval' && <ApprovalPolicy />}
       {tab === 'import' && <ImportData />}
     </>
   )
@@ -374,6 +375,32 @@ function Years() {
         <label>Đến ngày <input type="date" value={y.endDate} onChange={e => setY(x => ({ ...x, endDate: e.target.value }))} /></label>
         <button disabled={busy || !y.code || !y.startDate || !y.endDate} onClick={() => run(async () => { await post('/fiscal-years', y); setInfo(`Đã mở năm tài chính ${y.code}.`); setY({ code: '', startDate: '', endDate: '' }) })}>Mở năm</button>
       </div>
+    </section>
+  )
+}
+
+/** Một người được lập và duyệt, hay bắt buộc hai người khác nhau. Áp dụng cho mọi bước duyệt của công ty. */
+function ApprovalPolicy() {
+  const [distinct, setDistinct] = useState<boolean | null>(null)
+  const [info, setInfo] = useState('')
+  const { busy, error, run } = useAction()
+  const load = useCallback(() => run(async () => setDistinct((await get<{ requireDistinctApprover: boolean }>('/settings/approval')).requireDistinctApprover)), [run])
+  useEffect(() => { load() }, [load])
+  const choose = (v: boolean) => run(async () => { await put('/settings/approval', { requireDistinctApprover: v }); setDistinct(v); setInfo('Đã lưu. Áp dụng ngay cho các thao tác duyệt tiếp theo.') })
+  return (
+    <section className="panel">
+      <h3>Quy trình lập và duyệt</h3>
+      <p className="muted">Chọn cách làm của công ty. Cả hai cách đều được ghi nhật ký kiểm toán và chỉ người có quyền Thiết lập hệ thống mới đổi được.</p>
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+      {distinct !== null && (
+        <div className="form-row" style={{ flexDirection: 'column' }}>
+          <label className="check"><input type="radio" name="approval" disabled={busy} checked={!distinct} onChange={() => choose(false)} />
+            <span><b>Một người lập và duyệt được</b> — phù hợp doanh nghiệp nhỏ, ít nhân sự.</span></label>
+          <label className="check"><input type="radio" name="approval" disabled={busy} checked={distinct} onChange={() => choose(true)} />
+            <span><b>Lập và duyệt do hai người khác nhau</b> — kiểm soát chéo, áp dụng cho chứng từ, hóa đơn, phiếu kho, thẻ tài sản, khế ước vay, đơn hàng, lệnh chi và xác minh mẫu báo cáo.</span></label>
+        </div>
+      )}
     </section>
   )
 }
