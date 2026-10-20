@@ -743,6 +743,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("activated_by");
 
+                    b.Property<int>("AllocationFrequency")
+                        .HasColumnType("integer")
+                        .HasColumnName("allocation_frequency");
+
                     b.Property<Guid>("AssetAccountId")
                         .HasColumnType("uuid")
                         .HasColumnName("asset_account_id");

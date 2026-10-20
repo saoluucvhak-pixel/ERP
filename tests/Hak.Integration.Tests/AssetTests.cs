@@ -248,6 +248,54 @@ public class AssetTests
     }
 
     [Fact]
+    public async Task AllocationFrequency_Quarterly_Yearly_BookOnlyAtBoundary_AndCatchUp()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var l1 = await BuyAsync(h, s, "PREPAID", 12_000_000, new(2026, 1, 2));
+        var quarterly = await ActiveAsync(h, s, new AssetInput("Q001", "Bảo hiểm trả theo quý", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 12,
+            new(2026, 1, 1), [new AssetCostSourceInput(l1, 12_000_000)], Frequency: AllocationFrequency.Quarterly));
+        var l2 = await BuyAsync(h, s, "PREPAID", 4_000_000, new(2026, 1, 3));
+        var short4 = await ActiveAsync(h, s, new AssetInput("Q002", "Công cụ 4 tháng, ghi theo quý", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 4,
+            new(2026, 1, 1), [new AssetCostSourceInput(l2, 4_000_000)], Frequency: AllocationFrequency.Quarterly));
+        var l3 = await BuyAsync(h, s, "PREPAID", 6_000_000, new(2026, 1, 4));
+        var yearly = await ActiveAsync(h, s, new AssetInput("Y001", "Thuê nhà xưởng trả theo năm", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 12,
+            new(2026, 1, 1), [new AssetCostSourceInput(l3, 6_000_000)], Frequency: AllocationFrequency.Yearly));
+
+        async Task<decimal> BookedAsync(Guid id) => (await s.Db.DepreciationEntries.Where(e => e.AssetId == id && e.VoidedAt == null).ToListAsync()).Sum(e => e.Amount);
+        async Task RunMonth(int m) => await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, m));
+
+        await RunMonth(1); await RunMonth(2);
+        Assert.Equal((0m, 0m, 0m), (await BookedAsync(quarterly.Id), await BookedAsync(short4.Id), await BookedAsync(yearly.Id)));   // chưa đến cuối quý / năm
+        await RunMonth(3);
+        Assert.Equal((3_000_000m, 3_000_000m, 0m), (await BookedAsync(quarterly.Id), await BookedAsync(short4.Id), await BookedAsync(yearly.Id)));   // dồn đủ 3 tháng
+        await RunMonth(4);
+        Assert.Equal((3_000_000m, 4_000_000m, 0m), (await BookedAsync(quarterly.Id), await BookedAsync(short4.Id), await BookedAsync(yearly.Id)));   // thẻ 4 tháng hoàn tất giữa quý: ghi nốt
+        for (var m = 5; m <= 11; m++) await RunMonth(m);
+        Assert.Equal((9_000_000m, 4_000_000m, 0m), (await BookedAsync(quarterly.Id), await BookedAsync(short4.Id), await BookedAsync(yearly.Id)));   // quý 2, 3 đã ghi (tháng 6, 9)
+        await RunMonth(12);
+        Assert.Equal((12_000_000m, 4_000_000m, 6_000_000m), (await BookedAsync(quarterly.Id), await BookedAsync(short4.Id), await BookedAsync(yearly.Id)));
+        // Tổng chi phí ghi sổ đúng nguyên giá các thẻ; tài khoản trả trước về 0.
+        Assert.Equal(22_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));
+        Assert.Equal(0m, await BalanceAsync(s, h.Acc["PREPAID"]));
+    }
+
+    [Fact]
+    public async Task AllocationFrequency_DisposalInsideQuarter_BooksTheMissingMonths()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var line = await BuyAsync(h, s, "PREPAID", 12_000_000, new(2026, 1, 2));
+        var a = await ActiveAsync(h, s, new AssetInput("Q003", "Ghi theo quý", AssetClass.Tool, h.Acc["PREPAID"], null, h.Acc["DEP_EXP"], ProrationPolicy.FullMonth, 0, 12,
+            new(2026, 1, 1), [new AssetCostSourceInput(line, 12_000_000)], Frequency: AllocationFrequency.Quarterly));
+        for (var m = 1; m <= 4; m++) await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, m));   // quý 1 đã ghi (3.000.000), tháng 4 chưa đến kỳ ghi
+        await s.Assets.DisposeAsync(h.Approver, a.Id, new(2026, 5, 20), h.Acc["LOSS"], "Chấm dứt");     // tính tròn tháng: đến hết tháng 4
+        Assert.Equal(4_000_000m, await BalanceAsync(s, h.Acc["DEP_EXP"]));                              // 3 tháng quý 1 + tháng 4 ghi nốt khi ghi giảm
+        Assert.Equal(8_000_000m, await BalanceAsync(s, h.Acc["LOSS"]));
+        Assert.Equal(0m, await BalanceAsync(s, h.Acc["PREPAID"]));
+    }
+
+    [Fact]
     public async Task FixedAsset_Lifecycle_FullMonth_RunsInOrder_DisposeAndReverse()
     {
         using var h = await HostAsync();

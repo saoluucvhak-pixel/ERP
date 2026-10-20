@@ -267,6 +267,14 @@ Chị chốt: dăm gỗ vẫn theo chu trình bình thường, chỉ khác là t
 - **Báo cáo** "Chi phí khấu hao, phân bổ theo bộ phận": theo tài khoản và bộ phận, lọc khoảng ngày (mặc định đầu tháng → hôm nay; lấy các kỳ khấu hao giao với khoảng ngày).
 - Chưa làm: chia theo đối tượng chi phí / sản phẩm (chiều phân tích đang hoãn), chia theo số lượng (vd diện tích, số người) thay vì tỷ lệ cố định, nhập tỷ lệ theo bộ phận ở danh mục để dùng chung nhiều thẻ.
 
+## 9r. Đợt 17 (20/10/2026): kỳ ghi sổ khấu hao, phân bổ — hàng tháng, hàng quý, hàng năm
+
+- Mỗi thẻ chọn **kỳ ghi sổ** (`AllocationFrequency`): hàng tháng (mặc định, như trước), hàng quý hoặc hàng năm. Đóng băng khi thẻ đã ghi tăng (interceptor SQLite; trigger PostgreSQL đã cập nhật trong migration Phase9AllocationFrequency). Thẻ cũ giữ hàng tháng.
+- Cách chạy: số phải ghi mỗi kỳ vẫn là lũy kế theo kế hoạch trừ số đã ghi, nên thẻ ghi theo quý chỉ phát sinh bút toán ở **tháng cuối quý của năm tài chính** (dồn đủ 3 tháng), theo năm ở **tháng cuối năm tài chính**; các tháng còn lại lần chạy bỏ qua thẻ đó. Nếu kế hoạch hoàn tất giữa quý / năm (ví dụ thẻ 4 tháng) thì ghi nốt ở tháng hoàn tất. Quý và năm tính theo ngày đầu năm tài chính của công ty, không cứng theo lịch.
+- Ghi giảm giữa quý / năm: phần các tháng chưa ghi đến ngày ghi giảm được ghi nốt khi ghi giảm (cơ chế sẵn có). Chia chi phí theo bộ phận (9q) hoạt động như cũ trên số ghi mỗi kỳ.
+- Màn "Tài sản, CCDC": ô "Ghi sổ khấu hao / phân bổ" khi lập thẻ; chi tiết thẻ hiển thị kỳ ghi sổ; ghi chú ở mục chạy khấu hao.
+- Chưa làm: phân bổ theo số ngày thực tế giữa ngày bắt đầu và kết thúc (hiện tính tháng đầu / cuối theo tháng tròn hoặc theo ngày như trước), theo sản lượng, số dư giảm dần; đổi kỳ ghi sổ sau khi ghi tăng.
+
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).

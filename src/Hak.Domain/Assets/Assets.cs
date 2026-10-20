@@ -15,6 +15,12 @@ public enum DepreciationMethod { StraightLine = 1 }
 /// </summary>
 public enum ProrationPolicy { FullMonth = 1, Daily = 2 }
 
+/// <summary>
+/// Kỳ ghi sổ khấu hao / phân bổ của một thẻ: hàng tháng (mặc định), hàng quý hoặc hàng năm (theo năm tài chính của công ty).
+/// Số phải ghi mỗi kỳ vẫn là lũy kế theo kế hoạch trừ số đã ghi, nên ghi theo quý hoặc năm thì dồn đủ số các tháng trước đó; thẻ kết thúc giữa quý / năm thì ghi nốt phần còn lại ở tháng kết thúc.
+/// </summary>
+public enum AllocationFrequency { Monthly = 1, Quarterly = 2, Yearly = 3 }
+
 public enum AssetStatus { Draft = 1, Active = 2, Disposed = 3, Cancelled = 9 }
 
 /// <summary>
@@ -37,6 +43,8 @@ public sealed class LongTermAsset
     public Guid ExpenseAccountId { get; set; }
     public DepreciationMethod Method { get; set; } = DepreciationMethod.StraightLine;
     public ProrationPolicy Proration { get; set; } = ProrationPolicy.FullMonth;
+    /// <summary>Ghi sổ hàng tháng, hàng quý hoặc hàng năm. Đóng băng khi thẻ đã ghi tăng.</summary>
+    public AllocationFrequency AllocationFrequency { get; set; } = AllocationFrequency.Monthly;
     /// <summary>Frozen at activation: Σ cost sources.</summary>
     public decimal OriginalCost { get; set; }
     public decimal ResidualValue { get; set; }
@@ -117,6 +125,18 @@ public sealed class DepreciationEntry
 /// </summary>
 public static class DepreciationCalculator
 {
+    /// <summary>
+    /// Kỳ này có phải ghi sổ không: luôn ghi nếu thẻ ghi hàng tháng; hàng quý thì ở tháng cuối quý, hàng năm thì ở tháng cuối năm (tính từ ngày đầu năm tài chính);
+    /// và luôn ghi nốt khi kế hoạch hoàn tất trong kỳ này (<paramref name="planComplete"/>), để thẻ kết thúc giữa quý / năm không bị bỏ sót.
+    /// </summary>
+    public static bool IsBookingPeriod(AllocationFrequency frequency, DateOnly fiscalYearStart, DateOnly fiscalYearEnd, DateOnly periodEnd, bool planComplete)
+    {
+        if (frequency == AllocationFrequency.Monthly || planComplete) return true;
+        if (frequency == AllocationFrequency.Yearly) return periodEnd >= fiscalYearEnd;
+        var monthsIn = (periodEnd.Year * 12 + periodEnd.Month) - (fiscalYearStart.Year * 12 + fiscalYearStart.Month) + 1;
+        return monthsIn % 3 == 0 || periodEnd >= fiscalYearEnd;
+    }
+
     /// <summary>
     /// Depreciation that should have been booked from <paramref name="start"/> up to and including <paramref name="through"/>.
     /// </summary>

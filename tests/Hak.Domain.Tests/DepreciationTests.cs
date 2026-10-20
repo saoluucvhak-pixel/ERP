@@ -51,4 +51,27 @@ public class DepreciationTests
     public void ZeroOrNegativeLife_IsRejected()
         => Assert.Equal(ErrorCodes.ValidationFailed, Assert.Throws<DomainException>(() =>
             DepreciationCalculator.CumulativeTarget(1, 0, new(2026, 1, 1), new(2026, 1, 31), ProrationPolicy.FullMonth, 0)).Code);
+
+    [Theory]
+    [InlineData(AllocationFrequency.Monthly, 2026, 2, false, true)]
+    [InlineData(AllocationFrequency.Quarterly, 2026, 2, false, false)]
+    [InlineData(AllocationFrequency.Quarterly, 2026, 3, false, true)]
+    [InlineData(AllocationFrequency.Quarterly, 2026, 5, true, true)]      // kế hoạch hoàn tất giữa quý: ghi nốt
+    [InlineData(AllocationFrequency.Yearly, 2026, 11, false, false)]
+    [InlineData(AllocationFrequency.Yearly, 2026, 12, false, true)]
+    [InlineData(AllocationFrequency.Yearly, 2026, 6, true, true)]
+    public void IsBookingPeriod_FollowsFrequencyAndFiscalYear(AllocationFrequency f, int year, int month, bool complete, bool expected)
+        => Assert.Equal(expected, DepreciationCalculator.IsBookingPeriod(f, new(2026, 1, 1), new(2026, 12, 31), new DateOnly(year, month, DateTime.DaysInMonth(year, month)), complete));
+
+    [Fact]
+    public void IsBookingPeriod_UsesFiscalYearStart_NotCalendar()
+    {
+        // Năm tài chính 01/02/2026 – 31/01/2027: quý kết thúc cuối tháng 4, 7, 10, 1 (không phải 3, 6, 9, 12).
+        var s = new DateOnly(2026, 2, 1); var e = new DateOnly(2027, 1, 31);
+        Assert.True(DepreciationCalculator.IsBookingPeriod(AllocationFrequency.Quarterly, s, e, new DateOnly(2026, 4, 30), false));
+        Assert.False(DepreciationCalculator.IsBookingPeriod(AllocationFrequency.Quarterly, s, e, new DateOnly(2026, 3, 31), false));
+        Assert.False(DepreciationCalculator.IsBookingPeriod(AllocationFrequency.Quarterly, s, e, new DateOnly(2026, 12, 31), false));
+        Assert.True(DepreciationCalculator.IsBookingPeriod(AllocationFrequency.Yearly, s, e, new DateOnly(2027, 1, 31), false));
+        Assert.False(DepreciationCalculator.IsBookingPeriod(AllocationFrequency.Yearly, s, e, new DateOnly(2026, 12, 31), false));
+    }
 }

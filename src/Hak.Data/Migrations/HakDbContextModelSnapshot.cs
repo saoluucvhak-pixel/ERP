@@ -727,6 +727,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("activated_by");
 
+                    b.Property<int>("AllocationFrequency")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("allocation_frequency");
+
                     b.Property<Guid>("AssetAccountId")
                         .HasColumnType("TEXT")
                         .HasColumnName("asset_account_id");

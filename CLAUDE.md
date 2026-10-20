@@ -86,3 +86,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 (chị chốt): ngày hiển thị dd/MM/yyyy (web formatDate, server DateOnly.Vn()); Báo cáo theo mẫu mặc định từ đầu năm, các bộ lọc ngày khác đầu tháng → hôm nay.
 
 - 20/10 đợt 16: chia chi phí khấu hao/phân bổ cho nhiều bộ phận (AssetExpenseSplit, ExpenseSplitter, báo cáo theo bộ phận) — docs/10 mục 9q.
+
+- 20/10 đợt 17: kỳ ghi sổ khấu hao/phân bổ tháng, quý, năm theo năm tài chính (AllocationFrequency, DepreciationCalculator.IsBookingPeriod) — docs/10 mục 9r.

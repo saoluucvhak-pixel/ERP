@@ -17,7 +17,8 @@ public sealed record AssetCostSourceInput(Guid JournalLineId, decimal Amount);
 
 public sealed record AssetInput(string Code, string Name, AssetClass Class, Guid AssetAccountId, Guid? AccumulatedAccountId, Guid ExpenseAccountId,
     ProrationPolicy Proration, decimal ResidualValue, int UsefulLifeMonths, DateOnly InServiceDate, IReadOnlyList<AssetCostSourceInput> CostSources,
-    decimal OpeningAccumulated = 0, int? RemainingLifeMonths = null, DateOnly? ScheduleStartDate = null, string? Note = null);
+    decimal OpeningAccumulated = 0, int? RemainingLifeMonths = null, DateOnly? ScheduleStartDate = null, string? Note = null,
+    AllocationFrequency Frequency = AllocationFrequency.Monthly);
 
 public sealed record AssetRegisterRow(Guid Id, string Code, string Name, AssetClass Class, AssetStatus Status, string AssetAccountCode,
     DateOnly InServiceDate, DateOnly ScheduleStartDate, int UsefulLifeMonths, decimal OriginalCost, decimal Accumulated, decimal NetBookValue, DateOnly? DisposalDate);
@@ -59,6 +60,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
         if (string.IsNullOrWhiteSpace(input.Code) || string.IsNullOrWhiteSpace(input.Name))
             throw new DomainException(ErrorCodes.ValidationFailed, "Mã và tên tài sản bắt buộc.");
         if (input.UsefulLifeMonths <= 0) throw new DomainException(ErrorCodes.ValidationFailed, "Thời gian sử dụng phải lớn hơn 0 tháng.");
+        if (!Enum.IsDefined(input.Frequency)) throw new DomainException(ErrorCodes.ValidationFailed, "Kỳ ghi sổ khấu hao / phân bổ không hợp lệ.");
         if (input.ResidualValue < 0 || input.OpeningAccumulated < 0) throw new DomainException(ErrorCodes.AmountNotPositive, "Giá trị thu hồi và hao mòn lũy kế đầu kỳ không được âm.");
         if (input.CostSources.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Phải chọn bút toán đã ghi sổ hình thành nguyên giá.");
         if (input.CostSources.Select(s => s.JournalLineId).Distinct().Count() != input.CostSources.Count)
@@ -92,7 +94,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Code = code, Name = input.Name.Trim(), Class = input.Class,
                 AssetAccountId = input.AssetAccountId, AccumulatedAccountId = input.AccumulatedAccountId, ExpenseAccountId = input.ExpenseAccountId,
-                Proration = input.Proration, ResidualValue = input.ResidualValue, UsefulLifeMonths = input.UsefulLifeMonths,
+                Proration = input.Proration, AllocationFrequency = input.Frequency, ResidualValue = input.ResidualValue, UsefulLifeMonths = input.UsefulLifeMonths,
                 InServiceDate = input.InServiceDate, OpeningAccumulated = input.OpeningAccumulated, RemainingLifeMonths = input.RemainingLifeMonths,
                 ScheduleStartDate = scheduleStart, Note = input.Note, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
             };
@@ -209,6 +211,8 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var booked = await BookedAsync(ctx.CompanyId, assets.Select(a => a.Id).ToList());
             var dp = await DecimalsAsync(ctx.CompanyId);
             var splits = await SplitsByAssetAsync(assets.Select(a => a.Id).ToList());
+            var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= period.StartDate && f.EndDate >= period.StartDate)
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa kỳ {period.StartDate.Vn()}.");
             var run = new DepreciationRun
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, PeriodId = period.Id, PeriodStart = period.StartDate, PeriodEnd = period.EndDate,
@@ -220,6 +224,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             foreach (var a in assets)
             {
                 var target = DepreciationCalculator.CumulativeTarget(a.ScheduleBase, a.ScheduleMonths, a.ScheduleStartDate, period.EndDate, a.Proration, dp);
+                if (!DepreciationCalculator.IsBookingPeriod(a.AllocationFrequency, fy.StartDate, fy.EndDate, period.EndDate, target >= a.ScheduleBase)) continue;   // thẻ ghi theo quý / năm: chưa đến kỳ ghi
                 var amount = target - booked.GetValueOrDefault(a.Id);
                 if (amount < 0) throw new DomainException(ErrorCodes.AssetCostMismatch, $"Số khấu hao đã ghi của {a.Code} vượt kế hoạch; kiểm tra dữ liệu.");
                 if (amount == 0) continue;

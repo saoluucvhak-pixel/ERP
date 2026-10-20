@@ -16,7 +16,7 @@ interface Candidate { journalLineId: string; voucherNumber: string; postingDate:
 interface Run { id: string; periodStart: string; periodEnd: string; status: 'Active' | 'Reversed'; voucherId: string | null }
 interface ReconRow { accountId: string; accountCode: string; kind: string; registerBalance: string; ledgerBalance: string; difference: string }
 interface Detail {
-  asset: { id: string; code: string; name: string; proration: string; scheduleStartDate: string; openingAccumulated: string; remainingLifeMonths: number | null }
+  asset: { id: string; code: string; name: string; proration: string; allocationFrequency: string; scheduleStartDate: string; openingAccumulated: string; remainingLifeMonths: number | null }
   sources: { journalLineId: string; voucherNumber: string; postingDate: string; accountCode: string; lineAmount: string; amount: string }[]
   schedule: { periodEnd: string; planned: string; cumulative: string; booked: string | null }[]
 }
@@ -124,7 +124,7 @@ export function AssetsView() {
       {detail && (
         <section className="panel">
           <div className="toolbar"><h3>{detail.asset.code} – {detail.asset.name}</h3><button onClick={() => setDetail(null)}>Đóng</button></div>
-          <p className="muted">Bắt đầu khấu hao {formatDate(detail.asset.scheduleStartDate)}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}
+          <p className="muted">Bắt đầu khấu hao {formatDate(detail.asset.scheduleStartDate)}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}; ghi sổ {({ Monthly: 'hàng tháng', Quarterly: 'hàng quý', Yearly: 'hàng năm' } as Record<string, string>)[detail.asset.allocationFrequency] ?? 'hàng tháng'}
             {detail.asset.remainingLifeMonths ? `; chuyển từ hệ thống cũ: hao mòn đầu ${formatMoney(detail.asset.openingAccumulated)}, còn ${detail.asset.remainingLifeMonths} tháng` : ''}</p>
           <h4>Nguồn nguyên giá</h4>
           <table className="grid"><thead><tr><th>Chứng từ</th><th>Ngày</th><th>TK</th><th className="num">Dòng bút toán</th><th className="num">Gán cho tài sản</th></tr></thead>
@@ -141,7 +141,7 @@ export function AssetsView() {
 
       <section className="panel">
         <h3>Chạy khấu hao / phân bổ theo kỳ</h3>
-        <p className="muted">Chạy lần lượt từng kỳ; hủy từ kỳ gần nhất trở về trước. Bút toán sinh ra chỉ đảo được bằng chức năng hủy ở đây.</p>
+        <p className="muted">Chạy lần lượt từng kỳ; hủy từ kỳ gần nhất trở về trước. Thẻ ghi theo quý / năm chỉ phát sinh bút toán ở kỳ cuối quý / cuối năm tài chính (hoặc khi hết thời gian phân bổ). Bút toán sinh ra chỉ đảo được bằng chức năng hủy ở đây.</p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <select value={periodId || nextPeriod?.id || ''} onChange={e => setPeriodId(e.target.value)} aria-label="Kỳ khấu hao">
             <option value="">— chọn kỳ —</option>
@@ -198,7 +198,7 @@ function Dispose({ row, accounts, busy, onSubmit, onCancel }: {
 function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog>['accounts']; onDone: (msg?: string) => void }) {
   const [f, setF] = useState({
     code: '', name: '', class: 'FixedAsset' as 'FixedAsset' | 'Tool', assetAccountId: '', accumulatedAccountId: '', expenseAccountId: '',
-    proration: 'FullMonth', residualValue: '0', usefulLifeMonths: '60', inServiceDate: today(), note: '',
+    proration: 'FullMonth', frequency: 'Monthly', residualValue: '0', usefulLifeMonths: '60', inServiceDate: today(), note: '',
     takenOver: false, openingAccumulated: '0', remainingLifeMonths: '', scheduleStartDate: '',
   })
   const [candidates, setCandidates] = useState<Candidate[]>([])
@@ -219,7 +219,7 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
     const a = await post<{ code: string }>('/assets', {
       code: f.code, name: f.name, class: f.class, assetAccountId: f.assetAccountId,
       accumulatedAccountId: f.class === 'FixedAsset' ? f.accumulatedAccountId || null : null, expenseAccountId: f.expenseAccountId,
-      proration: f.proration, residualValue: money(f.residualValue, 'Giá trị thu hồi'), usefulLifeMonths: Number(f.usefulLifeMonths),
+      proration: f.proration, frequency: f.frequency, residualValue: money(f.residualValue, 'Giá trị thu hồi'), usefulLifeMonths: Number(f.usefulLifeMonths),
       inServiceDate: f.inServiceDate, costSources, note: f.note || null,
       openingAccumulated: f.takenOver ? money(f.openingAccumulated, 'Hao mòn lũy kế đầu') : '0',
       remainingLifeMonths: f.takenOver ? Number(f.remainingLifeMonths) : null,
@@ -244,6 +244,8 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
         <label>Giá trị thu hồi ước tính <input inputMode="decimal" value={f.residualValue} onChange={e => set('residualValue', e.target.value)} /></label>
         <label>Tính tháng đầu/cuối <select value={f.proration} onChange={e => set('proration', e.target.value)}>
           <option value="FullMonth">Tròn tháng (tính tháng tăng, không tính tháng giảm)</option><option value="Daily">Theo số ngày sử dụng</option></select></label>
+        <label title="Số phải ghi mỗi kỳ là lũy kế theo kế hoạch trừ số đã ghi, nên ghi theo quý hoặc năm thì dồn đủ các tháng trước đó; thẻ kết thúc giữa quý / năm thì ghi nốt ở tháng kết thúc">Ghi sổ khấu hao / phân bổ <select aria-label="Kỳ ghi sổ" value={f.frequency} onChange={e => set('frequency', e.target.value)}>
+          <option value="Monthly">Hàng tháng</option><option value="Quarterly">Hàng quý (cuối quý của năm tài chính)</option><option value="Yearly">Hàng năm (cuối năm tài chính)</option></select></label>
         <label><input type="checkbox" checked={f.takenOver} onChange={e => set('takenOver', e.target.checked)} /> Chuyển từ hệ thống cũ (đã khấu hao một phần)</label>
         {f.takenOver && <>
           <label>Hao mòn lũy kế đến ngày chuyển <input inputMode="decimal" value={f.openingAccumulated} onChange={e => set('openingAccumulated', e.target.value)} /></label>

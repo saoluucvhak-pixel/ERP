@@ -125,3 +125,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 | 20/10/2026 | Định dạng số (server + web), lọc khoảng ngày mặc định đầu tháng → hôm nay, rà thiết kế điện thoại | 198 tích hợp, 94 domain, web 29 | docs/10 mục 9p |
 
 | 20/10/2026 | Chia chi phí khấu hao/phân bổ trả trước cho nhiều bộ phận (migration Phase9ExpenseSplit) | 200 tích hợp (SQLite và PostgreSQL), 99 domain, web 31 | docs/10 mục 9q |
+
+| 20/10/2026 | Kỳ ghi sổ khấu hao/phân bổ hàng tháng, quý, năm (migration Phase9AllocationFrequency) | 202 tích hợp (SQLite và PostgreSQL), 107 domain, web 31 | docs/10 mục 9r |
