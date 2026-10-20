@@ -32,6 +32,9 @@ export function AssetsView() {
   const [periods, setPeriods] = useState<Period[]>([])
   const [recon, setRecon] = useState<ReconRow[] | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
+  const [fq, setFq] = useState('')
+  const [fClass, setFClass] = useState('')
+  const [fStatus, setFStatus] = useState('')
   const [journalId, setJournalId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [disposing, setDisposing] = useState<RegisterRow | null>(null)
@@ -46,6 +49,7 @@ export function AssetsView() {
   useEffect(() => { load() }, [load])
 
   const act = (fn: () => Promise<unknown>, msg: string) => run(async () => { await fn(); setInfo(msg); setDetail(null); await load() })
+  const shown = rows.filter(r => (!fClass || r.class === fClass) && (!fStatus || r.status === fStatus) && (!fq.trim() || `${r.code} ${r.name}`.toLowerCase().includes(fq.trim().toLowerCase())))
   const lastActive = runs.find(r => r.status === 'Active')
   // Next period after the last run; before the first run, the period of the earliest depreciation start (runs go in period order from there).
   const earliest = rows.filter(r => r.status === 'Active').map(r => r.scheduleStartDate).sort()[0]
@@ -66,16 +70,16 @@ export function AssetsView() {
           rows={rows.map(r => [r.code, r.name, CLASS_VI[r.class], STATUS_VI[r.status], r.assetAccountCode, r.inServiceDate, String(r.usefulLifeMonths), r.originalCost, r.accumulated, r.netBookValue, r.disposalDate])} />
       </div>
       <p className="muted">Nguyên giá lấy từ bút toán đã ghi sổ (hóa đơn mua, chứng từ, số dư đầu) nên sổ tài sản luôn khớp sổ cái. Phương pháp đường thẳng; cách tính tháng đầu/cuối là cấu hình [CẦN XÁC MINH căn cứ pháp lý].</p>
-      <AssetCyclePanels assets={rows} depreciationNote={lastActive ? `kỳ gần nhất đến ${lastActive.periodEnd}` : 'chưa chạy kỳ nào'} />
-      <ErrorBox error={error} />
-      {info && !error && <div className="msg ok">{info}</div>}
-
-      {creating && <NewAsset accounts={accounts} onDone={msg => { setCreating(false); if (msg) { setInfo(msg); load() } }} />}
-
+      <div className="toolbar" aria-label="Bộ lọc sổ tài sản">
+        <label>Tìm<input aria-label="Tìm tài sản" value={fq} onChange={e => setFq(e.target.value)} placeholder="mã, tên" /></label>
+        <label>Loại<select aria-label="Lọc theo loại tài sản" value={fClass} onChange={e => setFClass(e.target.value)}><option value="">Tất cả</option><option value="FixedAsset">TSCĐ</option><option value="Tool">CCDC</option></select></label>
+        <label>Trạng thái<select aria-label="Lọc theo trạng thái tài sản" value={fStatus} onChange={e => setFStatus(e.target.value)}><option value="">Tất cả</option>{Object.entries(STATUS_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
+        <span className="muted">{shown.length}/{rows.length} tài sản</span>
+      </div>
       <table className="grid">
         <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>TK</th><th>Ngày sử dụng</th><th>Tháng</th>
           <th className="num">Nguyên giá</th><th className="num">Hao mòn / đã phân bổ</th><th className="num">Còn lại</th><th>Thao tác</th></tr></thead>
-        <tbody>{rows.map(r => (
+        <tbody>{shown.map(r => (
           <tr key={r.id}>
             <td>{r.code}</td><td>{r.name}</td><td>{CLASS_VI[r.class]}</td>
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${r.disposalDate}` : ''}</span></td>
@@ -97,6 +101,13 @@ export function AssetsView() {
           </tr>))}
         </tbody>
       </table>
+
+      <AssetCyclePanels assets={rows} depreciationNote={lastActive ? `kỳ gần nhất đến ${lastActive.periodEnd}` : 'chưa chạy kỳ nào'} />
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+
+      {creating && <NewAsset accounts={accounts} onDone={msg => { setCreating(false); if (msg) { setInfo(msg); load() } }} />}
+
 
       {disposing && <Dispose row={disposing} accounts={accounts} busy={busy}
         onSubmit={(date, residualAccountId, description) => act(async () => {

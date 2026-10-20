@@ -26,6 +26,8 @@ export function OrdersView() {
   const [detail, setDetail] = useState<Fulfil | null>(null)
   const [info, setInfo] = useState('')
   const [contracts, setContracts] = useState<ContractRef[]>([])
+  const [fq, setFq] = useState('')
+  const [fStatus, setFStatus] = useState('')
   const [contractId, setContractId] = useState('')
   const [contractLines, setContractLines] = useState<ContractLineRef[]>([])
   const { busy, error, setError, run } = useAction()
@@ -55,6 +57,7 @@ export function OrdersView() {
     await load()
   })
 
+  const shownList = list.filter(o => (!fStatus || o.status === fStatus) && (!fq.trim() || `${o.number} ${o.contractNo ?? ''} ${o.description} ${partners.find(p => p.id === o.partnerId)?.code ?? ''}`.toLowerCase().includes(fq.trim().toLowerCase())))
   const n = (v: string) => (v === '0' ? '' : formatMoney(v))
   return (
     <>
@@ -134,9 +137,14 @@ export function OrdersView() {
         </div>
       )}
       <div className="scroll">
+        <div className="toolbar" aria-label="Bộ lọc đơn hàng">
+          <label>Tìm<input aria-label="Tìm đơn hàng" value={fq} onChange={e => setFq(e.target.value)} placeholder="số đơn, hợp đồng, diễn giải, đối tượng" /></label>
+          <label>Trạng thái<select aria-label="Lọc theo trạng thái đơn" value={fStatus} onChange={e => setFStatus(e.target.value)}><option value="">Tất cả</option>{Object.entries(STATUS_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
+          <span className="muted">{shownList.length}/{list.length} đơn</span>
+        </div>
         <table className="grid">
           <thead><tr><th>Số đơn</th><th>Ngày</th><th>Đối tượng</th><th>Hợp đồng</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{list.map(o => (
+          <tbody>{shownList.map(o => (
             <tr key={o.id}><td>{o.number}</td><td>{o.orderDate}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
               <td><span className="badge">{STATUS_VI[o.status] ?? o.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
@@ -145,7 +153,7 @@ export function OrdersView() {
                 {o.status === 'Confirmed' && <button onClick={() => { const r = prompt('Lý do đóng đơn:'); if (r) act(() => post(`/orders/${o.id}/close`, { reason: r }), `Đã đóng ${o.number}.`) }}>Đóng đơn</button>}
                 {(o.status === 'Draft' || o.status === 'Confirmed') && <button className="danger" onClick={() => { const r = prompt('Lý do hủy đơn:'); if (r) act(() => post(`/orders/${o.id}/cancel`, { reason: r }), `Đã hủy ${o.number}.`) }}>Hủy</button>}
               </td></tr>))}
-            {list.length === 0 && <tr><td colSpan={7} className="muted">Chưa có đơn hàng.</td></tr>}
+            {shownList.length === 0 && <tr><td colSpan={7} className="muted">{list.length === 0 ? 'Chưa có đơn hàng.' : 'Không có đơn khớp bộ lọc.'}</td></tr>}
           </tbody>
         </table>
       </div>

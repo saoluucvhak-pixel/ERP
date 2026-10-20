@@ -36,6 +36,8 @@ export function ContractsView() {
   const [view, setView] = useState<View | null>(null)
   const [form, setForm] = useState<{ id: string | null; name: string; category: Row['category']; partnerId: string; effective: string; expiration: string; terms: string; total: string; lines: LineDraft[]; ms: MsDraft[] } | null>(null)
   const [amend, setAmend] = useState<{ summary: string; value: string; expiry: string; qty: Record<string, string> } | null>(null)
+  const [fq, setFq] = useState('')
+  const [fStatus, setFStatus] = useState('')
   const [info, setInfo] = useState('')
   const { busy, error, run, setError } = useAction()
 
@@ -68,6 +70,7 @@ export function ContractsView() {
   const setLine = (i: number, p: Partial<LineDraft>) => form && setForm({ ...form, lines: form.lines.map((l, k) => k === i ? { ...l, ...p } : l) })
   const setMs = (i: number, p: Partial<MsDraft>) => form && setForm({ ...form, ms: form.ms.map((m, k) => k === i ? { ...m, ...p } : m) })
   const h = view?.header
+  const shownRows = rows.filter(r => (!fStatus || (fStatus === 'Expired' ? r.expired : r.status === fStatus && !r.expired)) && (!fq.trim() || `${r.code} ${r.name} ${r.partnerCode} ${r.partnerName}`.toLowerCase().includes(fq.trim().toLowerCase())))
 
   return (
     <>
@@ -112,11 +115,17 @@ export function ContractsView() {
       </section>}
 
       <section className="panel">
+        <div className="toolbar" aria-label="Bộ lọc hợp đồng">
+          <label>Tìm<input aria-label="Tìm hợp đồng" value={fq} onChange={e => setFq(e.target.value)} placeholder="mã, tên, đối tác" /></label>
+          <label>Trạng thái<select aria-label="Lọc theo trạng thái hợp đồng" value={fStatus} onChange={e => setFStatus(e.target.value)}><option value="">Tất cả</option>
+            {(Object.keys(STATUS_VI) as CStatus[]).map(k => <option key={k} value={k}>{STATUS_VI[k]}</option>)}<option value="Expired">Hết hạn, chưa thanh lý</option></select></label>
+          <span className="muted">{shownRows.length}/{rows.length} hợp đồng</span>
+        </div>
         <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>Đối tác</th><th>Loại</th><th>Hiệu lực</th><th className="num">Giá trị</th><th className="num">Đã đặt</th><th className="num">% thực hiện</th><th>Trạng thái</th></tr></thead>
-          <tbody>{rows.map(r => <tr key={r.id}><td><button className="link" onClick={() => open(r.id)}>{r.code}</button></td><td>{r.name}</td><td>{r.partnerCode} – {r.partnerName}</td><td>{CATEGORY_VI[r.category]}</td>
+          <tbody>{shownRows.map(r => <tr key={r.id}><td><button className="link" onClick={() => open(r.id)}>{r.code}</button></td><td>{r.name}</td><td>{r.partnerCode} – {r.partnerName}</td><td>{CATEGORY_VI[r.category]}</td>
             <td>{r.effectiveDate} → {r.expirationDate}</td><td className="num">{formatMoney(r.totalAmount)}</td><td className="num">{formatMoney(r.orderedAmount)}</td><td className="num">{r.percentDone ?? ''}</td>
             <td>{r.expired ? 'Hết hạn, chưa thanh lý' : STATUS_VI[r.status]}{r.version > 1 ? ` · v${r.version}` : ''}</td></tr>)}
-            {rows.length === 0 && <tr><td colSpan={9} className="muted">Chưa có hợp đồng.</td></tr>}</tbody></table>
+            {shownRows.length === 0 && <tr><td colSpan={9} className="muted">{rows.length === 0 ? 'Chưa có hợp đồng.' : 'Không có hợp đồng khớp bộ lọc.'}</td></tr>}</tbody></table>
       </section>
 
       {view && h && <section className="panel" aria-label="Chi tiết hợp đồng">
