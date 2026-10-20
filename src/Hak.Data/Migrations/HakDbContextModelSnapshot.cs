@@ -1287,6 +1287,71 @@ namespace Hak.Data.Migrations
                     b.ToTable("preventive_schedules");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Attachments.FileAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Caption")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("caption");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_type");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("file_name");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("storage_path");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("uploaded_at");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_file_attachments");
+
+                    b.HasIndex("CompanyId", "EntityType", "EntityId")
+                        .HasDatabaseName("ix_file_attachments_company_id_entity_type_entity_id");
+
+                    b.ToTable("file_attachments");
+                });
+
             modelBuilder.Entity("Hak.Domain.Banking.BankStatement", b =>
                 {
                     b.Property<Guid>("Id")

@@ -12,6 +12,7 @@
     "seed:dev": "node scripts/dev-seed.mjs"
   },
   "dependencies": {
+    "qrcode-generator": "^2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

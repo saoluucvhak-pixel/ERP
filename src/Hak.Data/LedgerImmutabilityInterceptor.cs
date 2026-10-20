@@ -130,6 +130,9 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                                                     && (Domain.Tax.DeclarationStatus)entry.OriginalValues[nameof(Domain.Tax.TaxDeclaration.Status)]! == Domain.Tax.DeclarationStatus.Filed:
                     throw Immutable("Tờ khai đã nộp không được sửa/xóa; lập tờ khai bổ sung theo quy định.");
 
+                case Domain.Attachments.FileAttachment when entry.State is EntityState.Modified or EntityState.Deleted:
+                    throw Immutable("Tệp đính kèm (ảnh sự cố, ảnh nghiệm thu) là chứng cứ: chỉ thêm, không sửa hoặc xóa.");
+
                 case Domain.Assets.LongTermAsset when entry.State == EntityState.Deleted:
                 case Domain.Assets.AssetCostSource or Domain.Assets.DepreciationEntrySplit when entry.State is EntityState.Modified or EntityState.Deleted:
                 case Domain.Assets.DepreciationRun or Domain.Assets.DepreciationEntry or Domain.Fx.FxRevaluationRun when entry.State == EntityState.Deleted:

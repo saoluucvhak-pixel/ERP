@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
+import { QrLabelsButton } from './AssetQr'
 import { AssetCyclePanels } from './AssetCycle'
 import { AssetJournal } from './AssetJournal'
 import { ExpenseAllocationReport, ExpenseSplitEditor } from './AssetExpenseSplit'
@@ -73,6 +74,7 @@ export function AssetsView() {
         <label>Tại ngày <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
         <button onClick={() => load()}>Tải lại</button>
         <button className="primary" onClick={() => { setCreating(true); setDetail(null) }}>Thêm thẻ tài sản</button>
+        <QrLabelsButton items={shown.filter(r => r.status === 'Active').map(r => ({ code: r.code, name: r.name }))} />
         <ExportButton fileName={'So_TSCD_' + asOf} sheet="Sổ tài sản" columns={[{ header: 'Mã' }, { header: 'Tên', width: 30 }, { header: 'Loại' }, { header: 'Trạng thái' }, { header: 'TK' }, { header: 'Ngày sử dụng' },
           { header: 'Số tháng', numeric: true }, { header: 'Nguyên giá', numeric: true }, { header: 'Hao mòn / đã phân bổ', numeric: true }, { header: 'Còn lại', numeric: true }, { header: 'Ngày ghi giảm' }]}
           rows={rows.map(r => [r.code, r.name, CLASS_VI[r.class], STATUS_VI[r.status], r.assetAccountCode, r.inServiceDate, String(r.usefulLifeMonths), r.originalCost, r.accumulated, r.netBookValue, r.disposalDate])} />

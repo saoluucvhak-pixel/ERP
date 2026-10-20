@@ -567,4 +567,56 @@ public class AssetTests
         Assert.Contains("LEDGER_IMMUTABLE", (await Assert.ThrowsAnyAsync<Exception>(() =>
             s.Db.Database.ExecuteSqlRawAsync("UPDATE asset_cost_sources SET amount = 1"))).Message);
     }
+
+    private static byte[] Jpeg(int extra = 100) => [0xFF, 0xD8, 0xFF, 0xE0, .. Enumerable.Range(0, extra).Select(i => (byte)(i % 251))];
+    private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
+
+    [Fact]
+    public async Task IncidentPhotos_AcceptOnlyRealImages_WithinLimits_AreAuditedAndTamperEvident()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var repairs = new AssetRepairService(s.Db, s.Stock, s.Audit, h.Clock);
+        var line = await BuyAsync(h, s, "FA", 120_000_000, new(2026, 1, 10));
+        var asset = await ActiveAsync(h, s, FixedAsset(h, "TS021", line, 120_000_000, new(2026, 1, 15)));
+        var req = await repairs.RequestAsync(h.Preparer, asset.Id, MaintenancePriority.Urgent, "Rò dầu thủy lực");
+        var root = Path.Combine(Path.GetTempPath(), "hak-att-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var svc = new Hak.Application.Attachments.AttachmentService(s.Db, new Hak.Application.Attachments.AttachmentStore(root), s.Audit, h.Clock);
+            // Loại tệp theo chữ ký, không theo tên / Content-Type.
+            Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.AddAsync(h.Preparer, "maintenance_request", req.Id, "anh.jpg", "<html>không phải ảnh</html>"u8.ToArray(), null)));
+            Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.AddAsync(h.Preparer, "maintenance_request", req.Id, "anh.jpg", [], null)));
+            Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.AddAsync(h.Preparer, "maintenance_request", req.Id, "anh.jpg", Jpeg(9 * 1024 * 1024), null)));   // quá 8 MB
+            Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.AddAsync(h.Preparer, "invoice", req.Id, "anh.jpg", Jpeg(), null)));                                 // loại đối tượng lạ
+            Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => svc.AddAsync(h.Preparer, "maintenance_request", Guid.NewGuid(), "anh.jpg", Jpeg(), null)));
+            Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.AddAsync(h.Auditor, "maintenance_request", req.Id, "anh.jpg", Jpeg(), null)));                            // kiểm toán chỉ xem
+
+            // Ảnh hợp lệ: tên gốc được làm sạch (không giữ đường dẫn), tên lưu là mã nội bộ.
+            var a = await svc.AddAsync(h.Preparer, "maintenance_request", req.Id, @"..\..\Windows\hiện trường 1.jpg", Jpeg(), "Vết rò");
+            Assert.Equal(("hiện trường 1.jpg", "image/jpeg"), (a.FileName, a.ContentType));
+            Assert.DoesNotContain("hiện", a.StoragePath);
+            await svc.AddAsync(h.Preparer, "maintenance_request", req.Id, "b.png", Png(), null);
+            Assert.Equal(2, (await svc.ListAsync(h.Auditor, "maintenance_request", req.Id)).Count);
+            Assert.Equal(2, (await svc.CountsAsync(h.Auditor, "maintenance_request"))[req.Id]);
+            var (meta, data) = await svc.ReadAsync(h.Auditor, a.Id);
+            Assert.Equal(Jpeg(), data);
+            Assert.Equal("image/jpeg", meta.ContentType);
+
+            // Chỉ thêm: sửa hoặc xóa bản ghi bị chặn.
+            var tracked = await s.Db.FileAttachments.FirstAsync(x => x.Id == a.Id);
+            tracked.Caption = "đổi";
+            Assert.Equal(ErrorCodes.LedgerImmutable, (await Assert.ThrowsAsync<DomainException>(() => s.Db.SaveChangesAsync())).Code);
+            s.Db.ChangeTracker.Clear();
+
+            // Tệp bị sửa ngoài phần mềm thì phát hiện qua mã băm.
+            await File.WriteAllBytesAsync(Path.Combine(root, a.StoragePath), Jpeg(150));
+            Assert.Equal(ErrorCodes.IntegrityViolation, await CodeOf(() => svc.ReadAsync(h.Auditor, a.Id)));
+
+            // Giới hạn số ảnh mỗi phiếu.
+            for (var i = 2; i < Hak.Application.Attachments.AttachmentService.MaxPerEntity; i++) await svc.AddAsync(h.Preparer, "maintenance_request", req.Id, $"p{i}.jpg", Jpeg(10 + i), null);
+            Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.AddAsync(h.Preparer, "maintenance_request", req.Id, "thua.jpg", Jpeg(5), null)));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
 }

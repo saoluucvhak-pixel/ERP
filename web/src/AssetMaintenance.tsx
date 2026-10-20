@@ -1,3 +1,4 @@
+import { PhotosToggle } from './Photos'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, useAction } from './common'
@@ -26,6 +27,7 @@ const monthStart = () => today().slice(0, 8) + '01'
 /** Bảo trì &amp; sửa chữa tài sản (tệp phân tích CMMS): YCSC → phương án, dự toán → duyệt → thi công, xuất vật tư → nghiệm thu → đóng; lịch bảo trì; KPI MTBF, MTTR. */
 export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[]; onOpenCount: (n: number) => void }) {
   const [reqs, setReqs] = useState<Req[]>([])
+  const [photoN, setPhotoN] = useState<Record<string, number>>({})
   const [wos, setWos] = useState<Repair[]>([])
   const [scheds, setScheds] = useState<Sched[]>([])
   const [kpi, setKpi] = useState<Kpi[]>([])
@@ -48,6 +50,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
     const w = await get<Repair[]>('/assets/repairs')
     setWos(w); onOpenCount(w.filter(x => ACTIVE.includes(x.status) && x.status !== 'Completed').length)
     setReqs(await get<Req[]>('/assets/maintenance/requests'))
+    setPhotoN({ ...(await get<Record<string, number>>('/attachments/maintenance_request/counts').catch(() => ({}))), ...(await get<Record<string, number>>('/attachments/asset_repair/counts').catch(() => ({}))) })
     setScheds(await get<Sched[]>(`/assets/maintenance/schedules?today=${today()}`))
     setKpi(await get<Kpi[]>(`/assets/maintenance/kpi?from=${range.from}&to=${range.to}`))
   }), [run, range, onOpenCount])
@@ -95,7 +98,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
           selects={[{ key: 'priority', label: 'Ưu tiên', options: Object.entries(PRIORITY_VI).map(([value, label]) => ({ value, label })) }, { key: 'status', label: 'Trạng thái', options: Object.entries(REQ_VI).map(([value, label]) => ({ value, label })) }]}
           chips={[{ key: 'urgent', label: 'Ưu tiên cao / khẩn cấp đang xử lý', count: reqs.filter(reqChips.urgent).length }, { key: 'noPlan', label: 'Chưa có phương án', count: reqs.filter(reqChips.noPlan).length }]} />
         <table className="grid"><thead><tr><th>Số</th><th>Tài sản</th><th>Ưu tiên</th><th>Hiện tượng</th><th>Báo lúc</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{shownReqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{r.assetCode} – {r.assetName}</td><td>{PRIORITY_VI[r.priority]}</td><td>{r.description}</td><td>{formatDateTime(r.reportedAt)}</td>
+          <tbody>{shownReqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{r.assetCode} – {r.assetName}</td><td>{PRIORITY_VI[r.priority]}</td><td>{r.description}<PhotosToggle entityType="maintenance_request" entityId={r.id} count={photoN[r.id] ?? 0} onChange={() => load()} /></td><td>{formatDateTime(r.reportedAt)}</td>
             <td>{REQ_VI[r.status]}{r.workOrderNumber ? ` · ${r.workOrderNumber}` : ''}{r.status === 'Rejected' && r.note ? ` — ${r.note}` : ''}</td>
             <td style={{ display: 'flex', gap: 6 }}>{(r.status === 'New' || r.status === 'Surveying') && <>
               {!r.workOrderNumber && <button disabled={busy} onClick={() => setPlan({ id: null, requestId: r.id, assetId: r.assetId, type: 'Emergency', description: r.description, vendor: '', tech: '', cause: '', solution: '', labor: '', mats: [] })}>Khảo sát, lập phương án</button>}
@@ -137,7 +140,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
         <table className="grid"><thead><tr><th>Số</th><th>Tài sản</th><th>Loại</th><th>Nội dung</th><th className="num">Dự toán</th><th className="num">Thực tế</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{shownWos.map(r => <Fragment key={r.id}>
             <tr><td><button className="link" onClick={() => setOpen(open === r.id ? null : r.id)}>{r.number}</button></td><td>{r.assetCode} – {r.assetName}</td><td>{r.type === 'Emergency' ? 'Sửa chữa' : 'Bảo trì'}</td>
-              <td>{r.description}</td><td className="num">{formatMoney(r.estimatedTotal)}</td><td className="num">{r.status === 'Draft' || r.status === 'PendingApproval' || r.status === 'Approved' ? '' : formatMoney(r.actualTotal)}</td>
+              <td>{r.description}<PhotosToggle entityType="asset_repair" entityId={r.id} count={photoN[r.id] ?? 0} onChange={() => load()} /></td><td className="num">{formatMoney(r.estimatedTotal)}</td><td className="num">{r.status === 'Draft' || r.status === 'PendingApproval' || r.status === 'Approved' ? '' : formatMoney(r.actualTotal)}</td>
               <td>{STATUS_VI[r.status]}{(r.status === 'Rejected' || r.status === 'Cancelled') && r.note ? ` — ${r.note}` : ''}</td>
               <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {r.status === 'Draft' && <><button disabled={busy} onClick={() => editPlan(r)}>Sửa phương án</button><button className="primary" disabled={busy} onClick={() => act(`Đã gửi duyệt ${r.number}.`, () => post(`/assets/repairs/${r.id}/submit`))}>Gửi duyệt</button></>}

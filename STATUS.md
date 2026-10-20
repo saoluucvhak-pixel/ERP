@@ -131,3 +131,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 | 20/10/2026 | Độ khô theo ngày (đơn vị phụ BDMT như tỷ giá, migration Phase9DrynessDailyRate), Excel xuất ngày dd/MM/yyyy, căn cứ khấu hao legal/KHAU-HAO | xem lần chạy test cuối | docs/10 mục 9s |
 
 | 20/10/2026 | Tạm ứng/hoàn ứng, kiểm kê quỹ, số TK ngân hàng + UNC/file chuyển tiền, vốn góp & cổ tức (migration Phase10Advances, Phase10BankEquity) | xem lần chạy test cuối | docs/10 mục 9t, 9u |
+
+| 20/10/2026 | Phê duyệt trả hàng/giảm giá/xóa nợ, QC trước nhập kho, in biên bản kiểm kê/bàn giao TS; QR + trang di động + PWA + ảnh sự cố (migration Phase10SalesApprovals, Phase10Attachments) | xem lần chạy test cuối | docs/10 mục 9v, 9w |

@@ -46,6 +46,11 @@ else
     builder.Services.AddScoped(_ => new HakDbContext(HakDb.SqliteOptions(dbPath)));
 }
 
+var attachmentsRoot = builder.Configuration["Hak:AttachmentsPath"]
+                      ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(builder.Configuration["Hak:DatabasePath"]
+                          ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "hak.db"))) ?? AppContext.BaseDirectory, "attachments");
+builder.Services.AddSingleton(new Hak.Application.Attachments.AttachmentStore(attachmentsRoot));
+builder.Services.AddScoped<Hak.Application.Attachments.AttachmentService>();
 builder.Services.AddSingleton(runtime);
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddScoped<AuditService>();
@@ -170,6 +175,7 @@ app.MapVatEndpoints();
 app.MapAssetEndpoints();
 app.MapContractEndpoints();
 app.MapAdvanceEndpoints();
+app.MapAttachmentEndpoints();
 app.MapSalesApprovalEndpoints();
 app.MapEquityEndpoints();
 app.MapFxEndpoints();

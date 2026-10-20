@@ -20,6 +20,7 @@ import { ContractsView } from './Contracts'
 import { AdvancesView, CashCountView } from './Advances'
 import { EquityView } from './Equity'
 import { SalesApprovalsView } from './SalesApprovals'
+import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
 import { PayrollView } from './Payroll'
 import { ProcurementView } from './Procurement'
 import { RevenueView } from './Revenue'
@@ -110,6 +111,8 @@ export default function App() {
   const [moduleKey, setModuleKey] = useState('home')
   const [tab, setTab] = useState<string>('flow')
   const [work, setWork] = useState<Record<string, number>>({})
+  const [mobile, setMobile] = useState(isMobileRoute())
+  useEffect(() => { const h = () => setMobile(isMobileRoute()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h) }, [])
 
   useEffect(() => {
     if (!token) return
@@ -172,6 +175,7 @@ export default function App() {
       </div></div>
     )
   }
+  if (mobile) return <MobileMaintenance company={`${company.code} – ${company.name}`} onFull={() => { window.location.hash = '' }} onLogout={logout} />
   const module = MODULES.find(m => m.key === moduleKey) ?? MODULES[0]
   const moduleCount = (m: (typeof MODULES)[number]) => m.screens.reduce((n, k) => n + (work[k] ?? 0), 0)
   const screenEl = (key: string) => SCREENS.find(s => s.key === key)?.el()

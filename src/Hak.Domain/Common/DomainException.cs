@@ -47,6 +47,7 @@ public static class ErrorCodes
     public const string RuleRoleUnmapped = "RULE_ROLE_UNMAPPED";
     public const string QualityCheckRequired = "QUALITY_CHECK_REQUIRED";
     public const string ApprovalRequired = "APPROVAL_REQUIRED";
+    public const string IntegrityViolation = "INTEGRITY_VIOLATION";
     public const string RuleInvalid = "RULE_INVALID";
     public const string RuleTestFailed = "RULE_TEST_FAILED";
     public const string RuleConstraint = "RULE_CONSTRAINT";
