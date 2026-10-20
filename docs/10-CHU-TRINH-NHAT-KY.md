@@ -331,3 +331,10 @@ Mỗi thẻ chọn **phương pháp** (căn cứ pháp lý từng phương pháp
 **Các phân hệ làm trước khi theo chu trình** đã xếp vào menu theo chu trình và có bảng khâu ở mục 9d; dải dòng chảy đã đủ ở mục 9x.
 **Còn dang dở từ các đợt trước:** đề nghị sửa chữa – nâng cấp tài sản, đơn vị tính quy đổi và lô, bộ đọc XML hóa đơn chưa thử trên tệp thật, 2FA, DPAPI cho khóa trao đổi, sao lưu tự động, bộ cài, đối chiếu dữ liệu thật.
 
+
+## 9z. Đợt 25 (20/10/2026): mặc định theo nhóm cho đối tượng
+Chị giao em đề xuất quy tắc ưu tiên. Nhóm đối tượng khai thêm **hạn mức tín dụng** và **hạn thanh toán (ngày)** mặc định (`CatalogGroup.DefaultCreditLimit/DefaultPaymentTermsDays`); `GroupDefaults.PartnerTermsAsync` quyết định giá trị hiệu lực cho từng chỉ tiêu:
+1. giá trị khai trên chính đối tượng;
+2. nhóm **sâu nhất** có khai giá trị (nhóm con thắng nhóm cha);
+3. cùng độ sâu thì lấy giá trị **chặt nhất** (hạn mức thấp nhất, hạn thanh toán ngắn nhất).
+Nhóm ngừng dùng bị bỏ qua. Áp dụng khi xác nhận đơn bán (kiểm tra tín dụng) và khi lập hóa đơn từ phiếu giao hàng (ngày đến hạn). Chưa làm: mặc định thuế suất / TK / khấu hao theo nhóm vật tư, tài sản (cần chị chốt cùng quy tắc), tiền tố mã theo nhóm. Mã đối tượng: giữ như hiện tại (chỉ khuyến nghị, docs/11).

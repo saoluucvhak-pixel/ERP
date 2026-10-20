@@ -19,6 +19,9 @@ public sealed class CatalogGroup
     public Guid? ParentId { get; set; }
     public bool IsActive { get; set; } = true;
     public string? Note { get; set; }
+    /// <summary>Mặc định cho nhóm đối tượng: hạn mức tín dụng (VND) và số ngày hạn thanh toán, dùng khi chính đối tượng chưa khai báo. Xem GroupDefaults.</summary>
+    public decimal? DefaultCreditLimit { get; set; }
+    public int? DefaultPaymentTermsDays { get; set; }
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
 }

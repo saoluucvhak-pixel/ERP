@@ -99,3 +99,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 đợt 23: bộ mã chứng từ (docs/11-QUY-TAC-MA.md; loại mới khai báo ở DocumentKinds và cấp số bằng Numbering.NextAsync, không tự viết hàm cấp số), chiết khấu thanh toán (PAYMENT_DISCOUNT_INCOME/EXPENSE), dải dòng chảy các màn còn lại — docs/10 mục 9x.
 
 - 20/10 đợt 24: nhóm danh mục nhiều cấp, mỗi mục nhiều nhóm (CatalogGroup/Member, GroupService, màn "Nhóm danh mục", groupLib.tsx; báo cáo theo nhóm không cộng được) — docs/10 mục 9y. Chưa: mặc định theo nhóm, tiền tố mã theo nhóm, nhập Excel.
+
+- 20/10 đợt 25: mặc định theo nhóm cho đối tượng (hạn mức tín dụng, hạn thanh toán; ưu tiên: đối tượng > nhóm sâu nhất > giá trị chặt nhất; GroupDefaults) — docs/10 mục 9z. Mã đối tượng giữ như hiện tại (chị: tạm thời vậy).

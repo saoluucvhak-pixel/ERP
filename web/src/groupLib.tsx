@@ -3,7 +3,7 @@ import { get, put } from './api'
 import { ErrorBox, Modal, useAction } from './common'
 
 export type GroupDomain = 'Partner' | 'Item' | 'Asset' | 'Warehouse'
-export interface GroupRow { id: string; domain: GroupDomain; code: string; name: string; parentId: string | null; level: number; isActive: boolean; note: string | null; directMembers: number; allMembers: number; children: number }
+export interface GroupRow { id: string; domain: GroupDomain; code: string; name: string; parentId: string | null; level: number; isActive: boolean; note: string | null; directMembers: number; allMembers: number; children: number; defaultCreditLimit?: string | null; defaultPaymentTermsDays?: number | null }
 export interface GroupLink { entityId: string; groupId: string }
 export const DOMAIN_VI: Record<GroupDomain, string> = { Partner: 'Đối tượng', Item: 'Vật tư, hàng hóa', Asset: 'Tài sản, CCDC', Warehouse: 'Kho' }
 

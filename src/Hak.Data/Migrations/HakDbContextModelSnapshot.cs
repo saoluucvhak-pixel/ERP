@@ -2021,6 +2021,14 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
+                    b.Property<long?>("DefaultCreditLimit")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_credit_limit");
+
+                    b.Property<int?>("DefaultPaymentTermsDays")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_payment_terms_days");
+
                     b.Property<int>("Domain")
                         .HasColumnType("INTEGER")
                         .HasColumnName("domain");

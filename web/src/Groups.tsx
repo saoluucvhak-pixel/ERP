@@ -36,7 +36,7 @@ function Tree({ domain }: { domain: GroupDomain }) {
   const [sel, setSel] = useState<GroupRow | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [entities, setEntities] = useState<Entity[]>([])
-  const [form, setForm] = useState<{ id: string | null; code: string; name: string; parentId: string; note: string; active: boolean } | null>(null)
+  const [form, setForm] = useState<{ id: string | null; code: string; name: string; parentId: string; note: string; active: boolean; limit: string; days: string } | null>(null)
   const [add, setAdd] = useState<string[] | null>(null)
   const [q, setQ] = useState('')
   const [info, setInfo] = useState('')
@@ -52,8 +52,8 @@ function Tree({ domain }: { domain: GroupDomain }) {
     <>
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
-      <div className="toolbar"><button className="primary" onClick={() => setForm({ id: null, code: '', name: '', parentId: current?.id ?? '', note: '', active: true })}>{current ? `Thêm nhóm con của ${current.code}` : 'Thêm nhóm gốc'}</button>
-        {current && <button onClick={() => setForm({ id: current.id, code: current.code, name: current.name, parentId: current.parentId ?? '', note: current.note ?? '', active: current.isActive })}>Sửa nhóm {current.code}</button>}
+      <div className="toolbar"><button className="primary" onClick={() => setForm({ id: null, code: '', name: '', parentId: current?.id ?? '', note: '', active: true, limit: '', days: '' })}>{current ? `Thêm nhóm con của ${current.code}` : 'Thêm nhóm gốc'}</button>
+        {current && <button onClick={() => setForm({ id: current.id, code: current.code, name: current.name, parentId: current.parentId ?? '', note: current.note ?? '', active: current.isActive, limit: current.defaultCreditLimit ?? '', days: current.defaultPaymentTermsDays?.toString() ?? '' })}>Sửa nhóm {current.code}</button>}
         {current && <button disabled={busy || current.children > 0 || current.directMembers > 0} title="Chỉ xóa được nhóm không có nhóm con và thành viên" onClick={() => { if (confirm(`Xóa nhóm ${current.code}?`)) act('Đã xóa nhóm.', async () => { await api('DELETE', `/groups/by-id/${current.id}`); setSel(null) }) }}>Xóa</button>}
         {sel && <button onClick={() => setSel(null)}>Bỏ chọn</button>}</div>
       <div className="form-row" style={{ alignItems: 'flex-start' }}>
@@ -82,8 +82,8 @@ function Tree({ domain }: { domain: GroupDomain }) {
 
       {form && <Modal title={form.id ? `Sửa nhóm ${form.code}` : 'Thêm nhóm'} onClose={() => setForm(null)} busy={busy}
         footer={<><button onClick={() => setForm(null)}>Đóng</button><button className="primary" disabled={busy || !form.name.trim() || (!form.id && !form.code.trim())} onClick={() => run(async () => {
-          if (form.id) await put(`/groups/by-id/${form.id}`, { name: form.name, parentId: form.parentId || null, note: form.note || null, isActive: form.active })
-          else await post('/groups', { domain, code: form.code, name: form.name, parentId: form.parentId || null, note: form.note || null })
+          if (form.id) await put(`/groups/by-id/${form.id}`, { name: form.name, parentId: form.parentId || null, note: form.note || null, isActive: form.active, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null })
+          else await post('/groups', { domain, code: form.code, name: form.name, parentId: form.parentId || null, note: form.note || null, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null })
           setForm(null); setInfo('Đã lưu nhóm.'); await g.reload()
         })}>Lưu</button></>}>
         <div className="form-row">
@@ -92,6 +92,13 @@ function Tree({ domain }: { domain: GroupDomain }) {
           <label>Nhóm cha<select value={form.parentId} onChange={e => setForm({ ...form, parentId: e.target.value })}><option value="">— nhóm gốc —</option>{g.options.filter(o => o.value !== form.id).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
         </div>
         <label style={{ display: 'block' }}>Ghi chú<input style={{ width: '100%' }} value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></label>
+        {domain === 'Partner' && <>
+          <div className="form-row">
+            <label>Hạn mức tín dụng mặc định (VND)<input inputMode="decimal" value={form.limit} onChange={e => setForm({ ...form, limit: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
+            <label>Hạn thanh toán mặc định (ngày)<input inputMode="numeric" value={form.days} onChange={e => setForm({ ...form, days: e.target.value.replace(/\D/g, '') })} /></label>
+          </div>
+          <p className="muted">Chỉ dùng khi chính khách hàng chưa khai báo. Khách thuộc nhiều nhóm: lấy nhóm sâu nhất (nhóm con thắng nhóm cha); cùng cấp thì lấy giá trị chặt nhất (hạn mức thấp nhất, hạn thanh toán ngắn nhất).</p>
+        </>}
         {form.id && <label className="check"><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Đang dùng</label>}
         <p className="muted">Mã gồm chữ hoa, số, dấu -; không đổi sau khi tạo. Nhóm chỉ để phân loại và báo cáo, không đổi số liệu đã ghi sổ.</p>
       </Modal>}

@@ -217,7 +217,7 @@ public sealed class SalesDispatchService(HakDbContext db, StockService stock, In
             if (price <= 0) throw new DomainException(ErrorCodes.ValidationFailed, $"Chưa có giá bán cho {item.Code}: nhập giá ở đơn hàng hoặc danh mục hàng hóa.");
             return new InvoiceLineInput(price, doc.Id, l.StockLineNo, l.Quantity, ol.Basis, VatRate: ol.VatRate ?? item.DefaultVatRate, OrderId: order.Id, OrderLineNo: ol.LineNo);
         }).ToList();
-        DateOnly? due = partner.PaymentTermsDays is { } days ? invoiceDate.AddDays(days) : null;
+        DateOnly? due = (await Hak.Application.Setup.GroupDefaults.PartnerTermsAsync(db, ctx.CompanyId, partner)).PaymentTermsDays is { } days ? invoiceDate.AddDays(days) : null;
         return await invoices.CreateAsync(ctx, new InvoiceInput(InvoiceKind.Sales, d.PartnerId, invoiceSeries, invoiceNo, invoiceDate, invoiceDate,
             $"Bán hàng theo phiếu giao hàng {del.Number}", lines, DueDate: due));
     }

@@ -2056,6 +2056,15 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<decimal?>("DefaultCreditLimit")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("default_credit_limit");
+
+                    b.Property<int?>("DefaultPaymentTermsDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("default_payment_terms_days");
+
                     b.Property<int>("Domain")
                         .HasColumnType("integer")
                         .HasColumnName("domain");

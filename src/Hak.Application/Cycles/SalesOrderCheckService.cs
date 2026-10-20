@@ -33,13 +33,15 @@ public sealed class SalesOrderCheckService(HakDbContext db, SettlementService se
     {
         var partner = await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == order.PartnerId);
         var today = DateOnly.FromDateTime(clock.UtcNow);
+        var terms = await Hak.Application.Setup.GroupDefaults.PartnerTermsAsync(db, ctx.CompanyId, partner);
+        var creditLimit = terms.CreditLimit;
 
         // Estimated order value incl. VAT, in functional currency (VND, rounded per line). Foreign-currency orders are not compared with the VND limit.
         var value = order.Lines.Sum(l => Math.Round(l.Quantity * l.UnitPrice * (1 + (l.VatRate ?? 0) / 100m), 0, MidpointRounding.AwayFromZero));
         decimal balance = 0, overdue = 0;
         string? note = null;
-        var applied = partner.CreditLimit is not null && order.Currency is null;
-        if (partner.CreditLimit is null) note = "Khách hàng chưa khai báo hạn mức tín dụng: không kiểm tra.";
+        var applied = creditLimit is not null && order.Currency is null;
+        if (creditLimit is null) note = "Khách hàng chưa khai báo hạn mức tín dụng: không kiểm tra.";
         else if (order.Currency is not null) note = "Đơn ngoại tệ: không so với hạn mức VND.";
         else
         {
@@ -64,7 +66,7 @@ public sealed class SalesOrderCheckService(HakDbContext db, SettlementService se
         }).ToList();
 
         var after = balance + value;
-        return new SalesOrderCheck(order.Id, order.Number, partner.Id, partner.Name, partner.CreditLimit, applied, note, balance, overdue, value, after,
-            applied && after > partner.CreditLimit!.Value, lines, lines.Any(l => l.Shortfall > 0));
+        return new SalesOrderCheck(order.Id, order.Number, partner.Id, partner.Name, creditLimit, applied, note, balance, overdue, value, after,
+            applied && after > creditLimit!.Value, lines, lines.Any(l => l.Shortfall > 0));
     }
 }
