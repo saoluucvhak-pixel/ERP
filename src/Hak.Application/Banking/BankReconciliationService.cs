@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -44,6 +45,34 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
 {
     public const int AutoMatchThreshold = 60;
 
+    /// <summary>Tiền tố mã giao dịch do hệ thống sinh cho dòng sao kê ngân hàng không có mã (quyết định 16/10/2026).</summary>
+    public const string AutoReferencePrefix = "AUTO-";
+    public static bool IsAutoReference(string reference) => reference.StartsWith(AutoReferencePrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Mã giao dịch từng dòng. Dòng có mã thì giữ nguyên; dòng không mã nhận mã băm của (ngày, tiền, nội dung, đối tác) + số lần xuất hiện
+    /// trong tệp, nên cùng nội dung ở sao kê chồng kỳ cho cùng mã (bị chặn nhập trùng như dòng có mã) còn hai giao dịch giống hệt nhau
+    /// trong một tệp vẫn phân biệt được.
+    /// </summary>
+    internal static List<string> ResolveReferences(IReadOnlyList<StatementLineInput> lines)
+    {
+        var seen = new Dictionary<string, int>();
+        var result = new List<string>(lines.Count);
+        foreach (var l in lines)
+        {
+            var reference = (l.BankReference ?? "").Trim();
+            if (reference.Length == 0)
+            {
+                var basis = string.Join('|', l.TransactionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), l.Amount.ToString("0.####", CultureInfo.InvariantCulture),
+                    (l.Description ?? "").Trim(), (l.CounterpartyName ?? "").Trim(), (l.CounterpartyAccount ?? "").Trim());
+                var n = seen[basis] = seen.GetValueOrDefault(basis) + 1;
+                reference = AutoReferencePrefix + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{basis}|{n}")))[..20];
+            }
+            result.Add(reference);
+        }
+        return result;
+    }
+
     public async Task<BankStatement> ImportAsync(SessionContext ctx, StatementInput input)
     {
         ctx.Require(Permissions.BankReconcile);
@@ -53,9 +82,10 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
         if (computed != input.ClosingBalance)
             throw new DomainException(ErrorCodes.StatementUnbalanced,
                 $"Số dư đầu {input.OpeningBalance} + phát sinh {input.Lines.Sum(l => l.Amount)} = {computed}, khác số dư cuối {input.ClosingBalance} trên sao kê.");
-        if (input.Lines.Any(l => l.Amount == 0 || string.IsNullOrWhiteSpace(l.BankReference) || l.TransactionDate < input.FromDate || l.TransactionDate > input.ToDate))
-            throw new DomainException(ErrorCodes.ValidationFailed, "Mỗi giao dịch phải có số tiền khác 0, mã giao dịch ngân hàng và ngày trong kỳ sao kê.");
-        var dupInFile = input.Lines.GroupBy(l => l.BankReference.Trim()).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (input.Lines.Any(l => l.Amount == 0 || l.TransactionDate < input.FromDate || l.TransactionDate > input.ToDate))
+            throw new DomainException(ErrorCodes.ValidationFailed, "Mỗi giao dịch phải có số tiền khác 0 và ngày trong kỳ sao kê.");
+        var references = ResolveReferences(input.Lines);
+        var dupInFile = references.GroupBy(r => r).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (dupInFile.Count > 0) throw new DomainException(ErrorCodes.StatementDuplicate, $"Mã giao dịch lặp trong file: {string.Join(", ", dupInFile)}.");
 
         var sha = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(input.SourceContent)));
@@ -65,7 +95,7 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
             if (bank is null || bank.CashKind != CashKind.Bank) throw new DomainException(ErrorCodes.ValidationFailed, "Tài khoản không phải tài khoản tiền gửi ngân hàng của công ty.");
             if (await db.BankStatements.AnyAsync(s => s.CompanyId == ctx.CompanyId && s.BankAccountId == bank.Id && s.SourceSha256 == sha))
                 throw new DomainException(ErrorCodes.StatementDuplicate, "File sao kê này đã được nhập.");
-            var refs = input.Lines.Select(l => l.BankReference.Trim()).ToList();
+            var refs = references;
             var existing = await db.BankStatementLines.Where(l => l.CompanyId == ctx.CompanyId && l.BankAccountId == bank.Id && refs.Contains(l.BankReference))
                 .Select(l => l.BankReference).ToListAsync();
             if (existing.Count > 0) throw new DomainException(ErrorCodes.StatementDuplicate, $"Giao dịch đã có trong sao kê nhập trước: {string.Join(", ", existing)}.");
@@ -85,7 +115,7 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
             st.Lines = input.Lines.Select((l, i) => new BankStatementLine
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, StatementId = st.Id, BankAccountId = bank.Id, LineNo = i + 1,
-                TransactionDate = l.TransactionDate, Amount = l.Amount, BankReference = l.BankReference.Trim(), Description = l.Description,
+                TransactionDate = l.TransactionDate, Amount = l.Amount, BankReference = references[i], Description = l.Description,
                 CounterpartyName = l.CounterpartyName, CounterpartyAccount = l.CounterpartyAccount,
             }).ToList();
             db.BankStatements.Add(st);
@@ -253,7 +283,7 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
                           select new { l.Id, e.VoucherNumber, l.PostingDate, l.Amount, l.Description, VDesc = v.Description, v.SourceId })
             .AsNoTracking().ToListAsync();
 
-        var reference = sl.BankReference.Trim();
+        var reference = IsAutoReference(sl.BankReference) ? "" : sl.BankReference.Trim();   // mã sinh tự động không phải mã ngân hàng thật: không dùng để chấm điểm
         var result = rows.Select(r =>
         {
             var score = 50 - 5 * Math.Abs(r.PostingDate.DayNumber - sl.TransactionDate.DayNumber);

@@ -56,7 +56,7 @@ public sealed class StatementVoucherService(HakDbContext db, AccountingEngine en
         if (open.FirstOrDefault(v => v.Status != VoucherStatus.Cancelled && v.Status != VoucherStatus.Reversed) is { } existing)
             throw new DomainException(ErrorCodes.DuplicateSource, $"Dòng sao kê đã có chứng từ {existing.Number}; xử lý chứng từ đó (hoặc hủy) trước.");
         var amount = Math.Abs(sl.Amount);
-        var text = string.IsNullOrWhiteSpace(description) ? $"{sl.Description} (GD {sl.BankReference})".Trim() : description.Trim();
+        var text = string.IsNullOrWhiteSpace(description) ? (BankReconciliationService.IsAutoReference(sl.BankReference) ? sl.Description : $"{sl.Description} (GD {sl.BankReference})").Trim() : description.Trim();
         VoucherLineInput bank = new(sl.BankAccountId, sl.Amount > 0 ? Side.Debit : Side.Credit, amount, Description: text);
         VoucherLineInput counter = new(counterAccountId, sl.Amount > 0 ? Side.Credit : Side.Debit, amount, partnerId, Description: text);
         var v = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, sl.TransactionDate, sl.TransactionDate, text,
