@@ -132,7 +132,7 @@ export function FlowTab({ module: m, labels, counts }: { module: AppModule; labe
       <div className="flow-main">
         <div className="flow-card">
           <div className="flow-title">{m.title}</div>
-          <div className="flow-diagram" style={{ gridTemplateColumns: `repeat(${n}, minmax(90px, 1fr))` }}>
+          <div className="flow-diagram" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
             <div className="flow-line" style={{ gridColumn: `1 / ${n + 1}` }} />
             {m.flow.map((node, i) => (
               <button key={i} className={`flow-node ${i % 2 === 0 ? 'up' : 'down'}`} style={{ gridColumn: i + 1, gridRow: i % 2 === 0 ? 1 : 3 }} onClick={() => go(node.screen)} title={labels[node.screen]}>
