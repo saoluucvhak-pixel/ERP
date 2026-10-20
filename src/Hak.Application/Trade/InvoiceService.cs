@@ -73,6 +73,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             var n = 0;
             foreach (var l in input.Lines)
                 inv.Lines.Add(await BuildLineAsync(ctx, inv, l, ++n, curDp, funcDp));
+            await CheckTotalsAgainstSourcesAsync(ctx.CompanyId, inv);
             db.CommercialInvoices.Add(inv);
             await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.create", "invoice", inv.Id.ToString(),
                 new { inv.Number, inv.Kind, inv.InvoiceSeries, inv.InvoiceNo, total = inv.Lines.Sum(x => x.FunctionalAmount + x.VatAmount) });
@@ -138,6 +139,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             Guid Role(string code) => roles.TryGetValue(code, out var id) ? id
                 : throw new DomainException(ErrorCodes.RuleRoleUnmapped, $"Chưa ánh xạ vai trò tài khoản {code}.");
 
+            await CheckTotalsAgainstSourcesAsync(ctx.CompanyId, inv);
             var gl = new List<VoucherLineInput>();
             foreach (var l in inv.Lines.OrderBy(x => x.LineNo))
             {
@@ -371,6 +373,30 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         line.Amount = MoneyMath.Round(line.BasisQuantity * line.UnitPrice, curDp);
         line.FunctionalAmount = rate is { } r ? MoneyMath.Convert(line.Amount, r, funcDp) : line.Amount;
         line.VatAmount = line.VatRate is { } v ? MoneyMath.Round(line.FunctionalAmount * v / 100m, funcDp) : 0;
+    }
+
+    /// <summary>
+    /// Tổng theo nguồn: nhiều dòng của MỘT hóa đơn cùng chỉ vào một dòng đơn dịch vụ hoặc một dòng phiếu kho phải được cộng lại rồi so với phần còn lại.
+    /// Kiểm tra từng dòng riêng (BuildLineAsync lúc lập, RecheckLineAsync lúc ghi sổ — cả hai bỏ chính hóa đơn này ra) bỏ sót trường hợp 6 + 6 &gt; 10.
+    /// Chạy trong cùng giao dịch ghi (một người ghi tại một thời điểm) nên không bị hai người dùng lách nhau.
+    /// </summary>
+    private async Task CheckTotalsAgainstSourcesAsync(Guid companyId, CommercialInvoice inv)
+    {
+        foreach (var g in inv.Lines.Where(x => x.StockDocumentId is null && x.ItemId is not null && x.OrderId is not null && x.OrderLineNo is not null)
+                     .GroupBy(x => (OrderId: x.OrderId!.Value, LineNo: x.OrderLineNo!.Value)).Where(g => g.Count() > 1))
+        {
+            var itemId = g.First().ItemId!.Value;
+            if (!await db.Items.AnyAsync(i => i.Id == itemId && i.IsService)) continue;
+            var number = await db.TradeOrders.AsNoTracking().Where(o => o.Id == g.Key.OrderId).Select(o => o.Number).FirstAsync();
+            await ServiceAcceptanceService.CheckInvoiceAgainstAcceptanceAsync(db, g.Key.OrderId, g.Key.LineNo, number, g.Sum(x => x.BasisQuantity), inv.Id);
+        }
+        foreach (var g in inv.Lines.Where(x => x.StockDocumentId is not null && x.StockLineNo is not null)
+                     .GroupBy(x => (Doc: x.StockDocumentId!.Value, LineNo: x.StockLineNo!.Value)).Where(g => g.Count() > 1))
+        {
+            var doc = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstAsync(d => d.Id == g.Key.Doc);
+            var sl = doc.Lines.Single(x => x.LineNo == g.Key.LineNo);
+            await CheckRemainingAsync(companyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, g.Sum(x => x.StockQuantity ?? 0), inv.Id);
+        }
     }
 
     /// <summary>At posting: quantities still available and the BDMT basis still equal to the active measurement.</summary>

@@ -1206,4 +1206,96 @@ public class TradeTests
         Assert.Equal(33_000_000m, r.JournalTotal);
         Assert.Equal(r.JournalTotal, r.BooksTotal); Assert.True(r.Balanced); Assert.Equal(3, r.DuplicateEntries);   // rút tiền (hiện ở chi tiền), nộp tiền vào ngân hàng (hiện ở thu tiền), hoàn ứng (hiện ở mua hàng)
     }
+
+    // ---- Tổng số lượng trên MỘT hóa đơn có nhiều dòng cùng nguồn (đơn dịch vụ / dòng phiếu kho) ----
+
+    private static async Task<Guid> AcceptedServiceOrderAsync(Fx fx, InvoiceKind kind, decimal ordered, decimal accepted)
+    {
+        var acc = new ServiceAcceptanceService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        fx.H.Acc["TRANSPORT"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "TRANSPORT", "Chi phí vận chuyển thuê (thử)")).Id;
+        var haul = await fx.S.Stock.CreateServiceItemAsync(fx.H.Admin, "VANCHUYEN", "Vận chuyển thuê", "chuyến", "SALESREV", "TRANSPORT");
+        var partner = kind == InvoiceKind.Sales ? fx.H.Partner["KH01"] : fx.H.Partner["NCC01"];
+        var order = await Orders(fx).CreateAsync(fx.H.Preparer, new OrderInput(kind, partner, D(3, 2), "Dịch vụ vận chuyển", [new OrderLineInput(haul.Id, ordered, 2_000_000, VatRate: 8)]));
+        await Orders(fx).ConfirmAsync(fx.H.Approver, order.Id);
+        var nt = await acc.CreateAsync(fx.H.Preparer, new(order.Id, D(3, 15), [new(1, accepted)]));
+        await acc.DecideAsync(fx.H.Approver, nt.Id, true, null);
+        return order.Id;
+    }
+
+    private static InvoiceInput ServiceInvoice(Fx fx, InvoiceKind kind, string no, params InvoiceLineInput[] lines)
+        => new(kind, kind == InvoiceKind.Sales ? fx.H.Partner["KH01"] : fx.H.Partner["NCC01"], "1C26T", no, D(3, 20), D(3, 20), "Dịch vụ vận chuyển", lines);
+
+    private static async Task<int> JournalCountAsync(Fx fx) => await fx.S.Db.JournalEntries.CountAsync();
+
+    [Fact]
+    public async Task ServiceInvoice_TwoLinesOfSameOrderLine_AreSummed_Sales()
+    {
+        using var fx = await SetupAsync();
+        var order = await AcceptedServiceOrderAsync(fx, InvoiceKind.Sales, 10, 10);
+        InvoiceLineInput L(decimal q, decimal price = 2_000_000) => new(price, Quantity: q, VatRate: 8, OrderId: order, OrderLineNo: 1);
+
+        // 6 + 6 > 10: bị chặn ngay lúc lập, không để lại hóa đơn nào.
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, ServiceInvoice(fx, InvoiceKind.Sales, "A1", L(6), L(6)))));
+        Assert.Equal(0, await fx.S.Db.CommercialInvoices.CountAsync());
+
+        // 6 + 4 = 10 hợp lệ (cho phép tách dòng theo đơn giá khác nhau; cộng theo số lượng).
+        var ok = await fx.Inv.CreateAsync(fx.H.Preparer, ServiceInvoice(fx, InvoiceKind.Sales, "A2", L(6), L(4, 2_500_000)));
+        // Nháp giữ chỗ: hóa đơn khác chỉ thêm 1 cũng vượt.
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, ServiceInvoice(fx, InvoiceKind.Sales, "A3", L(1)))));
+        await fx.Inv.PostAsync(fx.H.Approver, ok.Id);
+        Assert.Equal(-22_000_000m, await fx.Bal("SALESREV"));   // 6 × 2.000.000 + 4 × 2.500.000
+
+        // Ghi sổ lặp không phát sinh thêm bút toán.
+        var before = await JournalCountAsync(fx);
+        Assert.Equal(ErrorCodes.AlreadyPosted, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, ok.Id)));
+        Assert.Equal(before, await JournalCountAsync(fx));
+    }
+
+    [Fact]
+    public async Task ServiceInvoice_TwoLinesOfSameOrderLine_AreSummed_Purchase()
+    {
+        using var fx = await SetupAsync();
+        var order = await AcceptedServiceOrderAsync(fx, InvoiceKind.Purchase, 5, 5);
+        InvoiceLineInput L(decimal q) => new(2_000_000, Quantity: q, VatRate: 8, OrderId: order, OrderLineNo: 1);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, ServiceInvoice(fx, InvoiceKind.Purchase, "M1", L(3), L(3)))));
+        var ok = await fx.Inv.CreateAsync(fx.H.Preparer, ServiceInvoice(fx, InvoiceKind.Purchase, "M2", L(2), L(3)));
+        await fx.Inv.PostAsync(fx.H.Approver, ok.Id);
+        Assert.Equal(10_000_000m, await fx.Bal("TRANSPORT"));
+    }
+
+    [Fact]
+    public async Task ServiceInvoice_DraftEditedPastAcceptance_IsRejectedAtPosting_WithoutPartialState()
+    {
+        using var fx = await SetupAsync();
+        var order = await AcceptedServiceOrderAsync(fx, InvoiceKind.Sales, 10, 10);
+        InvoiceLineInput L(decimal q) => new(2_000_000, Quantity: q, VatRate: 8, OrderId: order, OrderLineNo: 1);
+        var draft = await fx.Inv.CreateAsync(fx.H.Preparer, ServiceInvoice(fx, InvoiceKind.Sales, "B1", L(6), L(4)));
+        // Mô phỏng dữ liệu cũ / sửa trực tiếp: dòng 2 bị nâng lên 6 (tổng 12 > 10) sau khi đã lập.
+        var line2 = await fx.S.Db.CommercialInvoiceLines.SingleAsync(x => x.InvoiceId == draft.Id && x.LineNo == 2);
+        line2.BasisQuantity = 6;
+        await fx.S.Db.SaveChangesAsync();
+        fx.S.Db.ChangeTracker.Clear();
+
+        var journalsBefore = await JournalCountAsync(fx);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, draft.Id)));
+        Assert.Equal(journalsBefore, await JournalCountAsync(fx));
+        Assert.Equal(InvoiceStatus.Draft, (await fx.S.Db.CommercialInvoices.AsNoTracking().SingleAsync(i => i.Id == draft.Id)).Status);
+        Assert.Equal(0m, await fx.Bal("SALESREV"));
+    }
+
+    [Fact]
+    public async Task StockInvoice_TwoLinesOfSameStockLine_AreSummed()
+    {
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 10, 1_000, D(3, 1), fx.Add);
+        var issue = await PostedIssueAsync(fx, 10, D(3, 2), fx.Add);
+        InvoiceLineInput L(decimal q) => new(500, issue.Id, 1, StockQuantity: q, VatRate: 10);
+        InvoiceInput Sale(string no, params InvoiceLineInput[] lines) => new(InvoiceKind.Sales, fx.H.Partner["KH01"], "S", no, D(3, 3), D(3, 3), "Bán phụ gia", lines);
+
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, Sale("C1", L(6), L(6)))));
+        Assert.Equal(0, await fx.S.Db.CommercialInvoices.CountAsync());
+        var ok = await fx.Inv.CreateAsync(fx.H.Preparer, Sale("C2", L(4), L(6)));
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, Sale("C3", L(1)))));
+        await fx.Inv.PostAsync(fx.H.Approver, ok.Id);
+    }
 }
