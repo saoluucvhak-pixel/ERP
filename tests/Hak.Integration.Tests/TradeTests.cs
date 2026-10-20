@@ -1,6 +1,7 @@
 using Hak.Domain.Catalog;
 using Hak.Application.Inventory;
 using Hak.Application.Trade;
+using Hak.Application.Cycles;
 using Hak.Domain.Common;
 using Hak.Domain.Inventory;
 using Hak.Domain.Trade;
@@ -852,5 +853,104 @@ public class TradeTests
         Assert.Equal(D(4, 10), Assert.Single(notice.Invoices).DueDate);
         Assert.Empty(await reports.OverdueNoticesAsync(h.Auditor, D(4, 10)));   // due today is not overdue yet
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => plan.PlanAsync(h.Auditor, D(3, 31), 0)));
+    }
+
+    [Fact]
+    public async Task QualityCheck_BlocksPostingOfSupplierReceipts_UntilFullyAcceptedInspection()
+    {
+        using var fx = await SetupAsync();
+        var insp = new Hak.Application.Cycles.GoodsInspectionService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        await fx.S.Stock.SetItemRequiresQcAsync(fx.H.Admin, fx.Add, true);
+        var doc = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 2), D(3, 2), "Nhập phụ gia",
+            [new StockLineInput(fx.Add, 100, 5_000_000, fx.A("GRNI"))], PartnerId: fx.H.Partner["NCC01"]));
+        Assert.Equal(ErrorCodes.QualityCheckRequired, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, doc.Id)));         // chưa có biên bản
+        var bad = await insp.CreateAsync(fx.H.Preparer, new InspectionInput(doc.Id, D(3, 2), "Ban kiểm nghiệm", "Lô lẫn tạp chất", [new InspectionLineInput(1, 80)]));
+        Assert.Equal(ErrorCodes.QualityCheckRequired, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, doc.Id)));         // chỉ đạt 80/100
+        await insp.CancelAsync(fx.H.Preparer, bad.Id, "Lập lại sau tuyển chọn");
+        await insp.CreateAsync(fx.H.Preparer, new InspectionInput(doc.Id, D(3, 3), "Ban kiểm nghiệm", "Đạt"));                            // không nêu dòng = đạt toàn bộ
+        Assert.Equal(StockDocumentStatus.Posted, (await fx.S.Stock.PostDocumentAsync(fx.H.Approver, doc.Id)).Status);
+        // Vật tư không bắt buộc, hoặc phiếu không có đối tác (nhập thành phẩm, tồn đầu kỳ) thì không bị chặn.
+        await PostedReceiptAsync(fx, 10, 15_000_000, D(3, 4), fx.Dam);
+        await fx.S.Stock.SetItemRequiresQcAsync(fx.H.Admin, fx.Dam, true);
+        var own = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 5), D(3, 5), "Nhập thành phẩm",
+            [new StockLineInput(fx.Dam, 5, 7_000_000, fx.A("COGS"))]));
+        Assert.Equal(StockDocumentStatus.Posted, (await fx.S.Stock.PostDocumentAsync(fx.H.Approver, own.Id)).Status);
+    }
+
+    [Fact]
+    public async Task SalesAdjustmentApproval_PolicyLimitsReturnsAndDiscountsToApprovedScope()
+    {
+        using var fx = await SetupAsync();
+        var (inv, _) = await PostedBdmtSaleAsync(fx);
+        var appr = new SalesApprovalService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        fx.H.Clock.UtcNow = new DateTime(2026, 3, 14, 8, 0, 0, DateTimeKind.Utc);
+        // Chưa bật chính sách: đường cũ vẫn chạy.
+        Assert.False(await appr.PolicyAsync(fx.H.Auditor));
+        await appr.SetPolicyAsync(fx.H.Approver, true);
+        Assert.Equal(ErrorCodes.ApprovalRequired, await CodeOf(() => fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 10, D(3, 15))));
+        Assert.Equal(ErrorCodes.ApprovalRequired, await CodeOf(() => fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(inv.Id, InvoicePurpose.Discount, "1C26T", "102", D(3, 20), D(3, 20), "Giảm giá", [new AdjustmentLineInput(1, Amount: 1_000_000)]))));
+
+        // Yêu cầu: lý do bắt buộc, số lượng không vượt số đã bán, người lập không tự duyệt.
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => appr.RequestAsync(fx.H.Preparer, new(inv.Id, AdjustmentKind.Return, " ", [new(1, 10, null)]))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => appr.RequestAsync(fx.H.Preparer, new(inv.Id, AdjustmentKind.Return, "Hàng lỗi", [new(1, 61, null)]))));
+        var req = await appr.RequestAsync(fx.H.Preparer, new(inv.Id, AdjustmentKind.Return, "Độ khô không đạt hợp đồng", [new(1, 10, null)]));
+        var own = await appr.RequestAsync(fx.H.Approver, new(inv.Id, AdjustmentKind.Return, "Tự lập", [new(1, 5, null)]));
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => appr.DecideAsync(fx.H.Approver, own.Id, true, null)));
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => appr.DecideAsync(fx.H.Approver, req.Id, false, " ")));
+        Assert.Equal(ErrorCodes.ApprovalRequired, await CodeOf(() => fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 10, D(3, 15))));   // chưa duyệt vẫn chặn
+        await appr.DecideAsync(fx.H.Approver, req.Id, true, "Đồng ý theo biên bản giám định");
+
+        // Trong phạm vi 10 MT thì được; vượt thì chặn; phần đã dùng hiện trên yêu cầu.
+        var ret = await fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 10, D(3, 15));
+        Assert.Equal(ErrorCodes.ApprovalRequired, await CodeOf(() => fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 1, D(3, 16))));
+        var row = (await appr.RequestsAsync(fx.H.Auditor, inv.Id)).Single(r => r.Id == req.Id);
+        Assert.Equal((ApprovalStatus.Approved, 10m), (row.Status, row.Lines[0].Used));
+        _ = ret;
+
+        // Giảm giá: duyệt 3 triệu; lập 3 triệu được, thêm 1 đồng thì chặn.
+        var dreq = await appr.RequestAsync(fx.H.Preparer, new(inv.Id, AdjustmentKind.Discount, "Giảm giá do độ khô thấp", [new(1, null, 3_000_000)]));
+        await appr.DecideAsync(fx.H.Approver, dreq.Id, true, null);
+        await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(inv.Id, InvoicePurpose.Discount, "1C26T", "102", D(3, 20), D(3, 20), "Giảm giá", [new AdjustmentLineInput(1, Amount: 3_000_000)]));
+        Assert.Equal(ErrorCodes.ApprovalRequired, await CodeOf(() => fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(inv.Id, InvoicePurpose.Discount, "1C26T", "103", D(3, 21), D(3, 21), "Thêm", [new AdjustmentLineInput(1, Amount: 1)]))));
+        // Tăng giá không bị chặn; hủy yêu cầu đã duyệt không làm mất hóa đơn đã lập nhưng không cấp thêm quyền.
+        await appr.CancelAsync(fx.H.Preparer, dreq.Id, "Thu hồi");
+        await appr.SetPolicyAsync(fx.H.Approver, false);
+        await fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 1, D(3, 16));   // tắt chính sách thì lại tự do
+    }
+
+    [Fact]
+    public async Task DebtWriteOff_Request_Approve_Voucher_UsesProvisionThenExpense_AndSettlesTheReceivable()
+    {
+        using var fx = await SetupAsync();
+        var (inv, _) = await PostedBdmtSaleAsync(fx);                          // phải thu KH01 143.856.000
+        foreach (var (code, name) in new[] { ("PROV", "Dự phòng phải thu khó đòi (thử)"), ("BDEXP", "Chi phí xóa nợ (thử)") }) fx.H.Acc[code] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, code, name)).Id;
+        var appr = new SalesApprovalService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        fx.H.Clock.UtcNow = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc);
+        var cands = await appr.CandidatesAsync(fx.H.Auditor, fx.H.Partner["KH01"], D(9, 1));
+        var c = Assert.Single(cands);
+        Assert.Equal((143_856_000m, true), (c.Open, c.OverdueDays > 100));
+
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => appr.RequestWriteOffAsync(fx.H.Preparer, new(fx.H.Partner["KH01"], " ", "QĐ 12", [new(c.JournalLineId, 100)]))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => appr.RequestWriteOffAsync(fx.H.Preparer, new(fx.H.Partner["KH01"], "Khách giải thể", " ", [new(c.JournalLineId, 100)]))));
+        Assert.Equal(ErrorCodes.SettlementExceedsOpen, await CodeOf(() => appr.RequestWriteOffAsync(fx.H.Preparer, new(fx.H.Partner["KH01"], "Khách giải thể", "QĐ 12", [new(c.JournalLineId, 143_856_001)]))));
+        // Xóa 40 triệu, trong đó 30 triệu đã trích dự phòng.
+        var w = await appr.RequestWriteOffAsync(fx.H.Preparer, new(fx.H.Partner["KH01"], "Khách giải thể, không còn tài sản", "QĐ 12/2026, biên bản đối chiếu 15/8", [new(c.JournalLineId, 40_000_000, 30_000_000)]));
+        Assert.Equal(103_856_000m, Assert.Single(await appr.CandidatesAsync(fx.H.Auditor, fx.H.Partner["KH01"], D(9, 1))).Open);   // khoản đã nằm trong phiếu thì không chọn lại
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => appr.CreateWriteOffVoucherAsync(fx.H.Preparer, w.Id, D(9, 1))));  // chưa duyệt
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => appr.DecideWriteOffAsync(fx.H.Preparer, w.Id, true, null)));           // không phải người có thẩm quyền
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(async () => { var own = await appr.RequestWriteOffAsync(fx.H.Approver, new(fx.H.Partner["KH01"], "x", "y", [new(c.JournalLineId, 1)])); await appr.DecideWriteOffAsync(fx.H.Approver, own.Id, true, null); }));
+        await appr.DecideWriteOffAsync(fx.H.Approver, w.Id, true, "Đồng ý");
+        Assert.Equal(ErrorCodes.RuleRoleUnmapped, await CodeOf(() => appr.CreateWriteOffVoucherAsync(fx.H.Preparer, w.Id, D(9, 1))));
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "BAD_DEBT_PROVISION", "PROV");
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "BAD_DEBT_EXPENSE", "BDEXP");
+        var v = await appr.CreateWriteOffVoucherAsync(fx.H.Preparer, w.Id, D(9, 1));
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => appr.CreateWriteOffVoucherAsync(fx.H.Preparer, w.Id, D(9, 1))));
+        await fx.S.Engine.SubmitAsync(fx.H.Preparer, v.Id); await fx.S.Engine.ApproveAsync(fx.H.Approver, v.Id); await fx.S.Engine.PostAsync(fx.H.Approver, v.Id);
+        Assert.Equal(143_856_000m - 40_000_000m, await fx.Bal("AR"));
+        Assert.Equal(30_000_000m, await fx.Bal("PROV"));
+        Assert.Equal(10_000_000m, await fx.Bal("BDEXP"));
+        var row = Assert.Single(await appr.WriteOffsAsync(fx.H.Auditor), r => r.Id == w.Id);
+        Assert.True(row.Done);
+        Assert.Equal(103_856_000m, Assert.Single(await fx.S.Settlement.OpenItemsAsync(fx.H.Auditor, fx.A("AR"), null, D(12, 31))).Open);
     }
 }

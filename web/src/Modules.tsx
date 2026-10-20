@@ -44,10 +44,10 @@ export const MODULES: AppModule[] = [
     catalogs: [{ label: 'Nhà cung cấp', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup' }, CAT_SETUP],
   },
   {
-    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'trade', 'arap'], title: 'NGHIỆP VỤ BÁN HÀNG',
+    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'trade', 'arap', 'salesapproval'], title: 'NGHIỆP VỤ BÁN HÀNG',
     flow: [
       { label: 'Hợp đồng bán', icon: '📑', screen: 'contracts' }, { label: 'Đơn bán, kiểm tra tín dụng', icon: '📝', screen: 'orders' }, { label: 'Lệnh bán hàng', icon: '📋', screen: 'revenue' }, { label: 'Giao hàng, xuất kho', icon: '🚚', screen: 'revenue' },
-      { label: 'Hóa đơn bán', icon: '📄', screen: 'trade' }, { label: 'Theo dõi phải thu', icon: '🧮', screen: 'arap' }, { label: 'Thu tiền', icon: '💵', screen: 'revenue' },
+      { label: 'Hóa đơn bán', icon: '📄', screen: 'trade' }, { label: 'Trả hàng, giảm giá (duyệt)', icon: '↩️', screen: 'salesapproval' }, { label: 'Theo dõi phải thu', icon: '🧮', screen: 'arap' }, { label: 'Thu tiền', icon: '💵', screen: 'revenue' }, { label: 'Xóa nợ khó đòi (duyệt)', icon: '🧾', screen: 'salesapproval' },
     ],
     reports: [{ label: 'Tiến độ, lịch thanh toán, chênh lệch giá hợp đồng', screen: 'contracts' }, { label: 'Phân tích tiêu thụ, giá vốn, lãi gộp', screen: 'revenue' }, { label: 'Thu tiền bán hàng', screen: 'revenue' }, { label: 'Thông báo nợ quá hạn', screen: 'revenue' }, { label: 'Công nợ phải thu khách hàng', screen: 'arap' }],
     catalogs: [{ label: 'Khách hàng', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup' }, CAT_SETUP],

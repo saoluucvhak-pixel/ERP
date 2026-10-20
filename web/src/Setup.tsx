@@ -270,7 +270,7 @@ function ItemAltUnitCell({ item, busy, onSave }: { item: Item; busy: boolean; on
     {dirty && <button className="primary" disabled={busy} onClick={() => onSave(u.trim() || null, f.trim() ? parseMoney(f) : null)}>Lưu</button>}</td>
 }
 
-interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean; altUnit?: string | null; altFactor?: string | null; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
+interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean; requiresQc?: boolean; altUnit?: string | null; altFactor?: string | null; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
 
 function Stock() {
@@ -310,12 +310,14 @@ function Stock() {
       </section>
       <section className="panel">
         <h3>Vật tư, hàng hóa</h3>
-        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đơn vị quy đổi cố định</th><th>Đo độ khô (MT/BDMT)</th></tr></thead>
+        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đơn vị quy đổi cố định</th><th>Đo độ khô (MT/BDMT)</th><th title="Phiếu nhập từ nhà cung cấp / khách trả lại chỉ ghi sổ khi có biên bản kiểm nghiệm đạt toàn bộ số lượng">Bắt buộc kiểm tra chất lượng</th></tr></thead>
           <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
             <ItemCommercialCells item={i} busy={busy} onSave={(body) => act(() => put(`/items/${i.id}/commercial`, body), `Đã lưu thông tin thương mại ${i.code}.`)} />
             <ItemAltUnitCell key={`${i.id}-${i.altUnit}-${i.altFactor}`} item={i} busy={busy} onSave={(altUnit, altFactor) => act(() => put(`/items/${i.id}/alt-unit`, { altUnit, altFactor }), `Đã lưu đơn vị quy đổi ${i.code}.`)} />
             <td><input type="checkbox" aria-label={`Đo độ khô ${i.code}`} checked={i.tracksDryness} disabled={busy}
-              onChange={e => act(() => post(`/items/${i.id}/tracks-dryness`, { tracks: e.target.checked }), 'Đã cập nhật theo dõi độ khô.')} /></td></tr>)}</tbody></table>
+              onChange={e => act(() => post(`/items/${i.id}/tracks-dryness`, { tracks: e.target.checked }), 'Đã cập nhật theo dõi độ khô.')} /></td>
+            <td><input type="checkbox" aria-label={`Bắt buộc kiểm tra chất lượng ${i.code}`} checked={!!i.requiresQc} disabled={busy}
+              onChange={e => act(() => post(`/items/${i.id}/requires-qc`, { requires: e.target.checked }), 'Đã cập nhật yêu cầu kiểm tra chất lượng.')} /></td></tr>)}</tbody></table>
         <div className="form-row" style={{ marginTop: 8 }}>
           <label>Mã <input value={item.code} onChange={e => setItem(x => ({ ...x, code: e.target.value.toUpperCase() }))} /></label>
           <label>Tên <input value={item.name} onChange={e => setItem(x => ({ ...x, name: e.target.value }))} /></label>

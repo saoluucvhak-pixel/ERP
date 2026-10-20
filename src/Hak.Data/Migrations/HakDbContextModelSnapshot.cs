@@ -3112,6 +3112,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("reorder_qty");
 
+                    b.Property<bool>("RequiresQc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("requires_qc");
+
                     b.Property<long?>("SalePrice")
                         .HasColumnType("INTEGER")
                         .HasColumnName("sale_price");
@@ -3287,6 +3291,14 @@ namespace Hak.Data.Migrations
                     b.Property<long>("Quantity")
                         .HasColumnType("INTEGER")
                         .HasColumnName("quantity");
+
+                    b.Property<Guid?>("SourceInvoiceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_invoice_id");
+
+                    b.Property<int?>("SourceInvoiceLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("source_invoice_line_no");
 
                     b.HasKey("Id")
                         .HasName("pk_stock_document_lines");
@@ -4344,6 +4356,10 @@ namespace Hak.Data.Migrations
                     b.Property<bool>("RequireDistinctApprover")
                         .HasColumnType("INTEGER")
                         .HasColumnName("require_distinct_approver");
+
+                    b.Property<bool>("RequireSalesAdjustmentApproval")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("require_sales_adjustment_approval");
 
                     b.Property<bool>("RequireSupplierApproval")
                         .HasColumnType("INTEGER")
@@ -6454,6 +6470,112 @@ namespace Hak.Data.Migrations
                     b.ToTable("tax_declaration_lines");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.AdjustmentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decision_note");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reason");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_adjustment_requests");
+
+                    b.HasIndex("InvoiceId")
+                        .HasDatabaseName("ix_adjustment_requests_invoice_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_adjustment_requests_company_id_number");
+
+                    b.HasIndex("CompanyId", "InvoiceId", "Status")
+                        .HasDatabaseName("ix_adjustment_requests_company_id_invoice_id_status");
+
+                    b.ToTable("adjustment_requests");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.AdjustmentRequestLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long?>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<int>("OriginalLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("original_line_no");
+
+                    b.Property<long?>("Quantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quantity");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_adjustment_request_lines");
+
+                    b.HasIndex("RequestId", "OriginalLineNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_adjustment_request_lines_request_id_original_line_no");
+
+                    b.ToTable("adjustment_request_lines");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.CommercialInvoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7005,6 +7127,110 @@ namespace Hak.Data.Migrations
                         .HasDatabaseName("ix_contract_milestones_contract_id");
 
                     b.ToTable("contract_milestones");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DebtWriteOff", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Basis")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("basis");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decision_note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reason");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("VoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("voucher_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_debt_write_offs");
+
+                    b.HasIndex("PartnerId")
+                        .HasDatabaseName("ix_debt_write_offs_partner_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_debt_write_offs_company_id_number");
+
+                    b.ToTable("debt_write_offs");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DebtWriteOffItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("JournalLineId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("journal_line_id");
+
+                    b.Property<long>("ProvisionUsed")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("provision_used");
+
+                    b.Property<Guid>("WriteOffId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("write_off_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_debt_write_off_items");
+
+                    b.HasIndex("WriteOffId", "JournalLineId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_debt_write_off_items_write_off_id_journal_line_id");
+
+                    b.ToTable("debt_write_off_items");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>
@@ -8660,6 +8886,26 @@ namespace Hak.Data.Migrations
                         .HasConstraintName("fk_tax_declaration_lines_tax_declarations_declaration_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.AdjustmentRequest", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_adjustment_requests_commercial_invoices_invoice_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.AdjustmentRequestLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.AdjustmentRequest", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_adjustment_request_lines_adjustment_requests_request_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.CommercialInvoice", b =>
                 {
                     b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
@@ -8741,6 +8987,26 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_contract_milestones_contracts_contract_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DebtWriteOff", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_debt_write_offs_business_partners_partner_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DebtWriteOffItem", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.DebtWriteOff", null)
+                        .WithMany("Items")
+                        .HasForeignKey("WriteOffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_debt_write_off_items_debt_write_offs_write_off_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>
@@ -8945,6 +9211,11 @@ namespace Hak.Data.Migrations
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.AdjustmentRequest", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.CommercialInvoice", b =>
                 {
                     b.Navigation("Lines");
@@ -8955,6 +9226,11 @@ namespace Hak.Data.Migrations
                     b.Navigation("Lines");
 
                     b.Navigation("Milestones");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DebtWriteOff", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>

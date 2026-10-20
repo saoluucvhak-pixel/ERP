@@ -19,6 +19,7 @@ import { OrdersView } from './Orders'
 import { ContractsView } from './Contracts'
 import { AdvancesView, CashCountView } from './Advances'
 import { EquityView } from './Equity'
+import { SalesApprovalsView } from './SalesApprovals'
 import { PayrollView } from './Payroll'
 import { ProcurementView } from './Procurement'
 import { RevenueView } from './Revenue'
@@ -50,6 +51,7 @@ const SCREENS = [
   { key: 'advances', label: 'Tạm ứng', el: () => <AdvancesView /> },
   { key: 'cashcount', label: 'Kiểm kê quỹ', el: () => <CashCountView /> },
   { key: 'equity', label: 'Vốn góp, cổ tức', el: () => <EquityView /> },
+  { key: 'salesapproval', label: 'Phê duyệt bán hàng', el: () => <SalesApprovalsView /> },
   { key: 'bank', label: 'Ngân hàng', el: () => <BankingView /> },
   { key: 'fx', label: 'Ngoại tệ', el: () => <FxView /> },
   { key: 'loans', label: 'Vay', el: () => <LoansView /> },
@@ -81,6 +83,7 @@ const LAUNCHER = [
   { key: 'advances', group: 'Tài chính, thanh toán', label: 'Tạm ứng' },
   { key: 'cashcount', group: 'Tài chính, thanh toán', label: 'Kiểm kê quỹ' },
   { key: 'equity', group: 'Tài chính, thanh toán', label: 'Vốn góp, cổ tức' },
+  { key: 'salesapproval', group: 'Chu trình doanh thu', label: 'Phê duyệt bán hàng' },
   { key: 'bank', group: 'Tài chính, thanh toán', label: 'Ngân hàng' },
   { key: 'fx', group: 'Tài chính, thanh toán', label: 'Ngoại tệ' },
   { key: 'loans', group: 'Tài chính, thanh toán', label: 'Vay' },

@@ -22,6 +22,8 @@ public sealed class Item
     public Guid InventoryAccountId { get; set; }
     /// <summary>Wood chips etc.: every receipt/issue line needs a dryness measurement to derive BDMT.</summary>
     public bool TracksDryness { get; set; }
+    /// <summary>Hàng phải qua kiểm tra chất lượng (biên bản kiểm nghiệm đạt toàn bộ số lượng) trước khi ghi sổ phiếu nhập từ nhà cung cấp / khách trả lại.</summary>
+    public bool RequiresQc { get; set; }
     /// <summary>
     /// Đơn vị tính quy đổi cố định (ví dụ 1 tấn = 1000 kg, 1 thùng = 12 chai): sổ kho chỉ giữ số lượng theo đơn vị chính, số theo đơn vị quy đổi suy ra bằng
     /// <see cref="AltFactor"/>. Vật tư theo dõi độ khô (dăm gỗ) không dùng hệ số cố định: đơn vị quy đổi của nó là BDMT với hệ số theo độ khô đo tại từng thời điểm.
@@ -108,6 +110,9 @@ public sealed class StockDocumentLine
     /// <summary>Purchase/sales order line this stock line fulfils.</summary>
     public Guid? OrderId { get; set; }
     public int? OrderLineNo { get; set; }
+    /// <summary>Hàng bán trả lại: dòng hóa đơn bán gốc mà phiếu nhập này nhận lại (để đối chiếu phạm vi đã duyệt trả hàng).</summary>
+    public Guid? SourceInvoiceId { get; set; }
+    public int? SourceInvoiceLineNo { get; set; }
 }
 
 /// <summary>Immutable quantity ledger row. Quantity is signed: + in, − out. Value lives in <see cref="StockValuation"/>.</summary>

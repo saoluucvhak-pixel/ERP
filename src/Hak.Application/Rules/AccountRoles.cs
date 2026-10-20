@@ -30,6 +30,8 @@ public static class AccountRoles
         new("DIVIDEND_SOURCE", "Vốn chủ sở hữu", "Lợi nhuận sau thuế chưa phân phối — nguồn chia cổ tức, lợi nhuận (Nợ khi ghi nhận cổ tức phải trả)"),
         new("DIVIDEND_PAYABLE", "Vốn chủ sở hữu", "Cổ tức, lợi nhuận phải trả cổ đông / thành viên (theo từng người, theo dõi từng khoản để bù trừ khi chi)"),
         new("DIVIDEND_PIT_PAYABLE", "Vốn chủ sở hữu", "Thuế TNCN khấu trừ trên cổ tức phải nộp (khi có cổ đông cá nhân)", Optional: true),
+        new("BAD_DEBT_PROVISION", "Bán hàng", "Dự phòng phải thu khó đòi — Nợ khi xóa nợ phần đã trích dự phòng", Optional: true),
+        new("BAD_DEBT_EXPENSE", "Bán hàng", "Chi phí xóa nợ phải thu không có dự phòng — Nợ khi xóa nợ phần còn lại", Optional: true),
         new("BANK_FEE", "Ngân hàng", "Chi phí phí ngân hàng — chỉ dùng để GỢI Ý TK khi tạo chứng từ từ dòng sao kê", Optional: true),
         new("BANK_INTEREST_INCOME", "Ngân hàng", "Lãi tiền gửi — chỉ dùng để GỢI Ý TK khi tạo chứng từ từ dòng sao kê", Optional: true),
         new("FX_REVALUATION", "Ngoại tệ", "Chênh lệch tỷ giá do đánh giá lại cuối kỳ"),

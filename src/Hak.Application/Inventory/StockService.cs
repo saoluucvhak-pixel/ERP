@@ -15,7 +15,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Hak.Application.Inventory;
 
 public sealed record StockLineInput(Guid ItemId, decimal Quantity, decimal? Amount = null, Guid? CounterAccountId = null, string? Description = null,
-    Guid? OrderId = null, int? OrderLineNo = null);
+    Guid? OrderId = null, int? OrderLineNo = null, Guid? SourceInvoiceId = null, int? SourceInvoiceLineNo = null);
 
 public sealed record StockDocumentInput(StockDocumentType Type, Guid WarehouseId, DateOnly DocumentDate, DateOnly PostingDate, string Description,
     IReadOnlyList<StockLineInput> Lines, Guid? ToWarehouseId = null, Guid? PartnerId = null);
@@ -212,6 +212,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             {
                 Id = Ids.New(), DocumentId = doc.Id, CompanyId = ctx.CompanyId, LineNo = i + 1, ItemId = l.ItemId, Quantity = l.Quantity,
                 Amount = l.Amount, CounterAccountId = l.CounterAccountId, Description = l.Description, OrderId = l.OrderId, OrderLineNo = l.OrderLineNo,
+                SourceInvoiceId = l.SourceInvoiceId, SourceInvoiceLineNo = l.SourceInvoiceLineNo,
             }).ToList();
             db.StockDocuments.Add(doc);
             await audit.AppendAsync(ctx.CompanyId, ctx, "stock.create", "stock_document", doc.Id.ToString(), new { doc.Number, doc.Type, lines = doc.Lines.Count });
@@ -224,6 +225,36 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     /// Posts a stock document: quantity ledger + valuation (FIFO / moving average immediately, monthly average later)
     /// + the GL voucher for whatever value is known now. One transaction; any failure leaves the document a Draft.
     /// </summary>
+    /// <summary>
+    /// Kiểm tra chất lượng trước nhập kho: phiếu nhập có đối tác (mua hàng, khách trả lại) chứa vật tư bắt buộc kiểm tra chất lượng chỉ ghi sổ được khi có biên bản kiểm nghiệm
+    /// còn hiệu lực và các dòng đó đạt toàn bộ số lượng (số không đạt phải bỏ khỏi phiếu hoặc nhập riêng sau xử lý). Nhập thành phẩm, tồn đầu kỳ không có đối tác nên không bị chặn.
+    /// </summary>
+    private async Task RequireQualityCheckAsync(StockDocument doc, IReadOnlyDictionary<Guid, Item> items)
+    {
+        if (doc.Type != StockDocumentType.Receipt || doc.PartnerId is null || doc.ReversesDocumentId is not null) return;
+        var needed = doc.Lines.Where(l => items[l.ItemId].RequiresQc).ToList();
+        if (needed.Count == 0) return;
+        var bb = await db.GoodsInspections.AsNoTracking().FirstOrDefaultAsync(i => i.StockDocumentId == doc.Id && !i.IsCancelled);
+        if (bb is null)
+            throw new DomainException(ErrorCodes.QualityCheckRequired, $"Phiếu {doc.Number} có vật tư bắt buộc kiểm tra chất lượng ({string.Join(", ", needed.Select(l => items[l.ItemId].Code).Distinct())}); lập biên bản kiểm nghiệm đạt trước khi ghi sổ.");
+        var lines = await db.GoodsInspectionLines.AsNoTracking().Where(l => l.InspectionId == bb.Id).ToDictionaryAsync(l => l.StockLineNo);
+        foreach (var l in needed)
+            if (!lines.TryGetValue(l.LineNo, out var il) || il.AcceptedQty < l.Quantity)
+                throw new DomainException(ErrorCodes.QualityCheckRequired, $"Dòng {l.LineNo} ({items[l.ItemId].Code}) chưa đạt kiểm tra chất lượng: đạt {(lines.TryGetValue(l.LineNo, out var x) ? x.AcceptedQty : 0)}/{l.Quantity}; chỉ nhập phần đạt (sửa số lượng phiếu) hoặc lập lại biên bản.");
+    }
+
+    public async Task SetItemRequiresQcAsync(SessionContext ctx, Guid itemId, bool requires)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            item.RequiresQc = requires;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.requires_qc", "item", item.Id.ToString(), new { requires });
+            await db.SaveChangesAsync();
+        });
+    }
+
     public async Task<StockDocument> PostDocumentAsync(SessionContext ctx, Guid documentId)
     {
         ctx.Require(Permissions.VoucherPost);
@@ -245,6 +276,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             }
             var dp = await DecimalsAsync(company);
             var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
+            await RequireQualityCheckAsync(doc, items);
             var seq = await MaxSequenceAsync(ctx.CompanyId);
 
             var glLines = new List<VoucherLineInput>();

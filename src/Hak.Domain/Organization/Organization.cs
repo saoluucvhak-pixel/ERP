@@ -13,6 +13,8 @@ public sealed class Company
     public bool RequireDistinctApprover { get; set; } = true;
     /// <summary>Nhà cung cấp mới tạo ở trạng thái chờ duyệt, chưa được đặt hàng cho tới khi người có thẩm quyền duyệt.</summary>
     public bool RequireSupplierApproval { get; set; }
+    /// <summary>Nhận hàng bán trả lại và lập hóa đơn giảm giá bán chỉ được trong phạm vi yêu cầu đã duyệt (người có thẩm quyền).</summary>
+    public bool RequireSalesAdjustmentApproval { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }

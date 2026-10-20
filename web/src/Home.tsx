@@ -18,6 +18,7 @@ const TILE: Record<string, { icon: string; color: string; desc: string }> = {
   cash: { icon: '💵', color: '#1a7f37', desc: 'Phiếu thu, phiếu chi, báo có, báo nợ' },
   advances: { icon: '🧳', color: '#1a7f37', desc: 'Đề nghị, chi, quyết toán, hoàn ứng, tuổi nợ' },
   cashcount: { icon: '🪙', color: '#1a7f37', desc: 'Đếm quỹ theo mệnh giá, chênh lệch, biên bản' },
+  salesapproval: { icon: '✅', color: '#9a6700', desc: 'Duyệt trả hàng, giảm giá, xóa nợ khó đòi' },
   equity: { icon: '🏛️', color: '#16263d', desc: 'Chủ sở hữu, góp / rút vốn, chia cổ tức, thuế TNCN' },
   bank: { icon: '🏦', color: '#0b5cad', desc: 'Lệnh thanh toán, sao kê, đối chiếu ngân hàng' },
   fx: { icon: '💱', color: '#0b7a8a', desc: 'Tỷ giá, đánh giá lại, thu chi ngoại tệ' },

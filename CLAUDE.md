@@ -92,3 +92,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 đợt 18: đối chiếu khấu hao (legal/KHAU-HAO; thẻ TSCĐ mới mặc định tính theo ngày), độ khô theo ngày làm đơn vị phụ BDMT như tỷ giá (DrynessDailyRate; ưu tiên đo > độ khô ngày > bình quân thời điểm), Excel ngày dd/MM/yyyy — docs/10 mục 9s.
 
 - 20/10 đợt 19–20: tạm ứng/hoàn ứng (vai trò ADVANCE), kiểm kê quỹ (CASH_SHORTAGE/CASH_SURPLUS), số TK ngân hàng đối tượng/công ty + in UNC + xuất CSV/Excel, vốn góp & cổ tức (CAPITAL_CONTRIBUTED, DIVIDEND_SOURCE/PAYABLE/PIT_PAYABLE) — docs/10 mục 9t, 9u. Mẫu: chứng từ nháp qua AccountingEngine, trạng thái lấy từ trạng thái chứng từ (không ghi riêng). Test PG cục bộ: cụm 16 cổng 5432, `HAK_TEST_PG="Host=127.0.0.1;Port=5432;Username=hak_admin;Password=x"` (tạo role bằng su postgres).
+
+- 20/10 đợt 21: phê duyệt trả hàng/giảm giá bán (cờ công ty RequireSalesAdjustmentApproval, StockDocumentLine.SourceInvoiceId), xóa nợ khó đòi có duyệt (BAD_DEBT_PROVISION/EXPENSE), Item.RequiresQc chặn ghi sổ phiếu nhập từ NCC, in biên bản kiểm kê/bàn giao tài sản — docs/10 mục 9v.

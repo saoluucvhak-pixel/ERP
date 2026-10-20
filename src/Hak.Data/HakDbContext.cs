@@ -120,6 +120,10 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<CapitalMovement> CapitalMovements => Set<CapitalMovement>();
     public DbSet<DividendResolution> DividendResolutions => Set<DividendResolution>();
     public DbSet<DividendLine> DividendLines => Set<DividendLine>();
+    public DbSet<AdjustmentRequest> AdjustmentRequests => Set<AdjustmentRequest>();
+    public DbSet<AdjustmentRequestLine> AdjustmentRequestLines => Set<AdjustmentRequestLine>();
+    public DbSet<DebtWriteOff> DebtWriteOffs => Set<DebtWriteOff>();
+    public DbSet<DebtWriteOffItem> DebtWriteOffItems => Set<DebtWriteOffItem>();
     public DbSet<AdvanceRequest> AdvanceRequests => Set<AdvanceRequest>();
     public DbSet<AdvanceSettlementLine> AdvanceSettlementLines => Set<AdvanceSettlementLine>();
     public DbSet<CashCount> CashCounts => Set<CashCount>();
@@ -685,6 +689,21 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.PeriodId }).IsUnique().HasFilter("status = 1");
             e.HasIndex(x => new { x.CompanyId, x.PeriodStart });
         });
+        b.Entity<AdjustmentRequest>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.InvoiceId, x.Status });
+            e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<AdjustmentRequestLine>(e => e.HasIndex(x => new { x.RequestId, x.OriginalLineNo }).IsUnique());
+        b.Entity<DebtWriteOff>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Items).WithOne().HasForeignKey(x => x.WriteOffId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<DebtWriteOffItem>(e => e.HasIndex(x => new { x.WriteOffId, x.JournalLineId }).IsUnique());
         b.Entity<PartnerBankAccount>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.PartnerId, x.AccountNo, x.BankName }).IsUnique();
@@ -959,6 +978,10 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<DepreciationEntry>().Property(x => x.Amount).HasConversion(money);
         b.Entity<AssetExpenseSplit>().Property(x => x.Percent).HasConversion(money);
         b.Entity<AssetUsage>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<AdjustmentRequestLine>().Property(x => x.Quantity).HasConversion(moneyNullable);
+        b.Entity<AdjustmentRequestLine>().Property(x => x.Amount).HasConversion(moneyNullable);
+        b.Entity<DebtWriteOffItem>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<DebtWriteOffItem>().Property(x => x.ProvisionUsed).HasConversion(money);
         b.Entity<Shareholder>().Property(x => x.CommittedCapital).HasConversion(money);
         b.Entity<CapitalMovement>().Property(x => x.Amount).HasConversion(money);
         b.Entity<DividendResolution>().Property(x => x.TotalAmount).HasConversion(money);

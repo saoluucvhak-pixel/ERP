@@ -1,3 +1,4 @@
+import { CountPrintButton, HandoverPrintButton } from './AssetPrint'
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, FlowStrip, useAction } from './common'
@@ -91,7 +92,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
         <h3>Bàn giao, sử dụng <span className="muted">· tài sản đang dùng và bộ phận / người đang giữ; mỗi lần bàn giao mới đóng lần trước và lưu lịch sử</span></h3>
         <table className="grid"><thead><tr><th>Tài sản</th><th>Loại</th><th>Bộ phận</th><th>Người giữ</th><th>Vị trí</th><th>Từ ngày</th><th /></tr></thead>
           <tbody>{cur.map(c => <tr key={c.assetId}><td>{c.code} – {c.name}</td><td>{CLASS_VI[c.class]}</td><td>{c.department ?? <span className="muted">chưa bàn giao</span>}</td><td>{c.custodian ?? ''}</td><td>{c.location ?? ''}</td><td>{formatDate(c.since)}</td>
-            <td><button disabled={busy} onClick={() => setAssign({ assetId: c.assetId, code: c.code, department: c.department ?? '', custodian: c.custodian ?? '', location: c.location ?? '' })}>{c.department ? 'Điều chuyển' : 'Bàn giao'}</button></td></tr>)}
+            <td><button disabled={busy} onClick={() => setAssign({ assetId: c.assetId, code: c.code, department: c.department ?? '', custodian: c.custodian ?? '', location: c.location ?? '' })}>{c.department ? 'Điều chuyển' : 'Bàn giao'}</button>{c.department && <HandoverPrintButton assetId={c.assetId} code={c.code} name={c.name} />}</td></tr>)}
             {cur.length === 0 && <tr><td colSpan={7} className="muted">Chưa có tài sản đang sử dụng.</td></tr>}</tbody></table>
         {assign && <div className="form-row">
           <strong>{assign.code}</strong>
@@ -113,6 +114,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
           {counts.map(c => <button key={c.id} className={open?.id === c.id ? 'primary' : ''} onClick={() => { setOpenCount(c.id); setDraft({}) }}>{c.number} · {c.status === 'Draft' ? 'đang kiểm' : c.status === 'Completed' ? 'đã chốt' : 'đã hủy'}</button>)}
         </div>
         {open && <>
+          <div className="toolbar"><CountPrintButton count={open} /></div>
           <p>Phiếu <b>{open.number}</b> ngày {formatDate(open.countDate)}: đã kiểm {open.counted}/{open.total}; không thấy <b>{open.missing}</b> (giá trị còn lại {formatMoney(open.missingNetBookValue)}); hỏng <b>{open.damaged}</b>; khác bộ phận theo sổ <b>{open.moved}</b>.</p>
           <table className="grid"><thead><tr><th>Tài sản</th><th>Bộ phận theo sổ</th><th>Kết quả</th><th>Bộ phận thực tế</th><th>Ghi chú</th><th className="num">Giá trị còn lại</th></tr></thead>
             <tbody>{open.lines.map(l => { const d = lineOf(l); const edit = open.status === 'Draft'; return <tr key={l.assetId}><td>{l.code} – {l.name}</td><td>{l.bookDepartment ?? ''}</td>
