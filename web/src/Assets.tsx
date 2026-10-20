@@ -220,6 +220,20 @@ function NewAsset({ accounts, groups, onDone }: { accounts: ReturnType<typeof us
   const [picked, setPicked] = useState<Record<string, string>>({})
   const { busy, error, run } = useAction()
   const set = (k: keyof typeof f, v: string | boolean) => setF(x => ({ ...x, [k]: v }))
+  const [defaults, setDefaults] = useState<Record<string, string>>({})   // vai trò TK mặc định → mã TK (Thiết lập → Hạch toán tự động)
+  useEffect(() => {
+    get<{ code: string; account: string | null }[]>('/rules/account-roles')
+      .then(rs => setDefaults(Object.fromEntries(rs.filter(r => r.account).map(r => [r.code, (r.account as string).split(' – ')[0]])))).catch(() => undefined)   // account = "242 – Tên"
+  }, [])
+  // Điền sẵn tài khoản theo loại thẻ từ vai trò TK mặc định của công ty (chỉ khi đã đặt); vẫn đổi được.
+  useEffect(() => {
+    const idOf = (role: string) => accounts.find(a => a.code === defaults[role])?.id ?? ''
+    if (accounts.length === 0) return
+    setF(x => x.class === 'Tool'
+      ? { ...x, assetAccountId: idOf('TOOL_COST_DEFAULT') || x.assetAccountId, expenseAccountId: idOf('TOOL_EXPENSE_DEFAULT') || x.expenseAccountId }
+      : { ...x, assetAccountId: idOf('ASSET_COST_DEFAULT') || x.assetAccountId, accumulatedAccountId: idOf('ASSET_ACCUMULATED_DEFAULT') || x.accumulatedAccountId,
+          expenseAccountId: idOf('ASSET_EXPENSE_DEFAULT') || x.expenseAccountId })
+  }, [defaults, accounts, f.class])
 
   useEffect(() => {
     setPicked({})
