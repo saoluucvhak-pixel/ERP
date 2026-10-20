@@ -2,13 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Partner } from './api'
 import { ErrorBox, useAction } from './common'
 import { formatMoney, parseMoney } from './money'
+import { matchesQuery } from './filter'
+import { SmartFilter, useFilterState } from './SmartFilter'
 
 /** Danh mục đối tượng: thêm, sửa tên / mã số thuế, ngừng sử dụng (không xóa đối tượng đã phát sinh). */
 export function CatalogView() {
   const [list, setList] = useState<Partner[]>([])
   const [edit, setEdit] = useState<Record<string, { name: string; taxCode: string; isActive: boolean; address: string; phone: string; email: string; creditLimit: string; terms: string }>>({})
   const [nw, setNw] = useState({ code: '', name: '', taxCode: '', roles: 'Customer' })
-  const [filter, setFilter] = useState('')
+  const [fs, patchFs, clearFs] = useFilterState('catalog')
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setList(await get<Partner[]>('/partners'))), [run])
@@ -16,11 +18,15 @@ export function CatalogView() {
   const val = (p: Partner) => edit[p.id] ?? { name: p.name, taxCode: p.taxCode ?? '', isActive: p.isActive, address: p.address ?? '', phone: p.phone ?? '', email: p.email ?? '',
     creditLimit: p.creditLimit ? formatMoney(p.creditLimit) : '', terms: p.paymentTermsDays == null ? '' : String(p.paymentTermsDays) }
   const set = (p: Partner, patch: Partial<ReturnType<typeof val>>) => setEdit(s => ({ ...s, [p.id]: { ...val(p), ...patch } }))
-  const shown = list.filter(p => !filter || `${p.code} ${p.name} ${p.taxCode ?? ''}`.toLowerCase().includes(filter.toLowerCase()))
+  const chipOf = (p: Partner, k: string) => k === 'customer' ? !!p.isCustomer : k === 'supplier' ? !!p.isSupplier : k === 'inactive' ? !p.isActive : k === 'nocode' ? !p.taxCode : true
+  const shown = list.filter(p => (!fs.chip || chipOf(p, fs.chip)) && matchesQuery(`${p.code} ${p.name} ${p.taxCode ?? ''} ${p.address ?? ''} ${p.phone ?? ''} ${p.email ?? ''}`, p.creditLimit ? Number(p.creditLimit) : null, fs.q))
 
   return (
     <>
-      <div className="toolbar"><h2>Danh mục đối tượng</h2><label>Tìm<input value={filter} onChange={e => setFilter(e.target.value)} placeholder="mã, tên, MST" /></label></div>
+      <div className="toolbar"><h2>Danh mục đối tượng</h2></div>
+      <SmartFilter label="Đối tượng" state={fs} patch={patchFs} clear={clearFs} shown={shown.length} total={list.length} placeholder="Tìm mã, tên, MST, địa chỉ, điện thoại"
+        chips={[{ key: 'customer', label: 'Khách hàng', count: list.filter(p => p.isCustomer).length }, { key: 'supplier', label: 'Nhà cung cấp', count: list.filter(p => p.isSupplier).length },
+          { key: 'nocode', label: 'Thiếu mã số thuế', count: list.filter(p => !p.taxCode).length }, { key: 'inactive', label: 'Ngừng dùng', count: list.filter(p => !p.isActive).length }]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="panel form-row">

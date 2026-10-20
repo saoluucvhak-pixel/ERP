@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, useAction } from './common'
-import { formatMoney, today } from './money'
+import { formatMoney } from './money'
+import { SmartFilter, useFilterState } from './SmartFilter'
 
 interface Me { id: string; userName: string; fullName: string; isSystemAdmin: boolean }
 interface Grant { companyId: string; companyCode: string; roleCode: string; roleName: string }
@@ -250,7 +251,8 @@ function Backups() {
 function AuditLog() {
   const [rows, setRows] = useState<AuditRow[] | null>(null)
   const [total, setTotal] = useState(0)
-  const [filter, setFilter] = useState({ from: today().slice(0, 8) + '01', to: today(), action: '' })
+  const [fs, patchFs, clearFs] = useFilterState('audit')
+  const filter = { from: fs.from, to: fs.to, action: fs.q.trim() }
   const [skip, setSkip] = useState(0)
   const [chain, setChain] = useState('')
   const { busy, error, run } = useAction()
@@ -262,18 +264,18 @@ function AuditLog() {
     if (filter.action) q.set('action', filter.action)
     const page = await get<{ total: number; rows: AuditRow[] }>(`/audit?${q}`)
     setRows(page.rows); setTotal(page.total); setSkip(s)
-  }), [run, filter])
-  useEffect(() => { get('/audit?take=1').then(() => load(0)).catch(() => setRows(null)) }, [])   // hidden without audit.view
+  }), [run, filter.from, filter.to, filter.action])
+  const [visible, setVisible] = useState(false)
+  useEffect(() => { get('/audit?take=1').then(() => setVisible(true)).catch(() => setRows(null)) }, [])   // hidden without audit.view
+  useEffect(() => { if (!visible) return; const t = setTimeout(() => { load(0) }, 350); return () => clearTimeout(t) }, [visible, load])
   if (rows === null) return null
   return (
     <section className="panel">
       <h3>Nhật ký kiểm toán (công ty đang chọn)</h3>
       <ErrorBox error={error} />
+      <SmartFilter label="Nhật ký kiểm toán" state={fs} patch={patchFs} clear={clearFs} dateLabel="thời điểm ghi" shown={rows.length} total={total}
+        placeholder="Hành động bắt đầu bằng: voucher.post, loan., …" hint="Gõ phần đầu của tên hành động (ví dụ voucher.post, asset.). Máy chủ lọc theo khoảng ngày và tiền tố này." />
       <div className="form-row">
-        <label>Từ <input type="date" value={filter.from} onChange={e => setFilter(f => ({ ...f, from: e.target.value }))} /></label>
-        <label>Đến <input type="date" value={filter.to} onChange={e => setFilter(f => ({ ...f, to: e.target.value }))} /></label>
-        <label>Hành động bắt đầu bằng <input value={filter.action} onChange={e => setFilter(f => ({ ...f, action: e.target.value }))} placeholder="voucher.post, loan., …" /></label>
-        <button disabled={busy} onClick={() => load(0)}>Lọc</button>
         <button disabled={busy} onClick={() => run(async () => {
           const r = await get<{ intact: boolean; firstBrokenSeq: number | null }>('/audit/verify')
           setChain(r.intact ? 'Chuỗi băm nhật ký nguyên vẹn.' : `Chuỗi băm BỊ HỎNG từ bản ghi #${r.firstBrokenSeq} — dữ liệu nhật ký đã bị sửa ngoài phần mềm.`)

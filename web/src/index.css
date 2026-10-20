@@ -268,3 +268,16 @@ button.link:hover { color: var(--accent); text-decoration: underline; }
   .ov-grid > * { flex: 1 1 100%; min-width: 0; }
   .ov-card svg, .main svg { max-width: 100%; height: auto; }
 }
+
+/* Điện thoại: vùng chạm tối thiểu ~40px (Apple/Google khuyến nghị 44/48px), chữ ô nhập 16px để iOS không tự phóng to khi bấm vào ô. */
+@media (max-width: 760px) {
+  .main button, .main select, .main input:not([type=checkbox]):not([type=radio]), .modal button, .modal select, .modal input:not([type=checkbox]):not([type=radio]) { min-height: 40px; font-size: 16px; }
+  .main table.grid button, .main table.grid select, .main table.grid input:not([type=checkbox]):not([type=radio]) { min-height: 36px; }
+  .main input[type=checkbox], .main input[type=radio], .modal input[type=checkbox] { width: 22px; height: 22px; margin: 6px; }
+  .main button.sf-chip, .main button.sf-preset { min-height: 36px; padding: 4px 12px; font-size: 13px; }
+  .main button.sf-clear { min-height: 36px; }
+  .main button.link { min-height: 40px; text-align: left; }
+  .sidebar button { min-height: 40px; }
+  .content .module-tabs button { min-height: 40px; }
+  .main .muted, .main .sf-n, .main span { font-size: max(12px, 1em); }
+}

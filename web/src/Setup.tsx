@@ -3,6 +3,8 @@ import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, Modal, useAction } from './common'
 import { ImportData } from './ImportData'
 import { formatMoney, parseMoney } from './money'
+import { matchesQuery } from './filter'
+import { SmartFilter, useFilterState } from './SmartFilter'
 
 const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', import: 'Nhập từ Excel/CSV' } as const
 
@@ -49,7 +51,7 @@ const attrsOf = (a: Account): Attrs => ({ requiresPartner: a.requiresPartner, op
 function Accounts() {
   const [list, setList] = useState<Account[]>([])
   const [open, setOpen] = useState<Set<string>>(new Set())
-  const [filter, setFilter] = useState('')
+  const [fs, patchFs, clearFs] = useFilterState('accounts')
   const [dialog, setDialog] = useState<Dialog>(null)
   const [info, setInfo] = useState('')
   const { error, run } = useAction()
@@ -60,9 +62,10 @@ function Accounts() {
   const children: Record<string, Account[]> = {}
   for (const a of [...list].sort((x, y) => (x.code < y.code ? -1 : 1))) (children[a.parentId && byId[a.parentId] ? a.parentId : ''] ??= []).push(a)
   // With a search: matching accounts plus their ancestors, all expanded.
-  const q = filter.trim().toLowerCase()
+  const chipOf = (a: Account, k: string | null) => !k || (k === 'group' ? !a.isPostable : k === 'detail' ? a.isPostable : k === 'partner' ? a.requiresPartner : k === 'cash' ? a.cashKind !== 'None' : k === 'inactive' ? !a.isActive : true)
+  const q = fs.q.trim() || fs.chip || ''
   const visible = new Set<string>()
-  if (q) for (const a of list) if (`${a.code} ${a.name}`.toLowerCase().includes(q)) for (let p: Account | undefined = a; p; p = p.parentId ? byId[p.parentId] : undefined) visible.add(p.id)
+  if (q) for (const a of list) if (chipOf(a, fs.chip) && matchesQuery(`${a.code} ${a.name}`, null, fs.q)) for (let p: Account | undefined = a; p; p = p.parentId ? byId[p.parentId] : undefined) visible.add(p.id)
   const rows: { a: Account; depth: number }[] = []
   const walk = (parent: string, depth: number) => {
     for (const a of children[parent] ?? []) {
@@ -81,11 +84,14 @@ function Accounts() {
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="toolbar">
         <button className="primary" onClick={() => setDialog({ kind: 'new' })}>Thêm TK cấp 1</button>
-        <label>Tìm <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="mã, tên" /></label>
         <button onClick={() => setOpen(new Set(list.filter(a => children[a.id]).map(a => a.id)))}>Mở hết</button>
         <button onClick={() => setOpen(new Set())}>Thu gọn</button>
         <span className="muted">{list.length} tài khoản · TK in đậm là TK tổng hợp</span>
       </div>
+      <SmartFilter label="Tài khoản" state={fs} patch={patchFs} clear={clearFs} shown={rows.length} total={list.length} placeholder="Tìm mã hoặc tên tài khoản"
+        chips={[{ key: 'group', label: 'Tổng hợp', count: list.filter(a => !a.isPostable).length }, { key: 'detail', label: 'Chi tiết', count: list.filter(a => a.isPostable).length },
+          { key: 'partner', label: 'Theo đối tượng', count: list.filter(a => a.requiresPartner).length }, { key: 'cash', label: 'Tiền', count: list.filter(a => a.cashKind !== 'None').length },
+          { key: 'inactive', label: 'Ngừng dùng', count: list.filter(a => !a.isActive).length }]} />
       <div className="scroll"><table className="grid">
         <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th title="Nhãn dùng trong công thức BCTC (DH, TDT, HCSD, LV, DT, KH…)">Nhãn BC</th><th>Đang dùng</th><th /></tr></thead>
         <tbody>{rows.map(({ a, depth }) => {
