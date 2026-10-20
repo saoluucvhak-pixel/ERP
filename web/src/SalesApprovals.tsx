@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, Modal, PartnerSelect, useAction, useCatalog } from './common'
+import { ErrorBox, Modal, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
 import { addMoney, formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
@@ -66,6 +66,12 @@ function Adjustments({ policy }: { policy: boolean }) {
     <>
       <div className="toolbar">{!policy && <span className="muted">Chính sách duyệt đang tắt: yêu cầu chỉ để lưu vết, hệ thống chưa chặn trả hàng / giảm giá chưa duyệt.</span>}
         <button className="primary" onClick={() => setForm({ invoiceId: '', kind: 'Return', reason: '', v: {} })}>Lập yêu cầu</button></div>
+      <FlowStrip steps={[
+        { label: 'Yêu cầu trả hàng / giảm giá (lý do, dòng hóa đơn)', journal: false, count: `${rows.filter(r => r.status === 'Requested').length} chờ duyệt` },
+        { label: 'Người có thẩm quyền duyệt', journal: false, count: `${rows.filter(r => r.status === 'Approved').length} đã duyệt` },
+        { label: 'Nhận hàng trả lại (phiếu nhập) / hóa đơn giảm giá', journal: true, screen: 'trade', count: 'chỉ trong phạm vi đã duyệt' },
+        { label: 'Hóa đơn điều chỉnh ghi sổ → giảm phải thu', journal: true, screen: 'arap', count: 'bù trừ công nợ' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <SmartFilter label="Yêu cầu trả hàng / giảm giá" state={f} patch={pf} clear={cf} shown={shown.length} total={rows.length} placeholder="Tìm số, hóa đơn, khách hàng, lý do"
@@ -123,6 +129,12 @@ function WriteOffs() {
   return (
     <>
       <div className="toolbar"><button className="primary" onClick={() => setForm({ partnerId: '', reason: '', basis: '', cands: [], amt: {}, prov: {} })}>Lập phiếu xóa nợ</button></div>
+      <FlowStrip steps={[
+        { label: 'Phiếu xóa nợ (khoản mở, lý do, căn cứ)', journal: false, count: `${rows.filter(r => r.status === 'Requested').length} chờ duyệt` },
+        { label: 'Người có thẩm quyền duyệt', journal: false, count: `${rows.filter(r => r.status === 'Approved' && !r.voucherNumber).length} chờ lập chứng từ` },
+        { label: 'Chứng từ xóa nợ (Có phải thu; Nợ dự phòng / chi phí)', journal: true, screen: 'vouchers', count: `${rows.filter(r => r.voucherPending).length} chờ ghi sổ` },
+        { label: 'Đã ghi sổ', journal: true, count: `${rows.filter(r => r.done).length} phiếu` },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <SmartFilter label="Xóa nợ" state={f} patch={pf} clear={cf} shown={shown.length} total={rows.length} placeholder="Tìm số, khách hàng, lý do, căn cứ, số tiền"

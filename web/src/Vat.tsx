@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, get, post, session } from './api'
-import { ErrorBox, ExportButton, useAction } from './common'
+import { ErrorBox, ExportButton, useAction, FlowStrip } from './common'
 import { eInvoiceFromXml, type EInvoiceJson } from './einvoicexml'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 
@@ -48,6 +48,13 @@ function Reconciliation() {
           columns={[{ header: 'Loại sai lệch', width: 26 }, { header: 'Hóa đơn / chỉ tiêu', width: 30 }, { header: 'Tiền HĐĐT', numeric: true }, { header: 'Tiền sổ', numeric: true }, { header: 'Thuế HĐĐT', numeric: true }, { header: 'Thuế sổ', numeric: true }, { header: 'Chênh lệch', numeric: true }, { header: 'Hướng xử lý', width: 60 }]}
           rows={(data?.differences ?? []).map(d => [DIFF_VI[d.type] ?? d.type, d.key, d.eInvoiceAmount, d.booksAmount, d.eInvoiceVat, d.booksVat, d.difference, d.suggestion])} />
       </div>
+      <FlowStrip steps={[
+        { label: 'Hóa đơn đầu vào, đầu ra (từ chu trình mua, bán)', journal: true, screen: 'trade', count: 'thuế ghi theo hóa đơn' },
+        { label: 'Bảng kê từ sổ', journal: false, count: 'mua vào, bán ra theo kỳ' },
+        { label: 'Nhập hóa đơn điện tử (XML)', journal: false, count: 'chứng cứ gốc, không sửa' },
+        { label: 'Đối chiếu 3 nguồn (sổ, tờ khai, hóa đơn điện tử)', journal: false, count: 'lệch kỳ, thiếu, thừa' },
+        { label: 'Tờ khai GTGT (số đã kê khai)', journal: false, count: 'nộp thì khóa, bổ sung khi sai' },
+      ]} />
       <ErrorBox error={error} />
       {sum && <div className="panel">Thuế đầu ra <strong>{formatMoney(sum.outputVat)}</strong> − đầu vào <strong>{formatMoney(sum.inputVat)}</strong> = <strong>{formatMoney(sum.netPayable)}</strong> <span className="muted">· {sum.note}</span></div>}
       {data && <>

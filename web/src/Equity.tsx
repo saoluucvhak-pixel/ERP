@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
-import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
+import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName, FlowStrip } from './common'
 import { addMoney, formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
@@ -139,6 +139,12 @@ function Dividends() {
   return (
     <>
       <div className="toolbar"><button className="primary" onClick={() => setForm({ date: today(), desc: '', total: '', pit: '5' })}>Lập phương án chia cổ tức</button></div>
+      <FlowStrip steps={[
+        { label: 'Phương án chia theo vốn thực góp (nghị quyết)', journal: false, count: `${rows.filter(r => r.status === 'Draft').length} dự thảo` },
+        { label: 'Duyệt (người khác người lập)', journal: false, count: `${rows.filter(r => r.status === 'Approved' && !r.declarationVoucherNumber).length} chờ ghi nhận` },
+        { label: 'Ghi nhận phải trả, khấu trừ TNCN (Nhật ký)', journal: true, screen: 'vouchers', count: `${rows.filter(r => r.status === 'Declared').length} đã ghi nhận` },
+        { label: 'Chi từng người (bù trừ khoản phải trả)', journal: true, screen: 'cash', count: 'chứng từ chi theo người' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="scroll"><table className="grid">

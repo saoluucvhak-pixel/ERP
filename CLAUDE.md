@@ -95,3 +95,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 đợt 21: phê duyệt trả hàng/giảm giá bán (cờ công ty RequireSalesAdjustmentApproval, StockDocumentLine.SourceInvoiceId), xóa nợ khó đòi có duyệt (BAD_DEBT_PROVISION/EXPENSE), Item.RequiresQc chặn ghi sổ phiếu nhập từ NCC, in biên bản kiểm kê/bàn giao tài sản — docs/10 mục 9v.
 
 - 20/10 đợt 22: bảo trì di động — nhãn QR (qr.ts, AssetQr.tsx), trang `#/m` (MobileMaintenance.tsx), PWA (public/manifest.webmanifest, sw.js), ảnh sự cố FileAttachment (AttachmentService; thư mục attachments cạnh DB — cần sao lưu) — docs/10 mục 9w.
+
+- 20/10 đợt 23: bộ mã chứng từ (docs/11-QUY-TAC-MA.md; loại mới khai báo ở DocumentKinds và cấp số bằng Numbering.NextAsync, không tự viết hàm cấp số), chiết khấu thanh toán (PAYMENT_DISCOUNT_INCOME/EXPENSE), dải dòng chảy các màn còn lại — docs/10 mục 9x.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
 import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
@@ -73,6 +73,13 @@ export function TradeView() {
         <button className={kind === 'Sales' ? 'primary' : ''} onClick={() => setKind('Sales')}>Hóa đơn bán</button>
         <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => setKind('Purchase')}>Hóa đơn mua</button>
       </div>
+      <FlowStrip steps={[
+        { label: 'Hóa đơn nháp (từ phiếu kho / phiếu giao hàng)', journal: false, count: `${list.filter(i => i.status === 'Draft').length} hóa đơn nháp` },
+        { label: 'Ghi sổ hóa đơn (Nhật ký: doanh thu / hàng tồn, thuế, công nợ)', journal: true, count: `${list.filter(i => i.status === 'Posted').length} đã ghi sổ` },
+        { label: 'Theo dõi công nợ, thanh toán', journal: true, screen: 'arap', count: 'bù trừ với phiếu thu / chi' },
+        { label: 'Chiết khấu thanh toán (trả / thu trong hạn)', journal: true, screen: 'paydiscount', count: 'theo điều khoản trên hóa đơn' },
+        { label: 'Điều chỉnh: trả hàng, giảm giá (duyệt)', journal: true, screen: 'salesapproval', count: 'hóa đơn điều chỉnh liên kết hóa đơn gốc' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="panel">

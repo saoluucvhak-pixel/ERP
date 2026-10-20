@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toAlt, toMain } from './units'
 import { api, get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, FlowStrip } from './common'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
@@ -26,6 +26,10 @@ function useStockCatalog() {
 
 export function InventoryView() {
   const [tab, setTab] = useState<'docs' | 'count' | 'summary' | 'card' | 'costing' | 'bdmt'>('docs')
+  const [counts, setCounts] = useState<{ draft: number; posted: number; pending: number }>({ draft: 0, posted: 0, pending: 0 })
+  useEffect(() => {
+    Promise.all([get<StockDoc[]>('/stock-documents'), get<unknown[]>('/measurements/pending').catch(() => [])]).then(([d, p]) => setCounts({ draft: d.filter(x => x.status === 'Draft').length, posted: d.filter(x => x.status === 'Posted').length, pending: p.length })).catch(() => undefined)
+  }, [tab])
   const tabs = { docs: 'Phiếu kho', count: 'Kiểm kê', summary: 'Nhập – xuất – tồn', card: 'Thẻ kho', costing: 'Tính giá cuối tháng', bdmt: 'MT / BDMT' } as const
   return (
     <>
@@ -33,6 +37,13 @@ export function InventoryView() {
         <h2>Kho</h2>
         {(Object.keys(tabs) as (keyof typeof tabs)[]).map(k => <button key={k} className={tab === k ? 'primary' : ''} onClick={() => setTab(k)}>{tabs[k]}</button>)}
       </div>
+      <FlowStrip steps={[
+        { label: 'Phiếu nhập / xuất / chuyển (nháp)', journal: false, count: `${counts.draft} phiếu nháp` },
+        { label: 'Ghi sổ: sổ kho + Nhật ký (người khác ghi sổ)', journal: true, count: `${counts.posted} phiếu đã ghi sổ` },
+        { label: 'Tính giá xuất cuối tháng (kho bình quân tháng)', journal: true, count: 'tab Tính giá cuối tháng' },
+        { label: 'Kiểm kê định kỳ, đối chiếu sổ', journal: false, count: 'tab Kiểm kê' },
+        { label: 'MT / BDMT (hàng theo dõi độ khô)', journal: false, count: `${counts.pending} dòng chờ kết quả đo` },
+      ]} />
       {tab === 'docs' && <StockDocs />}
       {tab === 'count' && <StockCount />}
       {tab === 'summary' && <Summary />}

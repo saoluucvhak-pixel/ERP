@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type OpenItem } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
 import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface BalanceRow {
@@ -46,6 +46,12 @@ export function FxView() {
         <button onClick={() => load()}>Tải lại</button>
       </div>
       <p className="muted">Số dư theo từng tài khoản – đối tượng – loại tiền. Đánh giá lại áp dụng cho tiền, tiền gửi, vay… (không theo dõi công nợ chi tiết); chênh lệch ghi vào TK ánh xạ vai trò FX_REVALUATION. Tỷ giá áp cho số dư Nợ / số dư Có theo chính sách của doanh nghiệp [CẦN XÁC MINH căn cứ TT99].</p>
+      <FlowStrip steps={[
+        { label: 'Tỷ giá theo ngày (nhập tay, có nguồn)', journal: false, count: 'bảng tỷ giá' },
+        { label: 'Thu, chi ngoại tệ theo hóa đơn (tỷ giá bình quân di động)', journal: true, count: 'chênh lệch tỷ giá đã thực hiện' },
+        { label: 'Đánh giá lại cuối kỳ (tiền, công nợ, vay)', journal: true, count: `${runs.length} lần đánh giá` },
+        { label: 'Chênh lệch tỷ giá chưa thực hiện → kết chuyển', journal: true, screen: 'periods', count: 'khóa kỳ, kết chuyển' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 

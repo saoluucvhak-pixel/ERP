@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, parseRate, today } from './money'
 
 interface LoanRow {
@@ -66,6 +66,13 @@ export function LoansView() {
           rows={rows.map(r => [r.code, r.description, r.lenderCode, r.accountCode, r.currency ?? 'VND', STATUS_VI[r.status], r.contractAmount, r.drawn, r.repaid, r.outstanding, r.outstandingForeign, r.currentRatePercent, r.maturityDate, r.dueWithin12Months ? 'Có' : '', r.interestAccrued])} />
       </div>
       <p className="muted">Giải ngân / trả nợ hạch toán bằng chứng từ thông thường (Nợ tiền / Có TK vay chi tiết bên cho vay) rồi gắn vào khế ước. Lãi tính theo dư nợ từng ngày × lãi suất từng ngày ÷ số ngày cơ sở; ngày giải ngân tính lãi, ngày trả nợ không tính [CẦN XÁC MINH theo hợp đồng].</p>
+      <FlowStrip steps={[
+        { label: 'Khế ước (nháp → hiệu lực, người khác duyệt)', journal: false, count: `${rows.filter(r => r.status === 'Draft').length} nháp · ${rows.filter(r => r.status === 'Active').length} hiệu lực` },
+        { label: 'Giải ngân, trả nợ gốc (liên kết chứng từ)', journal: true, screen: 'cash', count: 'chứng từ thu / chi gắn khế ước' },
+        { label: 'Trích lãi hằng kỳ', journal: true, count: `${runs.filter(r => r.status === 'Active').length} kỳ đã trích` },
+        { label: 'Đáo hạn trong 12 tháng', journal: false, count: `${rows.filter(r => r.dueWithin12Months).length} khế ước` },
+        { label: 'Lịch trả nợ vào kế hoạch tiền', journal: false, screen: 'procurement', count: 'Dự báo dòng tiền ở Tổng quan' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 

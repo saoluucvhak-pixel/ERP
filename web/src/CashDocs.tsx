@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { get, post, put, type OpenItem, type Voucher } from './api'
-import { AccountSelect, ErrorBox, navStore, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, navStore, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog, FlowStrip } from './common'
 import { addMoney, formatDate, formatMoney, parseMoney, today } from './money'
 
 const EVENTS: Record<string, { value: string; label: string; needsPartner: boolean; needsCounter: boolean }[]> = {
@@ -87,6 +87,12 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
   return (
     <>
       <div className="toolbar"><h2>{voucher ? `Sửa ${TYPE_VI[voucher.voucherType]} ${voucher.number}` : 'Thu / Chi tiền'}</h2>{onDone && <button onClick={onDone}>Đóng</button>}<button className="primary" onClick={save} disabled={busy}>Lưu nháp</button></div>
+      <FlowStrip steps={[
+        { label: 'Lập phiếu thu / chi (nháp)', journal: false, count: 'theo quy tắc định khoản' },
+        { label: 'Gửi duyệt → duyệt (người khác)', journal: false, screen: 'vouchers', count: 'màn Chứng từ' },
+        { label: 'Ghi sổ (Nhật ký: tiền / đối ứng)', journal: true, screen: 'vouchers', count: 'bù trừ công nợ nếu có' },
+        { label: 'Sổ quỹ, đối chiếu', journal: false, screen: 'ledger', count: 'kiểm kê quỹ định kỳ' },
+      ]} />
       <ErrorBox error={error} />
       {created && <div className="msg ok">Đã tạo {TYPE_VI[created.voucherType]} {created.number} (Nháp, {formatMoney(created.totalDebit)}). Gửi duyệt và ghi sổ ở màn hình Chứng từ.</div>}
       {mainAccountId && balance != null && <div className={overdraw ? 'msg error' : 'msg ok'}>

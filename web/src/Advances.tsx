@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
+import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName, FlowStrip } from './common'
 import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
@@ -75,6 +75,13 @@ export function AdvancesView() {
           rows={shown.map(r => [r.number, `${r.employeeCode} – ${r.employeeName}`, r.purpose, r.amount, r.requestDate, r.dueDate, stateText(r), r.outstanding, String(r.overdueDays)])} />
         <button className="primary" onClick={() => setForm({ employeeId: '', purpose: '', amount: '', date: today(), due: today() })}>Lập đề nghị tạm ứng</button>
       </div>
+      <FlowStrip steps={[
+        { label: 'Đề nghị tạm ứng (người lập)', journal: false, count: `${rows.filter(r => r.status === 'Requested').length} chờ duyệt` },
+        { label: 'Duyệt (người khác) → chứng từ chi nháp', journal: false, count: `${rows.filter(r => r.status === 'Approved').length} chờ chi` },
+        { label: 'Chi tạm ứng (Nhật ký: Nợ TK tạm ứng / Có tiền)', journal: true, screen: 'vouchers', count: `${rows.filter(r => r.status === 'Paid').length} đang giữ tiền` },
+        { label: 'Quyết toán, hoàn ứng (Nhật ký: chi phí / TK tạm ứng)', journal: true, screen: 'vouchers', count: `${rows.filter(r => r.status === 'Settled').length} đã quyết toán` },
+        { label: 'Tuổi nợ theo hạn quyết toán', journal: false, count: `${rows.filter(r => r.overdueDays > 0).length} khoản quá hạn` },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 

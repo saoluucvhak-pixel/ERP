@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
+import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
@@ -69,6 +69,12 @@ export function OrdersView() {
         <button className={kind === 'Sales' ? 'primary' : ''} onClick={() => setKind('Sales')}>Đơn bán</button>
         <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => setKind('Purchase')}>Đơn mua</button>
       </div>
+      <FlowStrip steps={[
+        { label: 'Đơn dự thảo (kiểm tra hợp đồng, tín dụng)', journal: false, count: `${list.filter(o => o.status === 'Draft').length} đơn nháp` },
+        { label: 'Xác nhận đơn (kiểm tra hạn mức, tồn kho, hợp đồng)', journal: false, count: `${list.filter(o => o.status === 'Confirmed').length} đơn đang thực hiện` },
+        { label: 'Thực hiện: phiếu kho → hóa đơn', journal: true, screen: 'stock', count: 'nhập / xuất kho theo đơn, rồi hóa đơn' },
+        { label: 'Đóng đơn', journal: false, count: `${list.filter(o => o.status === 'Closed').length} đơn đã đóng` },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="panel">

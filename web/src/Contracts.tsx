@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
-import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
+import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, overlaps, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
@@ -84,6 +84,13 @@ export function ContractsView() {
         <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => { setKind('Purchase'); setView(null); setForm(null) }}>Hợp đồng mua</button>
         <button onClick={blank}>+ Lập hợp đồng</button>
       </div>
+      <FlowStrip steps={[
+        { label: 'Dự thảo hợp đồng', journal: false, count: `${rows.filter(r => r.status === 'Draft').length} hợp đồng nháp` },
+        { label: 'Duyệt (người khác người lập)', journal: false, count: `${rows.filter(r => r.status === 'PendingApproval').length} chờ duyệt` },
+        { label: 'Hiệu lực: đơn kế thừa trừ lùi số lượng / giá trị', journal: false, screen: 'orders', count: `${rows.filter(r => r.status === 'Active').length} đang hiệu lực` },
+        { label: 'Phụ lục, mốc thanh toán', journal: false, count: `${alerts.length} cảnh báo` },
+        { label: 'Thanh lý', journal: false, count: `${rows.filter(r => r.status === 'Completed').length} đã thanh lý` },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       {alerts.length > 0 && <section className="panel" aria-label="Cảnh báo hợp đồng"><h3>Cảnh báo</h3><ul>{alerts.map((a, i) => <li key={i}><button className="link" onClick={() => open(a.contractId)}>{a.message}</button></li>)}</ul></section>}
