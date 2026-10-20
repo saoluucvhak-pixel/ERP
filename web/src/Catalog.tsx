@@ -5,6 +5,7 @@ import { formatMoney, parseMoney, parseRate } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { PartnerBankModal } from './BankAccounts'
+import { EntityGroupsButton, useGroups } from './groupLib'
 
 /** Danh mục đối tượng: thêm, sửa tên / mã số thuế, ngừng sử dụng (không xóa đối tượng đã phát sinh). */
 export function CatalogView() {
@@ -14,6 +15,7 @@ export function CatalogView() {
   const [fs, patchFs, clearFs] = useFilterState('catalog')
   const [info, setInfo] = useState('')
   const [bankOf, setBankOf] = useState<Partner | null>(null)
+  const groups = useGroups('Partner')
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setList(await get<Partner[]>('/partners'))), [run])
   useEffect(() => { load() }, [load])
@@ -21,12 +23,12 @@ export function CatalogView() {
     creditLimit: p.creditLimit ? formatMoney(p.creditLimit) : '', terms: p.paymentTermsDays == null ? '' : String(p.paymentTermsDays), discPct: p.paymentDiscountPercent ? formatMoney(p.paymentDiscountPercent) : '', discDays: p.paymentDiscountDays == null ? '' : String(p.paymentDiscountDays) }
   const set = (p: Partner, patch: Partial<ReturnType<typeof val>>) => setEdit(s => ({ ...s, [p.id]: { ...val(p), ...patch } }))
   const chipOf = (p: Partner, k: string) => k === 'customer' ? !!p.isCustomer : k === 'supplier' ? !!p.isSupplier : k === 'inactive' ? !p.isActive : k === 'nocode' ? !p.taxCode : true
-  const shown = list.filter(p => (!fs.chip || chipOf(p, fs.chip)) && matchesQuery(`${p.code} ${p.name} ${p.taxCode ?? ''} ${p.address ?? ''} ${p.phone ?? ''} ${p.email ?? ''}`, p.creditLimit ? Number(p.creditLimit) : null, fs.q))
+  const shown = list.filter(p => (!fs.chip || chipOf(p, fs.chip)) && (!fs.sel.group || groups.inGroup(p.id, fs.sel.group)) && matchesQuery(`${p.code} ${p.name} ${p.taxCode ?? ''} ${p.address ?? ''} ${p.phone ?? ''} ${p.email ?? ''}`, p.creditLimit ? Number(p.creditLimit) : null, fs.q))
 
   return (
     <>
       <div className="toolbar"><h2>Danh mục đối tượng</h2></div>
-      <SmartFilter label="Đối tượng" state={fs} patch={patchFs} clear={clearFs} shown={shown.length} total={list.length} placeholder="Tìm mã, tên, MST, địa chỉ, điện thoại"
+      <SmartFilter label="Đối tượng" state={fs} patch={patchFs} clear={clearFs} shown={shown.length} total={list.length} placeholder="Tìm mã, tên, MST, địa chỉ, điện thoại" selects={groups.options.length ? [{ key: 'group', label: 'Nhóm', options: groups.options }] : []}
         chips={[{ key: 'customer', label: 'Khách hàng', count: list.filter(p => p.isCustomer).length }, { key: 'supplier', label: 'Nhà cung cấp', count: list.filter(p => p.isSupplier).length },
           { key: 'nocode', label: 'Thiếu mã số thuế', count: list.filter(p => !p.taxCode).length }, { key: 'inactive', label: 'Ngừng dùng', count: list.filter(p => !p.isActive).length }]} />
       <ErrorBox error={error} />
@@ -41,7 +43,7 @@ export function CatalogView() {
         })}>Thêm</button>
       </div>
       <div className="scroll"><table className="grid">
-        <thead><tr><th>Mã</th><th>Tên</th><th>Mã số thuế</th><th>Địa chỉ</th><th>Điện thoại</th><th>Email</th><th className="num" title="Để trống = không kiểm tra khi xác nhận đơn bán">Hạn mức tín dụng</th><th title="Số ngày từ ngày hóa đơn đến hạn thanh toán">Hạn TT (ngày)</th><th>Đang dùng</th><th /></tr></thead>
+        <thead><tr><th>Mã</th><th>Tên</th><th>Mã số thuế</th><th>Địa chỉ</th><th>Điện thoại</th><th>Email</th><th className="num" title="Để trống = không kiểm tra khi xác nhận đơn bán">Hạn mức tín dụng</th><th title="Số ngày từ ngày hóa đơn đến hạn thanh toán">Hạn TT (ngày)</th><th>Nhóm</th><th>Đang dùng</th><th /></tr></thead>
         <tbody>{shown.map(p => {
           const v = val(p)
           const base = { name: p.name, taxCode: p.taxCode ?? '', isActive: p.isActive, address: p.address ?? '', phone: p.phone ?? '', email: p.email ?? '',
@@ -56,6 +58,7 @@ export function CatalogView() {
             <td><input className="num" aria-label="Hạn mức tín dụng" value={v.creditLimit} onChange={e => set(p, { creditLimit: e.target.value })} size={14} /></td>
             <td><input className="num" aria-label="Hạn thanh toán (ngày)" value={v.terms} onChange={e => set(p, { terms: e.target.value })} size={4} /></td>
             <td><input className="num" aria-label="Chiết khấu thanh toán %" value={v.discPct} onChange={e => set(p, { discPct: e.target.value })} size={4} title="Chiết khấu thanh toán: P% nếu trả đủ trong N ngày" /> / <input className="num" aria-label="Chiết khấu thanh toán ngày" value={v.discDays} onChange={e => set(p, { discDays: e.target.value.replace(/\D/g, '') })} size={3} /></td>
+            <td><EntityGroupsButton g={groups} domain="Partner" entityId={p.id} title={p.name} onSaved={groups.reload} /></td>
             <td><input type="checkbox" aria-label="Đang dùng" checked={v.isActive} onChange={e => set(p, { isActive: e.target.checked })} /></td>
             <td><button onClick={() => setBankOf(p)} title="Số tài khoản ngân hàng nhận tiền">Ngân hàng</button>{dirty && <button className="primary" disabled={busy} onClick={() => run(async () => {
               const limit = v.creditLimit.trim() ? parseMoney(v.creditLimit) : null

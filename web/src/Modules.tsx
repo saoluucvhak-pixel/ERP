@@ -114,7 +114,7 @@ export const MODULES: AppModule[] = [
     reports: [{ label: 'Cân đối phát sinh sau khi nhập', screen: 'tb' }], catalogs: [],
   },
   {
-    key: 'system', label: 'Danh mục, hệ thống', icon: '⚙️', screens: ['catalog', 'setup', 'admin'], title: 'DANH MỤC VÀ HỆ THỐNG',
+    key: 'system', label: 'Danh mục, hệ thống', icon: '⚙️', screens: ['catalog', 'groups', 'setup', 'admin'], title: 'DANH MỤC VÀ HỆ THỐNG',
     flow: [{ label: 'Đối tượng', icon: '👤', screen: 'catalog' }, { label: 'Thiết lập', icon: '⚙️', screen: 'setup' }, { label: 'Người dùng, quyền, sao lưu', icon: '🔐', screen: 'admin' }],
     reports: [{ label: 'Nhật ký kiểm toán', screen: 'admin' }],
     catalogs: [],

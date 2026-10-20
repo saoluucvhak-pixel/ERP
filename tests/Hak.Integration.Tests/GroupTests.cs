@@ -40,7 +40,8 @@ public class GroupTests
         Assert.Equal(2, (await svc.MembersAsync(h.Auditor, mien.Id, true)).Count);
         Assert.Empty(await svc.MembersAsync(h.Auditor, mien.Id, false));
         var kh01 = (await svc.MembersAsync(h.Auditor, dn.Id, true)).Single();
-        Assert.Equal(("KH01", [xk.Id]), (kh01.Code, kh01.OtherGroupIds.ToArray()));                       // thuộc thêm nhóm xuất khẩu
+        Assert.Equal("KH01", kh01.Code);
+        Assert.Equal([xk.Id], kh01.OtherGroupIds.ToArray());                       // thuộc thêm nhóm xuất khẩu
 
         // Không tạo vòng; không xóa nhóm còn con / thành viên; thêm / bỏ thành viên hàng loạt.
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.UpdateAsync(h.Admin, mien.Id, "Miền Trung", dn.Id, null, true)));
@@ -76,6 +77,6 @@ public class GroupTests
         Assert.Equal(["receivable", "payable"], sum.Columns.Select(c => c.Key).ToArray());
         Assert.Equal((1, 1_000m), (sum.Rows.Single(r => r.Code == "A").Count, sum.Rows.Single(r => r.Code == "A").Values["receivable"]));
         Assert.Equal((2, 1_500m), (sum.Rows.Single(r => r.Code == "B").Count, sum.Rows.Single(r => r.Code == "B").Values["receivable"]));
-        Assert.Equal((2, 0m), (sum.UngroupedCount, sum.UngroupedValues["receivable"]));           // KH và NCC chưa xếp nhóm (KH02 đã vào B nên còn lại NCC01 + KH...)
+        Assert.Equal((1, 0m), (sum.UngroupedCount, sum.UngroupedValues["receivable"]));           // chỉ NCC01 chưa thuộc nhóm nào
     }
 }

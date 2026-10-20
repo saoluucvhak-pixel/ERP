@@ -97,3 +97,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 đợt 22: bảo trì di động — nhãn QR (qr.ts, AssetQr.tsx), trang `#/m` (MobileMaintenance.tsx), PWA (public/manifest.webmanifest, sw.js), ảnh sự cố FileAttachment (AttachmentService; thư mục attachments cạnh DB — cần sao lưu) — docs/10 mục 9w.
 
 - 20/10 đợt 23: bộ mã chứng từ (docs/11-QUY-TAC-MA.md; loại mới khai báo ở DocumentKinds và cấp số bằng Numbering.NextAsync, không tự viết hàm cấp số), chiết khấu thanh toán (PAYMENT_DISCOUNT_INCOME/EXPENSE), dải dòng chảy các màn còn lại — docs/10 mục 9x.
+
+- 20/10 đợt 24: nhóm danh mục nhiều cấp, mỗi mục nhiều nhóm (CatalogGroup/Member, GroupService, màn "Nhóm danh mục", groupLib.tsx; báo cáo theo nhóm không cộng được) — docs/10 mục 9y. Chưa: mặc định theo nhóm, tiền tố mã theo nhóm, nhập Excel.

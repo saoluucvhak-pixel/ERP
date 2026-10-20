@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
 import { QrLabelsButton } from './AssetQr'
+import { EntityGroupsButton, useGroups } from './groupLib'
 import { AssetCyclePanels } from './AssetCycle'
 import { AssetJournal } from './AssetJournal'
 import { ExpenseAllocationReport, ExpenseSplitEditor } from './AssetExpenseSplit'
@@ -41,6 +42,7 @@ export function AssetsView() {
   const [recon, setRecon] = useState<ReconRow[] | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
   const [f, pf, cf] = useFilterState('assets')
+  const groups = useGroups('Asset')
   const [journalId, setJournalId] = useState<string | null>(null)
   const [splitFor, setSplitFor] = useState<RegisterRow | null>(null)
   const [creating, setCreating] = useState(false)
@@ -57,7 +59,7 @@ export function AssetsView() {
 
   const act = (fn: () => Promise<unknown>, msg: string) => run(async () => { await fn(); setInfo(msg); setDetail(null); await load() })
   const assetChips = { active: (r: RegisterRow) => r.status === 'Active', fullyDepreciated: (r: RegisterRow) => r.status === 'Active' && toNumber(r.netBookValue) === 0, disposed: (r: RegisterRow) => r.status === 'Disposed', draft: (r: RegisterRow) => r.status === 'Draft' }
-  const shown = rows.filter(r => (!f.sel.class || r.class === f.sel.class) && (!f.sel.status || r.status === f.sel.status) && (!f.chip || assetChips[f.chip as keyof typeof assetChips]?.(r))
+  const shown = rows.filter(r => (!f.sel.group || groups.inGroup(r.id, f.sel.group)) && (!f.sel.class || r.class === f.sel.class) && (!f.sel.status || r.status === f.sel.status) && (!f.chip || assetChips[f.chip as keyof typeof assetChips]?.(r))
     && matchesQuery(`${r.code} ${r.name} ${r.assetAccountCode} ${r.inServiceDate}`, toNumber(r.originalCost), f.q))
   const lastActive = runs.find(r => r.status === 'Active')
   // Next period after the last run; before the first run, the period of the earliest depreciation start (runs go in period order from there).
@@ -81,15 +83,15 @@ export function AssetsView() {
       </div>
       <p className="muted">Nguyên giá lấy từ bút toán đã ghi sổ (hóa đơn mua, chứng từ, số dư đầu) nên sổ tài sản luôn khớp sổ cái. Phương pháp, kỳ ghi sổ và cách tính tháng đầu / cuối chọn theo từng thẻ (căn cứ: Thông tư 45/2013/TT-BTC, xem legal/KHAU-HAO).</p>
       <SmartFilter label="Sổ tài sản" state={f} patch={pf} clear={cf} shown={shown.length} total={rows.length} placeholder="Tìm mã, tên, TK, ngày; ví dụ: may nghien >100tr"
-        selects={[{ key: 'class', label: 'Loại', options: [{ value: 'FixedAsset', label: 'TSCĐ' }, { value: 'Tool', label: 'CCDC' }] }, { key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) }]}
+        selects={[...(groups.options.length ? [{ key: 'group', label: 'Nhóm', options: groups.options }] : []), { key: 'class', label: 'Loại', options: [{ value: 'FixedAsset', label: 'TSCĐ' }, { value: 'Tool', label: 'CCDC' }] }, { key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) }]}
         chips={[{ key: 'active', label: 'Đang dùng', count: rows.filter(assetChips.active).length }, { key: 'fullyDepreciated', label: 'Đã khấu hao hết', count: rows.filter(assetChips.fullyDepreciated).length },
           { key: 'draft', label: 'Chưa ghi tăng', count: rows.filter(assetChips.draft).length }, { key: 'disposed', label: 'Đã ghi giảm', count: rows.filter(assetChips.disposed).length }]} />
       <table className="grid">
-        <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>TK</th><th>Ngày sử dụng</th><th>Phương pháp, kỳ ghi sổ</th><th>Tháng</th>
+        <thead><tr><th>Mã</th><th>Tên</th><th>Nhóm</th><th>Loại</th><th>Trạng thái</th><th>TK</th><th>Ngày sử dụng</th><th>Phương pháp, kỳ ghi sổ</th><th>Tháng</th>
           <th className="num">Nguyên giá</th><th className="num">Hao mòn / đã phân bổ</th><th className="num">Còn lại</th><th>Thao tác</th></tr></thead>
         <tbody>{shown.map(r => (
           <tr key={r.id}>
-            <td>{r.code}</td><td>{r.name}</td><td>{CLASS_VI[r.class]}</td>
+            <td>{r.code}</td><td>{r.name}</td><td><EntityGroupsButton g={groups} domain="Asset" entityId={r.id} title={r.name} onSaved={groups.reload} /></td><td>{CLASS_VI[r.class]}</td>
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${formatDate(r.disposalDate)}` : ''}</span></td>
             <td>{r.assetAccountCode}</td><td>{formatDate(r.inServiceDate)}</td><td title={r.method === 'UnitsOfProduction' && r.totalUnits ? `Tổng sản lượng dự kiến ${formatMoney(r.totalUnits)} ${r.unitName ?? ''}` : r.method === 'TimeBased' && r.scheduleEndDate ? `Phân bổ đến ${formatDate(r.scheduleEndDate)}` : undefined}>{METHOD_VI[r.method ?? 'StraightLine']} · {FREQ_VI[r.frequency ?? 'Monthly']}</td><td>{r.method === 'UnitsOfProduction' ? '—' : r.usefulLifeMonths}</td>
             <td className="num">{formatMoney(r.originalCost)}</td><td className="num">{formatMoney(r.accumulated)}</td><td className="num">{formatMoney(r.netBookValue)}</td>

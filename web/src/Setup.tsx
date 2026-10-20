@@ -4,6 +4,7 @@ import { AccountSelect, ErrorBox, Modal, useAction } from './common'
 import { ImportData } from './ImportData'
 import { CompanyBanks } from './BankAccounts'
 import { NumberingView } from './Numbering'
+import { EntityGroupsButton, useGroups } from './groupLib'
 import { formatMoney, parseMoney } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
@@ -281,6 +282,7 @@ function Stock() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [wh, setWh] = useState({ code: '', name: '' })
   const [policy, setPolicy] = useState({ warehouseId: '', method: 'MovingAverage', effectiveFrom: '', note: '' })
+  const itemGroups = useGroups('Item')
   const [item, setItem] = useState({ code: '', name: '', unit: '', inventoryAccountId: '', tracksDryness: false })
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
@@ -312,7 +314,7 @@ function Stock() {
       </section>
       <section className="panel">
         <h3>Vật tư, hàng hóa</h3>
-        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đơn vị quy đổi cố định</th><th>Đo độ khô (MT/BDMT)</th><th title="Cách tính BDMT tạm cho phiếu xuất chưa có chứng thư">BDMT phiếu xuất</th><th title="Phiếu nhập từ nhà cung cấp / khách trả lại chỉ ghi sổ khi có biên bản kiểm nghiệm đạt toàn bộ số lượng">Bắt buộc kiểm tra chất lượng</th></tr></thead>
+        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đơn vị quy đổi cố định</th><th>Đo độ khô (MT/BDMT)</th><th title="Cách tính BDMT tạm cho phiếu xuất chưa có chứng thư">BDMT phiếu xuất</th><th title="Phiếu nhập từ nhà cung cấp / khách trả lại chỉ ghi sổ khi có biên bản kiểm nghiệm đạt toàn bộ số lượng">Bắt buộc kiểm tra chất lượng</th><th>Nhóm</th></tr></thead>
           <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
             <ItemCommercialCells item={i} busy={busy} onSave={(body) => act(() => put(`/items/${i.id}/commercial`, body), `Đã lưu thông tin thương mại ${i.code}.`)} />
             <ItemAltUnitCell key={`${i.id}-${i.altUnit}-${i.altFactor}`} item={i} busy={busy} onSave={(altUnit, altFactor) => act(() => put(`/items/${i.id}/alt-unit`, { altUnit, altFactor }), `Đã lưu đơn vị quy đổi ${i.code}.`)} />
@@ -322,7 +324,8 @@ function Stock() {
               onChange={e => act(() => post(`/items/${i.id}/issue-dryness-basis`, { basis: e.target.value }), 'Đã đổi cách tính BDMT phiếu xuất.')}>
               <option value="WarehouseAverage">Bình quân độ khô kho xuất</option><option value="DailyRate">Độ khô công bố theo ngày</option></select>}</td>
             <td><input type="checkbox" aria-label={`Bắt buộc kiểm tra chất lượng ${i.code}`} checked={!!i.requiresQc} disabled={busy}
-              onChange={e => act(() => post(`/items/${i.id}/requires-qc`, { requires: e.target.checked }), 'Đã cập nhật yêu cầu kiểm tra chất lượng.')} /></td></tr>)}</tbody></table>
+              onChange={e => act(() => post(`/items/${i.id}/requires-qc`, { requires: e.target.checked }), 'Đã cập nhật yêu cầu kiểm tra chất lượng.')} /></td>
+            <td><EntityGroupsButton g={itemGroups} domain="Item" entityId={i.id} title={i.name} /></td></tr>)}</tbody></table>
         <div className="form-row" style={{ marginTop: 8 }}>
           <label>Mã <input value={item.code} onChange={e => setItem(x => ({ ...x, code: e.target.value.toUpperCase() }))} /></label>
           <label>Tên <input value={item.name} onChange={e => setItem(x => ({ ...x, name: e.target.value }))} /></label>

@@ -1,0 +1,50 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { get, put } from './api'
+import { ErrorBox, Modal, useAction } from './common'
+
+export type GroupDomain = 'Partner' | 'Item' | 'Asset' | 'Warehouse'
+export interface GroupRow { id: string; domain: GroupDomain; code: string; name: string; parentId: string | null; level: number; isActive: boolean; note: string | null; directMembers: number; allMembers: number; children: number }
+export interface GroupLink { entityId: string; groupId: string }
+export const DOMAIN_VI: Record<GroupDomain, string> = { Partner: 'Đối tượng', Item: 'Vật tư, hàng hóa', Asset: 'Tài sản, CCDC', Warehouse: 'Kho' }
+
+/** Cây nhóm và quan hệ mục – nhóm của một loại danh mục; lọc "thuộc nhóm" tính cả mọi nhóm con. */
+export function useGroups(domain: GroupDomain) {
+  const [tree, setTree] = useState<GroupRow[]>([])
+  const [links, setLinks] = useState<GroupLink[]>([])
+  const reload = useCallback(async () => {
+    try {
+      setTree(await get<GroupRow[]>(`/groups/${domain}`)); setLinks(await get<GroupLink[]>(`/groups/${domain}/links`))
+    } catch { setTree([]); setLinks([]) }
+  }, [domain])
+  useEffect(() => { reload() }, [reload])
+  const byId = useMemo(() => Object.fromEntries(tree.map(g => [g.id, g])), [tree])
+  /** Mã nhóm và các nhóm con của nó. */
+  const subtree = useCallback((id: string) => {
+    const set = new Set<string>([id]); let grew = true
+    while (grew) { grew = false; for (const g of tree) if (g.parentId && set.has(g.parentId) && !set.has(g.id)) { set.add(g.id); grew = true } }
+    return set
+  }, [tree])
+  const groupsOf = useCallback((entityId: string) => links.filter(l => l.entityId === entityId).map(l => byId[l.groupId]).filter(Boolean), [links, byId])
+  const inGroup = useCallback((entityId: string, groupId: string) => { const s = subtree(groupId); return links.some(l => l.entityId === entityId && s.has(l.groupId)) }, [links, subtree])
+  const options = useMemo(() => tree.map(g => ({ value: g.id, label: `${'  '.repeat(g.level)}${g.code} – ${g.name}${g.isActive ? '' : ' (ngừng)'}` })), [tree])
+  return { tree, links, reload, byId, groupsOf, inGroup, options }
+}
+
+/** Nút "Nhóm" của một mục: hộp chọn các nhóm (nhiều nhóm, cây nhiều cấp). */
+export function EntityGroupsButton({ g, domain, entityId, title, onSaved }: { g: ReturnType<typeof useGroups>; domain: GroupDomain; entityId: string; title: string; onSaved?: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const { busy, error, run } = useAction()
+  const mine = g.groupsOf(entityId)
+  return <>
+    <button type="button" onClick={() => { setPicked(new Set(mine.map(x => x.id))); setOpen(true) }} title="Xếp mục này vào các nhóm">{mine.length ? mine.map(x => x.code).join(', ') : 'Nhóm…'}</button>
+    {open && <Modal title={`Nhóm của ${title}`} onClose={() => setOpen(false)} busy={busy}
+      footer={<><button onClick={() => setOpen(false)}>Đóng</button><button className="primary" disabled={busy} onClick={() => run(async () => { await put(`/groups/${domain}/entity/${entityId}`, { groupIds: [...picked] }); setOpen(false); await g.reload(); onSaved?.() })}>Lưu</button></>}>
+      <ErrorBox error={error} />
+      {g.tree.length === 0 && <p className="muted">Chưa có nhóm nào cho loại danh mục này — tạo ở Danh mục, hệ thống › Nhóm danh mục.</p>}
+      {g.tree.map(x => <label key={x.id} className="check" style={{ paddingLeft: 18 * x.level, display: 'block', opacity: x.isActive ? 1 : 0.6 }}>
+        <input type="checkbox" checked={picked.has(x.id)} disabled={!x.isActive && !picked.has(x.id)} onChange={e => setPicked(s => { const n = new Set(s); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} /> {x.code} – {x.name}</label>)}
+      <p className="muted">Một mục thuộc được nhiều nhóm; lọc và báo cáo theo nhóm cha gồm cả các nhóm con.</p>
+    </Modal>}
+  </>
+}
