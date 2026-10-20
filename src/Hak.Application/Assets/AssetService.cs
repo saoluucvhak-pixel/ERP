@@ -173,7 +173,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var taken = used.Where(u => u.JournalLineId == l.Id).Sum(u => u.Amount);
             if (taken + s.Amount > l.Amount)
                 throw new DomainException(ErrorCodes.AssetCostMismatch,
-                    $"Dòng của chứng từ {l.Number}: {l.Amount:N0}, đã gán cho tài sản khác {taken:N0}, không đủ để gán thêm {s.Amount:N0}.");
+                    $"Dòng của chứng từ {l.Number}: {l.Amount.Vn(0)}, đã gán cho tài sản khác {taken.Vn(0)}, không đủ để gán thêm {s.Amount.Vn(0)}.");
         }
     }
 

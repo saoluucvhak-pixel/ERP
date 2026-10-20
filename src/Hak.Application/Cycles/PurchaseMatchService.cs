@@ -73,7 +73,7 @@ public sealed class PurchaseMatchService(HakDbContext db)
             {
                 ordered = ol.Quantity; orderPrice = ol.UnitPrice;
                 if (ol.Basis == l.Basis && ol.UnitPrice != l.UnitPrice)
-                    flags.Add(new MatchFlag("PRICE_DIFF", true, $"Đơn giá hóa đơn {l.UnitPrice:N0} khác đơn giá đơn đặt hàng {order.Number} ({ol.UnitPrice:N0})."));
+                    flags.Add(new MatchFlag("PRICE_DIFF", true, $"Đơn giá hóa đơn {l.UnitPrice.Vn(0)} khác đơn giá đơn đặt hàng {order.Number} ({ol.UnitPrice.Vn(0)})."));
             }
             else if (l.StockDocumentId is not null) flags.Add(new MatchFlag("NO_ORDER", false, "Dòng không theo đơn đặt hàng."));
             lines.Add(new MatchLineView(l.LineNo, l.ItemId is { } it && items.TryGetValue(it, out var item) ? item.Code : null, invoiced, received, accepted, ordered, l.UnitPrice, orderPrice, flags));

@@ -59,6 +59,9 @@ export const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Ngày đầu tháng hiện hành (yyyy-mm-dd, giờ địa phương) — mặc định "từ ngày" của mọi bộ lọc theo khoảng ngày. */
+export const monthStart = () => today().slice(0, 8) + '01'
+
 const DIGITS = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín']
 const SCALES = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ', 'tỷ tỷ']
 

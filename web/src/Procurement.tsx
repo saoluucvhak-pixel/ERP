@@ -159,7 +159,7 @@ export function ProcurementView() {
             <td>{p.code} – {p.name}</td>
             <td title={p.supplierStatusReason ?? ''} style={{ color: p.supplierStatus === 'Approved' ? undefined : 'var(--danger)' }}>{SUPPLIER_VI[p.supplierStatus]}</td>
             <td className="num">{r?.receipts ?? 0}</td><td className="num">{formatMoney(r?.purchaseAmount ?? '0')}</td>
-            <td className="num">{r?.acceptRate != null ? `${r.acceptRate}%` : '—'}</td><td className="num">{r?.onTimeRate != null ? `${r.onTimeRate}%` : '—'}</td>
+            <td className="num">{r?.acceptRate != null ? `${formatMoney(String(r.acceptRate))}%` : '—'}</td><td className="num">{r?.onTimeRate != null ? `${formatMoney(String(r.onTimeRate))}%` : '—'}</td>
             <td className="num">{r?.score ?? '—'}</td><td>{r?.grade ?? '—'}</td>
             <td>{p.supplierStatus !== 'Approved' && <button disabled={busy} onClick={() => act(`Đã duyệt ${p.code}.`, () => put(`/cycles/procurement/suppliers/${p.id}/status`, { status: 'Approved' }))}>Duyệt</button>}
               {p.supplierStatus !== 'Blocked' && <button disabled={busy} onClick={() => { const reason = ask('Lý do chặn nhà cung cấp:'); if (reason) act(`Đã chặn ${p.code}.`, () => put(`/cycles/procurement/suppliers/${p.id}/status`, { status: 'Blocked', reason })) }}>Chặn</button>}

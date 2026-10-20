@@ -48,3 +48,31 @@ export function toNumber(s: string | null | undefined): number | null {
   const n = Number(s)
   return Number.isFinite(n) ? n : null
 }
+
+/** Ngày yyyy-mm-dd nằm trong khoảng đã chọn (bỏ trống một đầu = không giới hạn đầu đó). */
+export const inRange = (s: { from: string; to: string }, date: string | null | undefined) => {
+  if (!date) return false
+  // Thời điểm có giờ (ISO, UTC) đổi sang ngày theo giờ địa phương; ngày thuần giữ nguyên.
+  const d = date.length > 10 ? localDay(date) : date
+  return (!s.from || d >= s.from) && (!s.to || d <= s.to)
+}
+
+/** Hai khoảng giao nhau (hợp đồng có hiệu lực trong khoảng đã chọn). */
+export const overlaps = (s: { from: string; to: string }, start: string, end: string) => (!s.to || start <= s.to) && (!s.from || end >= s.from)
+
+function localDay(iso: string): string { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : ymd(d) }
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+/** Các mốc chọn nhanh theo lịch địa phương. */
+export function datePresets(now = new Date()): { key: string; label: string; from: string; to: string }[] {
+  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate(), dow = (now.getDay() + 6) % 7
+  const q = Math.floor(m / 3) * 3
+  return [
+    { key: 'today', label: 'Hôm nay', from: ymd(now), to: ymd(now) },
+    { key: 'week', label: 'Tuần này', from: ymd(new Date(y, m, d - dow)), to: ymd(now) },
+    { key: 'month', label: 'Tháng này', from: ymd(new Date(y, m, 1)), to: ymd(now) },
+    { key: 'lastmonth', label: 'Tháng trước', from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) },
+    { key: 'quarter', label: 'Quý này', from: ymd(new Date(y, q, 1)), to: ymd(now) },
+    { key: 'year', label: 'Năm nay', from: ymd(new Date(y, 0, 1)), to: ymd(now) },
+    { key: 'all', label: 'Tất cả ngày', from: '', to: '' },
+  ]
+}

@@ -80,3 +80,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 19/10 đợt 13: quản lý hợp đồng mua bán (ContractService, ContractControl chặn đơn kế thừa, màn "Hợp đồng") — docs/10 mục 9n. Kiểm tra kiểu web: `npm --prefix web run build` (không dùng `tsc -p .`).
 
 - 20/10 đợt 14: SmartFilter dùng chung (web/src/SmartFilter.tsx, filter.ts) cho tài sản, hợp đồng, đơn hàng, YCSC, phiếu thi công; sửa tràn ngang trên điện thoại — docs/10 mục 9o. Quy tắc CSS khung đặt cuối index.css để không bị đè.
+
+- 20/10 đợt 15: số hiển thị kiểu 1.234.567,5 (server: VnNumber.Vn(), web: formatMoney); mọi bộ lọc ngày mặc định đầu tháng → hôm nay (SmartFilter dateLabel, monthStart() trong money.ts) — docs/10 mục 9p. Ngày trong bảng còn dạng ISO.

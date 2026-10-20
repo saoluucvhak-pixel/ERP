@@ -17,9 +17,8 @@ const OUTCOME_VI: Record<ImportResult['outcome'], string> = {
 }
 
 export function PayrollView() {
-  const year = today().slice(0, 4)
-  const [from, setFrom] = useState(`${year}-01-01`)
-  const [to, setTo] = useState(`${year}-12-31`)
+  const [from, setFrom] = useState(today().slice(0, 8) + '01')
+  const [to, setTo] = useState(today())
   const [file, setFile] = useState<{ name: string; text: string } | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [sheets, setSheets] = useState<Sheet[]>([])

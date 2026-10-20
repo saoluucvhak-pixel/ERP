@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, ExportButton, useAction } from './common'
-import { formatMoney, today } from './money'
+import { formatMoney, monthStart, today } from './money'
 
 interface DefInfo { id: string; code: string; version: number; name: string; category: string; legalReference: string | null; status: 'Draft' | 'Verified'
   verificationNote: string | null; verifiedAt: string | null; lineCount: number; snapshots: number; createdAt: string }
@@ -86,8 +86,9 @@ function exportRows(r: Run) {
 }
 
 function RunReport({ defs, onSnapshot }: { defs: DefInfo[]; onSnapshot: () => void }) {
-  const year = today().slice(0, 4)
-  const [p, setP] = useState({ definitionId: '', fromDate: `${year}-01-01`, toDate: today(), compare: false, compareFrom: `${Number(year) - 1}-01-01`, compareTo: `${Number(year) - 1}-12-31` })
+  // Mặc định: từ đầu tháng hiện hành đến hôm nay; kỳ so sánh là cùng kỳ năm trước.
+  const lastYear = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); const t = new Date(y - 1, m - 1, d); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}` }
+  const [p, setP] = useState({ definitionId: '', fromDate: monthStart(), toDate: today(), compare: false, compareFrom: lastYear(monthStart()), compareTo: lastYear(today()) })
   const [result, setResult] = useState<Run | null>(null)
   const [picked, setPicked] = useState<RunLine | null>(null)
   const [note, setNote] = useState('')

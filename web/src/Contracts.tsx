@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
 import { formatMoney, parseMoney, today } from './money'
-import { SmartFilter, useFilterState } from './SmartFilter'
+import { SmartFilter, overlaps, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
 
 type Kind = 'Sales' | 'Purchase'
@@ -73,7 +73,7 @@ export function ContractsView() {
   const h = view?.header
   const chipTests: Record<string, (r: Row) => boolean> = {
     expiring: r => r.status === 'Active' && !r.expired && r.daysToExpire <= 60, expired: r => r.expired, nearLimit: r => r.status === 'Active' && Number(r.percentDone ?? 0) >= 90, pending: r => r.status === 'PendingApproval' }
-  const shownRows = rows.filter(r => (!f.sel.status || (f.sel.status === 'Expired' ? r.expired : r.status === f.sel.status && !r.expired)) && (!f.chip || chipTests[f.chip]?.(r))
+  const shownRows = rows.filter(r => overlaps(f, r.effectiveDate, r.expirationDate) && (!f.sel.status || (f.sel.status === 'Expired' ? r.expired : r.status === f.sel.status && !r.expired)) && (!f.chip || chipTests[f.chip]?.(r))
     && matchesQuery(`${r.code} ${r.name} ${r.partnerCode} ${r.partnerName}`, toNumber(r.totalAmount), f.q))
 
   return (
@@ -119,13 +119,13 @@ export function ContractsView() {
       </section>}
 
       <section className="panel">
-        <SmartFilter label="Hợp đồng" state={f} patch={pf} clear={cf} shown={shownRows.length} total={rows.length} placeholder="Tìm mã, tên, đối tác; ví dụ: khach hang a >1ty"
+        <SmartFilter label="Hợp đồng" dateLabel="thời gian hiệu lực hợp đồng giao với khoảng ngày" state={f} patch={pf} clear={cf} shown={shownRows.length} total={rows.length} placeholder="Tìm mã, tên, đối tác; ví dụ: khach hang a >1ty"
           selects={[{ key: 'status', label: 'Trạng thái', options: [...(Object.keys(STATUS_VI) as CStatus[]).map(k => ({ value: k, label: STATUS_VI[k] })), { value: 'Expired', label: 'Hết hạn, chưa thanh lý' }] }]}
           chips={[{ key: 'expiring', label: 'Sắp hết hạn (≤ 60 ngày)', count: rows.filter(chipTests.expiring).length }, { key: 'expired', label: 'Đã hết hạn', count: rows.filter(chipTests.expired).length },
             { key: 'nearLimit', label: 'Dùng ≥ 90% hạn mức', count: rows.filter(chipTests.nearLimit).length }, { key: 'pending', label: 'Chờ duyệt', count: rows.filter(chipTests.pending).length }]} />
         <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>Đối tác</th><th>Loại</th><th>Hiệu lực</th><th className="num">Giá trị</th><th className="num">Đã đặt</th><th className="num">% thực hiện</th><th>Trạng thái</th></tr></thead>
           <tbody>{shownRows.map(r => <tr key={r.id}><td><button className="link" onClick={() => open(r.id)}>{r.code}</button></td><td>{r.name}</td><td>{r.partnerCode} – {r.partnerName}</td><td>{CATEGORY_VI[r.category]}</td>
-            <td>{r.effectiveDate} → {r.expirationDate}</td><td className="num">{formatMoney(r.totalAmount)}</td><td className="num">{formatMoney(r.orderedAmount)}</td><td className="num">{r.percentDone ?? ''}</td>
+            <td>{r.effectiveDate} → {r.expirationDate}</td><td className="num">{formatMoney(r.totalAmount)}</td><td className="num">{formatMoney(r.orderedAmount)}</td><td className="num">{formatMoney(r.percentDone)}</td>
             <td>{r.expired ? 'Hết hạn, chưa thanh lý' : STATUS_VI[r.status]}{r.version > 1 ? ` · v${r.version}` : ''}</td></tr>)}
             {shownRows.length === 0 && <tr><td colSpan={9} className="muted">{rows.length === 0 ? 'Chưa có hợp đồng.' : 'Không có hợp đồng khớp bộ lọc.'}</td></tr>}</tbody></table>
       </section>
@@ -156,8 +156,8 @@ export function ContractsView() {
           }}>Lưu phụ lục</button><button onClick={() => setAmend(null)}>Đóng</button></div>}
         <h4>Hàng hóa cam kết và thực hiện (trừ lùi)</h4>
         <table className="grid"><thead><tr><th>Vật tư</th><th className="num">Cam kết</th><th className="num">Đơn giá</th><th className="num">CK %</th><th className="num">Giá sau CK</th><th className="num">Đã đặt</th><th className="num">Còn lại</th><th className="num">%</th><th className="num">Giá trị cam kết</th></tr></thead>
-          <tbody>{view.lines.map(l => <tr key={l.id}><td>{l.itemCode} – {l.itemName}</td><td className="num">{formatMoney(l.committedQty)} {l.unit}</td><td className="num">{formatMoney(l.unitPrice)}</td><td className="num">{l.discountRate}</td><td className="num">{formatMoney(l.netPrice)}</td>
-            <td className="num">{formatMoney(l.orderedQty)}</td><td className="num">{formatMoney(l.remainingQty)}</td><td className="num">{l.percentDone ?? ''}</td><td className="num">{formatMoney(l.committedAmount)}</td></tr>)}
+          <tbody>{view.lines.map(l => <tr key={l.id}><td>{l.itemCode} – {l.itemName}</td><td className="num">{formatMoney(l.committedQty)} {l.unit}</td><td className="num">{formatMoney(l.unitPrice)}</td><td className="num">{formatMoney(l.discountRate)}</td><td className="num">{formatMoney(l.netPrice)}</td>
+            <td className="num">{formatMoney(l.orderedQty)}</td><td className="num">{formatMoney(l.remainingQty)}</td><td className="num">{formatMoney(l.percentDone)}</td><td className="num">{formatMoney(l.committedAmount)}</td></tr>)}
             {view.lines.length === 0 && <tr><td colSpan={9} className="muted">Hợp đồng khung giá trị: hạn mức {formatMoney(h.totalAmount)}, đã đặt {formatMoney(h.orderedAmount)}.</td></tr>}</tbody></table>
         <h4>Mốc thanh toán</h4>
         <table className="grid"><thead><tr><th>Mốc</th><th>Hạn</th><th className="num">Phải thanh toán</th><th className="num">Đã thanh toán</th><th>Tình trạng</th><th /></tr></thead>
@@ -179,7 +179,7 @@ export function ContractsView() {
             {sched.length === 0 && <tr><td colSpan={7} className="muted">Chưa có mốc thanh toán.</td></tr>}</tbody></table>
         <h3>Chênh lệch giá so với hợp đồng</h3>
         <table className="grid"><thead><tr><th>Hợp đồng</th><th>Vật tư</th><th className="num">Giá cam kết (sau CK)</th><th className="num">SL đã đặt</th><th className="num">Giá bình quân thực tế</th><th className="num">Thấp nhất</th><th className="num">Cao nhất</th><th className="num">Chênh lệch %</th></tr></thead>
-          <tbody>{variance.map((v, i) => <tr key={i}><td>{v.contractCode}</td><td>{v.itemCode} – {v.itemName}</td><td className="num">{formatMoney(v.contractPrice)}</td><td className="num">{formatMoney(v.orderedQty)}</td><td className="num">{formatMoney(v.averagePrice)}</td><td className="num">{formatMoney(v.minPrice)}</td><td className="num">{formatMoney(v.maxPrice)}</td><td className="num">{v.variancePercent}</td></tr>)}
+          <tbody>{variance.map((v, i) => <tr key={i}><td>{v.contractCode}</td><td>{v.itemCode} – {v.itemName}</td><td className="num">{formatMoney(v.contractPrice)}</td><td className="num">{formatMoney(v.orderedQty)}</td><td className="num">{formatMoney(v.averagePrice)}</td><td className="num">{formatMoney(v.minPrice)}</td><td className="num">{formatMoney(v.maxPrice)}</td><td className="num">{formatMoney(v.variancePercent)}</td></tr>)}
             {variance.length === 0 && <tr><td colSpan={8} className="muted">Chưa có đơn kế thừa để so giá.</td></tr>}</tbody></table>
       </section>
     </>

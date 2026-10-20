@@ -252,6 +252,13 @@ Chị chốt: dăm gỗ vẫn theo chu trình bình thường, chỉ khác là t
 - **Thiết kế**: sửa lỗi điện thoại — quy tắc khung `.shell` 230px về sau đè quy tắc màn hình nhỏ nên trang tràn ngang ~1400px; nay menu thành thanh ngang cuộn được, bảng cuộn ngang trong khung, form xếp dòng. Kiểm tra tràn ngang ở 1500px và 390px, sáng và tối cho Tài sản, Hợp đồng, Đơn hàng: không còn tràn.
 - Chưa làm: lưu bộ lọc đặt tên (bộ lọc của tôi), lọc theo khoảng ngày trong SmartFilter, chuyển các bộ lọc cũ sang SmartFilter, rà thiết kế điện thoại cho mọi màn còn lại.
 
+## 9p. Đợt 15 (20/10/2026): định dạng số, lọc theo khoảng ngày, rà thiết kế toàn bộ màn hình
+
+- **Định dạng số** (1.234.567,5: chấm ngăn nhóm, phẩy thập phân): giao diện dùng `formatMoney`. Đã quét mọi tab: sửa các chỗ còn hiện kiểu máy (5.56, 665.5, 95.5%) ở hợp đồng, KPI bảo trì, xếp hạng nhà cung cấp; ngày giờ ở Quản trị dùng vi-VN. Thông báo từ máy chủ (vượt hạn mức, chênh lệch, lịch vay…) trước đây ra "540,000,000" do InvariantGlobalization; nay dùng `VnNumber.Vn()` (Hak.Domain.Common) cho cùng kiểu với giao diện. Còn: ngày trong bảng vẫn hiện dạng 2026-10-19 (chưa đổi sang 19/10/2026 — chờ chị quyết).
+- **Lọc theo khoảng ngày** trong SmartFilter: "Từ ngày — Đến ngày" mặc định là **ngày đầu tháng hiện hành đến ngày hiện hành** (tính lại mỗi lần mở màn, không lưu), mốc nhanh Hôm nay / Tuần này / Tháng này / Tháng trước / Quý này / Năm nay / Tất cả ngày, "Xóa lọc" trả về mặc định. Áp dụng cho Đơn hàng (ngày đơn), Hợp đồng (hiệu lực giao với khoảng), YCSC (ngày báo, đổi theo giờ địa phương), Phiếu thi công (ngày lập). Sổ tài sản là số dư tại ngày nên không lọc theo khoảng ngày.
+- **Mặc định ngày ở mọi màn cũ** cũng đã thống nhất đầu tháng → hôm nay (Doanh thu, Kho, Lương, Nhật ký kiểm toán, Báo cáo theo mẫu; kỳ so sánh của báo cáo mẫu là cùng kỳ năm trước). Đã quét tự động toàn bộ tab: không còn ô "Từ ngày" nào khác mặc định.
+- **Thiết kế**: quét 45 tab ở 1500px và 390px: không còn tràn ngang. Sửa: nội dung rộng (Hóa đơn, Kho) cuộn trong khung; tab Quy trình xếp dọc trên điện thoại; thẻ Tổng quan và biểu đồ co theo bề rộng.
+
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).

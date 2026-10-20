@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, useAction } from './common'
 import { formatMoney, parseMoney, today } from './money'
-import { SmartFilter, useFilterState } from './SmartFilter'
+import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
 
 type Status = 'Draft' | 'PendingApproval' | 'Approved' | 'InProgress' | 'Testing' | 'Completed' | 'Closed' | 'Rejected' | 'Cancelled'
@@ -57,10 +57,10 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
   const ask = (q: string) => { const v = prompt(q); return v && v.trim() ? v.trim() : null }
   const active = assets.filter(a => a.status === 'Active')
   const reqChips: Record<string, (r: Req) => boolean> = { urgent: r => (r.priority === 'High' || r.priority === 'Urgent') && ['New', 'Surveying', 'Proposed', 'Approved', 'InProgress'].includes(r.status), noPlan: r => (r.status === 'New' || r.status === 'Surveying') && !r.workOrderNumber }
-  const shownReqs = reqs.filter(r => (!fr.sel.status || r.status === fr.sel.status) && (!fr.sel.priority || r.priority === fr.sel.priority) && (!fr.chip || reqChips[fr.chip]?.(r))
+  const shownReqs = reqs.filter(r => inRange(fr, r.reportedAt) && (!fr.sel.status || r.status === fr.sel.status) && (!fr.sel.priority || r.priority === fr.sel.priority) && (!fr.chip || reqChips[fr.chip]?.(r))
     && matchesQuery(`${r.number} ${r.assetCode} ${r.assetName} ${r.description} ${r.workOrderNumber ?? ''}`, null, fr.q))
   const woChips: Record<string, (r: Repair) => boolean> = { pending: r => r.status === 'PendingApproval', doing: r => r.status === 'InProgress', testing: r => r.status === 'Testing', preventive: r => r.type === 'Preventive' }
-  const shownWos = wos.filter(r => (!fw.sel.status || r.status === fw.sel.status) && (!fw.chip || woChips[fw.chip]?.(r))
+  const shownWos = wos.filter(r => inRange(fw, r.reportedDate) && (!fw.sel.status || r.status === fw.sel.status) && (!fw.chip || woChips[fw.chip]?.(r))
     && matchesQuery(`${r.number} ${r.assetCode} ${r.assetName} ${r.description} ${r.assignedTech ?? ''} ${r.vendor ?? ''}`, toNumber(r.estimatedTotal), fw.q))
   const money = (t: string) => (t.trim() ? parseMoney(t) : '0')
 
@@ -91,7 +91,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
           <label>Hiện tượng hư hỏng<input aria-label="Hiện tượng hư hỏng" value={rq.description} onChange={e => setRq({ ...rq, description: e.target.value })} size={40} /></label>
           <button className="primary" disabled={busy || !rq.assetId || !rq.description.trim()} onClick={() => act('Đã lập yêu cầu sửa chữa.', async () => { await post('/assets/maintenance/requests', rq); setRq({ ...rq, description: '' }) })}>Báo sự cố</button>
         </div>
-        <SmartFilter label="Yêu cầu sửa chữa" state={fr} patch={pfr} clear={cfr} shown={shownReqs.length} total={reqs.length} placeholder="Tìm số, tài sản, hiện tượng"
+        <SmartFilter label="Yêu cầu sửa chữa" dateLabel="ngày báo sự cố" state={fr} patch={pfr} clear={cfr} shown={shownReqs.length} total={reqs.length} placeholder="Tìm số, tài sản, hiện tượng"
           selects={[{ key: 'priority', label: 'Ưu tiên', options: Object.entries(PRIORITY_VI).map(([value, label]) => ({ value, label })) }, { key: 'status', label: 'Trạng thái', options: Object.entries(REQ_VI).map(([value, label]) => ({ value, label })) }]}
           chips={[{ key: 'urgent', label: 'Ưu tiên cao / khẩn cấp đang xử lý', count: reqs.filter(reqChips.urgent).length }, { key: 'noPlan', label: 'Chưa có phương án', count: reqs.filter(reqChips.noPlan).length }]} />
         <table className="grid"><thead><tr><th>Số</th><th>Tài sản</th><th>Ưu tiên</th><th>Hiện tượng</th><th>Báo lúc</th><th>Trạng thái</th><th /></tr></thead>
@@ -130,7 +130,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
             <button className="primary" disabled={busy || !plan.assetId || !plan.description.trim()} onClick={savePlan}>{plan.id ? 'Lưu phương án' : 'Lập phiếu'}</button>
             <button onClick={() => setPlan(null)}>Đóng</button></div>
         </div>}
-        <SmartFilter label="Phiếu thi công" state={fw} patch={pfw} clear={cfw} shown={shownWos.length} total={wos.length} placeholder="Tìm số, tài sản, nội dung, kỹ thuật viên; ví dụ: >5tr"
+        <SmartFilter label="Phiếu thi công" dateLabel="ngày lập phiếu" state={fw} patch={pfw} clear={cfw} shown={shownWos.length} total={wos.length} placeholder="Tìm số, tài sản, nội dung, kỹ thuật viên; ví dụ: >5tr"
           selects={[{ key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) }]}
           chips={[{ key: 'pending', label: 'Chờ duyệt', count: wos.filter(woChips.pending).length }, { key: 'doing', label: 'Đang thi công', count: wos.filter(woChips.doing).length },
             { key: 'testing', label: 'Chờ nghiệm thu', count: wos.filter(woChips.testing).length }, { key: 'preventive', label: 'Bảo trì định kỳ', count: wos.filter(woChips.preventive).length }]} />
@@ -195,7 +195,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
           <label>Từ<input type="date" value={range.from} onChange={e => setRange({ ...range, from: e.target.value })} /></label>
           <label>Đến<input type="date" value={range.to} onChange={e => setRange({ ...range, to: e.target.value })} /></label></div>
         <table className="grid"><thead><tr><th>Tài sản</th><th>Bộ phận</th><th className="num">Số sự cố</th><th className="num">Giờ sửa</th><th className="num">MTTR (giờ)</th><th className="num">MTBF (giờ)</th><th className="num">Dừng máy %</th><th className="num">Nhân công</th><th className="num">Vật tư</th><th className="num">Tổng chi phí</th></tr></thead>
-          <tbody>{kpi.map(k => <tr key={k.assetId}><td>{k.assetCode} – {k.assetName}</td><td>{k.department ?? ''}</td><td className="num">{k.failures}</td><td className="num">{k.repairHours}</td><td className="num">{k.mttr ?? ''}</td><td className="num">{k.mtbf ?? ''}</td><td className="num">{k.downtimeRate}</td>
+          <tbody>{kpi.map(k => <tr key={k.assetId}><td>{k.assetCode} – {k.assetName}</td><td>{k.department ?? ''}</td><td className="num">{k.failures}</td><td className="num">{formatMoney(k.repairHours)}</td><td className="num">{formatMoney(k.mttr)}</td><td className="num">{formatMoney(k.mtbf)}</td><td className="num">{formatMoney(k.downtimeRate)}</td>
             <td className="num">{formatMoney(k.laborCost)}</td><td className="num">{formatMoney(k.materialCost)}</td><td className="num">{formatMoney(k.totalCost)}</td></tr>)}
             {kpi.length === 0 && <tr><td colSpan={10} className="muted">Chưa có phiếu nghiệm thu trong kỳ.</td></tr>}</tbody></table>
       </section>

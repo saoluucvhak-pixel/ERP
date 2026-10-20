@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, useAction } from './common'
-import { formatMoney } from './money'
+import { formatMoney, today } from './money'
 
 interface Me { id: string; userName: string; fullName: string; isSystemAdmin: boolean }
 interface Grant { companyId: string; companyCode: string; roleCode: string; roleName: string }
@@ -235,7 +235,7 @@ function Backups() {
         })}>Sao lưu ngay</button>
       </div>
       <table className="grid"><thead><tr><th>File</th><th>Thời điểm</th><th className="num">Dung lượng</th><th>Ghi chú</th><th /></tr></thead>
-        <tbody>{list.map(b => <tr key={b.fileName}><td>{b.fileName}</td><td>{new Date(b.createdAt).toLocaleString()}</td><td className="num">{formatMoney(String(b.size))}</td><td>{b.note}</td>
+        <tbody>{list.map(b => <tr key={b.fileName}><td>{b.fileName}</td><td>{new Date(b.createdAt).toLocaleString('vi-VN')}</td><td className="num">{formatMoney(String(b.size))}</td><td>{b.note}</td>
           <td style={{ display: 'flex', gap: 6 }}><button disabled={busy} onClick={() => check(b.fileName, false)}>Kiểm tra</button>
             <button disabled={busy} onClick={() => check(b.fileName, true)}>Khôi phục ra file mới</button></td></tr>)}</tbody></table>
       {result && <div className={`msg ${result.isValid ? 'ok' : 'error'}`}>
@@ -250,7 +250,7 @@ function Backups() {
 function AuditLog() {
   const [rows, setRows] = useState<AuditRow[] | null>(null)
   const [total, setTotal] = useState(0)
-  const [filter, setFilter] = useState({ from: '', to: '', action: '' })
+  const [filter, setFilter] = useState({ from: today().slice(0, 8) + '01', to: today(), action: '' })
   const [skip, setSkip] = useState(0)
   const [chain, setChain] = useState('')
   const { busy, error, run } = useAction()
@@ -281,7 +281,7 @@ function AuditLog() {
       </div>
       {chain && <div className={`msg ${chain.startsWith('Chuỗi băm nhật ký nguyên') ? 'ok' : 'error'}`}>{chain}</div>}
       <div className="scroll"><table className="grid"><thead><tr><th>#</th><th>Thời điểm</th><th>Người dùng</th><th>Máy</th><th>Hành động</th><th>Đối tượng</th><th>Kết quả</th><th>Dữ liệu</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={r.seq}><td>{r.seq}</td><td>{new Date(r.at).toLocaleString()}</td><td>{r.userName}</td><td>{r.device}</td><td>{r.action}</td>
+        <tbody>{rows.map(r => <tr key={r.seq}><td>{r.seq}</td><td>{new Date(r.at).toLocaleString('vi-VN')}</td><td>{r.userName}</td><td>{r.device}</td><td>{r.action}</td>
           <td>{r.entityType}{r.entityId ? ` ${r.entityId.slice(0, 8)}` : ''}</td><td>{r.result}</td>
           <td title={r.dataJson ?? ''} style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.dataJson}</td></tr>)}</tbody></table></div>
       <div className="form-row" style={{ marginTop: 6 }}>

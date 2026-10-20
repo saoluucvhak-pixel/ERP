@@ -97,7 +97,7 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         if (o.Kind != InvoiceKind.Sales) return;
         var check = await new SalesOrderCheckService(db, new SettlementService(db, audit, clock), clock).ComputeAsync(ctx, o);
         if (!check.ExceedsCredit) return;
-        var detail = $"Số dư công nợ {check.CurrentBalance:N0} + đơn {check.OrderValue:N0} = {check.BalanceAfter:N0} vượt hạn mức tín dụng {check.CreditLimit:N0} của {check.PartnerName}.";
+        var detail = $"Số dư công nợ {check.CurrentBalance.Vn(0)} + đơn {check.OrderValue.Vn(0)} = {check.BalanceAfter.Vn(0)} vượt hạn mức tín dụng {check.CreditLimit.Vn(0)} của {check.PartnerName}.";
         if (string.IsNullOrWhiteSpace(creditOverrideReason))
             throw new DomainException(ErrorCodes.CreditLimitExceeded, detail + " Cần người có thẩm quyền xác nhận kèm lý do, hoặc yêu cầu khách thanh toán nợ cũ.");
         ctx.Require(Permissions.CreditOverride);
@@ -232,6 +232,6 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         var limit = line.Quantity * (1 + order.OverDeliveryTolerancePercent / 100m);
         if (used + alsoInThisDocument + quantity > limit)
             throw new DomainException(ErrorCodes.OverDelivered,
-                $"Đơn {order.Number} dòng {orderLineNo}: đặt {line.Quantity} (dung sai {order.OverDeliveryTolerancePercent}%), đã có {used + alsoInThisDocument}, thêm {quantity} vượt giới hạn {limit:0.####}.");
+                $"Đơn {order.Number} dòng {orderLineNo}: đặt {line.Quantity} (dung sai {order.OverDeliveryTolerancePercent}%), đã có {used + alsoInThisDocument}, thêm {quantity} vượt giới hạn {limit.Vn()}.");
     }
 }

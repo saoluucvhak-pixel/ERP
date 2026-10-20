@@ -130,7 +130,7 @@ export function RevenueView() {
     </div>)
 
   // ---- reports
-  const [from, setFrom] = useState(today().slice(0, 4) + '-01-01')
+  const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [coll, setColl] = useState<Collections | null>(null)

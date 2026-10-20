@@ -49,7 +49,7 @@ public sealed class LoanScheduleService(HakDbContext db, AuditService audit, ICl
             if (items.Any(i => !MoneyMath.HasAtMostDecimals(i.PrincipalDue, dp) || !MoneyMath.HasAtMostDecimals(i.InterestDue, dp)))
                 throw new DomainException(ErrorCodes.AmountPrecision, $"Số tiền tối đa {dp} chữ số thập phân.");
             if (items.Sum(i => i.PrincipalDue) > loan.ContractAmount)
-                throw new DomainException(ErrorCodes.ValidationFailed, $"Tổng nợ gốc theo lịch vượt số tiền khế ước {loan.ContractAmount:N0}.");
+                throw new DomainException(ErrorCodes.ValidationFailed, $"Tổng nợ gốc theo lịch vượt số tiền khế ước {loan.ContractAmount.Vn(0)}.");
             db.LoanScheduleItems.RemoveRange(await db.LoanScheduleItems.Where(s => s.LoanId == loanId).ToListAsync());
             foreach (var i in items.OrderBy(i => i.DueDate))
                 db.LoanScheduleItems.Add(new LoanScheduleItem { Id = Ids.New(), CompanyId = ctx.CompanyId, LoanId = loanId, DueDate = i.DueDate, PrincipalDue = i.PrincipalDue, InterestDue = i.InterestDue });

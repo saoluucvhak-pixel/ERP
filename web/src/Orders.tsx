@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
 import { formatMoney, parseMoney, today } from './money'
-import { SmartFilter, useFilterState } from './SmartFilter'
+import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
 
 export interface Order { id: string; number: string; kind: string; partnerId: string; contractNo: string | null; orderDate: string; description: string; overDeliveryTolerancePercent: string; status: string; statusReason: string | null; lines: { lineNo: number; itemId: string; quantity: string; basis: string; unitPrice: string; vatRate: string | null }[] }
@@ -59,7 +59,7 @@ export function OrdersView() {
   })
 
   const orderChips: Record<string, (o: Order) => boolean> = { draft: o => o.status === 'Draft', open: o => o.status === 'Confirmed', byContract: o => !!o.contractNo }
-  const shownList = list.filter(o => (!f.sel.status || o.status === f.sel.status) && (!f.chip || orderChips[f.chip]?.(o))
+  const shownList = list.filter(o => inRange(f, o.orderDate) && (!f.sel.status || o.status === f.sel.status) && (!f.chip || orderChips[f.chip]?.(o))
     && matchesQuery(`${o.number} ${o.orderDate} ${o.contractNo ?? ''} ${o.description} ${partners.find(p => p.id === o.partnerId)?.code ?? ''} ${partners.find(p => p.id === o.partnerId)?.name ?? ''}`, null, f.q))
   const n = (v: string) => (v === '0' ? '' : formatMoney(v))
   return (
@@ -140,7 +140,7 @@ export function OrdersView() {
         </div>
       )}
       <div className="scroll">
-        <SmartFilter label="Đơn hàng" state={f} patch={pf} clear={cf} shown={shownList.length} total={list.length} placeholder="Tìm số đơn, đối tượng, hợp đồng, diễn giải"
+        <SmartFilter label="Đơn hàng" dateLabel="ngày đơn" state={f} patch={pf} clear={cf} shown={shownList.length} total={list.length} placeholder="Tìm số đơn, đối tượng, hợp đồng, diễn giải"
           selects={[{ key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) }]}
           chips={[{ key: 'draft', label: 'Chờ xác nhận', count: list.filter(orderChips.draft).length }, { key: 'open', label: 'Đang thực hiện', count: list.filter(orderChips.open).length }, { key: 'byContract', label: 'Theo hợp đồng', count: list.filter(orderChips.byContract).length }]} />
                 <table className="grid">

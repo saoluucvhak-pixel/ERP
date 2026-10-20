@@ -271,10 +271,10 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
         {
             if (r.Expired) list.Add(new(r.Id, r.Code, "expired", $"Hợp đồng {r.Code} đã hết hạn từ {r.ExpirationDate:dd/MM/yyyy} nhưng chưa thanh lý.", r.ExpirationDate));
             else if (r.DaysToExpire <= 60) list.Add(new(r.Id, r.Code, r.DaysToExpire <= 30 ? "expiring30" : "expiring60", $"Hợp đồng {r.Code} còn {r.DaysToExpire} ngày đến hạn ({r.ExpirationDate:dd/MM/yyyy}).", r.ExpirationDate));
-            if (r.PercentDone is >= 90) list.Add(new(r.Id, r.Code, "limit", $"Hợp đồng {r.Code} đã dùng {r.PercentDone:0.##}% hạn mức cam kết.", null));
+            if (r.PercentDone is >= 90) list.Add(new(r.Id, r.Code, "limit", $"Hợp đồng {r.Code} đã dùng {r.PercentDone.Vn(2)}% hạn mức cam kết.", null));
         }
         foreach (var m in (await MilestoneScheduleAsync(ctx)).Where(m => m.PaymentStatus == "OVERDUE"))
-            list.Add(new(m.ContractId, m.ContractCode, "milestone_overdue", $"Mốc \"{m.Name}\" của {m.ContractCode} quá hạn từ {m.DueDate:dd/MM/yyyy}, còn {m.Remaining:N0}.", m.DueDate));
+            list.Add(new(m.ContractId, m.ContractCode, "milestone_overdue", $"Mốc \"{m.Name}\" của {m.ContractCode} quá hạn từ {m.DueDate:dd/MM/yyyy}, còn {m.Remaining.Vn(0)}.", m.DueDate));
         return list;
     }
 
@@ -399,12 +399,12 @@ public static class ContractControl
             {
                 var used = prior.Where(p => p.ItemId == l.ItemId).Sum(p => p.Quantity) + thisQty.GetValueOrDefault(l.ItemId);
                 if (used > l.CommittedQty) throw new DomainException(ErrorCodes.ContractLimitExceeded,
-                    $"Vượt số lượng cam kết của hợp đồng {c.Code}: đã đặt (cả đơn này) {used:0.####} / cam kết {l.CommittedQty:0.####}.");
+                    $"Vượt số lượng cam kết của hợp đồng {c.Code}: đã đặt (cả đơn này) {used.Vn()} / cam kết {l.CommittedQty.Vn()}.");
             }
         else if (c.Category == ContractCategory.Value)
         {
             var used = prior.Sum(p => p.Quantity * p.UnitPrice) + lines.Sum(l => l.Quantity * l.UnitPrice);
-            if (used > c.TotalAmount) throw new DomainException(ErrorCodes.ContractLimitExceeded, $"Vượt giá trị cam kết của hợp đồng {c.Code}: {used:N0} / {c.TotalAmount:N0}.");
+            if (used > c.TotalAmount) throw new DomainException(ErrorCodes.ContractLimitExceeded, $"Vượt giá trị cam kết của hợp đồng {c.Code}: {used.Vn(0)} / {c.TotalAmount.Vn(0)}.");
         }
     }
 }
