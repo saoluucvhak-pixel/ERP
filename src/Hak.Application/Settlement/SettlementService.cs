@@ -23,6 +23,8 @@ public sealed record AllocationRow(Guid Id, DateOnly AllocationDate, decimal Amo
 public sealed record AgingRow(Guid PartnerId, string PartnerCode, string PartnerName, decimal NotDue, IReadOnlyList<decimal> Buckets,
     decimal OpenObligations, decimal UnappliedCredits, decimal Net);
 
+public sealed record AgingAccountReport(Guid AccountId, string Code, string Name, string Nature, AgingReport Report);
+
 public sealed record AgingReport(Guid AccountId, string AccountCode, DateOnly AsOf, IReadOnlyList<string> BucketLabels, IReadOnlyList<AgingRow> Rows);
 
 public sealed record ReconcileRow(Guid AccountId, string AccountCode, Guid? PartnerId, decimal LedgerBalance, decimal SubledgerBalance, decimal Difference, string? Issue);
@@ -149,6 +151,22 @@ public sealed class SettlementService(HakDbContext db, AuditService audit, ICloc
                              select new { l.Id, e.VoucherNumber }).ToDictionaryAsync(x => x.Id, x => x.VoucherNumber);
         return rows.Select(a => new AllocationRow(a.Id, a.AllocationDate, a.Amount, a.ForeignAmount, a.Origin, a.IsActive, a.VoidReason,
             numbers.GetValueOrDefault(a.DebitLineId, ""), numbers.GetValueOrDefault(a.CreditLineId, ""), a.CreatedAt)).ToList();
+    }
+
+    /// <summary>Tuổi nợ của mọi TK phải thu / phải trả trong một lần gọi (màn hình Tổng quan); TK không lập được báo cáo thì bỏ qua.</summary>
+    public async Task<IReadOnlyList<AgingAccountReport>> AgingAllAsync(SessionContext ctx, DateOnly asOf)
+    {
+        ctx.Require(Permissions.ReportView);
+        var accounts = await db.Accounts.AsNoTracking()
+            .Where(a => a.CompanyId == ctx.CompanyId && (a.OpenItemNature == OpenItemNature.Receivable || a.OpenItemNature == OpenItemNature.Payable))
+            .OrderBy(a => a.Code).ToListAsync();
+        var result = new List<AgingAccountReport>();
+        foreach (var a in accounts)
+        {
+            try { result.Add(new AgingAccountReport(a.Id, a.Code, a.Name, a.OpenItemNature.ToString(), await AgingAsync(ctx, a.Id, asOf))); }
+            catch (DomainException) { /* bỏ qua TK không lập được */ }
+        }
+        return result;
     }
 
     public async Task<AgingReport> AgingAsync(SessionContext ctx, Guid accountId, DateOnly asOf, int[]? bucketDays = null)

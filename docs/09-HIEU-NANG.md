@@ -59,8 +59,10 @@ Mỗi chứng từ đi đủ 4 bước như người dùng thật: lập → g�
 Đã làm: `AuditService.AppendAsync` không còn truy vấn bản ghi cuối khi đã có bản ghi chờ lưu cùng giao dịch (bớt 1 truy vấn cho mỗi lần ghi nhật ký thứ hai trở đi).
 
 Chưa làm (cần đo hoặc cần migration, xếp theo lợi ích):
-1. **Ổ khóa ghi toàn hệ thống.** `WriterLockKey` là một khóa duy nhất cho mọi công ty: nhiều công ty trên cùng máy chủ LAN xếp hàng chung (~30 chứng từ/giây tổng). Có thể khóa theo công ty cho nghiệp vụ chỉ chạm dữ liệu một công ty; dữ liệu dùng chung (người dùng, vai trò, loại tiền) vẫn cần khóa toàn cục.
-2. **Nhập hóa đơn điện tử (VatService):** mỗi hóa đơn một truy vấn kiểm tra trùng (N+1). Nên tải trước tập khóa (hướng, MST, ký hiệu, số) của lô.
-3. **Tự khớp sao kê:** mỗi dòng sao kê một truy vấn ứng viên. Có chỉ mục (công ty, TK, ngày) nên chấp nhận được tới vài nghìn dòng; nên tải trước theo khoảng ngày nếu sao kê lớn.
+1. (**Cố ý chưa làm**, xem ghi chú dưới) **Ổ khóa ghi toàn hệ thống.** `WriterLockKey` là một khóa duy nhất cho mọi công ty: nhiều công ty trên cùng máy chủ LAN xếp hàng chung (~30 chứng từ/giây tổng). Có thể khóa theo công ty cho nghiệp vụ chỉ chạm dữ liệu một công ty; dữ liệu dùng chung (người dùng, vai trò, loại tiền) vẫn cần khóa toàn cục.
+2. (**Đã làm 20/10**, chờ CI) **Nhập hóa đơn điện tử (VatService):** mỗi hóa đơn một truy vấn kiểm tra trùng (N+1). Nên tải trước tập khóa (hướng, MST, ký hiệu, số) của lô.
+3. (**Đã làm 20/10**, chờ CI; cả báo cáo đối chiếu không còn tải toàn bộ số chứng từ của công ty) **Tự khớp sao kê:** mỗi dòng sao kê một truy vấn ứng viên. Có chỉ mục (công ty, TK, ngày) nên chấp nhận được tới vài nghìn dòng; nên tải trước theo khoảng ngày nếu sao kê lớn.
 4. (**Đã làm 20/10**, chờ CI) **Chỉ mục thiếu cột đầu:** `StockMeasurement` (CompanyId, DocumentId, LineNo) và `CommercialInvoiceLine` (CompanyId, StockDocumentId, StockLineNo) bị truy vấn không kèm CompanyId ở vài chỗ (OrderService, InvoiceService) nên không dùng được chỉ mục trên SQLite. Thêm điều kiện CompanyId vào truy vấn (không cần migration).
-5. **Giao diện Tổng quan:** gọi báo cáo tuổi nợ riêng cho từng tài khoản công nợ đang mở; nên có một API trả gộp.
+5. (**Đã làm 20/10**, chờ CI: `GET /reports/aging-all`) **Giao diện Tổng quan:** gọi báo cáo tuổi nợ riêng cho từng tài khoản công nợ đang mở; nên có một API trả gộp.
+
+Ghi chú về khóa ghi theo công ty: khóa hiện tại bảo vệ đồng thời số chứng từ, chuỗi băm nhật ký, số thứ tự sổ kho (đều theo công ty) **và** các bảng dùng chung (người dùng, vai trò, loại tiền, công ty). Chia khóa theo công ty chỉ an toàn khi mọi thao tác ghi biết chắc nó chỉ chạm dữ liệu của một công ty; nếu không, hai công ty ghi cùng lúc vào bảng dùng chung có thể ghi trùng/lệch. Việc này cần khảo sát từng điểm gọi `InTransactionAsync` (hàng trăm chỗ) và đo trên nhiều công ty thật trước khi làm; chưa có dữ liệu cho thấy nghẽn.
