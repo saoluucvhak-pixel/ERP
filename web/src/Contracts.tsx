@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
 import { formatMoney, parseMoney, today } from './money'
+import { SmartFilter, useFilterState } from './SmartFilter'
+import { matchesQuery, toNumber } from './filter'
 
 type Kind = 'Sales' | 'Purchase'
 type CStatus = 'Draft' | 'PendingApproval' | 'Active' | 'Completed' | 'Cancelled'
@@ -36,8 +38,7 @@ export function ContractsView() {
   const [view, setView] = useState<View | null>(null)
   const [form, setForm] = useState<{ id: string | null; name: string; category: Row['category']; partnerId: string; effective: string; expiration: string; terms: string; total: string; lines: LineDraft[]; ms: MsDraft[] } | null>(null)
   const [amend, setAmend] = useState<{ summary: string; value: string; expiry: string; qty: Record<string, string> } | null>(null)
-  const [fq, setFq] = useState('')
-  const [fStatus, setFStatus] = useState('')
+  const [f, pf, cf] = useFilterState('contracts')
   const [info, setInfo] = useState('')
   const { busy, error, run, setError } = useAction()
 
@@ -70,7 +71,10 @@ export function ContractsView() {
   const setLine = (i: number, p: Partial<LineDraft>) => form && setForm({ ...form, lines: form.lines.map((l, k) => k === i ? { ...l, ...p } : l) })
   const setMs = (i: number, p: Partial<MsDraft>) => form && setForm({ ...form, ms: form.ms.map((m, k) => k === i ? { ...m, ...p } : m) })
   const h = view?.header
-  const shownRows = rows.filter(r => (!fStatus || (fStatus === 'Expired' ? r.expired : r.status === fStatus && !r.expired)) && (!fq.trim() || `${r.code} ${r.name} ${r.partnerCode} ${r.partnerName}`.toLowerCase().includes(fq.trim().toLowerCase())))
+  const chipTests: Record<string, (r: Row) => boolean> = {
+    expiring: r => r.status === 'Active' && !r.expired && r.daysToExpire <= 60, expired: r => r.expired, nearLimit: r => r.status === 'Active' && Number(r.percentDone ?? 0) >= 90, pending: r => r.status === 'PendingApproval' }
+  const shownRows = rows.filter(r => (!f.sel.status || (f.sel.status === 'Expired' ? r.expired : r.status === f.sel.status && !r.expired)) && (!f.chip || chipTests[f.chip]?.(r))
+    && matchesQuery(`${r.code} ${r.name} ${r.partnerCode} ${r.partnerName}`, toNumber(r.totalAmount), f.q))
 
   return (
     <>
@@ -115,12 +119,10 @@ export function ContractsView() {
       </section>}
 
       <section className="panel">
-        <div className="toolbar" aria-label="Bộ lọc hợp đồng">
-          <label>Tìm<input aria-label="Tìm hợp đồng" value={fq} onChange={e => setFq(e.target.value)} placeholder="mã, tên, đối tác" /></label>
-          <label>Trạng thái<select aria-label="Lọc theo trạng thái hợp đồng" value={fStatus} onChange={e => setFStatus(e.target.value)}><option value="">Tất cả</option>
-            {(Object.keys(STATUS_VI) as CStatus[]).map(k => <option key={k} value={k}>{STATUS_VI[k]}</option>)}<option value="Expired">Hết hạn, chưa thanh lý</option></select></label>
-          <span className="muted">{shownRows.length}/{rows.length} hợp đồng</span>
-        </div>
+        <SmartFilter label="Hợp đồng" state={f} patch={pf} clear={cf} shown={shownRows.length} total={rows.length} placeholder="Tìm mã, tên, đối tác; ví dụ: khach hang a >1ty"
+          selects={[{ key: 'status', label: 'Trạng thái', options: [...(Object.keys(STATUS_VI) as CStatus[]).map(k => ({ value: k, label: STATUS_VI[k] })), { value: 'Expired', label: 'Hết hạn, chưa thanh lý' }] }]}
+          chips={[{ key: 'expiring', label: 'Sắp hết hạn (≤ 60 ngày)', count: rows.filter(chipTests.expiring).length }, { key: 'expired', label: 'Đã hết hạn', count: rows.filter(chipTests.expired).length },
+            { key: 'nearLimit', label: 'Dùng ≥ 90% hạn mức', count: rows.filter(chipTests.nearLimit).length }, { key: 'pending', label: 'Chờ duyệt', count: rows.filter(chipTests.pending).length }]} />
         <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>Đối tác</th><th>Loại</th><th>Hiệu lực</th><th className="num">Giá trị</th><th className="num">Đã đặt</th><th className="num">% thực hiện</th><th>Trạng thái</th></tr></thead>
           <tbody>{shownRows.map(r => <tr key={r.id}><td><button className="link" onClick={() => open(r.id)}>{r.code}</button></td><td>{r.name}</td><td>{r.partnerCode} – {r.partnerName}</td><td>{CATEGORY_VI[r.category]}</td>
             <td>{r.effectiveDate} → {r.expirationDate}</td><td className="num">{formatMoney(r.totalAmount)}</td><td className="num">{formatMoney(r.orderedAmount)}</td><td className="num">{r.percentDone ?? ''}</td>

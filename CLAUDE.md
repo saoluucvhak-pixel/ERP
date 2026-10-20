@@ -78,3 +78,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 19/10 đợt 12: bảo trì & sửa chữa tài sản theo tệp CMMS (AssetRepairService: YCSC, phiếu thi công, lịch bảo trì, KPI MTBF/MTTR) + Nhật ký tài sản (AssetJournalService, nút "Nhật ký") — docs/10 mục 9m.
 
 - 19/10 đợt 13: quản lý hợp đồng mua bán (ContractService, ContractControl chặn đơn kế thừa, màn "Hợp đồng") — docs/10 mục 9n. Kiểm tra kiểu web: `npm --prefix web run build` (không dùng `tsc -p .`).
+
+- 20/10 đợt 14: SmartFilter dùng chung (web/src/SmartFilter.tsx, filter.ts) cho tài sản, hợp đồng, đơn hàng, YCSC, phiếu thi công; sửa tràn ngang trên điện thoại — docs/10 mục 9o. Quy tắc CSS khung đặt cuối index.css để không bị đè.

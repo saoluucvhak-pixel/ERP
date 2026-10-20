@@ -119,3 +119,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 | 19/10/2026 | Bảo trì & sửa chữa tài sản theo CMMS (YCSC, phiếu thi công, lịch bảo trì, KPI) + Nhật ký tài sản (migration Phase8AssetMaintenance) | xem docs/10 mục 9m |
 
 | 19/10/2026 | Quản lý hợp đồng mua bán (hợp đồng, đơn kế thừa trừ lùi, phụ lục, mốc thanh toán, báo cáo; migration Phase9Contracts) | 198 tích hợp (SQLite và PostgreSQL), web 20 | docs/10 mục 9n |
+
+| 20/10/2026 | Bộ lọc thông minh dùng chung (SmartFilter) + sửa giao diện điện thoại | web 25 test | docs/10 mục 9o |

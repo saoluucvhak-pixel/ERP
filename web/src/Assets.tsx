@@ -3,6 +3,8 @@ import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
 import { AssetCyclePanels } from './AssetCycle'
 import { AssetJournal } from './AssetJournal'
+import { SmartFilter, useFilterState } from './SmartFilter'
+import { matchesQuery, toNumber } from './filter'
 import { addMoney, formatMoney, parseMoney, today } from './money'
 
 interface RegisterRow {
@@ -32,9 +34,7 @@ export function AssetsView() {
   const [periods, setPeriods] = useState<Period[]>([])
   const [recon, setRecon] = useState<ReconRow[] | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
-  const [fq, setFq] = useState('')
-  const [fClass, setFClass] = useState('')
-  const [fStatus, setFStatus] = useState('')
+  const [f, pf, cf] = useFilterState('assets')
   const [journalId, setJournalId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [disposing, setDisposing] = useState<RegisterRow | null>(null)
@@ -49,7 +49,9 @@ export function AssetsView() {
   useEffect(() => { load() }, [load])
 
   const act = (fn: () => Promise<unknown>, msg: string) => run(async () => { await fn(); setInfo(msg); setDetail(null); await load() })
-  const shown = rows.filter(r => (!fClass || r.class === fClass) && (!fStatus || r.status === fStatus) && (!fq.trim() || `${r.code} ${r.name}`.toLowerCase().includes(fq.trim().toLowerCase())))
+  const assetChips = { active: (r: RegisterRow) => r.status === 'Active', fullyDepreciated: (r: RegisterRow) => r.status === 'Active' && toNumber(r.netBookValue) === 0, disposed: (r: RegisterRow) => r.status === 'Disposed', draft: (r: RegisterRow) => r.status === 'Draft' }
+  const shown = rows.filter(r => (!f.sel.class || r.class === f.sel.class) && (!f.sel.status || r.status === f.sel.status) && (!f.chip || assetChips[f.chip as keyof typeof assetChips]?.(r))
+    && matchesQuery(`${r.code} ${r.name} ${r.assetAccountCode} ${r.inServiceDate}`, toNumber(r.originalCost), f.q))
   const lastActive = runs.find(r => r.status === 'Active')
   // Next period after the last run; before the first run, the period of the earliest depreciation start (runs go in period order from there).
   const earliest = rows.filter(r => r.status === 'Active').map(r => r.scheduleStartDate).sort()[0]
@@ -70,12 +72,10 @@ export function AssetsView() {
           rows={rows.map(r => [r.code, r.name, CLASS_VI[r.class], STATUS_VI[r.status], r.assetAccountCode, r.inServiceDate, String(r.usefulLifeMonths), r.originalCost, r.accumulated, r.netBookValue, r.disposalDate])} />
       </div>
       <p className="muted">Nguyên giá lấy từ bút toán đã ghi sổ (hóa đơn mua, chứng từ, số dư đầu) nên sổ tài sản luôn khớp sổ cái. Phương pháp đường thẳng; cách tính tháng đầu/cuối là cấu hình [CẦN XÁC MINH căn cứ pháp lý].</p>
-      <div className="toolbar" aria-label="Bộ lọc sổ tài sản">
-        <label>Tìm<input aria-label="Tìm tài sản" value={fq} onChange={e => setFq(e.target.value)} placeholder="mã, tên" /></label>
-        <label>Loại<select aria-label="Lọc theo loại tài sản" value={fClass} onChange={e => setFClass(e.target.value)}><option value="">Tất cả</option><option value="FixedAsset">TSCĐ</option><option value="Tool">CCDC</option></select></label>
-        <label>Trạng thái<select aria-label="Lọc theo trạng thái tài sản" value={fStatus} onChange={e => setFStatus(e.target.value)}><option value="">Tất cả</option>{Object.entries(STATUS_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
-        <span className="muted">{shown.length}/{rows.length} tài sản</span>
-      </div>
+      <SmartFilter label="Sổ tài sản" state={f} patch={pf} clear={cf} shown={shown.length} total={rows.length} placeholder="Tìm mã, tên, TK, ngày; ví dụ: may nghien >100tr"
+        selects={[{ key: 'class', label: 'Loại', options: [{ value: 'FixedAsset', label: 'TSCĐ' }, { value: 'Tool', label: 'CCDC' }] }, { key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) }]}
+        chips={[{ key: 'active', label: 'Đang dùng', count: rows.filter(assetChips.active).length }, { key: 'fullyDepreciated', label: 'Đã khấu hao hết', count: rows.filter(assetChips.fullyDepreciated).length },
+          { key: 'draft', label: 'Chưa ghi tăng', count: rows.filter(assetChips.draft).length }, { key: 'disposed', label: 'Đã ghi giảm', count: rows.filter(assetChips.disposed).length }]} />
       <table className="grid">
         <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th>Trạng thái</th><th>TK</th><th>Ngày sử dụng</th><th>Tháng</th>
           <th className="num">Nguyên giá</th><th className="num">Hao mòn / đã phân bổ</th><th className="num">Còn lại</th><th>Thao tác</th></tr></thead>

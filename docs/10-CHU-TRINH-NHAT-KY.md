@@ -245,6 +245,13 @@ Chị chốt: dăm gỗ vẫn theo chu trình bình thường, chỉ khác là t
 - Chưa làm so với tệp: duyệt nhiều cấp (Pháp chế → Ban giám đốc; hiện một cấp), mẫu hợp đồng, hợp đồng con liên kết hợp đồng mẹ, lưu nội dung tệp scan, ghi nhận thanh toán mốc tự động từ phiếu thu/chi (hiện nhập tay), đưa cảnh báo hợp đồng vào "Việc cần làm", hạn mức công nợ lấy từ hợp đồng.
 - Lưu ý kỹ thuật: kiểm tra kiểu web phải chạy `npm --prefix web run build` (lệnh `tsc --noEmit -p .` bỏ qua vì tsconfig dạng tham chiếu). KPI/báo cáo truyền thời điểm cho PostgreSQL phải là UTC.
 
+## 9o. Đã làm đợt 14 (20/10/2026): bộ lọc thông minh dùng chung và rà thiết kế
+
+- **SmartFilter** (`web/src/SmartFilter.tsx` + `filter.ts`, có test): ô tìm không phân biệt hoa thường và dấu tiếng Việt, nhiều từ (và), "cụm từ" trong ngoặc kép, so sánh số tiền (`>500tr`, `<=2ty`, `>=1,5tr`, `=100k`; đơn vị k, tr, ty), danh sách chọn, nút lọc nhanh có số đếm (bấm lần nữa để bỏ), nút Xóa lọc, bộ đếm kết quả, nhớ lựa chọn theo từng màn hình trên máy (localStorage). Chỉ lọc hiển thị, không dùng tính sổ.
+- Áp dụng: Sổ tài sản (đang dùng, đã khấu hao hết, chưa ghi tăng, đã ghi giảm), Hợp đồng (sắp hết hạn ≤ 60 ngày, đã hết hạn, dùng ≥ 90% hạn mức, chờ duyệt), Đơn hàng (chờ xác nhận, đang thực hiện, theo hợp đồng), Yêu cầu sửa chữa (ưu tiên cao/khẩn cấp, chưa có phương án), Phiếu thi công (chờ duyệt, đang thi công, chờ nghiệm thu, bảo trì định kỳ). Các bộ lọc có sẵn ở Chứng từ, Danh mục, Thiết lập tài khoản, Nhật ký kiểm toán giữ nguyên (chưa chuyển sang SmartFilter).
+- **Thiết kế**: sửa lỗi điện thoại — quy tắc khung `.shell` 230px về sau đè quy tắc màn hình nhỏ nên trang tràn ngang ~1400px; nay menu thành thanh ngang cuộn được, bảng cuộn ngang trong khung, form xếp dòng. Kiểm tra tràn ngang ở 1500px và 390px, sáng và tối cho Tài sản, Hợp đồng, Đơn hàng: không còn tràn.
+- Chưa làm: lưu bộ lọc đặt tên (bộ lọc của tôi), lọc theo khoảng ngày trong SmartFilter, chuyển các bộ lọc cũ sang SmartFilter, rà thiết kế điện thoại cho mọi màn còn lại.
+
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).

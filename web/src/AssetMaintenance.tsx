@@ -2,6 +2,8 @@ import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, useAction } from './common'
 import { formatMoney, parseMoney, today } from './money'
+import { SmartFilter, useFilterState } from './SmartFilter'
+import { matchesQuery, toNumber } from './filter'
 
 type Status = 'Draft' | 'PendingApproval' | 'Approved' | 'InProgress' | 'Testing' | 'Completed' | 'Closed' | 'Rejected' | 'Cancelled'
 interface Material { id: string; itemId: string; itemCode: string; itemName: string; unit: string; qtyRequested: string; qtyIssued: string; unitPrice: string; status: 'Pending' | 'Issued' | 'Cancelled'; stockDocumentNumber: string | null }
@@ -37,6 +39,8 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
   const [test, setTest] = useState<{ id: string; number: string; labor: string; note: string } | null>(null)
   const [sf, setSf] = useState({ assetId: '', task: '', days: '30', due: today() })
   const [open, setOpen] = useState<string | null>(null)
+  const [fr, pfr, cfr] = useFilterState('maint-requests')
+  const [fw, pfw, cfw] = useFilterState('maint-orders')
   const [info, setInfo] = useState('')
   const { busy, error, run, setError } = useAction()
 
@@ -52,6 +56,12 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
   const act = (msg: string, fn: () => Promise<unknown>) => run(async () => { await fn(); setInfo(msg); await load() })
   const ask = (q: string) => { const v = prompt(q); return v && v.trim() ? v.trim() : null }
   const active = assets.filter(a => a.status === 'Active')
+  const reqChips: Record<string, (r: Req) => boolean> = { urgent: r => (r.priority === 'High' || r.priority === 'Urgent') && ['New', 'Surveying', 'Proposed', 'Approved', 'InProgress'].includes(r.status), noPlan: r => (r.status === 'New' || r.status === 'Surveying') && !r.workOrderNumber }
+  const shownReqs = reqs.filter(r => (!fr.sel.status || r.status === fr.sel.status) && (!fr.sel.priority || r.priority === fr.sel.priority) && (!fr.chip || reqChips[fr.chip]?.(r))
+    && matchesQuery(`${r.number} ${r.assetCode} ${r.assetName} ${r.description} ${r.workOrderNumber ?? ''}`, null, fr.q))
+  const woChips: Record<string, (r: Repair) => boolean> = { pending: r => r.status === 'PendingApproval', doing: r => r.status === 'InProgress', testing: r => r.status === 'Testing', preventive: r => r.type === 'Preventive' }
+  const shownWos = wos.filter(r => (!fw.sel.status || r.status === fw.sel.status) && (!fw.chip || woChips[fw.chip]?.(r))
+    && matchesQuery(`${r.number} ${r.assetCode} ${r.assetName} ${r.description} ${r.assignedTech ?? ''} ${r.vendor ?? ''}`, toNumber(r.estimatedTotal), fw.q))
   const money = (t: string) => (t.trim() ? parseMoney(t) : '0')
 
   const savePlan = () => {
@@ -81,13 +91,16 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
           <label>Hiện tượng hư hỏng<input aria-label="Hiện tượng hư hỏng" value={rq.description} onChange={e => setRq({ ...rq, description: e.target.value })} size={40} /></label>
           <button className="primary" disabled={busy || !rq.assetId || !rq.description.trim()} onClick={() => act('Đã lập yêu cầu sửa chữa.', async () => { await post('/assets/maintenance/requests', rq); setRq({ ...rq, description: '' }) })}>Báo sự cố</button>
         </div>
+        <SmartFilter label="Yêu cầu sửa chữa" state={fr} patch={pfr} clear={cfr} shown={shownReqs.length} total={reqs.length} placeholder="Tìm số, tài sản, hiện tượng"
+          selects={[{ key: 'priority', label: 'Ưu tiên', options: Object.entries(PRIORITY_VI).map(([value, label]) => ({ value, label })) }, { key: 'status', label: 'Trạng thái', options: Object.entries(REQ_VI).map(([value, label]) => ({ value, label })) }]}
+          chips={[{ key: 'urgent', label: 'Ưu tiên cao / khẩn cấp đang xử lý', count: reqs.filter(reqChips.urgent).length }, { key: 'noPlan', label: 'Chưa có phương án', count: reqs.filter(reqChips.noPlan).length }]} />
         <table className="grid"><thead><tr><th>Số</th><th>Tài sản</th><th>Ưu tiên</th><th>Hiện tượng</th><th>Báo lúc</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{reqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{r.assetCode} – {r.assetName}</td><td>{PRIORITY_VI[r.priority]}</td><td>{r.description}</td><td>{r.reportedAt.slice(0, 16).replace('T', ' ')}</td>
+          <tbody>{shownReqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{r.assetCode} – {r.assetName}</td><td>{PRIORITY_VI[r.priority]}</td><td>{r.description}</td><td>{r.reportedAt.slice(0, 16).replace('T', ' ')}</td>
             <td>{REQ_VI[r.status]}{r.workOrderNumber ? ` · ${r.workOrderNumber}` : ''}{r.status === 'Rejected' && r.note ? ` — ${r.note}` : ''}</td>
             <td style={{ display: 'flex', gap: 6 }}>{(r.status === 'New' || r.status === 'Surveying') && <>
               {!r.workOrderNumber && <button disabled={busy} onClick={() => setPlan({ id: null, requestId: r.id, assetId: r.assetId, type: 'Emergency', description: r.description, vendor: '', tech: '', cause: '', solution: '', labor: '', mats: [] })}>Khảo sát, lập phương án</button>}
               <button disabled={busy} onClick={() => { const reason = ask('Lý do từ chối yêu cầu:'); if (reason) act(`Đã từ chối ${r.number}.`, () => post(`/assets/maintenance/requests/${r.id}/reject`, { reason })) }}>Từ chối</button></>}</td></tr>)}
-            {reqs.length === 0 && <tr><td colSpan={7} className="muted">Chưa có yêu cầu sửa chữa.</td></tr>}</tbody></table>
+            {shownReqs.length === 0 && <tr><td colSpan={7} className="muted">{reqs.length === 0 ? 'Chưa có yêu cầu sửa chữa.' : 'Không có yêu cầu khớp bộ lọc.'}</td></tr>}</tbody></table>
       </section>
 
       <section className="panel" aria-label="Phiếu thi công">
@@ -117,8 +130,12 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
             <button className="primary" disabled={busy || !plan.assetId || !plan.description.trim()} onClick={savePlan}>{plan.id ? 'Lưu phương án' : 'Lập phiếu'}</button>
             <button onClick={() => setPlan(null)}>Đóng</button></div>
         </div>}
+        <SmartFilter label="Phiếu thi công" state={fw} patch={pfw} clear={cfw} shown={shownWos.length} total={wos.length} placeholder="Tìm số, tài sản, nội dung, kỹ thuật viên; ví dụ: >5tr"
+          selects={[{ key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) }]}
+          chips={[{ key: 'pending', label: 'Chờ duyệt', count: wos.filter(woChips.pending).length }, { key: 'doing', label: 'Đang thi công', count: wos.filter(woChips.doing).length },
+            { key: 'testing', label: 'Chờ nghiệm thu', count: wos.filter(woChips.testing).length }, { key: 'preventive', label: 'Bảo trì định kỳ', count: wos.filter(woChips.preventive).length }]} />
         <table className="grid"><thead><tr><th>Số</th><th>Tài sản</th><th>Loại</th><th>Nội dung</th><th className="num">Dự toán</th><th className="num">Thực tế</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{wos.map(r => <Fragment key={r.id}>
+          <tbody>{shownWos.map(r => <Fragment key={r.id}>
             <tr><td><button className="link" onClick={() => setOpen(open === r.id ? null : r.id)}>{r.number}</button></td><td>{r.assetCode} – {r.assetName}</td><td>{r.type === 'Emergency' ? 'Sửa chữa' : 'Bảo trì'}</td>
               <td>{r.description}</td><td className="num">{formatMoney(r.estimatedTotal)}</td><td className="num">{r.status === 'Draft' || r.status === 'PendingApproval' || r.status === 'Approved' ? '' : formatMoney(r.actualTotal)}</td>
               <td>{STATUS_VI[r.status]}{(r.status === 'Rejected' || r.status === 'Cancelled') && r.note ? ` — ${r.note}` : ''}</td>
@@ -142,7 +159,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
               <div>Dự toán nhân công {formatMoney(r.estimatedLaborCost)} + vật tư {formatMoney(r.estimatedMaterialCost)}{r.actualLaborCost != null ? `; thực tế nhân công ${formatMoney(r.actualLaborCost)} + vật tư ${formatMoney(r.actualMaterialCost)}` : ''}</div>
               {r.materials.length > 0 && <ul>{r.materials.map(m => <li key={m.id}>{m.itemCode} – {m.itemName}: {formatMoney(m.qtyRequested)} {m.unit} × {formatMoney(m.unitPrice)}{m.status === 'Issued' ? ` — đã xuất${m.stockDocumentNumber ? ` (phiếu ${m.stockDocumentNumber})` : ''}` : ''}</li>)}</ul>}
             </td></tr>}</Fragment>)}
-            {wos.length === 0 && <tr><td colSpan={8} className="muted">Chưa có phiếu thi công.</td></tr>}</tbody></table>
+            {shownWos.length === 0 && <tr><td colSpan={8} className="muted">{wos.length === 0 ? 'Chưa có phiếu thi công.' : 'Không có phiếu khớp bộ lọc.'}</td></tr>}</tbody></table>
         {issue && <div className="form-row"><strong>{issue.number}</strong>
           <label>Kho xuất<select aria-label="Kho xuất vật tư" value={issue.warehouseId} onChange={e => setIssue({ ...issue, warehouseId: e.target.value })}>{whs.map(w => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}</select></label>
           <label>TK chi phí sửa chữa <AccountSelect accounts={accounts} value={issue.accountId} onChange={v => setIssue({ ...issue, accountId: v })} filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK chi phí sửa chữa" /></label>
