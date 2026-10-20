@@ -7183,6 +7183,52 @@ namespace Hak.Data.Migrations
                     b.ToTable("contracts");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.ContractAcceptancePlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("contract_id");
+
+                    b.Property<int>("ContractLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("contract_line_no");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<int>("PlanNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("plan_no");
+
+                    b.Property<DateOnly>("PlannedDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("planned_date");
+
+                    b.Property<long>("PlannedQty")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("planned_qty");
+
+                    b.HasKey("Id")
+                        .HasName("pk_contract_acceptance_plans");
+
+                    b.HasIndex("ContractId", "ContractLineNo", "PlanNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_contract_acceptance_plans_contract_id_contract_line_no_plan_no");
+
+                    b.ToTable("contract_acceptance_plans");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.ContractAmendment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7611,6 +7657,119 @@ namespace Hak.Data.Migrations
                         .HasDatabaseName("ix_service_acceptance_lines_acceptance_id");
 
                     b.ToTable("service_acceptance_lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceMilestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AcceptanceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("acceptance_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("due_date");
+
+                    b.Property<int>("MilestoneNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("milestone_no");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("OrderLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("order_line_no");
+
+                    b.Property<long>("Percentage")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("percentage");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_milestones");
+
+                    b.HasIndex("AcceptanceId")
+                        .HasDatabaseName("ix_service_milestones_acceptance_id");
+
+                    b.HasIndex("OrderId", "OrderLineNo", "MilestoneNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_service_milestones_order_id_order_line_no_milestone_no");
+
+                    b.ToTable("service_milestones");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceTimeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AcceptanceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("acceptance_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<long>("Hours")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("hours");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("OrderLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("order_line_no");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("work_date");
+
+                    b.Property<string>("Worker")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_time_entries");
+
+                    b.HasIndex("AcceptanceId")
+                        .HasDatabaseName("ix_service_time_entries_acceptance_id");
+
+                    b.HasIndex("OrderId", "OrderLineNo", "WorkDate")
+                        .HasDatabaseName("ix_service_time_entries_order_id_order_line_no_work_date");
+
+                    b.ToTable("service_time_entries");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>
@@ -9350,6 +9509,16 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_contracts_business_partners_partner_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.ContractAcceptancePlan", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_contract_acceptance_plans_contracts_contract_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.ContractAmendment", b =>

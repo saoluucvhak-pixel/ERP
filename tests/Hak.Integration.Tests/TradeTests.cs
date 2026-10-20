@@ -1041,12 +1041,19 @@ public class TradeTests
         Assert.Equal((4m, 0m, 4m), (cand.Accepted, cand.Invoiced, cand.Remaining));
         Assert.Equal(fx.A("SALESREV"), cand.AccountId);
 
+        var rep = new ServiceReportService(fx.S.Db, acc);
+        var backlog = await rep.ReportAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 1), D(3, 31));
+        Assert.Equal(8_000_000m, backlog.BacklogAmount); Assert.Equal(0m, backlog.Total);          // đã nghiệm thu 4 chuyến × 2.000.000, chưa lập hóa đơn
         var inv = await fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26T", "S1", D(3, 20), D(3, 20), "Vận chuyển thuê đợt 1", [line]));
         Assert.Equal(haul.Id, inv.Lines[0].ItemId); Assert.Equal(fx.A("SALESREV"), inv.Lines[0].AccountId);
         Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26T", "S2", D(3, 21), D(3, 21), "Vượt", [line with { Quantity = 1 }]))));
         await fx.Inv.PostAsync(fx.H.Approver, inv.Id);
         Assert.Equal(-8_000_000m, await fx.Bal("SALESREV"));
         Assert.Equal(8_640_000m, await fx.Bal("AR", fx.H.Partner["KH01"]));
+        var done = await rep.ReportAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 1), D(3, 31));
+        Assert.Equal((8_000_000m, 640_000m, 0m), (done.Total, done.TotalVat, done.BacklogAmount));
+        Assert.Equal(("VANCHUYEN", 4m), (done.ByService.Single().Key, done.ByService.Single().Quantity));
+        Assert.Equal(8_000_000m, (await new SalesReportService(fx.S.Db, fx.S.Settlement).AnalyseAsync(fx.H.Auditor, D(3, 1), D(3, 31))).ByType!.Single(t => t.Key == "SERVICE").Revenue);
         Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => acc.CancelAsync(fx.H.Preparer, nt.Id, "Hủy nhầm")));   // đã lập hóa đơn hết phần nghiệm thu
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 22), D(3, 22), "Xuất dịch vụ",
             [new StockLineInput(haul.Id, 1, CounterAccountId: fx.A("COGS"))], PartnerId: fx.H.Partner["KH01"]))));
@@ -1067,5 +1074,98 @@ public class TradeTests
         await fx.Inv.PostAsync(fx.H.Approver, pinv.Id);
         Assert.Equal(5_000_000m, await fx.Bal("TRANSPORT"));
         Assert.Equal(-5_400_000m, await fx.Bal("AP", fx.H.Partner["NCC01"]));
+    }
+
+    [Fact]
+    public async Task ServiceContract_AcceptancePlan_ComparesPlanToActual_AndFlagsOverdue()
+    {
+        using var fx = await SetupAsync();
+        var orders = Orders(fx);
+        var acc = new ServiceAcceptanceService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        var plans = new ContractServicePlanService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        var contracts = new ContractService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        var svc = await fx.S.Stock.CreateServiceItemAsync(fx.H.Admin, "TUVAN", "Tư vấn kế toán", "giờ", "SALESREV", null);
+        var c = await contracts.CreateAsync(fx.H.Preparer, new ContractInput(InvoiceKind.Sales, "HĐ tư vấn 2026", ContractCategory.Quantity, fx.H.Partner["KH01"], D(1, 1), D(12, 31),
+            [new ContractLineInput(svc.Id, 100, 500_000, TaxRate: 8), new ContractLineInput(fx.Dam, 10, 1_000_000)]));
+        await contracts.SubmitAsync(fx.H.Preparer, c.Id); await contracts.DecideAsync(fx.H.Approver, c.Id, true, null);
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => plans.SetPlanAsync(fx.H.Preparer, c.Id, [new(2, "Giao dăm", D(3, 1), 5)])));                 // dòng hàng hóa
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => plans.SetPlanAsync(fx.H.Preparer, c.Id, [new(1, "Đợt 1", D(3, 1), 60), new(1, "Đợt 2", D(4, 1), 50)])));   // vượt cam kết 100
+        Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => plans.SetPlanAsync(fx.H.Preparer, c.Id, [new(9, "x", D(3, 1), 1)])));
+        await plans.SetPlanAsync(fx.H.Preparer, c.Id, [new(1, "Đợt 2", D(4, 30), 40), new(1, "Đợt 1", D(3, 31), 30), new(1, "Đợt 3", D(6, 30), 30)]);
+
+        var order = await orders.CreateAsync(fx.H.Preparer, new OrderInput(InvoiceKind.Sales, fx.H.Partner["KH01"], D(2, 1), "Tư vấn theo HĐ", [new OrderLineInput(svc.Id, 100, 500_000, VatRate: 8)], ContractId: c.Id));
+        await orders.ConfirmAsync(fx.H.Approver, order.Id);
+        var today = D(4, 15);
+        var rows = await plans.PlanAsync(fx.H.Auditor, c.Id, today);
+        Assert.Equal(["Đợt 1", "Đợt 2", "Đợt 3"], rows.Select(r => r.Name).ToArray());               // sắp theo ngày dự kiến
+        Assert.Equal(["OVERDUE", "PENDING", "PENDING"], rows.Select(r => r.Status).ToArray());       // chưa nghiệm thu gì, đợt 1 đã quá 31/3
+        Assert.Equal([30m, 70m, 100m], rows.Select(r => r.CumulativePlanned).ToArray());
+
+        var nt = await acc.CreateAsync(fx.H.Preparer, new(order.Id, D(4, 10), [new(1, 45)]));
+        await acc.DecideAsync(fx.H.Approver, nt.Id, true, null);
+        rows = await plans.PlanAsync(fx.H.Auditor, c.Id, today);
+        Assert.Equal(["DONE", "PARTIAL", "PENDING"], rows.Select(r => r.Status).ToArray());          // lũy kế 45: đạt đợt 1 (30), đang dở đợt 2 (70)
+        Assert.Empty(await plans.OverdueAsync(fx.H.Auditor, InvoiceKind.Sales, today));
+        var late = await plans.OverdueAsync(fx.H.Auditor, InvoiceKind.Sales, D(5, 10));
+        var one = Assert.Single(late);
+        Assert.Equal(("Đợt 2", 10, 25m), (one.Name, one.DaysLate, one.Missing));                      // hạn 30/4, trễ 10 ngày, còn thiếu 70 − 45
+        Assert.Empty(await plans.OverdueAsync(fx.H.Auditor, InvoiceKind.Purchase, D(5, 10)));
+    }
+
+    [Fact]
+    public async Task ServiceProgress_Milestones_AndTimesheet_FeedAcceptances()
+    {
+        using var fx = await SetupAsync();
+        var orders = Orders(fx);
+        var acc = new ServiceAcceptanceService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        var prog = new ServiceProgressService(fx.S.Db, acc, fx.S.Audit, fx.H.Clock);
+        var proj = await fx.S.Stock.CreateServiceItemAsync(fx.H.Admin, "DUAN", "Triển khai dự án", "dự án", "SALESREV", null);
+        var hrs = await fx.S.Stock.CreateServiceItemAsync(fx.H.Admin, "NGAYCONG", "Tư vấn theo ngày công", "ngày", "SALESREV", null);
+        var order = await orders.CreateAsync(fx.H.Preparer, new OrderInput(InvoiceKind.Sales, fx.H.Partner["KH01"], D(2, 1), "Dự án + tư vấn", [new OrderLineInput(proj.Id, 1, 100_000_000), new OrderLineInput(hrs.Id, 20, 3_000_000)]));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => prog.SetMilestonesAsync(fx.H.Preparer, order.Id, 1, [new("Khởi động", 30, D(3, 1))])));     // đơn chưa xác nhận
+        await orders.ConfirmAsync(fx.H.Approver, order.Id);
+
+        // Mốc: 30% + 50% + 20%; tổng không vượt 100%.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => prog.SetMilestonesAsync(fx.H.Preparer, order.Id, 1, [new("A", 60, D(3, 1)), new("B", 50, D(4, 1))])));
+        await prog.SetMilestonesAsync(fx.H.Preparer, order.Id, 1, [new("Nghiệm thu", 20, D(6, 1)), new("Khởi động", 30, D(3, 1)), new("Triển khai", 50, D(4, 1))]);
+        var ms = await prog.MilestonesAsync(fx.H.Auditor, order.Id, D(3, 15));
+        Assert.Equal(["Khởi động", "Triển khai", "Nghiệm thu"], ms.Select(m => m.Name).ToArray());
+        Assert.Equal(["OVERDUE", "PENDING", "PENDING"], ms.Select(m => m.Status).ToArray());
+        Assert.Equal(0.3m, ms[0].Quantity);
+        var a1 = await prog.CompleteMilestoneAsync(fx.H.Preparer, ms[0].Id, D(3, 10));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => prog.CompleteMilestoneAsync(fx.H.Preparer, ms[0].Id, D(3, 11))));   // đã hoàn thành
+        Assert.Equal("WAITING", (await prog.MilestonesAsync(fx.H.Auditor, order.Id, D(3, 15)))[0].Status);
+        await acc.DecideAsync(fx.H.Approver, a1.Id, true, null);
+        Assert.Equal("DONE", (await prog.MilestonesAsync(fx.H.Auditor, order.Id, D(3, 15)))[0].Status);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => prog.SetMilestonesAsync(fx.H.Preparer, order.Id, 1, [new("Mới", 100, D(7, 1))])));   // đã có mốc hoàn thành
+        // Mốc 2: biên bản bị từ chối thì mốc mở lại.
+        var a2 = await prog.CompleteMilestoneAsync(fx.H.Preparer, ms[1].Id, D(4, 2));
+        await acc.DecideAsync(fx.H.Approver, a2.Id, false, "Chưa đủ hồ sơ");
+        Assert.Equal("OVERDUE", (await prog.MilestonesAsync(fx.H.Auditor, order.Id, D(4, 20)))[1].Status);
+        await prog.CompleteMilestoneAsync(fx.H.Preparer, ms[1].Id, D(4, 25));
+
+        // Chấm giờ trên dòng 2 (tư vấn theo ngày công): 8 giờ = 1 ngày; giờ đã chốt bị khóa, biên bản bị hủy thì mở lại.
+        Assert.Equal(ErrorCodes.AmountNotPositive, await CodeOf(() => prog.AddTimeAsync(fx.H.Preparer, order.Id, 2, D(3, 3), "An", 0, null)));
+        Assert.Equal(ErrorCodes.AmountNotPositive, await CodeOf(() => prog.AddTimeAsync(fx.H.Preparer, order.Id, 2, D(3, 3), "An", 25, null)));
+        var e1 = await prog.AddTimeAsync(fx.H.Preparer, order.Id, 2, D(3, 3), "An", 8, "Khảo sát");
+        await prog.AddTimeAsync(fx.H.Preparer, order.Id, 2, D(3, 4), "Bình", 6, null);
+        await prog.AddTimeAsync(fx.H.Preparer, order.Id, 2, D(3, 20), "An", 10, "Sau ngày chốt");
+        var nt = await prog.CloseTimesheetAsync(fx.H.Preparer, order.Id, 2, D(3, 10), 8, D(3, 11));
+        Assert.Equal(1.75m, nt.Lines.Single().Quantity);                                                       // (8 + 6) giờ ÷ 8
+        Assert.Equal(2, (await prog.TimeEntriesAsync(fx.H.Auditor, order.Id, false)).Count(t => t.Locked));
+        Assert.Equal(1, (await prog.TimeEntriesAsync(fx.H.Auditor, order.Id, true)).Count);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => prog.DeleteTimeAsync(fx.H.Preparer, e1.Id)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => prog.CloseTimesheetAsync(fx.H.Preparer, order.Id, 2, D(3, 10), 8, D(3, 11))));   // không còn giờ chưa chốt đến 10/3
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => prog.AddTimeAsync(fx.H.Preparer, order.Id, 1, D(3, 3), "", 4, null)));   // thiếu người thực hiện
+        await acc.CancelAsync(fx.H.Preparer, nt.Id, "Chốt nhầm kỳ");
+        Assert.Equal(3, (await prog.TimeEntriesAsync(fx.H.Auditor, order.Id, true)).Count);                    // giờ được mở lại
+        await prog.DeleteTimeAsync(fx.H.Preparer, e1.Id);
+        var nt2 = await prog.CloseTimesheetAsync(fx.H.Preparer, order.Id, 2, D(3, 31), 8, D(3, 31));
+        Assert.Equal(2m, nt2.Lines.Single().Quantity);                                                         // (6 + 10) giờ ÷ 8
+        await acc.DecideAsync(fx.H.Approver, nt2.Id, true, null);
+        var cand = (await acc.InvoiceCandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, null)).Where(c => c.ItemCode == "NGAYCONG").Single();
+        Assert.Equal(2m, cand.Remaining);                                                                      // hóa đơn lập được theo số nghiệm thu đã xác nhận
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => prog.CloseTimesheetAsync(fx.H.Preparer, order.Id, 2, D(3, 31), 0, D(3, 31))));
     }
 }

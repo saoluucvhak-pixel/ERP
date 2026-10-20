@@ -15,7 +15,7 @@ interface QueueRow { invoiceId: string; number: string; invoiceSeries: string; i
 interface OverdueInv { invoiceId: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; dueDate: string; daysOverdue: number; total: string; open: string }
 interface Overdue { partnerId: string; partnerCode: string; partnerName: string; address: string | null; phone: string | null; email: string | null; totalOpen: string; maxDaysOverdue: number; invoices: OverdueInv[] }
 interface Row { key: string; name: string; quantity: string; revenue: string; vat: string; invoices: number; cost: string; uncostedLines: number }
-interface Analysis { byItem: Row[]; byPartner: Row[]; byMonth: Row[]; totalRevenue: string; totalVat: string; totalCost: string; uncostedLines: number }
+interface Analysis { byItem: Row[]; byPartner: Row[]; byMonth: Row[]; byType?: Row[]; totalRevenue: string; totalVat: string; totalCost: string; uncostedLines: number }
 interface Collections { byPartner: { partnerCode: string; partnerName: string; collected: string; receipts: number }[]; total: string }
 interface Warehouse { id: string; code: string; name: string }
 
@@ -247,7 +247,7 @@ export function RevenueView() {
           <button className="primary" disabled={busy} onClick={loadReports}>Xem</button></div>
         {analysis && <>
           <p>Doanh thu (chưa thuế, đã trừ hàng trả lại và giảm giá): <b>{formatMoney(analysis.totalRevenue)}</b> · Thuế GTGT: <b>{formatMoney(analysis.totalVat)}</b></p>
-          {([['Theo mặt hàng', analysis.byItem, 'Mặt hàng'], ['Theo khách hàng', analysis.byPartner, 'Khách hàng'], ['Theo tháng', analysis.byMonth, 'Tháng']] as const).map(([title, rows, first]) => (
+          {([['Theo loại (hàng hóa, dịch vụ)', analysis.byType ?? [], 'Loại'], ['Theo mặt hàng', analysis.byItem, 'Mặt hàng'], ['Theo khách hàng', analysis.byPartner, 'Khách hàng'], ['Theo tháng', analysis.byMonth, 'Tháng']] as const).map(([title, rows, first]) => (
             <div key={title} style={{ marginTop: 8 }}>
               <div className="toolbar"><strong>{title}</strong><ExportButton fileName={`Ban_hang_${title.replace(/ /g, '_')}_${from}_${to}`} sheet={title} title={`Phân tích tiêu thụ ${title.toLowerCase()}`} subtitle={`Từ ${d8(from)} đến ${d8(to)}`} disabled={rows.length === 0} columns={rowCols(first)} rows={rowData(rows)} /></div>
               <table className="grid"><thead><tr><th>{first}</th><th className="num">Số lượng</th><th className="num">Doanh thu</th><th className="num">Thuế GTGT</th><th className="num">Số HĐ</th><th className="num">Giá vốn</th><th className="num">Lãi gộp</th></tr></thead>

@@ -123,6 +123,9 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<DividendLine> DividendLines => Set<DividendLine>();
     public DbSet<ServiceAcceptance> ServiceAcceptances => Set<ServiceAcceptance>();
     public DbSet<ServiceAcceptanceLine> ServiceAcceptanceLines => Set<ServiceAcceptanceLine>();
+    public DbSet<ContractAcceptancePlan> ContractAcceptancePlans => Set<ContractAcceptancePlan>();
+    public DbSet<ServiceMilestone> ServiceMilestones => Set<ServiceMilestone>();
+    public DbSet<ServiceTimeEntry> ServiceTimeEntries => Set<ServiceTimeEntry>();
     public DbSet<CatalogGroup> CatalogGroups => Set<CatalogGroup>();
     public DbSet<CatalogGroupMember> CatalogGroupMembers => Set<CatalogGroupMember>();
     public DbSet<NumberingRule> NumberingRules => Set<NumberingRule>();
@@ -942,6 +945,16 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<SalesDeliveryLine>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<BusinessPartner>().Property(x => x.CreditLimit).HasConversion(moneyNullable);
         b.Entity<ServiceAcceptanceLine>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<ContractAcceptancePlan>(e =>
+        {
+            e.HasIndex(x => new { x.ContractId, x.ContractLineNo, x.PlanNo }).IsUnique();
+            e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<ContractAcceptancePlan>().Property(x => x.PlannedQty).HasConversion(money);
+        b.Entity<ServiceMilestone>(e => { e.HasIndex(x => new { x.OrderId, x.OrderLineNo, x.MilestoneNo }).IsUnique(); e.HasIndex(x => x.AcceptanceId); });
+        b.Entity<ServiceMilestone>().Property(x => x.Percentage).HasConversion(money);
+        b.Entity<ServiceTimeEntry>(e => { e.HasIndex(x => new { x.OrderId, x.OrderLineNo, x.WorkDate }); e.HasIndex(x => x.AcceptanceId); });
+        b.Entity<ServiceTimeEntry>().Property(x => x.Hours).HasConversion(money);
         b.Entity<CatalogGroup>().Property(x => x.DefaultCreditLimit).HasConversion(moneyNullable);
         b.Entity<CatalogGroup>().Property(x => x.DefaultVatRate).HasConversion(moneyNullable);
         b.Entity<BusinessPartner>().Property(x => x.PaymentDiscountPercent).HasConversion(moneyNullable);

@@ -1,3 +1,4 @@
+import { AcceptancePlanPanel } from './ContractServicePlan'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
@@ -17,7 +18,7 @@ interface View { header: Row; paymentTerms: string | null; signedDate: string | 
 interface Variance { contractId: string; contractCode: string; itemCode: string; itemName: string; contractPrice: string; orderedQty: string; averagePrice: string; minPrice: string; maxPrice: string; variancePercent: string }
 interface Sched { contractId: string; contractCode: string; kind: Kind; partnerName: string; milestoneId: string; name: string; dueDate: string; dueAmount: string; paidAmount: string; remaining: string; paymentStatus: string }
 interface Alert { contractId: string; contractCode: string; kind: string; message: string }
-interface ItemRef { id: string; code: string; name: string; unit: string }
+interface ItemRef { id: string; code: string; name: string; unit: string; isService?: boolean }
 interface LineDraft { itemId: string; qty: string; price: string; discount: string; tax: string }
 interface MsDraft { name: string; amount: string; date: string }
 
@@ -171,6 +172,7 @@ export function ContractsView() {
           <tbody>{view.milestones.map(m => <tr key={m.id}><td>{m.name}</td><td>{formatDate(m.dueDate)}</td><td className="num">{formatMoney(m.dueAmount)}</td><td className="num">{formatMoney(m.paidAmount)}</td><td>{PAY_VI[m.paymentStatus]}</td>
             <td>{['Active', 'Completed'].includes(h.status) && m.paymentStatus !== 'PAID' && <button disabled={busy} onClick={() => { const t = ask('Số tiền đã thanh toán đợt này:'); const amt = t ? parseMoney(t) : null; if (amt) act('Đã ghi nhận thanh toán.', () => post(`/contracts/${h.id}/milestones/${m.id}/pay`, { amount: amt, date: today() })) }}>Ghi nhận thanh toán</button>}</td></tr>)}
             {view.milestones.length === 0 && <tr><td colSpan={6} className="muted">Chưa khai mốc thanh toán.</td></tr>}</tbody></table>
+        {view.lines.some(l => items.find(i => i.id === l.itemId)?.isService) && <AcceptancePlanPanel contractId={h.id} status={h.status} serviceLines={view.lines.filter(l => items.find(i => i.id === l.itemId)?.isService)} />}
         <h4>Đơn hàng kế thừa</h4>
         <table className="grid"><thead><tr><th>Đơn</th><th>Ngày</th><th>Trạng thái</th><th className="num">Giá trị</th></tr></thead>
           <tbody>{view.orders.map(o => <tr key={o.orderId}><td>{o.number}</td><td>{formatDate(o.orderDate)}</td><td>{ORDER_VI[o.status] ?? o.status}</td><td className="num">{formatMoney(o.amount)}</td></tr>)}

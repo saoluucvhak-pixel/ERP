@@ -7317,6 +7317,49 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("contracts");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.ContractAcceptancePlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.Property<int>("ContractLineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("contract_line_no");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("PlanNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("plan_no");
+
+                    b.Property<DateOnly>("PlannedDate")
+                        .HasColumnType("date")
+                        .HasColumnName("planned_date");
+
+                    b.Property<decimal>("PlannedQty")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("planned_qty");
+
+                    b.HasKey("Id")
+                        .HasName("pk_contract_acceptance_plans");
+
+                    b.ToTable("contract_acceptance_plans");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.ContractAmendment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7756,6 +7799,108 @@ namespace Hak.Data.Postgres.Migrations
                         .HasDatabaseName("ix_service_acceptance_lines_acceptance_id");
 
                     b.ToTable("service_acceptance_lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceMilestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AcceptanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acceptance_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
+
+                    b.Property<int>("MilestoneNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("milestone_no");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("OrderLineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_line_no");
+
+                    b.Property<decimal>("Percentage")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("percentage");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_milestones");
+
+                    b.ToTable("service_milestones");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceTimeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AcceptanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acceptance_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("hours");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("OrderLineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_line_no");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date")
+                        .HasColumnName("work_date");
+
+                    b.Property<string>("Worker")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("worker");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_time_entries");
+
+                    b.ToTable("service_time_entries");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>

@@ -103,3 +103,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 đợt 25: mặc định theo nhóm cho đối tượng (hạn mức, hạn thanh toán, thuế suất vật tư; theo ERP khác: mục khai > nhóm chính > kế thừa nhóm cha > nhóm sâu nhất/giá trị chặt nhất; GroupDefaults) — docs/10 mục 9z. Mã đối tượng giữ như hiện tại (chị: tạm thời vậy).
 
 - 20/10 đợt 26: dịch vụ (Item.IsService không kho; đơn → biên bản nghiệm thu dịch vụ NTDV/NTDM (ServiceAcceptanceService) → hóa đơn trong phạm vi nghiệm thu; TK doanh thu/chi phí trên mặt hàng) — docs/10 mục 9aa. InventoryAccountId của vật tư có thể null (dịch vụ).
+
+- 20/10 đợt 27: báo cáo dịch vụ (ServiceReportService), lịch nghiệm thu theo hợp đồng (ContractServicePlanService), mốc + chấm giờ (ServiceProgressService) — docs/10 mục 9ab.
