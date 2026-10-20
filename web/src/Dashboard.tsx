@@ -55,12 +55,12 @@ export function DashboardView() {
   }), [run, asOf, month1])
   useEffect(() => { load() }, [load])
 
-  // Aging per receivable / payable account (needs the account catalog first).
+  // Aging of every receivable / payable account, one request.
   useEffect(() => {
-    const open = accounts.filter(a => a.openItemNature === 'Receivable' || a.openItemNature === 'Payable')
-    Promise.all(open.map(a => get<Aging>(`/reports/aging?accountId=${a.id}&asOf=${asOf}`).then(data => ({ code: a.code, name: a.name, nature: a.openItemNature, data })).catch(() => null)))
-      .then(r => setAging(r.filter((x): x is NonNullable<typeof x> => x !== null)))
-  }, [accounts, asOf])
+    get<{ code: string; name: string; nature: string; report: Aging }[]>(`/reports/aging-all?asOf=${asOf}`)
+      .then(r => setAging(r.map(x => ({ code: x.code, name: x.name, nature: x.nature, data: x.report }))))
+      .catch(() => setAging([]))
+  }, [asOf])
 
   const bal = (id: string) => { const r = tb?.rows.find(x => x.accountId === id); return r ? addMoney([r.closingDebit, '-' + r.closingCredit]) : '0' }
   const cash = accounts.filter(a => a.cashKind !== 'None' && a.isPostable).map(a => ({ a, v: bal(a.id) })).filter(x => x.v !== '0' || x.a.isActive)

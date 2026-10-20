@@ -73,6 +73,11 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
             db.EInvoiceImportBatches.Add(batch);
             var rejected = new List<string>();
             int statusChanges = 0;
+            // Tải trước hóa đơn đã có của các người bán trong lô (một truy vấn) thay vì kiểm tra trùng từng hóa đơn.
+            var sellerCodes = invoices.Select(i => Norm(i.SellerTaxCode)).Where(c => c.Length > 0).Distinct().ToList();
+            var known = (await db.EInvoiceRecords.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && sellerCodes.Contains(r.SellerTaxCode)).ToListAsync())
+                .GroupBy(r => (r.Direction, r.SellerTaxCode, r.Series, r.Number)).ToDictionary(g => g.Key, g => g.First());
+            var latestStatus = await LatestStatusesAsync(ctx.CompanyId, sellerCodes);
             foreach (var x in invoices)
             {
                 var key = $"{x.Direction}/{x.SellerTaxCode}/{x.Series}/{x.Number}";
@@ -85,12 +90,11 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                 if (problem is not null) { rejected.Add($"{key}: {problem}"); continue; }
 
                 var seller = Norm(x.SellerTaxCode);
-                var existing = await db.EInvoiceRecords.AsNoTracking().FirstOrDefaultAsync(r => r.CompanyId == ctx.CompanyId && r.Direction == x.Direction
-                    && r.SellerTaxCode == seller && r.Series == x.Series.Trim() && r.Number == x.Number.Trim())
+                var existing = known.GetValueOrDefault((x.Direction, seller, x.Series.Trim(), x.Number.Trim()))
                     ?? db.EInvoiceRecords.Local.FirstOrDefault(r => r.Direction == x.Direction && r.SellerTaxCode == seller && r.Series == x.Series.Trim() && r.Number == x.Number.Trim());
                 if (existing is not null)
                 {
-                    if (await CurrentStatusAsync(existing) != x.Status)
+                    if (CurrentStatus(existing, latestStatus) != x.Status)
                     {
                         db.EInvoiceStatusChanges.Add(new EInvoiceStatusChange { Id = Ids.New(), EInvoiceId = existing.Id, NewStatus = x.Status, ImportBatchId = batch.Id, At = clock.UtcNow });
                         statusChanges++;
@@ -134,8 +138,8 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
         var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
         var own = Norm(company.TaxCode);
         var einvoices = await db.EInvoiceRecords.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId).ToListAsync();
-        var statuses = new Dictionary<Guid, EInvoiceStatus>();
-        foreach (var e in einvoices) statuses[e.Id] = await CurrentStatusAsync(e);
+        var latest = await LatestStatusesAsync(ctx.CompanyId, null);
+        var statuses = einvoices.ToDictionary(e => e.Id, e => latest.TryGetValue(e.Id, out var st) ? st : e.Status);
 
         // Books: everything posted up to "to" so an invoice booked in a later/earlier period is reported as a period difference, not as missing.
         var books = await LedgerInvoicesAsync(ctx.CompanyId, DateOnly.MinValue, DateOnly.MaxValue);
@@ -310,10 +314,26 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
         return total;
     }
 
-    private async Task<EInvoiceStatus> CurrentStatusAsync(EInvoiceRecord e)
-        => await db.EInvoiceStatusChanges.AsNoTracking().Where(s => s.EInvoiceId == e.Id).OrderByDescending(s => s.At).Select(s => (EInvoiceStatus?)s.NewStatus).FirstOrDefaultAsync()
-           ?? db.EInvoiceStatusChanges.Local.Where(s => s.EInvoiceId == e.Id).OrderByDescending(s => s.At).Select(s => (EInvoiceStatus?)s.NewStatus).FirstOrDefault()
-           ?? e.Status;
+    /// <summary>Trạng thái mới nhất đã lưu của các hóa đơn điện tử (một truy vấn); null sellerCodes = mọi hóa đơn của công ty.</summary>
+    private async Task<Dictionary<Guid, EInvoiceStatus>> LatestStatusesAsync(Guid companyId, IReadOnlyCollection<string>? sellerCodes)
+    {
+        var records = db.EInvoiceRecords.Where(r => r.CompanyId == companyId);
+        if (sellerCodes is not null)
+        {
+            var codes = sellerCodes.ToList();
+            records = records.Where(r => codes.Contains(r.SellerTaxCode));
+        }
+        var rows = await (from s in db.EInvoiceStatusChanges
+                          join r in records on s.EInvoiceId equals r.Id
+                          select new { s.EInvoiceId, s.NewStatus, s.At }).AsNoTracking().ToListAsync();
+        return rows.GroupBy(x => x.EInvoiceId).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.At).First().NewStatus);
+    }
+
+    /// <summary>Đã lưu → thay đổi chưa lưu trong lô đang nhập → trạng thái gốc của hóa đơn.</summary>
+    private EInvoiceStatus CurrentStatus(EInvoiceRecord e, Dictionary<Guid, EInvoiceStatus> saved)
+        => saved.TryGetValue(e.Id, out var s) ? s
+           : db.EInvoiceStatusChanges.Local.Where(c => c.EInvoiceId == e.Id).OrderByDescending(c => c.At).Select(c => (EInvoiceStatus?)c.NewStatus).FirstOrDefault()
+             ?? e.Status;
 
     private static string Norm(string? taxCode) => (taxCode ?? "").Replace(" ", "").Trim();
 }

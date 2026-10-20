@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -44,6 +45,34 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
 {
     public const int AutoMatchThreshold = 60;
 
+    /// <summary>Tiền tố mã giao dịch do hệ thống sinh cho dòng sao kê ngân hàng không có mã (quyết định 16/10/2026).</summary>
+    public const string AutoReferencePrefix = "AUTO-";
+    public static bool IsAutoReference(string reference) => reference.StartsWith(AutoReferencePrefix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Mã giao dịch từng dòng. Dòng có mã thì giữ nguyên; dòng không mã nhận mã băm của (ngày, tiền, nội dung, đối tác) + số lần xuất hiện
+    /// trong tệp, nên cùng nội dung ở sao kê chồng kỳ cho cùng mã (bị chặn nhập trùng như dòng có mã) còn hai giao dịch giống hệt nhau
+    /// trong một tệp vẫn phân biệt được.
+    /// </summary>
+    internal static List<string> ResolveReferences(IReadOnlyList<StatementLineInput> lines)
+    {
+        var seen = new Dictionary<string, int>();
+        var result = new List<string>(lines.Count);
+        foreach (var l in lines)
+        {
+            var reference = (l.BankReference ?? "").Trim();
+            if (reference.Length == 0)
+            {
+                var basis = string.Join('|', l.TransactionDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), l.Amount.ToString("0.####", CultureInfo.InvariantCulture),
+                    (l.Description ?? "").Trim(), (l.CounterpartyName ?? "").Trim(), (l.CounterpartyAccount ?? "").Trim());
+                var n = seen[basis] = seen.GetValueOrDefault(basis) + 1;
+                reference = AutoReferencePrefix + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{basis}|{n}")))[..20];
+            }
+            result.Add(reference);
+        }
+        return result;
+    }
+
     public async Task<BankStatement> ImportAsync(SessionContext ctx, StatementInput input)
     {
         ctx.Require(Permissions.BankReconcile);
@@ -53,9 +82,10 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
         if (computed != input.ClosingBalance)
             throw new DomainException(ErrorCodes.StatementUnbalanced,
                 $"Số dư đầu {input.OpeningBalance} + phát sinh {input.Lines.Sum(l => l.Amount)} = {computed}, khác số dư cuối {input.ClosingBalance} trên sao kê.");
-        if (input.Lines.Any(l => l.Amount == 0 || string.IsNullOrWhiteSpace(l.BankReference) || l.TransactionDate < input.FromDate || l.TransactionDate > input.ToDate))
-            throw new DomainException(ErrorCodes.ValidationFailed, "Mỗi giao dịch phải có số tiền khác 0, mã giao dịch ngân hàng và ngày trong kỳ sao kê.");
-        var dupInFile = input.Lines.GroupBy(l => l.BankReference.Trim()).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (input.Lines.Any(l => l.Amount == 0 || l.TransactionDate < input.FromDate || l.TransactionDate > input.ToDate))
+            throw new DomainException(ErrorCodes.ValidationFailed, "Mỗi giao dịch phải có số tiền khác 0 và ngày trong kỳ sao kê.");
+        var references = ResolveReferences(input.Lines);
+        var dupInFile = references.GroupBy(r => r).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (dupInFile.Count > 0) throw new DomainException(ErrorCodes.StatementDuplicate, $"Mã giao dịch lặp trong file: {string.Join(", ", dupInFile)}.");
 
         var sha = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(input.SourceContent)));
@@ -65,7 +95,7 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
             if (bank is null || bank.CashKind != CashKind.Bank) throw new DomainException(ErrorCodes.ValidationFailed, "Tài khoản không phải tài khoản tiền gửi ngân hàng của công ty.");
             if (await db.BankStatements.AnyAsync(s => s.CompanyId == ctx.CompanyId && s.BankAccountId == bank.Id && s.SourceSha256 == sha))
                 throw new DomainException(ErrorCodes.StatementDuplicate, "File sao kê này đã được nhập.");
-            var refs = input.Lines.Select(l => l.BankReference.Trim()).ToList();
+            var refs = references;
             var existing = await db.BankStatementLines.Where(l => l.CompanyId == ctx.CompanyId && l.BankAccountId == bank.Id && refs.Contains(l.BankReference))
                 .Select(l => l.BankReference).ToListAsync();
             if (existing.Count > 0) throw new DomainException(ErrorCodes.StatementDuplicate, $"Giao dịch đã có trong sao kê nhập trước: {string.Join(", ", existing)}.");
@@ -85,7 +115,7 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
             st.Lines = input.Lines.Select((l, i) => new BankStatementLine
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, StatementId = st.Id, BankAccountId = bank.Id, LineNo = i + 1,
-                TransactionDate = l.TransactionDate, Amount = l.Amount, BankReference = l.BankReference.Trim(), Description = l.Description,
+                TransactionDate = l.TransactionDate, Amount = l.Amount, BankReference = references[i], Description = l.Description,
                 CounterpartyName = l.CounterpartyName, CounterpartyAccount = l.CounterpartyAccount,
             }).ToList();
             db.BankStatements.Add(st);
@@ -110,10 +140,13 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
             var lines = await db.BankStatementLines.Where(l => l.CompanyId == ctx.CompanyId && l.StatementId == statementId && l.Status != StatementLineStatus.Matched)
                 .OrderBy(l => l.LineNo).ToListAsync();
             var taken = new HashSet<Guid>();
+            // Một truy vấn lấy mọi dòng sổ chưa ghép trong khoảng ngày của sao kê; từng dòng sao kê chấm điểm trong bộ nhớ.
+            var pool = lines.Count == 0 ? null
+                : await LoadLedgerRowsAsync(ctx.CompanyId, lines[0].BankAccountId, lines.Min(l => l.TransactionDate).AddDays(-toleranceDays), lines.Max(l => l.TransactionDate).AddDays(toleranceDays));
             int matched = 0, pending = 0, unmatched = 0;
             foreach (var sl in lines)
             {
-                var candidates = (await CandidatesAsync(ctx.CompanyId, sl, toleranceDays)).Where(c => !taken.Contains(c.JournalLineId)).ToList();
+                var candidates = (await CandidatesAsync(ctx.CompanyId, sl, toleranceDays, pool)).Where(c => !taken.Contains(c.JournalLineId)).ToList();
                 var top = candidates.FirstOrDefault();
                 var unique = top is not null && (candidates.Count == 1 || candidates[1].Score < top.Score);
                 if (top is not null && unique && top.ReferenceMatched && top.Score >= AutoMatchThreshold)
@@ -180,25 +213,28 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
     public async Task<BankReconciliationReport> ReportAsync(SessionContext ctx, Guid bankAccountId, DateOnly asOf)
     {
         ctx.Require(Permissions.ReportView);
-        var lines = await db.JournalLines.AsNoTracking().Where(l => l.CompanyId == ctx.CompanyId && l.AccountId == bankAccountId && l.PostingDate <= asOf)
-            .Select(l => new { l.Id, l.Side, l.Amount, l.PostingDate, l.Description, l.JournalEntryId }).ToListAsync();
+        var lines = await (from l in db.JournalLines join e in db.JournalEntries on l.JournalEntryId equals e.Id
+                           where l.CompanyId == ctx.CompanyId && l.AccountId == bankAccountId && l.PostingDate <= asOf
+                           select new { l.Id, l.Side, l.Amount, l.PostingDate, l.Description, e.VoucherNumber }).AsNoTracking().ToListAsync();
         var book = lines.Sum(l => (int)l.Side * l.Amount);
         var activeMatches = await db.ReconciliationMatches.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.VoidedAt == null)
             .Select(m => new { m.JournalLineId, m.StatementLineId }).ToListAsync();
         var matchedLedger = activeMatches.Select(m => m.JournalLineId).ToHashSet();
 
-        var entryNumbers = await db.JournalEntries.AsNoTracking().Where(e => e.CompanyId == ctx.CompanyId).ToDictionaryAsync(e => e.Id, e => e.VoucherNumber);
         var bookOnly = lines.Where(l => !matchedLedger.Contains(l.Id))
-            .Select(l => new UnmatchedLedgerLine(l.Id, entryNumbers[l.JournalEntryId], l.PostingDate, (int)l.Side * l.Amount, l.Description))
+            .Select(l => new UnmatchedLedgerLine(l.Id, l.VoucherNumber, l.PostingDate, (int)l.Side * l.Amount, l.Description))
             .OrderBy(l => l.PostingDate).ToList();
 
         var statementLines = await db.BankStatementLines.AsNoTracking()
             .Where(l => l.CompanyId == ctx.CompanyId && l.BankAccountId == bankAccountId && l.TransactionDate <= asOf && l.Status != StatementLineStatus.Matched)
             .OrderBy(l => l.TransactionDate).ThenBy(l => l.LineNo).ToListAsync();
         var statementOnly = new List<UnmatchedStatementLine>();
+        var pendingLines = statementLines.Where(l => l.Status == StatementLineStatus.PendingConfirmation).ToList();
+        var pool = pendingLines.Count == 0 ? null
+            : await LoadLedgerRowsAsync(ctx.CompanyId, bankAccountId, pendingLines.Min(l => l.TransactionDate).AddDays(-3), pendingLines.Max(l => l.TransactionDate).AddDays(3));
         foreach (var sl in statementLines)
             statementOnly.Add(new UnmatchedStatementLine(sl.Id, sl.TransactionDate, sl.Amount, sl.BankReference, sl.Description, sl.Status,
-                sl.Status == StatementLineStatus.PendingConfirmation ? await CandidatesAsync(ctx.CompanyId, sl, 3) : []));
+                sl.Status == StatementLineStatus.PendingConfirmation ? await CandidatesAsync(ctx.CompanyId, sl, 3, pool) : []));
 
         var latest = await db.BankStatements.AsNoTracking().Where(s => s.CompanyId == ctx.CompanyId && s.BankAccountId == bankAccountId && s.ToDate <= asOf)
             .OrderByDescending(s => s.ToDate).FirstOrDefaultAsync();
@@ -238,22 +274,28 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
         return await db.PaymentOrders.FirstOrDefaultAsync(p => p.VoucherId == voucherId);
     }
 
-    private async Task<List<MatchCandidate>> CandidatesAsync(Guid companyId, BankStatementLine sl, int toleranceDays)
+    private sealed record LedgerRow(Guid Id, string VoucherNumber, DateOnly PostingDate, decimal Amount, Side Side, string? Description, string VDesc);
+
+    /// <summary>Dòng sổ của TK ngân hàng trong khoảng ngày, chưa được ghép với dòng sao kê nào.</summary>
+    private async Task<List<LedgerRow>> LoadLedgerRowsAsync(Guid companyId, Guid bankAccountId, DateOnly fromDate, DateOnly toDate)
+        => await (from l in db.JournalLines
+                  join e in db.JournalEntries on l.JournalEntryId equals e.Id
+                  join v in db.Vouchers on e.VoucherId equals v.Id
+                  where l.CompanyId == companyId && l.AccountId == bankAccountId && l.PostingDate >= fromDate && l.PostingDate <= toDate
+                        && !db.ReconciliationMatches.Any(m => m.JournalLineId == l.Id && m.VoidedAt == null)
+                  select new LedgerRow(l.Id, e.VoucherNumber, l.PostingDate, l.Amount, l.Side, l.Description, v.Description))
+            .AsNoTracking().ToListAsync();
+
+    private async Task<List<MatchCandidate>> CandidatesAsync(Guid companyId, BankStatementLine sl, int toleranceDays, List<LedgerRow>? pool = null)
     {
         var side = sl.Amount > 0 ? Side.Debit : Side.Credit;
         var abs = Math.Abs(sl.Amount);
         var fromDate = sl.TransactionDate.AddDays(-toleranceDays);
         var toDate = sl.TransactionDate.AddDays(toleranceDays);
-        var rows = await (from l in db.JournalLines
-                          join e in db.JournalEntries on l.JournalEntryId equals e.Id
-                          join v in db.Vouchers on e.VoucherId equals v.Id
-                          where l.CompanyId == companyId && l.AccountId == sl.BankAccountId && l.Side == side && l.Amount == abs
-                                && l.PostingDate >= fromDate && l.PostingDate <= toDate
-                                && !db.ReconciliationMatches.Any(m => m.JournalLineId == l.Id && m.VoidedAt == null)
-                          select new { l.Id, e.VoucherNumber, l.PostingDate, l.Amount, l.Description, VDesc = v.Description, v.SourceId })
-            .AsNoTracking().ToListAsync();
+        var rows = (pool ?? await LoadLedgerRowsAsync(companyId, sl.BankAccountId, fromDate, toDate))
+            .Where(r => r.Side == side && r.Amount == abs && r.PostingDate >= fromDate && r.PostingDate <= toDate).ToList();
 
-        var reference = sl.BankReference.Trim();
+        var reference = IsAutoReference(sl.BankReference) ? "" : sl.BankReference.Trim();   // mã sinh tự động không phải mã ngân hàng thật: không dùng để chấm điểm
         var result = rows.Select(r =>
         {
             var score = 50 - 5 * Math.Abs(r.PostingDate.DayNumber - sl.TransactionDate.DayNumber);
