@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, ExportButton, useAction } from './common'
-import { formatMoney, monthStart, today } from './money'
+import { formatDate, formatDateTime, formatMoney, today } from './money'
 
 interface DefInfo { id: string; code: string; version: number; name: string; category: string; legalReference: string | null; status: 'Draft' | 'Verified'
   verificationNote: string | null; verifiedAt: string | null; lineCount: number; snapshots: number; createdAt: string }
@@ -49,8 +49,8 @@ function ResultTable({ r, onPick, picked }: { r: Run; onPick?: (l: RunLine) => v
   return (
     <>
       {!r.verified && <div className="msg error">MẪU CHƯA XÁC MINH — số liệu chỉ để kiểm tra nội bộ, không dùng nộp cơ quan nhà nước.</div>}
-      <p><b>{r.companyName}</b> · {r.name} ({r.code} v{r.version}{r.legalReference ? ` · ${r.legalReference}` : ''}) · kỳ {r.fromDate} → {r.toDate}
-        {compare && <> · so sánh {r.compareFrom} → {r.compareTo}</>}</p>
+      <p><b>{r.companyName}</b> · {r.name} ({r.code} v{r.version}{r.legalReference ? ` · ${r.legalReference}` : ''}) · kỳ {formatDate(r.fromDate)} → {formatDate(r.toDate)}
+        {compare && <> · so sánh {formatDate(r.compareFrom)} → {formatDate(r.compareTo)}</>}</p>
       <div className="scroll"><table className="grid">
         <thead><tr><th>Chỉ tiêu</th><th>Mã số</th><th>Thuyết minh</th>{valueHeaders(r).map(h => <th key={h} className="num">{h}</th>)}</tr></thead>
         <tbody>{r.lines.map(l => <tr key={l.lineNo} onClick={() => onPick?.(l)} style={{ cursor: onPick && hasValue(l) ? 'pointer' : undefined,
@@ -86,9 +86,9 @@ function exportRows(r: Run) {
 }
 
 function RunReport({ defs, onSnapshot }: { defs: DefInfo[]; onSnapshot: () => void }) {
-  // Mặc định: từ đầu tháng hiện hành đến hôm nay; kỳ so sánh là cùng kỳ năm trước.
+  // Báo cáo tài chính xem lũy kế: mặc định từ đầu năm đến hôm nay; kỳ so sánh là cùng kỳ năm trước.
   const lastYear = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); const t = new Date(y - 1, m - 1, d); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}` }
-  const [p, setP] = useState({ definitionId: '', fromDate: monthStart(), toDate: today(), compare: false, compareFrom: lastYear(monthStart()), compareTo: lastYear(today()) })
+  const [p, setP] = useState({ definitionId: '', fromDate: today().slice(0, 4) + '-01-01', toDate: today(), compare: false, compareFrom: lastYear(today().slice(0, 4) + '-01-01'), compareTo: lastYear(today()) })
   const [result, setResult] = useState<Run | null>(null)
   const [picked, setPicked] = useState<RunLine | null>(null)
   const [note, setNote] = useState('')
@@ -115,7 +115,7 @@ function RunReport({ defs, onSnapshot }: { defs: DefInfo[]; onSnapshot: () => vo
       {result && <section className="panel">
         <div className="toolbar">
           <ExportButton fileName={`${result.code}-${result.toDate}`} sheet={result.code} columns={exportColumns(result)} rows={exportRows(result)} title={result.name}
-            subtitle={`${result.code} · kỳ ${result.fromDate} → ${result.toDate}${result.compareFrom ? ` · so sánh ${result.compareFrom} → ${result.compareTo}` : ''}${result.legalReference ? ` · ${result.legalReference}` : ''}${result.verified ? '' : ' · MẪU CHƯA XÁC MINH — chỉ dùng nội bộ'}`} />
+            subtitle={`${result.code} · kỳ ${formatDate(result.fromDate)} → ${formatDate(result.toDate)}${result.compareFrom ? ` · so sánh ${formatDate(result.compareFrom)} → ${formatDate(result.compareTo)}` : ''}${result.legalReference ? ` · ${result.legalReference}` : ''}${result.verified ? '' : ' · MẪU CHƯA XÁC MINH — chỉ dùng nội bộ'}`} />
           <label style={{ flex: 1 }}>Ghi chú khi chốt <input value={note} onChange={e => setNote(e.target.value)} placeholder="VD: số liệu trình ban giám đốc quý 3" /></label>
           <button disabled={busy} title="Lưu nguyên kết quả này (kèm mã băm) — chỉ kế toán trưởng" onClick={() => run(async () => {
             const s = await post<{ id: string; sha256: string }>('/report-runs/snapshots', { ...body(), note })
@@ -254,15 +254,15 @@ function Snapshots() {
       <ErrorBox error={error} />
       <section className="panel"><table className="grid">
         <thead><tr><th>Thời điểm chốt</th><th>Mẫu</th><th>Kỳ</th><th>Người chốt</th><th>Ghi chú</th><th>Mã băm</th><th /></tr></thead>
-        <tbody>{list.map(s => <tr key={s.id}><td>{s.createdAt.replace('T', ' ').slice(0, 16)}</td>
+        <tbody>{list.map(s => <tr key={s.id}><td>{formatDateTime(s.createdAt)}</td>
           <td>{s.definitionCode} v{s.definitionVersion}{s.definitionVerified ? '' : ' (chưa xác minh)'}</td>
-          <td>{s.fromDate} → {s.toDate}{s.compareFrom && <div className="muted">so sánh {s.compareFrom} → {s.compareTo}</div>}</td>
+          <td>{formatDate(s.fromDate)} → {formatDate(s.toDate)}{s.compareFrom && <div className="muted">so sánh {formatDate(s.compareFrom)} → {formatDate(s.compareTo)}</div>}</td>
           <td>{s.createdBy}</td><td>{s.note}</td><td><code>{s.sha256.slice(0, 12)}…</code></td>
           <td><button onClick={() => run(async () => setShown(await get(`/report-runs/snapshots/${s.id}`)))}>Xem</button></td></tr>)}</tbody></table>
         {list.length === 0 && <p className="muted">Chưa chốt kết quả nào.</p>}</section>
       {shown && <section className="panel">
         <div className={shown.hashValid ? 'msg ok' : 'msg error'}>{shown.hashValid ? 'Mã băm khớp — nội dung đúng như lúc chốt.' : 'MÃ BĂM KHÔNG KHỚP — dữ liệu đã bị thay đổi sau khi chốt!'}
-          {' '}Chốt bởi {shown.info.createdBy} lúc {shown.info.createdAt.replace('T', ' ').slice(0, 16)}.</div>
+          {' '}Chốt bởi {shown.info.createdBy} lúc {formatDateTime(shown.info.createdAt)}.</div>
         <div className="toolbar"><ExportButton fileName={`${shown.run.code}-${shown.run.toDate}-chot`} sheet={shown.run.code}
           columns={exportColumns(shown.run)} rows={exportRows(shown.run)} /></div>
         <ResultTable r={shown.run} />

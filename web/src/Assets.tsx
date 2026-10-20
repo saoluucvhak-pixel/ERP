@@ -5,7 +5,7 @@ import { AssetCyclePanels } from './AssetCycle'
 import { AssetJournal } from './AssetJournal'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 
 interface RegisterRow {
   id: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; status: 'Draft' | 'Active' | 'Disposed' | 'Cancelled'
@@ -82,8 +82,8 @@ export function AssetsView() {
         <tbody>{shown.map(r => (
           <tr key={r.id}>
             <td>{r.code}</td><td>{r.name}</td><td>{CLASS_VI[r.class]}</td>
-            <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${r.disposalDate}` : ''}</span></td>
-            <td>{r.assetAccountCode}</td><td>{r.inServiceDate}</td><td>{r.usefulLifeMonths}</td>
+            <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}{r.disposalDate ? ` ${formatDate(r.disposalDate)}` : ''}</span></td>
+            <td>{r.assetAccountCode}</td><td>{formatDate(r.inServiceDate)}</td><td>{r.usefulLifeMonths}</td>
             <td className="num">{formatMoney(r.originalCost)}</td><td className="num">{formatMoney(r.accumulated)}</td><td className="num">{formatMoney(r.netBookValue)}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => run(async () => setDetail(await get<Detail>(`/assets/${r.id}`)))}>Chi tiết</button>
@@ -102,7 +102,7 @@ export function AssetsView() {
         </tbody>
       </table>
 
-      <AssetCyclePanels assets={rows} depreciationNote={lastActive ? `kỳ gần nhất đến ${lastActive.periodEnd}` : 'chưa chạy kỳ nào'} />
+      <AssetCyclePanels assets={rows} depreciationNote={lastActive ? `kỳ gần nhất đến ${formatDate(lastActive.periodEnd)}` : 'chưa chạy kỳ nào'} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 
@@ -120,15 +120,15 @@ export function AssetsView() {
       {detail && (
         <section className="panel">
           <div className="toolbar"><h3>{detail.asset.code} – {detail.asset.name}</h3><button onClick={() => setDetail(null)}>Đóng</button></div>
-          <p className="muted">Bắt đầu khấu hao {detail.asset.scheduleStartDate}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}
+          <p className="muted">Bắt đầu khấu hao {formatDate(detail.asset.scheduleStartDate)}; tính tháng đầu/cuối: {detail.asset.proration === 'Daily' ? 'theo ngày' : 'tròn tháng'}
             {detail.asset.remainingLifeMonths ? `; chuyển từ hệ thống cũ: hao mòn đầu ${formatMoney(detail.asset.openingAccumulated)}, còn ${detail.asset.remainingLifeMonths} tháng` : ''}</p>
           <h4>Nguồn nguyên giá</h4>
           <table className="grid"><thead><tr><th>Chứng từ</th><th>Ngày</th><th>TK</th><th className="num">Dòng bút toán</th><th className="num">Gán cho tài sản</th></tr></thead>
-            <tbody>{detail.sources.map(x => <tr key={x.journalLineId}><td>{x.voucherNumber}</td><td>{x.postingDate}</td><td>{x.accountCode}</td>
+            <tbody>{detail.sources.map(x => <tr key={x.journalLineId}><td>{x.voucherNumber}</td><td>{formatDate(x.postingDate)}</td><td>{x.accountCode}</td>
               <td className="num">{formatMoney(x.lineAmount)}</td><td className="num">{formatMoney(x.amount)}</td></tr>)}</tbody></table>
           <h4>Kế hoạch khấu hao / phân bổ</h4>
           <table className="grid"><thead><tr><th>Tháng</th><th className="num">Kế hoạch</th><th className="num">Lũy kế</th><th className="num">Đã ghi sổ</th></tr></thead>
-            <tbody>{detail.schedule.map(x => <tr key={x.periodEnd}><td>{x.periodEnd.slice(0, 7)}</td><td className="num">{formatMoney(x.planned)}</td>
+            <tbody>{detail.schedule.map(x => <tr key={x.periodEnd}><td>{formatMonth(x.periodEnd)}</td><td className="num">{formatMoney(x.planned)}</td>
               <td className="num">{formatMoney(x.cumulative)}</td><td className="num">{x.booked == null ? '' : formatMoney(x.booked)}</td></tr>)}</tbody></table>
         </section>
       )}
@@ -139,7 +139,7 @@ export function AssetsView() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <select value={periodId || nextPeriod?.id || ''} onChange={e => setPeriodId(e.target.value)} aria-label="Kỳ khấu hao">
             <option value="">— chọn kỳ —</option>
-            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}</option>)}
+            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{formatMonth(p.startDate)}</option>)}
           </select>
           <button className="primary" disabled={busy || !(periodId || nextPeriod)} onClick={() => {
             const id = periodId || nextPeriod!.id
@@ -148,7 +148,7 @@ export function AssetsView() {
           }}>Chạy khấu hao</button>
         </div>
         <table className="grid"><thead><tr><th>Kỳ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{r.periodStart.slice(0, 7)}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}{r.status === 'Active' && !r.voucherId ? ' (không phát sinh)' : ''}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{formatMonth(r.periodStart)}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}{r.status === 'Active' && !r.voucherId ? ' (không phát sinh)' : ''}</td>
             <td>{r.id === lastActive?.id && <button disabled={busy} onClick={() => {
               const reason = prompt('Lý do hủy lần chạy khấu hao:')
               if (reason) act(() => post(`/assets/depreciation-runs/${r.id}/reverse`, { reason }), 'Đã hủy lần chạy khấu hao.')
@@ -156,7 +156,7 @@ export function AssetsView() {
       </section>
 
       <section className="panel">
-        <div className="toolbar"><h3>Đối chiếu sổ tài sản ↔ sổ cái tại {asOf}</h3>
+        <div className="toolbar"><h3>Đối chiếu sổ tài sản ↔ sổ cái tại {formatDate(asOf)}</h3>
           <button onClick={() => run(async () => setRecon(await get<ReconRow[]>(`/assets/reconciliation?asOf=${asOf}`)))}>Đối chiếu</button></div>
         {recon && <table className="grid"><thead><tr><th>TK</th><th>Nội dung</th><th className="num">Sổ tài sản</th><th className="num">Sổ cái</th><th className="num">Chênh lệch</th></tr></thead>
           <tbody>{recon.map(r => <tr key={r.accountId} className={r.difference !== '0' ? 'warn' : ''}><td>{r.accountCode}</td><td>{r.kind}</td>
@@ -251,7 +251,7 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
         <tbody>{candidates.map(c => <tr key={c.journalLineId}>
           <td><input type="checkbox" aria-label={`Chọn ${c.voucherNumber}`} checked={c.journalLineId in picked} onChange={e => setPicked(p => {
             const n = { ...p }; if (e.target.checked) n[c.journalLineId] = remaining(c); else delete n[c.journalLineId]; return n })} /></td>
-          <td>{c.voucherNumber}</td><td>{c.postingDate}</td><td>{c.description}</td><td className="num">{formatMoney(c.lineAmount)}</td><td className="num">{formatMoney(c.assigned)}</td>
+          <td>{c.voucherNumber}</td><td>{formatDate(c.postingDate)}</td><td>{c.description}</td><td className="num">{formatMoney(c.lineAmount)}</td><td className="num">{formatMoney(c.assigned)}</td>
           <td className="num">{c.journalLineId in picked && <input inputMode="decimal" value={picked[c.journalLineId]} aria-label="Số tiền gán"
             onChange={e => setPicked(p => ({ ...p, [c.journalLineId]: e.target.value }))} />}</td>
         </tr>)}</tbody></table>}

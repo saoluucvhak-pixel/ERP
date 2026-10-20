@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, FlowStrip, navStore, useAction } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { formatDate, formatMoney, parseMoney, today } from './money'
 import { PeriodCostingView } from './Production'
 
 interface Item { id: string; code: string; name: string; unit: string }
@@ -147,13 +147,13 @@ function OrderDetail({ order: o, centers, busy, act, ask, onError }: { order: Or
 
       <h4>Phiếu xuất nguyên vật liệu</h4>
       <table className="grid"><thead><tr><th>Phiếu kho</th><th>Ngày</th><th>Trạng thái</th></tr></thead>
-        <tbody>{issues.map(i => <tr key={i.stockDocumentId}><td><a href="#kho" onClick={e => { e.preventDefault(); navStore.go?.('stock') }}>{i.number}</a></td><td>{i.date}</td><td>{DOC_VI[i.status] ?? i.status}{i.status === 'Draft' ? ' — ghi sổ ở màn Kho' : ''}</td></tr>)}
+        <tbody>{issues.map(i => <tr key={i.stockDocumentId}><td><a href="#kho" onClick={e => { e.preventDefault(); navStore.go?.('stock') }}>{i.number}</a></td><td>{formatDate(i.date)}</td><td>{DOC_VI[i.status] ?? i.status}{i.status === 'Draft' ? ' — ghi sổ ở màn Kho' : ''}</td></tr>)}
           {issues.length === 0 && <tr><td colSpan={3} className="muted">Chưa xuất nguyên vật liệu.</td></tr>}</tbody></table>
       {running && <div className="toolbar"><button disabled={busy || reqs.every(r => r.remaining === '0')} onClick={() => act('Đã lập phiếu xuất nguyên vật liệu nháp theo phần còn phải xuất; ghi sổ ở màn Kho.', () => post(`/production/orders/${o.id}/issues`, { date: today(), lines: null }))}>Lập phiếu xuất nguyên vật liệu theo định mức</button></div>}
 
       <h4>Báo công</h4>
       <table className="grid"><thead><tr><th>Ngày</th><th>Tổ xưởng</th><th className="num">Giờ công</th><th className="num">Giờ máy</th><th className="num">CP nhân công</th><th className="num">CP máy, SXC</th><th>Ghi chú</th><th /></tr></thead>
-        <tbody>{confs.map(c => <tr key={c.id} style={{ opacity: c.voided ? 0.5 : 1, textDecoration: c.voided ? 'line-through' : undefined }}><td>{c.workDate}</td><td>{c.workCenterCode} – {c.workCenterName}</td><td className="num">{c.laborHours}</td><td className="num">{c.machineHours}</td>
+        <tbody>{confs.map(c => <tr key={c.id} style={{ opacity: c.voided ? 0.5 : 1, textDecoration: c.voided ? 'line-through' : undefined }}><td>{formatDate(c.workDate)}</td><td>{c.workCenterCode} – {c.workCenterName}</td><td className="num">{c.laborHours}</td><td className="num">{c.machineHours}</td>
           <td className="num">{formatMoney(c.laborCost)}</td><td className="num">{formatMoney(c.overheadCost)}</td><td>{c.voided ? `Đã hủy: ${c.voidReason}` : c.note ?? ''}</td>
           <td>{running && !c.voided && <button disabled={busy} onClick={() => { const reason = ask('Lý do hủy báo công:'); if (reason) act('Đã hủy báo công.', () => post(`/production/confirmations/${c.id}/void`, { reason })) }}>Hủy</button>}</td></tr>)}
           {confs.length === 0 && <tr><td colSpan={8} className="muted">Chưa có báo công.</td></tr>}</tbody></table>

@@ -3,7 +3,7 @@ import { get, type Period } from './api'
 import { ErrorBox, ExportButton, navStore, useAction, useCatalog } from './common'
 import { OverviewCards, type OverviewData } from './Overview'
 import { maxAbs, pct } from './dashboardmath'
-import { addMoney, formatMoney, today } from './money'
+import { addMoney, formatDate, formatMoney, today } from './money'
 
 interface TbRow { accountId: string; accountCode: string; accountName: string; closingDebit: string; closingCredit: string }
 interface Aging { bucketLabels: string[]; rows: { notDue: string; buckets: string[] }[] }
@@ -129,7 +129,7 @@ export function DashboardView() {
         <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
           <li style={{ color: tb == null ? undefined : tb.isBalanced ? 'var(--ok)' : 'var(--danger)' }}>{tb == null ? 'Bảng cân đối số phát sinh: không xem được' : tb.isBalanced ? '✓ Bảng cân đối số phát sinh cân (tổng Nợ = tổng Có)' : '✗ Bảng cân đối số phát sinh KHÔNG cân — kiểm tra ngay'}</li>
           <li style={{ color: recon == null ? undefined : recon ? 'var(--ok)' : 'var(--danger)' }}>{recon == null ? 'Đối chiếu công nợ: không xem được' : recon ? '✓ Sổ chi tiết công nợ khớp sổ cái' : '✗ Sổ chi tiết công nợ lệch sổ cái — xem màn Công nợ'}</li>
-          <li>{current ? `Kỳ hiện tại: kỳ ${current.periodNo} (${current.startDate} → ${current.endDate}) — ${current.status === 'Open' ? 'đang mở' : 'ĐÃ KHÓA, không ghi sổ được'}` : 'Chưa có kỳ kế toán chứa ngày hôm nay (mở năm tài chính ở Thiết lập)'}</li>
+          <li>{current ? `Kỳ hiện tại: kỳ ${current.periodNo} (${formatDate(current.startDate)} → ${formatDate(current.endDate)}) — ${current.status === 'Open' ? 'đang mở' : 'ĐÃ KHÓA, không ghi sổ được'}` : 'Chưa có kỳ kế toán chứa ngày hôm nay (mở năm tài chính ở Thiết lập)'}</li>
           <li>{open.length} kỳ đang mở / {periods.length} kỳ trong năm tài chính{open.length > 1 ? ` — kỳ mở cũ nhất: ${open[0].periodNo}` : ''}</li>
         </ul>
       </div>

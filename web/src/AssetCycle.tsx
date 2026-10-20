@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, FlowStrip, useAction } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { formatDate, formatMoney, parseMoney, today } from './money'
 import { MaintenancePanels } from './AssetMaintenance'
 
 interface Req { id: string; number: string; class: 'FixedAsset' | 'Tool'; name: string; department: string | null; estimatedCost: string; neededDate: string; reason: string; status: 'Pending' | 'Approved' | 'Rejected' | 'Fulfilled' | 'Cancelled'; decisionNote: string | null; assetId: string | null }
@@ -73,7 +73,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
           }}>Lập đề nghị</button>
         </div>
         <table className="grid"><thead><tr><th>Số</th><th>Loại</th><th>Tên</th><th>Bộ phận</th><th className="num">Dự kiến</th><th>Cần trước</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{reqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{CLASS_VI[r.class]}</td><td title={r.reason}>{r.name}</td><td>{r.department ?? ''}</td><td className="num">{formatMoney(r.estimatedCost)}</td><td>{r.neededDate}</td>
+          <tbody>{reqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{CLASS_VI[r.class]}</td><td title={r.reason}>{r.name}</td><td>{r.department ?? ''}</td><td className="num">{formatMoney(r.estimatedCost)}</td><td>{formatDate(r.neededDate)}</td>
             <td title={r.decisionNote ?? ''}>{REQ_VI[r.status]}{r.decisionNote ? ` — ${r.decisionNote}` : ''}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               {r.status === 'Pending' && <>
@@ -90,7 +90,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
       <section className="panel">
         <h3>Bàn giao, sử dụng <span className="muted">· tài sản đang dùng và bộ phận / người đang giữ; mỗi lần bàn giao mới đóng lần trước và lưu lịch sử</span></h3>
         <table className="grid"><thead><tr><th>Tài sản</th><th>Loại</th><th>Bộ phận</th><th>Người giữ</th><th>Vị trí</th><th>Từ ngày</th><th /></tr></thead>
-          <tbody>{cur.map(c => <tr key={c.assetId}><td>{c.code} – {c.name}</td><td>{CLASS_VI[c.class]}</td><td>{c.department ?? <span className="muted">chưa bàn giao</span>}</td><td>{c.custodian ?? ''}</td><td>{c.location ?? ''}</td><td>{c.since ?? ''}</td>
+          <tbody>{cur.map(c => <tr key={c.assetId}><td>{c.code} – {c.name}</td><td>{CLASS_VI[c.class]}</td><td>{c.department ?? <span className="muted">chưa bàn giao</span>}</td><td>{c.custodian ?? ''}</td><td>{c.location ?? ''}</td><td>{formatDate(c.since)}</td>
             <td><button disabled={busy} onClick={() => setAssign({ assetId: c.assetId, code: c.code, department: c.department ?? '', custodian: c.custodian ?? '', location: c.location ?? '' })}>{c.department ? 'Điều chuyển' : 'Bàn giao'}</button></td></tr>)}
             {cur.length === 0 && <tr><td colSpan={7} className="muted">Chưa có tài sản đang sử dụng.</td></tr>}</tbody></table>
         {assign && <div className="form-row">
@@ -113,7 +113,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
           {counts.map(c => <button key={c.id} className={open?.id === c.id ? 'primary' : ''} onClick={() => { setOpenCount(c.id); setDraft({}) }}>{c.number} · {c.status === 'Draft' ? 'đang kiểm' : c.status === 'Completed' ? 'đã chốt' : 'đã hủy'}</button>)}
         </div>
         {open && <>
-          <p>Phiếu <b>{open.number}</b> ngày {open.countDate}: đã kiểm {open.counted}/{open.total}; không thấy <b>{open.missing}</b> (giá trị còn lại {formatMoney(open.missingNetBookValue)}); hỏng <b>{open.damaged}</b>; khác bộ phận theo sổ <b>{open.moved}</b>.</p>
+          <p>Phiếu <b>{open.number}</b> ngày {formatDate(open.countDate)}: đã kiểm {open.counted}/{open.total}; không thấy <b>{open.missing}</b> (giá trị còn lại {formatMoney(open.missingNetBookValue)}); hỏng <b>{open.damaged}</b>; khác bộ phận theo sổ <b>{open.moved}</b>.</p>
           <table className="grid"><thead><tr><th>Tài sản</th><th>Bộ phận theo sổ</th><th>Kết quả</th><th>Bộ phận thực tế</th><th>Ghi chú</th><th className="num">Giá trị còn lại</th></tr></thead>
             <tbody>{open.lines.map(l => { const d = lineOf(l); const edit = open.status === 'Draft'; return <tr key={l.assetId}><td>{l.code} – {l.name}</td><td>{l.bookDepartment ?? ''}</td>
               <td>{edit ? <select aria-label={`Kết quả ${l.code}`} value={d.result} onChange={e => setDraft({ ...draft, [l.assetId]: { ...d, result: e.target.value as CountLine['result'] } })}>{(Object.keys(RESULT_VI) as CountLine['result'][]).map(k => <option key={k} value={k}>{RESULT_VI[k]}</option>)}</select> : RESULT_VI[l.result]}</td>

@@ -293,7 +293,7 @@ public sealed class SalesDispatchService(HakDbContext db, StockService stock, In
 
     private async Task<FiscalYear> FiscalYearAsync(Guid companyId, DateOnly date)
         => await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-           ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date}.");
+           ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
 
     private async Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string key, string prefix)
     {

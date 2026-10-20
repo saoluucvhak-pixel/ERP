@@ -54,7 +54,7 @@ export function SmartFilter({ label, state, patch, clear, selects = [], chips = 
       {dateLabel && <div className="sf-dates" role="group" aria-label={`Khoảng ngày: ${dateLabel}`}>
         <label className="sf-date">Từ ngày<input type="date" aria-label="Từ ngày" value={state.from} max={state.to || undefined} onChange={e => patch({ from: e.target.value })} /></label>
         <label className="sf-date">Đến ngày<input type="date" aria-label="Đến ngày" value={state.to} min={state.from || undefined} onChange={e => patch({ to: e.target.value })} /></label>
-        <span className="sf-presets">{datePresets().map(p => <button type="button" key={p.key} className={`sf-chip sf-preset${state.from === p.from && state.to === p.to ? ' on' : ''}`} onClick={() => patch({ from: p.from, to: p.to })}>{p.label}</button>)}</span>
+        <span className="sf-presets">{(() => { const all = datePresets(); const hit = all.find(x => x.from === state.from && x.to === state.to)?.key; return all.map(p => <button type="button" key={p.key} className={`sf-chip sf-preset${hit === p.key ? ' on' : ''}`} onClick={() => patch({ from: p.from, to: p.to })}>{p.label}</button>) })()}</span>
         <span className="muted sf-hint">Theo {dateLabel}</span>
       </div>}
       {chips.length > 0 && <div className="sf-chips" role="group" aria-label="Lọc nhanh">

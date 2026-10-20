@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, get, post, put } from './api'
 import { AccountSelect, ErrorBox, ExportButton, navStore, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { addMoney, formatDate, formatMoney, parseMoney, today } from './money'
 
 interface QueueRow { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; dueDate: string | null; partnerId: string; partnerCode: string; partnerName: string
   total: string; open: string; hasReceiptLink: boolean; fromOrder: boolean; acceptanceId: string | null; stage: string; mismatchCount: number; matchNotes: string[] | null }
@@ -94,7 +94,7 @@ export function ProcurementView() {
         <table className="grid">
           <thead><tr><th>Phiếu nhập</th><th>Ngày</th><th>Nhà cung cấp</th><th className="num">Số lượng nhận</th><th>Biên bản kiểm nghiệm</th><th /></tr></thead>
           <tbody>{receipts.slice(0, 30).map(r => (
-            <tr key={r.stockDocumentId}><td>{r.stockNumber}<div className="muted">{r.status === 'Draft' ? 'Nháp' : 'Đã ghi sổ'}</div></td><td>{r.documentDate}</td><td>{r.partnerName}</td><td className="num">{formatMoney(r.totalQty)}</td>
+            <tr key={r.stockDocumentId}><td>{r.stockNumber}<div className="muted">{r.status === 'Draft' ? 'Nháp' : 'Đã ghi sổ'}</div></td><td>{formatDate(r.documentDate)}</td><td>{r.partnerName}</td><td className="num">{formatMoney(r.totalQty)}</td>
               <td>{r.inspection ? <>{r.inspection.number} · {r.inspection.inspector}{r.inspection.lines.some(l => l.rejectedQty !== '0') && <div style={{ color: 'var(--danger)' }}>Không đạt: {r.inspection.lines.filter(l => l.rejectedQty !== '0').map(l => `${l.itemCode} ${formatMoney(l.rejectedQty)}`).join(', ')}</div>}</> : <span className="muted">chưa kiểm nghiệm</span>}</td>
               <td style={{ display: 'flex', gap: 4 }}>
                 {!r.inspection && <button className="primary" disabled={busy} onClick={async () => setInspecting({ r, inspector: '', conclusion: '', accepted: {} })}>Lập biên bản</button>}

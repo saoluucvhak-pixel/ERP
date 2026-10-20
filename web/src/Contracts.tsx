@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, overlaps, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
 
@@ -125,14 +125,14 @@ export function ContractsView() {
             { key: 'nearLimit', label: 'Dùng ≥ 90% hạn mức', count: rows.filter(chipTests.nearLimit).length }, { key: 'pending', label: 'Chờ duyệt', count: rows.filter(chipTests.pending).length }]} />
         <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>Đối tác</th><th>Loại</th><th>Hiệu lực</th><th className="num">Giá trị</th><th className="num">Đã đặt</th><th className="num">% thực hiện</th><th>Trạng thái</th></tr></thead>
           <tbody>{shownRows.map(r => <tr key={r.id}><td><button className="link" onClick={() => open(r.id)}>{r.code}</button></td><td>{r.name}</td><td>{r.partnerCode} – {r.partnerName}</td><td>{CATEGORY_VI[r.category]}</td>
-            <td>{r.effectiveDate} → {r.expirationDate}</td><td className="num">{formatMoney(r.totalAmount)}</td><td className="num">{formatMoney(r.orderedAmount)}</td><td className="num">{formatMoney(r.percentDone)}</td>
+            <td>{formatDate(r.effectiveDate)} → {formatDate(r.expirationDate)}</td><td className="num">{formatMoney(r.totalAmount)}</td><td className="num">{formatMoney(r.orderedAmount)}</td><td className="num">{formatMoney(r.percentDone)}</td>
             <td>{r.expired ? 'Hết hạn, chưa thanh lý' : STATUS_VI[r.status]}{r.version > 1 ? ` · v${r.version}` : ''}</td></tr>)}
             {shownRows.length === 0 && <tr><td colSpan={9} className="muted">{rows.length === 0 ? 'Chưa có hợp đồng.' : 'Không có hợp đồng khớp bộ lọc.'}</td></tr>}</tbody></table>
       </section>
 
       {view && h && <section className="panel" aria-label="Chi tiết hợp đồng">
         <div className="toolbar"><h3>{h.code} – {h.name}</h3><button onClick={() => setView(null)}>Đóng</button></div>
-        <p>{h.partnerCode} – {h.partnerName} · {CATEGORY_VI[h.category]} · {h.effectiveDate} → {h.expirationDate}{h.daysToExpire >= 0 && h.status === 'Active' ? ` (còn ${h.daysToExpire} ngày)` : ''} · {STATUS_VI[h.status]}{view.statusReason ? ` — ${view.statusReason}` : ''}</p>
+        <p>{h.partnerCode} – {h.partnerName} · {CATEGORY_VI[h.category]} · {formatDate(h.effectiveDate)} → {formatDate(h.expirationDate)}{h.daysToExpire >= 0 && h.status === 'Active' ? ` (còn ${h.daysToExpire} ngày)` : ''} · {STATUS_VI[h.status]}{view.statusReason ? ` — ${view.statusReason}` : ''}</p>
         {view.paymentTerms && <p className="muted">Thanh toán: {view.paymentTerms}</p>}
         <div className="toolbar">
           {h.status === 'Draft' && <><button disabled={busy} onClick={() => edit(view)}>Sửa dự thảo</button><button className="primary" disabled={busy} onClick={() => act(`Đã gửi duyệt ${h.code}.`, () => post(`/contracts/${h.id}/submit`))}>Gửi duyệt</button></>}
@@ -161,21 +161,21 @@ export function ContractsView() {
             {view.lines.length === 0 && <tr><td colSpan={9} className="muted">Hợp đồng khung giá trị: hạn mức {formatMoney(h.totalAmount)}, đã đặt {formatMoney(h.orderedAmount)}.</td></tr>}</tbody></table>
         <h4>Mốc thanh toán</h4>
         <table className="grid"><thead><tr><th>Mốc</th><th>Hạn</th><th className="num">Phải thanh toán</th><th className="num">Đã thanh toán</th><th>Tình trạng</th><th /></tr></thead>
-          <tbody>{view.milestones.map(m => <tr key={m.id}><td>{m.name}</td><td>{m.dueDate}</td><td className="num">{formatMoney(m.dueAmount)}</td><td className="num">{formatMoney(m.paidAmount)}</td><td>{PAY_VI[m.paymentStatus]}</td>
+          <tbody>{view.milestones.map(m => <tr key={m.id}><td>{m.name}</td><td>{formatDate(m.dueDate)}</td><td className="num">{formatMoney(m.dueAmount)}</td><td className="num">{formatMoney(m.paidAmount)}</td><td>{PAY_VI[m.paymentStatus]}</td>
             <td>{['Active', 'Completed'].includes(h.status) && m.paymentStatus !== 'PAID' && <button disabled={busy} onClick={() => { const t = ask('Số tiền đã thanh toán đợt này:'); const amt = t ? parseMoney(t) : null; if (amt) act('Đã ghi nhận thanh toán.', () => post(`/contracts/${h.id}/milestones/${m.id}/pay`, { amount: amt, date: today() })) }}>Ghi nhận thanh toán</button>}</td></tr>)}
             {view.milestones.length === 0 && <tr><td colSpan={6} className="muted">Chưa khai mốc thanh toán.</td></tr>}</tbody></table>
         <h4>Đơn hàng kế thừa</h4>
         <table className="grid"><thead><tr><th>Đơn</th><th>Ngày</th><th>Trạng thái</th><th className="num">Giá trị</th></tr></thead>
-          <tbody>{view.orders.map(o => <tr key={o.orderId}><td>{o.number}</td><td>{o.orderDate}</td><td>{ORDER_VI[o.status] ?? o.status}</td><td className="num">{formatMoney(o.amount)}</td></tr>)}
+          <tbody>{view.orders.map(o => <tr key={o.orderId}><td>{o.number}</td><td>{formatDate(o.orderDate)}</td><td>{ORDER_VI[o.status] ?? o.status}</td><td className="num">{formatMoney(o.amount)}</td></tr>)}
             {view.orders.length === 0 && <tr><td colSpan={4} className="muted">Chưa có đơn kế thừa. Lập ở màn Đơn hàng, chọn "Theo hợp đồng".</td></tr>}</tbody></table>
-        {view.amendments.length > 0 && <><h4>Phụ lục</h4><ul>{view.amendments.map(a => <li key={a.id}>{a.code} ({a.amendmentDate}): {a.summary}{a.valueChange !== '0' ? ` · giá trị ${formatMoney(a.valueChange)}` : ''}{a.newExpirationDate ? ` · gia hạn đến ${a.newExpirationDate}` : ''}</li>)}</ul></>}
+        {view.amendments.length > 0 && <><h4>Phụ lục</h4><ul>{view.amendments.map(a => <li key={a.id}>{a.code} ({formatDate(a.amendmentDate)}): {a.summary}{a.valueChange !== '0' ? ` · giá trị ${formatMoney(a.valueChange)}` : ''}{a.newExpirationDate ? ` · gia hạn đến ${a.newExpirationDate}` : ''}</li>)}</ul></>}
         {view.documents.length > 0 && <><h4>Tài liệu</h4><ul>{view.documents.map(d => <li key={d.id}>{d.fileName} — {d.filePath}</li>)}</ul></>}
       </section>}
 
       <section className="panel" aria-label="Báo cáo hợp đồng">
         <h3>Lịch thanh toán theo hợp đồng</h3>
         <table className="grid"><thead><tr><th>Hợp đồng</th><th>Đối tác</th><th>Mốc</th><th>Hạn</th><th className="num">Phải thanh toán</th><th className="num">Còn lại</th><th>Tình trạng</th></tr></thead>
-          <tbody>{sched.map(m => <Fragment key={m.milestoneId}><tr><td>{m.contractCode}</td><td>{m.partnerName}</td><td>{m.name}</td><td>{m.dueDate}</td><td className="num">{formatMoney(m.dueAmount)}</td><td className="num">{formatMoney(m.remaining)}</td><td>{PAY_VI[m.paymentStatus as keyof typeof PAY_VI]}</td></tr></Fragment>)}
+          <tbody>{sched.map(m => <Fragment key={m.milestoneId}><tr><td>{m.contractCode}</td><td>{m.partnerName}</td><td>{m.name}</td><td>{formatDate(m.dueDate)}</td><td className="num">{formatMoney(m.dueAmount)}</td><td className="num">{formatMoney(m.remaining)}</td><td>{PAY_VI[m.paymentStatus as keyof typeof PAY_VI]}</td></tr></Fragment>)}
             {sched.length === 0 && <tr><td colSpan={7} className="muted">Chưa có mốc thanh toán.</td></tr>}</tbody></table>
         <h3>Chênh lệch giá so với hợp đồng</h3>
         <table className="grid"><thead><tr><th>Hợp đồng</th><th>Vật tư</th><th className="num">Giá cam kết (sau CK)</th><th className="num">SL đã đặt</th><th className="num">Giá bình quân thực tế</th><th className="num">Thấp nhất</th><th className="num">Cao nhất</th><th className="num">Chênh lệch %</th></tr></thead>

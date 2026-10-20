@@ -17,3 +17,12 @@ public class VnNumberTests
     [Fact]
     public void Vn_NullIsEmpty() => Assert.Equal("", ((decimal?)null).Vn());
 }
+
+public class VnDateTests
+{
+    [Fact]
+    public void Vn_DateOnly_IsDayMonthYear() => Assert.Equal("19/10/2026", new DateOnly(2026, 10, 19).Vn());
+
+    [Fact]
+    public void Vn_NullableDateOnly_IsEmptyWhenNull() => Assert.Equal("", ((DateOnly?)null).Vn());
+}

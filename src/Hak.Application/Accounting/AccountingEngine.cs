@@ -309,7 +309,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             throw new DomainException(ErrorCodes.RegimeNotVerified,
                 $"Chế độ kế toán {regime.VersionCode} chưa được xác minh với văn bản pháp luật gốc; không được ghi sổ ở môi trường Production.");
         if (v.PostingDate < regime.EffectiveFrom || (regime.EffectiveTo is { } to && v.PostingDate > to))
-            throw new DomainException(ErrorCodes.RegimeNotEffective, $"Ngày hạch toán {v.PostingDate} ngoài hiệu lực của chế độ kế toán {regime.VersionCode}.");
+            throw new DomainException(ErrorCodes.RegimeNotEffective, $"Ngày hạch toán {v.PostingDate.Vn()} ngoài hiệu lực của chế độ kế toán {regime.VersionCode}.");
 
         var now = clock.UtcNow;
         var entry = new JournalEntry
@@ -389,7 +389,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
         var errors = VoucherValidator.Validate(v, accounts, partners, dp);
         var period = await db.AccountingPeriods.AsNoTracking()
             .FirstOrDefaultAsync(p => p.CompanyId == v.CompanyId && p.StartDate <= v.PostingDate && p.EndDate >= v.PostingDate);
-        if (period is null) errors.Add(new(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {v.PostingDate}."));
+        if (period is null) errors.Add(new(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {v.PostingDate.Vn()}."));
         else if (period.Status == PeriodStatus.Locked) errors.Add(new(ErrorCodes.PeriodLocked, $"Kỳ {period.StartDate:MM/yyyy} đã khóa sổ."));
 
         await CheckSettlementsAsync(v, accounts, errors);
@@ -478,7 +478,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
     {
         var p = await db.AccountingPeriods.AsNoTracking()
                     .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.StartDate <= date && x.EndDate >= date)
-                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date}.");
+                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date.Vn()}.");
         if (p.Status == PeriodStatus.Locked)
             throw new DomainException(ErrorCodes.PeriodLocked, $"Kỳ {p.StartDate:MM/yyyy} đã khóa sổ.");
         return p;
@@ -486,7 +486,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
 
     private async Task<FiscalYear> FiscalYearForAsync(Guid companyId, DateOnly date)
         => await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-           ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date}.");
+           ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
 
     private async Task<Company> LoadCompanyAsync(Guid companyId)
         => await db.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == companyId)

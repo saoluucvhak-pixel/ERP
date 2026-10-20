@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get } from './api'
 import { ErrorBox, useAction } from './common'
-import { formatMoney } from './money'
+import { formatDate, formatMoney } from './money'
 
 interface JournalEvent { date: string; group: string; title: string; detail: string | null; amount: string | null; reference: string | null; by: string | null; voided: boolean }
 interface Journal { assetId: string; code: string; name: string; class: 'FixedAsset' | 'Tool'; status: string; originalCost: string; accumulated: string; netBookValue: string; department: string | null; custodian: string | null; repairCost: string; repairCount: number; events: JournalEvent[] }
@@ -33,7 +33,7 @@ export function AssetJournal({ assetId, onClose }: { assetId: string; onClose: (
       </div>
       <table className="grid"><thead><tr><th>Ngày</th><th>Nhóm</th><th>Biến động</th><th>Nội dung</th><th className="num">Số tiền</th><th>Chứng từ / số phiếu</th><th>Người thực hiện</th></tr></thead>
         <tbody>{shown.map((e, i) => <tr key={i} style={e.voided ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>
-          <td>{e.date}</td><td>{e.group}</td><td>{e.title}</td><td>{e.detail ?? ''}</td><td className="num">{e.amount == null ? '' : formatMoney(e.amount)}</td><td>{e.reference ?? ''}</td><td>{e.by ?? ''}</td></tr>)}
+          <td>{formatDate(e.date)}</td><td>{e.group}</td><td>{e.title}</td><td>{e.detail ?? ''}</td><td className="num">{e.amount == null ? '' : formatMoney(e.amount)}</td><td>{e.reference ?? ''}</td><td>{e.by ?? ''}</td></tr>)}
           {shown.length === 0 && <tr><td colSpan={7} className="muted">Không có biến động.</td></tr>}</tbody></table>
     </section>
   )

@@ -44,7 +44,7 @@ public sealed class GoodsInspectionService(HakDbContext db, AuditService audit, 
                     throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {g.StockLineNo}: số lượng đạt phải từ 0 đến số lượng nhận {line.Quantity}.");
             }
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.InspectionDate && f.EndDate >= input.InspectionDate)
-                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.InspectionDate}.");
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.InspectionDate.Vn()}.");
             var bb = new GoodsInspection
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Number = await NextNumberAsync(ctx.CompanyId, fy), StockDocumentId = doc.Id, PartnerId = doc.PartnerId,

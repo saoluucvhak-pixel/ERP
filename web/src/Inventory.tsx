@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toAlt, toMain } from './units'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog } from './common'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
 interface Warehouse { id: string; code: string; name: string; policies: { method: string; effectiveFrom: string }[] }
@@ -134,7 +134,7 @@ function StockDocs() {
         <table className="grid">
           <thead><tr><th>Ngày</th><th>Số</th><th>Loại</th><th>Kho</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{shown.map(d => (
-            <tr key={d.id} className={d.id === selId ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelId(d.id)}><td>{d.postingDate}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
+            <tr key={d.id} className={d.id === selId ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelId(d.id)}><td>{formatDate(d.postingDate)}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
                 {d.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
@@ -163,7 +163,7 @@ function StockDocDetail({ doc: d, warehouses, items, partners, accounts }: { doc
   return (
     <div className="panel">
       <div className="toolbar">
-        <strong>{d.number}</strong> <span className="muted">{TYPE_VI[d.type]} · {wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''} · {d.postingDate} · {STATUS_VI[d.status] ?? d.status}</span>
+        <strong>{d.number}</strong> <span className="muted">{TYPE_VI[d.type]} · {wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''} · {formatDate(d.postingDate)} · {STATUS_VI[d.status] ?? d.status}</span>
         <span style={{ marginLeft: 'auto' }} /><button onClick={printSheet}>In phiếu</button>
       </div>
       <table className="grid">
@@ -345,7 +345,7 @@ function StockCard() {
       <ErrorBox error={error} />
       {rows && <table className="grid">
         <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Diễn giải</th><th className="num">Nhập</th><th className="num">Xuất</th><th className="num">Giá trị</th><th className="num">Tồn SL</th>{selItem?.altUnit && <th className="num">Tồn quy đổi ({selItem.altUnit})</th>}<th className="num">Tồn GT</th></tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i}><td>{r.date}</td><td>{r.documentNumber}</td><td>{r.description}</td>
+        <tbody>{rows.map((r, i) => <tr key={i}><td>{formatDate(r.date)}</td><td>{r.documentNumber}</td><td>{r.description}</td>
           <td className="num">{r.inQty === '0' ? '' : formatMoney(r.inQty)}</td><td className="num">{r.outQty === '0' ? '' : formatMoney(r.outQty)}</td>
           <td className="num">{r.value == null ? <span className="muted">chờ tính giá</span> : formatMoney(r.value)}</td>
           <td className="num">{formatMoney(r.balanceQty)}</td>{selItem?.altUnit && <td className="num">{altText(selItem, r.balanceQty)}</td>}<td className="num">{r.balanceValue == null ? '—' : formatMoney(r.balanceValue)}</td></tr>)}</tbody>
@@ -373,13 +373,13 @@ function Costing() {
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="toolbar">
         <label>Kho (bình quân cuối tháng)<select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}><option value="">— chọn —</option>{monthly.map(w => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}</select></label>
-        <label>Kỳ<select value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">— chọn —</option>{periods.map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
+        <label>Kỳ<select value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">— chọn —</option>{periods.map(p => <option key={p.id} value={p.id}>{formatMonth(p.startDate)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
         <button className="primary" disabled={busy || !warehouseId || !periodId} onClick={() => run(async () => { await post('/costing-runs', { warehouseId, periodId }); setInfo('Đã tính giá và ghi sổ giá vốn xuất kho của kỳ.'); await load() })}>Tính giá</button>
       </div>
       <table className="grid">
         <thead><tr><th>Kỳ</th><th>Kho</th><th>Trạng thái</th><th>Kết quả</th><th /></tr></thead>
         <tbody>{runs.map(r => (
-          <tr key={r.id}><td>{r.periodStart.slice(0, 7)}</td><td>{warehouses.find(w => w.id === r.warehouseId)?.code}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
+          <tr key={r.id}><td>{formatMonth(r.periodStart)}</td><td>{warehouses.find(w => w.id === r.warehouseId)?.code}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
             <td style={{ whiteSpace: 'normal' }}>{(JSON.parse(r.resultJson || '[]') as { item: string; issuedQty: number | string; issuedValue: number | string }[])
               .map(x => `${x.item}: xuất ${formatMoney(String(x.issuedQty))} = ${formatMoney(String(x.issuedValue))}`).join('; ')}</td>
             <td>{r.status === 'Active' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy lần tính giá:'); if (reason) run(async () => { await post(`/costing-runs/${r.id}/reverse`, { reason }); await load() }) }}>Hủy</button>}</td></tr>))}
@@ -473,7 +473,7 @@ function Bdmt() {
         <table className="grid">
           <thead><tr><th>Ngày</th><th>Phiếu</th><th>Vật tư</th><th className="num">MT trên phiếu</th><th>Loại đo</th><th>Độ khô %</th><th>MT theo chứng thư</th><th>Số chứng thư / phiếu đo</th><th>Đơn vị giám định</th><th>Ngày</th><th /></tr></thead>
           <tbody>{pending.map(p => (
-            <tr key={key(p)}><td>{p.postingDate}</td><td>{p.documentNumber}/{p.lineNo}</td><td>{p.itemCode}</td><td className="num">{formatMoney(p.quantity)}</td><td>{KIND_VI[p.expectedKind]}</td>
+            <tr key={key(p)}><td>{formatDate(p.postingDate)}</td><td>{p.documentNumber}/{p.lineNo}</td><td>{p.itemCode}</td><td className="num">{formatMoney(p.quantity)}</td><td>{KIND_VI[p.expectedKind]}</td>
               <td><input className="num" aria-label="Độ khô %" size={6} value={f(p).dryness} onChange={e => setF(p, { dryness: e.target.value })} /></td>
               <td><input className="num" aria-label="MT theo chứng thư" size={8} placeholder="= phiếu" value={f(p).mt} onChange={e => setF(p, { mt: e.target.value })} /></td>
               <td><input aria-label="Số chứng thư" value={f(p).evidenceNo} onChange={e => setF(p, { evidenceNo: e.target.value })} placeholder={p.expectedKind === 'Shipment' ? 'Chứng thư (bắt buộc)' : 'Phiếu đo'} /></td>
@@ -492,7 +492,7 @@ function Bdmt() {
             <tr key={m.id} style={m.supersededAt ? { opacity: .6 } : undefined}><td>{m.documentNumber}/{m.lineNo}</td><td>{KIND_VI[m.kind]}</td>
               <td className="num">{formatMoney(m.measuredMt)}{m.measuredMt !== m.lineMt ? ` (phiếu ${formatMoney(m.lineMt)})` : ''}</td>
               <td className="num">{formatMoney(m.drynessPercent)}</td><td className="num">{formatMoney(m.bdmt)}</td>
-              <td>{m.evidenceType === 'Certificate' ? 'Chứng thư' : 'Phiếu đo'} {m.evidenceNo}{m.evidenceIssuer ? ` · ${m.evidenceIssuer}` : ''} · {m.evidenceDate}</td>
+              <td>{m.evidenceType === 'Certificate' ? 'Chứng thư' : 'Phiếu đo'} {m.evidenceNo}{m.evidenceIssuer ? ` · ${m.evidenceIssuer}` : ''} · {formatDate(m.evidenceDate)}</td>
               <td>{m.supersededAt ? `Đã thay thế: ${m.supersedeReason}` : 'Hiệu lực'}</td>
               <td>{!m.supersededAt && <button onClick={() => supersede(m)}>Thay thế</button>}</td></tr>))}
           </tbody>

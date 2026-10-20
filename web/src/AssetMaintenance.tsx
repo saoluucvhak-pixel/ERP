@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, useAction } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { formatDate, formatDateTime, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
 
@@ -95,7 +95,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
           selects={[{ key: 'priority', label: 'Ưu tiên', options: Object.entries(PRIORITY_VI).map(([value, label]) => ({ value, label })) }, { key: 'status', label: 'Trạng thái', options: Object.entries(REQ_VI).map(([value, label]) => ({ value, label })) }]}
           chips={[{ key: 'urgent', label: 'Ưu tiên cao / khẩn cấp đang xử lý', count: reqs.filter(reqChips.urgent).length }, { key: 'noPlan', label: 'Chưa có phương án', count: reqs.filter(reqChips.noPlan).length }]} />
         <table className="grid"><thead><tr><th>Số</th><th>Tài sản</th><th>Ưu tiên</th><th>Hiện tượng</th><th>Báo lúc</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{shownReqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{r.assetCode} – {r.assetName}</td><td>{PRIORITY_VI[r.priority]}</td><td>{r.description}</td><td>{r.reportedAt.slice(0, 16).replace('T', ' ')}</td>
+          <tbody>{shownReqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{r.assetCode} – {r.assetName}</td><td>{PRIORITY_VI[r.priority]}</td><td>{r.description}</td><td>{formatDateTime(r.reportedAt)}</td>
             <td>{REQ_VI[r.status]}{r.workOrderNumber ? ` · ${r.workOrderNumber}` : ''}{r.status === 'Rejected' && r.note ? ` — ${r.note}` : ''}</td>
             <td style={{ display: 'flex', gap: 6 }}>{(r.status === 'New' || r.status === 'Surveying') && <>
               {!r.workOrderNumber && <button disabled={busy} onClick={() => setPlan({ id: null, requestId: r.id, assetId: r.assetId, type: 'Emergency', description: r.description, vendor: '', tech: '', cause: '', solution: '', labor: '', mats: [] })}>Khảo sát, lập phương án</button>}
@@ -183,7 +183,7 @@ export function MaintenancePanels({ assets, onOpenCount }: { assets: AssetRef[];
           <button className="primary" disabled={busy || !sf.assetId || !sf.task.trim() || !/^\d+$/.test(sf.days)} onClick={() => act('Đã lưu lịch bảo trì.', async () => { await post('/assets/maintenance/schedules', { id: null, assetId: sf.assetId, taskName: sf.task, frequencyDays: Number(sf.days), nextDueDate: sf.due, isActive: true }); setSf({ ...sf, task: '' }) })}>Thêm lịch</button>
         </div>
         <table className="grid"><thead><tr><th>Tài sản</th><th>Hạng mục</th><th className="num">Chu kỳ</th><th>Lần gần nhất</th><th>Hạn kế tiếp</th><th>Tình trạng</th><th /></tr></thead>
-          <tbody>{scheds.map(s => <tr key={s.id}><td>{s.assetCode} – {s.assetName}</td><td>{s.taskName}</td><td className="num">{s.frequencyDays} ngày</td><td>{s.lastPerformedAt ?? ''}</td><td>{s.nextDueDate}</td>
+          <tbody>{scheds.map(s => <tr key={s.id}><td>{s.assetCode} – {s.assetName}</td><td>{s.taskName}</td><td className="num">{s.frequencyDays} ngày</td><td>{formatDate(s.lastPerformedAt)}</td><td>{formatDate(s.nextDueDate)}</td>
             <td>{!s.isActive ? 'Đã tắt' : s.overdue ? `Quá hạn ${-s.daysToDue} ngày` : s.daysToDue <= 7 ? `Còn ${s.daysToDue} ngày` : ''}</td>
             <td>{s.isActive && <button disabled={busy} onClick={() => act('Đã lập phiếu bảo trì Nháp.', () => post(`/assets/maintenance/schedules/${s.id}/work-order?date=${today()}`))}>Lập phiếu bảo trì</button>}</td></tr>)}
             {scheds.length === 0 && <tr><td colSpan={7} className="muted">Chưa có lịch bảo trì.</td></tr>}</tbody></table>

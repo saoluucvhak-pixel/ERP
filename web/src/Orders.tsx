@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
 
@@ -146,7 +146,7 @@ export function OrdersView() {
                 <table className="grid">
           <thead><tr><th>Số đơn</th><th>Ngày</th><th>Đối tượng</th><th>Hợp đồng</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{shownList.map(o => (
-            <tr key={o.id}><td>{o.number}</td><td>{o.orderDate}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
+            <tr key={o.id}><td>{o.number}</td><td>{formatDate(o.orderDate)}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
               <td><span className="badge">{STATUS_VI[o.status] ?? o.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => run(async () => setDetail(await get<Fulfil>(`/orders/${o.id}/fulfilment`)))}>Tiến độ</button>

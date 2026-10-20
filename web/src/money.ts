@@ -59,6 +59,33 @@ export const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Ngày hiển thị kiểu Việt: 2026-10-19 → 19/10/2026 (cả thời điểm ISO có giờ, đổi sang giờ địa phương). Chuỗi không phải ngày giữ nguyên. */
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return ''
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    const d = new Date(value)
+    if (!Number.isNaN(d.getTime())) return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+  }
+  return value
+}
+
+/** Thời điểm hiển thị kiểu Việt: ISO (UTC) → 19/10/2026 14:30 theo giờ địa phương. */
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) return ''
+  const d = new Date(value)
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(d.getTime())) return formatDate(value)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** Tháng hiển thị kiểu Việt: 2026-10-19 hoặc 2026-10 → 10/2026. */
+export function formatMonth(value: string | null | undefined): string {
+  const m = value ? /^(\d{4})-(\d{2})/.exec(value) : null
+  return m ? `${m[2]}/${m[1]}` : (value ?? '')
+}
+
 /** Ngày đầu tháng hiện hành (yyyy-mm-dd, giờ địa phương) — mặc định "từ ngày" của mọi bộ lọc theo khoảng ngày. */
 export const monthStart = () => today().slice(0, 8) + '01'
 

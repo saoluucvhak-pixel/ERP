@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post, put, type OpenItem, type Voucher } from './api'
 import { AccountSelect, ErrorBox, navStore, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { addMoney, formatDate, formatMoney, parseMoney, today } from './money'
 
 const EVENTS: Record<string, { value: string; label: string; needsPartner: boolean; needsCounter: boolean }[]> = {
   CR: [{ value: 'CUSTOMER_RECEIPT', label: 'Thu tiền khách hàng', needsPartner: true, needsCounter: false }],
@@ -90,7 +90,7 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
       <ErrorBox error={error} />
       {created && <div className="msg ok">Đã tạo {TYPE_VI[created.voucherType]} {created.number} (Nháp, {formatMoney(created.totalDebit)}). Gửi duyệt và ghi sổ ở màn hình Chứng từ.</div>}
       {mainAccountId && balance != null && <div className={overdraw ? 'msg error' : 'msg ok'}>
-        Số dư đã ghi sổ đến {date}: <b>{formatMoney(balance)}</b>
+        Số dư đã ghi sổ đến {formatDate(date)}: <b>{formatMoney(balance)}</b>
         {outflow && total !== '0' && <> · Phiếu này chi <b>{formatMoney(total)}</b> → còn {formatMoney(addMoney([balance, '-' + total]))}</>}
         {overdraw && ' — vượt số dư, hệ thống sẽ chặn khi ghi sổ nếu quỹ không cho phép âm.'}
       </div>}
@@ -131,7 +131,7 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
                     upd(i, { settle: e.target.value, amount: item && !l.amount ? formatMoney(item.open) : l.amount })
                   }}>
                     <option value="">(ứng trước / chưa phân bổ)</option>
-                    {openItems.map(o => <option key={o.journalLineId} value={o.journalLineId}>{o.voucherNumber} · {o.postingDate} · còn {formatMoney(o.open)}</option>)}
+                    {openItems.map(o => <option key={o.journalLineId} value={o.journalLineId}>{o.voucherNumber} · {formatDate(o.postingDate)} · còn {formatMoney(o.open)}</option>)}
                   </select></td>}
                 <td><input aria-label="Diễn giải dòng" value={l.description} onChange={e => upd(i, { description: e.target.value })} /></td>
                 <td><button aria-label="Xóa dòng" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}>✕</button></td>
@@ -142,7 +142,7 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
         <button style={{ marginTop: 8 }} onClick={() => setLines(ls => [...ls, { amount: '', counterAccountId: '', settle: '', description: '' }])}>+ Thêm dòng</button>
         {recent.length > 0 && <><h3>Phiếu gần đây của {cashKind === 'Cash' ? 'quỹ' : 'tài khoản'} này</h3>
           <table className="grid"><thead><tr><th>Ngày</th><th>Số</th><th>Diễn giải</th><th className="num">Số tiền</th><th>Trạng thái</th></tr></thead><tbody>
-            {recent.map(v => <tr key={v.id}><td>{v.postingDate}</td><td>{v.number}</td><td>{v.description}</td><td className="num">{formatMoney(v.totalDebit)}</td><td>{STATUS_VI[v.status]}</td></tr>)}
+            {recent.map(v => <tr key={v.id}><td>{formatDate(v.postingDate)}</td><td>{v.number}</td><td>{v.description}</td><td className="num">{formatMoney(v.totalDebit)}</td><td>{STATUS_VI[v.status]}</td></tr>)}
           </tbody></table></>}
         <p className="muted">Định khoản được sinh từ quy tắc đang hiệu lực cho nghiệp vụ đã chọn; số tiền thanh toán không được vượt số còn phải thu/trả của chứng từ.</p>
       </div>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type OpenItem } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, parseRate, today } from './money'
+import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface BalanceRow {
   accountId: string; accountCode: string; partnerId: string | null; partnerCode: string | null; currency: string
@@ -36,7 +36,7 @@ export function FxView() {
       return { currency: c, debitBalanceRate: debit, creditBalanceRate: credit }
     })
     await post('/fx/revaluations', { date: asOf, rates: payload, rateSource: source })
-  }, `Đã đánh giá lại số dư ngoại tệ ngày ${asOf} và ghi sổ.`)
+  }, `Đã đánh giá lại số dư ngoại tệ ngày ${formatDate(asOf)} và ghi sổ.`)
 
   return (
     <>
@@ -64,7 +64,7 @@ export function FxView() {
       <FxPaymentPanel date={asOf} onDone={msg => { setInfo(msg); load() }} />
 
       <section className="panel">
-        <h3>Đánh giá lại ngày {asOf}</h3>
+        <h3>Đánh giá lại ngày {formatDate(asOf)}</h3>
         {currencies.length === 0 && <p className="muted">Không còn số dư nguyên tệ cần tỷ giá; chạy đánh giá lại vẫn xử lý phần quy đổi còn sót trên số dư nguyên tệ bằng 0.</p>}
         <div className="form-grid">
           {currencies.map(c => <div key={c}>
@@ -79,7 +79,7 @@ export function FxView() {
       <section className="panel">
         <h3>Các lần đánh giá lại</h3>
         <table className="grid"><thead><tr><th>Ngày</th><th>Nguồn tỷ giá</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{r.revaluationDate}</td><td>{r.rateSource}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{formatDate(r.revaluationDate)}</td><td>{r.rateSource}</td>
             <td>{r.status === 'Active' ? (r.voucherId ? 'Hiệu lực' : 'Hiệu lực (không phát sinh)') : 'Đã hủy'}</td>
             <td>{r.id === lastActive?.id && <button disabled={busy} onClick={() => {
               const reason = prompt('Lý do hủy lần đánh giá lại:')
@@ -143,7 +143,7 @@ function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) 
         <tbody>{items.map(i => <tr key={i.journalLineId}>
           <td><input type="checkbox" aria-label={`Chọn ${i.voucherNumber}`} checked={i.journalLineId in picked} onChange={e => { setPreview(null); setPicked(p => {
             const n = { ...p }; if (e.target.checked) n[i.journalLineId] = i.openForeign ?? ''; else delete n[i.journalLineId]; return n }) }} /></td>
-          <td>{i.voucherNumber}</td><td>{i.dueDate}</td><td>{i.foreignCurrency}</td>
+          <td>{i.voucherNumber}</td><td>{formatDate(i.dueDate)}</td><td>{i.foreignCurrency}</td>
           <td className="num">{formatMoney(i.openForeign)}</td><td className="num">{formatMoney(i.open)}</td>
           <td className="num">{i.journalLineId in picked && <input inputMode="decimal" aria-label="Nguyên tệ thanh toán" value={picked[i.journalLineId]}
             onChange={e => { setPreview(null); setPicked(p => ({ ...p, [i.journalLineId]: e.target.value })) }} />}</td>

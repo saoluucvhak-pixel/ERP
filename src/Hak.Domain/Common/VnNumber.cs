@@ -15,5 +15,10 @@ public static class VnNumber
         return s.Replace(',', '\u0001').Replace('.', ',').Replace('\u0001', '.');
     }
 
+    /// <summary>Ngày dạng 19/10/2026 (DateOnly.ToString() với culture bất biến cho ra 10/19/2026, dễ đọc nhầm).</summary>
+    public static string Vn(this DateOnly value) => value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    public static string Vn(this DateOnly? value) => value is { } v ? v.Vn() : "";
+
     public static string Vn(this decimal? value, int maxDecimals = 4) => value is { } v ? v.Vn(maxDecimals) : "";
 }
