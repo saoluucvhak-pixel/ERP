@@ -4,6 +4,7 @@ import { ErrorBox, useAction } from './common'
 import { formatMoney, parseMoney } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
+import { PartnerBankModal } from './BankAccounts'
 
 /** Danh mục đối tượng: thêm, sửa tên / mã số thuế, ngừng sử dụng (không xóa đối tượng đã phát sinh). */
 export function CatalogView() {
@@ -12,6 +13,7 @@ export function CatalogView() {
   const [nw, setNw] = useState({ code: '', name: '', taxCode: '', roles: 'Customer' })
   const [fs, patchFs, clearFs] = useFilterState('catalog')
   const [info, setInfo] = useState('')
+  const [bankOf, setBankOf] = useState<Partner | null>(null)
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setList(await get<Partner[]>('/partners'))), [run])
   useEffect(() => { load() }, [load])
@@ -54,7 +56,7 @@ export function CatalogView() {
             <td><input className="num" aria-label="Hạn mức tín dụng" value={v.creditLimit} onChange={e => set(p, { creditLimit: e.target.value })} size={14} /></td>
             <td><input className="num" aria-label="Hạn thanh toán (ngày)" value={v.terms} onChange={e => set(p, { terms: e.target.value })} size={4} /></td>
             <td><input type="checkbox" aria-label="Đang dùng" checked={v.isActive} onChange={e => set(p, { isActive: e.target.checked })} /></td>
-            <td>{dirty && <button className="primary" disabled={busy} onClick={() => run(async () => {
+            <td><button onClick={() => setBankOf(p)} title="Số tài khoản ngân hàng nhận tiền">Ngân hàng</button>{dirty && <button className="primary" disabled={busy} onClick={() => run(async () => {
               const limit = v.creditLimit.trim() ? parseMoney(v.creditLimit) : null
               if (v.creditLimit.trim() && limit == null) throw new Error('Hạn mức tín dụng không hợp lệ.')
               const terms = v.terms.trim() ? Number.parseInt(v.terms, 10) : null
@@ -64,6 +66,7 @@ export function CatalogView() {
             })}>Lưu</button>}</td></tr>
         })}</tbody>
       </table></div>
+      {bankOf && <PartnerBankModal partner={bankOf} onClose={() => setBankOf(null)} />}
     </>
   )
 }

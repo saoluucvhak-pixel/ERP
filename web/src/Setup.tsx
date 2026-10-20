@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, Modal, useAction } from './common'
 import { ImportData } from './ImportData'
+import { CompanyBanks } from './BankAccounts'
 import { formatMoney, parseMoney } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
 
-const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', import: 'Nhập từ Excel/CSV' } as const
+const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', banks: 'Tài khoản ngân hàng', import: 'Nhập từ Excel/CSV' } as const
 
 /** Thiết lập công ty: catalogue the modules depend on. Codes are the company's own (legal chart [CẦN XÁC MINH TT99]). */
 export function SetupView() {
@@ -20,6 +21,7 @@ export function SetupView() {
       {tab === 'roles' && <Roles />}
       {tab === 'stock' && <Stock />}
       {tab === 'years' && <Years />}
+      {tab === 'banks' && <CompanyBanks />}
       {tab === 'import' && <ImportData />}
     </>
   )

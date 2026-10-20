@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, FlowStrip, PartnerSelect, useAction, useCatalog } from './common'
-import { addMoney, formatDate, formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, ExportButton, FlowStrip, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
+import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
+import type { PartnerBank } from './BankAccounts'
 
-interface PaymentOrder { id: string; number: string; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
+interface PaymentOrder { id: string; number: string; bankAccountId: string; beneficiaryAccountNo: string | null; beneficiaryBank: string | null; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
 
 const PO_STATUS: Record<string, string> = {
   Created: 'Đã lập', Approved: 'Đã duyệt', SentToBank: 'Đã gửi NH', ExecutedByBank: 'NH đã thực hiện', Posted: 'Đã hạch toán', Reconciled: 'Đã đối chiếu sao kê', Cancelled: 'Đã hủy',
@@ -28,11 +29,29 @@ function PaymentOrders() {
   const [list, setList] = useState<PaymentOrder[]>([])
   const [form, setForm] = useState({ bankAccountId: '', partnerId: '', amount: '', requestedDate: today(), description: '', beneficiaryAccountNo: '', beneficiaryBank: '' })
   const [info, setInfo] = useState('')
+  const [pbanks, setPbanks] = useState<PartnerBank[]>([])
+  const [cbanks, setCbanks] = useState<{ accountId: string; bankName: string; accountNo: string; accountName: string }[]>([])
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [printing, setPrinting] = useState<PaymentOrder[] | null>(null)
   const { busy, error, setError, run } = useAction()
-  const load = useCallback(() => run(async () => setList(await get<PaymentOrder[]>('/payment-orders'))), [run])
+  const load = useCallback(() => run(async () => {
+    setList(await get<PaymentOrder[]>('/payment-orders'))
+    setPbanks(await get<PartnerBank[]>('/bank-accounts/partners').catch(() => []))
+    setCbanks(await get<{ accountId: string; bankName: string; accountNo: string; accountName: string }[]>('/bank-accounts/company').catch(() => []))
+  }), [run])
   useEffect(() => { load() }, [load])
   const act = (fn: () => Promise<unknown>, msg: string) => run(async () => { await fn(); setInfo(msg); await load() })
   const partnerName = (id: string) => partners.find(p => p.id === id)?.code ?? ''
+  /** Tên chủ tài khoản thụ hưởng: theo tài khoản trùng số trong danh mục của đối tượng, nếu không có thì tên đối tượng. */
+  const beneficiary = (p: PaymentOrder) => pbanks.find(b => b.partnerId === p.partnerId && b.accountNo === p.beneficiaryAccountNo)?.accountName ?? partners.find(x => x.id === p.partnerId)?.name ?? ''
+  const payer = (p: PaymentOrder) => cbanks.find(c => c.accountId === p.bankAccountId)
+  const chosen = list.filter(p => picked.has(p.id))
+  const csv = () => {
+    const q = (v: string) => `"${v.replace(/"/g, '""')}"`
+    const body = ['STT;Số UNC;Tên người thụ hưởng;Số tài khoản;Ngân hàng;Số tiền;Nội dung'].concat(chosen.map((p, i) => [i + 1, p.number, q(beneficiary(p)), `'${p.beneficiaryAccountNo ?? ''}`, q(p.beneficiaryBank ?? ''), p.amount.replace('.', ','), q(p.description)].join(';')))
+    const url = URL.createObjectURL(new Blob(['\ufeff' + body.join('\r\n')], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a'); a.href = url; a.download = `Chuyen_tien_${today()}.csv`; a.click(); URL.revokeObjectURL(url)
+  }
 
   const create = () => {
     const amount = parseMoney(form.amount)
@@ -63,12 +82,22 @@ function PaymentOrders() {
           <button className="primary" onClick={create} disabled={busy} style={{ alignSelf: 'flex-end' }}>Lập lệnh</button>
         </div>
       </div>
+      <div className="toolbar">
+        <span className="muted">Đã chọn {chosen.length} lệnh · {formatMoney(addMoney(chosen.map(p => p.amount)))}</span>
+        <ExportButton fileName={`Chuyen_tien_${today()}`} sheet="Chuyển tiền" disabled={chosen.length === 0}
+          columns={[{ header: 'STT', width: 6 }, { header: 'Số UNC', width: 16 }, { header: 'Tên người thụ hưởng', width: 34 }, { header: 'Số tài khoản', width: 20 }, { header: 'Ngân hàng', width: 28 }, { header: 'Số tiền', numeric: true, width: 18 }, { header: 'Nội dung', width: 40 }]}
+          rows={chosen.map((p, i) => [String(i + 1), p.number, beneficiary(p), p.beneficiaryAccountNo, p.beneficiaryBank, p.amount, p.description])} />
+        <button disabled={chosen.length === 0} onClick={csv} title="CSV UTF-8, dấu ; ngăn cột — để nạp vào ngân hàng điện tử (mẫu từng ngân hàng khác nhau: đối chiếu trước khi nạp)">Xuất CSV</button>
+        <button disabled={chosen.length === 0} onClick={() => setPrinting(chosen)}>In UNC đã chọn</button>
+      </div>
       <div className="scroll">
         <table className="grid">
-          <thead><tr><th>Số</th><th>Ngày</th><th>NCC</th><th>Nội dung</th><th className="num">Số tiền</th><th>Trạng thái</th><th>Mã GD NH</th><th>Thao tác</th></tr></thead>
+          <thead><tr><th /><th>Số</th><th>Ngày</th><th>NCC</th><th>Tài khoản thụ hưởng</th><th>Nội dung</th><th className="num">Số tiền</th><th>Trạng thái</th><th>Mã GD NH</th><th>Thao tác</th></tr></thead>
           <tbody>{list.map(p => (
             <tr key={p.id}>
-              <td>{p.number}</td><td>{formatDate(p.requestedDate)}</td><td>{partnerName(p.partnerId)}</td><td>{p.description}</td>
+              <td><input type="checkbox" aria-label={`Chọn ${p.number}`} disabled={p.status === 'Cancelled'} checked={picked.has(p.id)} onChange={e => setPicked(s => { const n = new Set(s); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n })} /></td>
+              <td>{p.number}</td><td>{formatDate(p.requestedDate)}</td><td>{partnerName(p.partnerId)}</td>
+              <td>{p.beneficiaryAccountNo ? <>{p.beneficiaryAccountNo}<div className="muted">{p.beneficiaryBank}</div></> : <span className="muted" title="Khai báo ở Danh mục đối tượng › Ngân hàng">chưa có</span>}</td><td>{p.description}</td>
               <td className="num">{formatMoney(p.amount)}</td><td><span className="badge">{PO_STATUS[p.status] ?? p.status}</span></td><td>{p.bankReference}</td>
               <td style={{ display: 'flex', gap: 4 }}>
                 {p.status === 'Created' && <button onClick={() => act(() => post(`/payment-orders/${p.id}/approve`), `Đã duyệt ${p.number}.`)}>Duyệt</button>}
@@ -80,16 +109,51 @@ function PaymentOrders() {
                     `Đã ghi nhận ngân hàng thực hiện ${p.number}; đã tạo báo Nợ (Nháp) — duyệt và ghi sổ ở màn hình Chứng từ.`)
                 }}>NH đã thực hiện</button>}
                 {p.status === 'ExecutedByBank' && <button onClick={() => act(() => post(`/payment-orders/${p.id}/recreate-voucher`), 'Đã lập lại chứng từ hạch toán.')}>Lập lại chứng từ</button>}
+                {p.status !== 'Cancelled' && <button onClick={() => setPrinting([p])}>In UNC</button>}
                 {['Created', 'Approved', 'SentToBank'].includes(p.status) && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do hủy lệnh:'); if (reason) act(() => post(`/payment-orders/${p.id}/cancel`, { reason }), `Đã hủy ${p.number}.`)
                 }}>Hủy</button>}
               </td>
             </tr>))}
-            {list.length === 0 && <tr><td colSpan={8} className="muted">Chưa có lệnh thanh toán.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={10} className="muted">Chưa có lệnh thanh toán.</td></tr>}
           </tbody>
         </table>
       </div>
+      {printing && <UncPrint orders={printing} beneficiary={beneficiary} payer={payer} partnerName={id => partners.find(p => p.id === id)?.name ?? ''} onDone={() => setPrinting(null)} />}
     </>
+  )
+}
+
+/** Ủy nhiệm chi: mỗi lệnh một trang, đủ bên chi, bên thụ hưởng, số tiền bằng số và bằng chữ, nội dung, chữ ký. */
+function UncPrint({ orders, beneficiary, payer, partnerName, onDone }: { orders: PaymentOrder[]; beneficiary: (p: PaymentOrder) => string; payer: (p: PaymentOrder) => { bankName: string; accountNo: string; accountName: string } | undefined; partnerName: (id: string) => string; onDone: () => void }) {
+  const company = useCompanyName()
+  useEffect(() => { const t = setTimeout(() => { printSheet(); onDone() }, 200); return () => clearTimeout(t) }, [onDone])
+  return (
+    <PrintSheet>
+      {orders.map(p => {
+        const pay = payer(p)
+        return <div key={p.id} style={{ pageBreakAfter: 'always' }}>
+          <div><b>{pay?.accountName || company}</b></div>
+          <h1>ỦY NHIỆM CHI</h1>
+          <div className="center">Số: <b>{p.number}</b> · Ngày {formatDate(p.requestedDate)}{p.status === 'Created' ? ' · (CHƯA DUYỆT)' : ''}</div>
+          <table>
+            <tbody>
+              <tr><td><b>Đơn vị trả tiền</b></td><td>{pay?.accountName || company}</td></tr>
+              <tr><td><b>Số tài khoản</b></td><td>{pay?.accountNo ?? '………………………………'}</td></tr>
+              <tr><td><b>Tại ngân hàng</b></td><td>{pay?.bankName ?? '………………………………'}</td></tr>
+              <tr><td><b>Đơn vị nhận tiền</b></td><td>{beneficiary(p) || partnerName(p.partnerId)}</td></tr>
+              <tr><td><b>Số tài khoản</b></td><td>{p.beneficiaryAccountNo ?? '………………………………'}</td></tr>
+              <tr><td><b>Tại ngân hàng</b></td><td>{p.beneficiaryBank ?? '………………………………'}</td></tr>
+              <tr><td><b>Số tiền bằng số</b></td><td className="num"><b>{formatMoney(p.amount)}</b> đồng</td></tr>
+              <tr><td><b>Số tiền bằng chữ</b></td><td><i>{amountInWords(p.amount)}</i></td></tr>
+              <tr><td><b>Nội dung</b></td><td>{p.description}</td></tr>
+            </tbody>
+          </table>
+          <div className="signs"><div><b>Người lập</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Chủ tài khoản</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
+          <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu ủy nhiệm chi của ngân hàng [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+        </div>
+      })}
+    </PrintSheet>
   )
 }
 

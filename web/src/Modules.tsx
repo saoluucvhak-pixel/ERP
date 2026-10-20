@@ -26,13 +26,13 @@ export const MODULES: AppModule[] = [
   { key: 'home', label: 'Tổng quan', icon: '▦', screens: [], title: 'Tổng quan', flow: [], reports: [], catalogs: [] },
   { key: 'cycles', label: 'Quản lý chu trình', icon: '🔄', screens: [], title: 'Quản lý chu trình', flow: [], reports: [], catalogs: [] },
   {
-    key: 'money', label: 'Tiền', icon: '💵', screens: ['cash', 'bank', 'fx', 'loans'], title: 'NGHIỆP VỤ TIỀN MẶT, TIỀN GỬI, VAY',
+    key: 'money', label: 'Tiền', icon: '💵', screens: ['cash', 'advances', 'cashcount', 'equity', 'bank', 'fx', 'loans'], title: 'NGHIỆP VỤ TIỀN MẶT, TIỀN GỬI, VAY',
     flow: [
-      { label: 'Thu tiền', icon: '🧾', screen: 'cash' }, { label: 'Đề nghị chi tiền (từ chấp nhận thanh toán, lương)', icon: '📝', screen: 'bank' }, { label: 'Chi tiền', icon: '💸', screen: 'cash' },
+      { label: 'Thu tiền', icon: '🧾', screen: 'cash' }, { label: 'Đề nghị chi tiền (từ chấp nhận thanh toán, lương)', icon: '📝', screen: 'bank' }, { label: 'Chi tiền', icon: '💸', screen: 'cash' }, { label: 'Tạm ứng, hoàn ứng', icon: '🧳', screen: 'advances' }, { label: 'Kiểm kê quỹ', icon: '🪙', screen: 'cashcount' }, { label: 'Vốn góp, cổ tức', icon: '🏛️', screen: 'equity' },
       { label: 'Lệnh thanh toán ngân hàng', icon: '🏦', screen: 'bank' }, { label: 'Đối chiếu ngân hàng', icon: '✅', screen: 'bank' }, { label: 'Thu, chi ngoại tệ', icon: '💱', screen: 'fx' }, { label: 'Vay, lịch trả nợ', icon: '🏷️', screen: 'loans' },
     ],
-    reports: [{ label: 'Sổ quỹ tiền mặt, sổ tiền gửi', screen: 'ledger' }, { label: 'Dự báo dòng tiền (Tổng quan)', screen: 'home' }, { label: 'Bảng kê khế ước vay và lịch trả nợ', screen: 'loans' }, { label: 'Đối chiếu sao kê ngân hàng', screen: 'bank' }],
-    catalogs: [{ label: 'Tài khoản ngân hàng', screen: 'setup' }, CAT_PARTNERS, CAT_SETUP],
+    reports: [{ label: 'Sổ quỹ tiền mặt, sổ tiền gửi', screen: 'ledger' }, { label: 'Tuổi nợ tạm ứng, biên bản kiểm kê quỹ', screen: 'advances' }, { label: 'Dự báo dòng tiền (Tổng quan)', screen: 'home' }, { label: 'Bảng kê khế ước vay và lịch trả nợ', screen: 'loans' }, { label: 'Đối chiếu sao kê ngân hàng', screen: 'bank' }],
+    catalogs: [{ label: 'Tài khoản ngân hàng (công ty, đối tượng)', screen: 'setup' }, CAT_PARTNERS, CAT_SETUP],
   },
   {
     key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'contracts', 'orders', 'trade', 'arap'], title: 'NGHIỆP VỤ MUA HÀNG',

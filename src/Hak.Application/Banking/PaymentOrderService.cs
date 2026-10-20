@@ -46,11 +46,20 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
             seq.LastNumber++;
             seq.RowVersion++;
 
+            // Không nhập tay thông tin thụ hưởng: lấy tài khoản ngân hàng mặc định của đối tượng (chụp lại, đổi danh mục sau không đổi lệnh).
+            var beneficiaryNo = input.BeneficiaryAccountNo; var beneficiaryBank = input.BeneficiaryBank;
+            if (string.IsNullOrWhiteSpace(beneficiaryNo) && string.IsNullOrWhiteSpace(beneficiaryBank))
+            {
+                var def = await db.PartnerBankAccounts.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.PartnerId == input.PartnerId && a.IsActive)
+                    .OrderByDescending(a => a.IsDefault).ThenBy(a => a.CreatedAt).FirstOrDefaultAsync();
+                if (def is not null) { beneficiaryNo = def.AccountNo; beneficiaryBank = string.IsNullOrWhiteSpace(def.Branch) ? def.BankName : $"{def.BankName} – {def.Branch}"; }
+            }
+
             var po = new PaymentOrder
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Number = $"UNC{fy.Code}-{seq.LastNumber:D6}", BankAccountId = input.BankAccountId,
                 PartnerId = input.PartnerId, BusinessEvent = input.BusinessEvent, Amount = input.Amount, RequestedDate = input.RequestedDate,
-                Description = input.Description.Trim(), BeneficiaryAccountNo = input.BeneficiaryAccountNo, BeneficiaryBank = input.BeneficiaryBank,
+                Description = input.Description.Trim(), BeneficiaryAccountNo = beneficiaryNo, BeneficiaryBank = beneficiaryBank,
                 SettleJournalLineId = input.SettleJournalLineId, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
             };
             db.PaymentOrders.Add(po);

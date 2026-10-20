@@ -1,9 +1,11 @@
 using System.Text;
+using Hak.Domain.Advances;
 using Hak.Domain.Assets;
 using Hak.Domain.Banking;
 using Hak.Domain.Catalog;
 using Hak.Domain.Common;
 using Hak.Domain.Cycles;
+using Hak.Domain.Equity;
 using Hak.Domain.Fx;
 using Hak.Domain.Integration;
 using Hak.Domain.Inventory;
@@ -112,6 +114,16 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<AssetCountLine> AssetCountLines => Set<AssetCountLine>();
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
     public DbSet<AssetUsage> AssetUsages => Set<AssetUsage>();
+    public DbSet<PartnerBankAccount> PartnerBankAccounts => Set<PartnerBankAccount>();
+    public DbSet<CompanyBankAccount> CompanyBankAccounts => Set<CompanyBankAccount>();
+    public DbSet<Shareholder> Shareholders => Set<Shareholder>();
+    public DbSet<CapitalMovement> CapitalMovements => Set<CapitalMovement>();
+    public DbSet<DividendResolution> DividendResolutions => Set<DividendResolution>();
+    public DbSet<DividendLine> DividendLines => Set<DividendLine>();
+    public DbSet<AdvanceRequest> AdvanceRequests => Set<AdvanceRequest>();
+    public DbSet<AdvanceSettlementLine> AdvanceSettlementLines => Set<AdvanceSettlementLine>();
+    public DbSet<CashCount> CashCounts => Set<CashCount>();
+    public DbSet<CashCountLine> CashCountLines => Set<CashCountLine>();
     public DbSet<AssetExpenseSplit> AssetExpenseSplits => Set<AssetExpenseSplit>();
     public DbSet<DepreciationEntrySplit> DepreciationEntrySplits => Set<DepreciationEntrySplit>();
     public DbSet<FxRevaluationRun> FxRevaluationRuns => Set<FxRevaluationRun>();
@@ -673,6 +685,58 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.PeriodId }).IsUnique().HasFilter("status = 1");
             e.HasIndex(x => new { x.CompanyId, x.PeriodStart });
         });
+        b.Entity<PartnerBankAccount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.PartnerId, x.AccountNo, x.BankName }).IsUnique();
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CompanyBankAccount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.AccountNo, x.BankName }).IsUnique();
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Shareholder>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.PartnerId }).IsUnique();
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CapitalMovement>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.ShareholderId, x.Date });
+            e.HasOne<Shareholder>().WithMany().HasForeignKey(x => x.ShareholderId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_capital_movements_amount", "amount > 0"));
+        });
+        b.Entity<DividendResolution>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.ResolutionId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<DividendLine>(e =>
+        {
+            e.HasIndex(x => new { x.ResolutionId, x.ShareholderId }).IsUnique();
+            e.HasOne<Shareholder>().WithMany().HasForeignKey(x => x.ShareholderId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AdvanceRequest>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.EmployeeId, x.Status });
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.AdvanceId).OnDelete(DeleteBehavior.Cascade);
+            e.ToTable(t => t.HasCheckConstraint("ck_advance_requests_amount", "amount > 0"));
+        });
+        b.Entity<AdvanceSettlementLine>(e =>
+        {
+            e.HasIndex(x => new { x.AdvanceId, x.LineNo }).IsUnique();
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CashCount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.CashAccountId, x.CountDate });
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.CashAccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.CashCountId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<CashCountLine>(e => e.HasIndex(x => new { x.CashCountId, x.Denomination }).IsUnique());
         b.Entity<AssetUsage>(e =>
         {
             e.HasIndex(x => new { x.AssetId, x.PeriodId }).IsUnique();
@@ -895,6 +959,21 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<DepreciationEntry>().Property(x => x.Amount).HasConversion(money);
         b.Entity<AssetExpenseSplit>().Property(x => x.Percent).HasConversion(money);
         b.Entity<AssetUsage>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<Shareholder>().Property(x => x.CommittedCapital).HasConversion(money);
+        b.Entity<CapitalMovement>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<DividendResolution>().Property(x => x.TotalAmount).HasConversion(money);
+        b.Entity<DividendResolution>().Property(x => x.PitRatePercent).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.CapitalBasis).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.Gross).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.PitWithheld).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.Net).HasConversion(money);
+        b.Entity<AdvanceRequest>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<AdvanceRequest>().Property(x => x.SpentAmount).HasConversion(moneyNullable);
+        b.Entity<AdvanceSettlementLine>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<CashCount>().Property(x => x.CountedTotal).HasConversion(money);
+        b.Entity<CashCount>().Property(x => x.BookBalance).HasConversion(moneyNullable);
+        b.Entity<CashCount>().Property(x => x.Difference).HasConversion(moneyNullable);
+        b.Entity<CashCountLine>().Property(x => x.Denomination).HasConversion(money);
         b.Entity<LongTermAsset>().Property(x => x.DecliningFactor).HasConversion(moneyNullable);
         b.Entity<LongTermAsset>().Property(x => x.TotalUnits).HasConversion(moneyNullable);
         b.Entity<DepreciationEntrySplit>().Property(x => x.Amount).HasConversion(money);

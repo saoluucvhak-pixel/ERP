@@ -17,6 +17,263 @@ namespace Hak.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("Hak.Domain.Advances.AdvanceRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decision_note");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("due_date");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("employee_id");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<Guid?>("PaymentVoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payment_voucher_id");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("purpose");
+
+                    b.Property<DateOnly>("RequestDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_date");
+
+                    b.Property<Guid?>("SettlementVoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("settlement_voucher_id");
+
+                    b.Property<long?>("SpentAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("spent_amount");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_advance_requests");
+
+                    b.HasIndex("EmployeeId")
+                        .HasDatabaseName("ix_advance_requests_employee_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_advance_requests_company_id_number");
+
+                    b.HasIndex("CompanyId", "EmployeeId", "Status")
+                        .HasDatabaseName("ix_advance_requests_company_id_employee_id_status");
+
+                    b.ToTable("advance_requests", t =>
+                        {
+                            t.HasCheckConstraint("ck_advance_requests_amount", "amount > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Advances.AdvanceSettlementLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AdvanceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("advance_id");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("document_date");
+
+                    b.Property<string>("DocumentNo")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("document_no");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("expense_account_id");
+
+                    b.Property<int>("LineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("line_no");
+
+                    b.HasKey("Id")
+                        .HasName("pk_advance_settlement_lines");
+
+                    b.HasIndex("ExpenseAccountId")
+                        .HasDatabaseName("ix_advance_settlement_lines_expense_account_id");
+
+                    b.HasIndex("AdvanceId", "LineNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_advance_settlement_lines_advance_id_line_no");
+
+                    b.ToTable("advance_settlement_lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Advances.CashCount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AdjustmentVoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("adjustment_voucher_id");
+
+                    b.Property<long?>("BookBalance")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("book_balance");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_reason");
+
+                    b.Property<Guid>("CashAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cash_account_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<Guid?>("ConfirmedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("confirmed_by");
+
+                    b.Property<DateOnly>("CountDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("count_date");
+
+                    b.Property<long>("CountedTotal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("counted_total");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<long?>("Difference")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("difference");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<string>("Participants")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("participants");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cash_counts");
+
+                    b.HasIndex("CashAccountId")
+                        .HasDatabaseName("ix_cash_counts_cash_account_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cash_counts_company_id_number");
+
+                    b.HasIndex("CompanyId", "CashAccountId", "CountDate")
+                        .HasDatabaseName("ix_cash_counts_company_id_cash_account_id_count_date");
+
+                    b.ToTable("cash_counts");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Advances.CashCountLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CashCountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cash_count_id");
+
+                    b.Property<long>("Denomination")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("denomination");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quantity");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cash_count_lines");
+
+                    b.HasIndex("CashCountId", "Denomination")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cash_count_lines_cash_count_id_denomination");
+
+                    b.ToTable("cash_count_lines");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetAssignment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1168,6 +1425,128 @@ namespace Hak.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Banking.CompanyBankAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("account_id");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("account_name");
+
+                    b.Property<string>("AccountNo")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("account_no");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("bank_name");
+
+                    b.Property<string>("Branch")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("branch");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_active");
+
+                    b.HasKey("Id")
+                        .HasName("pk_company_bank_accounts");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_company_bank_accounts_account_id");
+
+                    b.HasIndex("CompanyId", "AccountNo", "BankName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_company_bank_accounts_company_id_account_no_bank_name");
+
+                    b.ToTable("company_bank_accounts");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Banking.PartnerBankAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("account_name");
+
+                    b.Property<string>("AccountNo")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("account_no");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("bank_name");
+
+                    b.Property<string>("Branch")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("branch");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_default");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_partner_bank_accounts");
+
+                    b.HasIndex("PartnerId")
+                        .HasDatabaseName("ix_partner_bank_accounts_partner_id");
+
+                    b.HasIndex("CompanyId", "PartnerId", "AccountNo", "BankName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_partner_bank_accounts_company_id_partner_id_account_no_bank_name");
+
+                    b.ToTable("partner_bank_accounts");
+                });
+
             modelBuilder.Entity("Hak.Domain.Banking.PaymentOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2037,6 +2416,239 @@ namespace Hak.Data.Migrations
                         .HasDatabaseName("ix_sales_dispatch_orders_company_id_order_id");
 
                     b.ToTable("sales_dispatch_orders");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.CapitalMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid?>("CashAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cash_account_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("date");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("ShareholderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("shareholder_id");
+
+                    b.Property<Guid?>("VoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("voucher_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_capital_movements");
+
+                    b.HasIndex("ShareholderId")
+                        .HasDatabaseName("ix_capital_movements_shareholder_id");
+
+                    b.HasIndex("CompanyId", "ShareholderId", "Date")
+                        .HasDatabaseName("ix_capital_movements_company_id_shareholder_id_date");
+
+                    b.ToTable("capital_movements", t =>
+                        {
+                            t.HasCheckConstraint("ck_capital_movements_amount", "amount > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.DividendLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CapitalBasis")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("capital_basis");
+
+                    b.Property<long>("Gross")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("gross");
+
+                    b.Property<long>("Net")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("net");
+
+                    b.Property<Guid?>("PaymentVoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payment_voucher_id");
+
+                    b.Property<long>("PitWithheld")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("pit_withheld");
+
+                    b.Property<Guid>("ResolutionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("resolution_id");
+
+                    b.Property<Guid>("ShareholderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("shareholder_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_dividend_lines");
+
+                    b.HasIndex("ShareholderId")
+                        .HasDatabaseName("ix_dividend_lines_shareholder_id");
+
+                    b.HasIndex("ResolutionId", "ShareholderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_dividend_lines_resolution_id_shareholder_id");
+
+                    b.ToTable("dividend_lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.DividendResolution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_by");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decision_note");
+
+                    b.Property<Guid?>("DeclarationVoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("declaration_voucher_id");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("number");
+
+                    b.Property<long>("PitRatePercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("pit_rate_percent");
+
+                    b.Property<DateOnly>("ResolutionDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("resolution_date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<long>("TotalAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_amount");
+
+                    b.HasKey("Id")
+                        .HasName("pk_dividend_resolutions");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_dividend_resolutions_company_id_number");
+
+                    b.ToTable("dividend_resolutions");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.Shareholder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CommittedCapital")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("committed_capital");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsIndividual")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_individual");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_shareholders");
+
+                    b.HasIndex("PartnerId")
+                        .HasDatabaseName("ix_shareholders_partner_id");
+
+                    b.HasIndex("CompanyId", "PartnerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_shareholders_company_id_partner_id");
+
+                    b.ToTable("shareholders");
                 });
 
             modelBuilder.Entity("Hak.Domain.Fx.FxRevaluationRun", b =>
@@ -6900,6 +7512,53 @@ namespace Hak.Data.Migrations
                     b.ToTable("voucher_number_sequences");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Advances.AdvanceRequest", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_advance_requests_business_partners_employee_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Advances.AdvanceSettlementLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Advances.AdvanceRequest", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("AdvanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_advance_settlement_lines_advance_requests_advance_id");
+
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_advance_settlement_lines_accounts_expense_account_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Advances.CashCount", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CashAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cash_counts_accounts_cash_account_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Advances.CashCountLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Advances.CashCount", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("CashCountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_cash_count_lines_cash_counts_cash_count_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetAssignment", b =>
                 {
                     b.HasOne("Hak.Domain.Assets.LongTermAsset", null)
@@ -7122,6 +7781,26 @@ namespace Hak.Data.Migrations
                         .HasConstraintName("fk_bank_statement_lines_bank_statements_statement_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Banking.CompanyBankAccount", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_company_bank_accounts_accounts_account_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Banking.PartnerBankAccount", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_partner_bank_accounts_business_partners_partner_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Banking.PaymentOrder", b =>
                 {
                     b.HasOne("Hak.Domain.Catalog.Account", null)
@@ -7299,6 +7978,43 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_sales_dispatch_orders_warehouses_warehouse_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.CapitalMovement", b =>
+                {
+                    b.HasOne("Hak.Domain.Equity.Shareholder", null)
+                        .WithMany()
+                        .HasForeignKey("ShareholderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_capital_movements_shareholders_shareholder_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.DividendLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Equity.DividendResolution", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("ResolutionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_dividend_lines_dividend_resolutions_resolution_id");
+
+                    b.HasOne("Hak.Domain.Equity.Shareholder", null)
+                        .WithMany()
+                        .HasForeignKey("ShareholderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_dividend_lines_shareholders_shareholder_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.Shareholder", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_shareholders_business_partners_partner_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Inventory.CostingPolicy", b =>
@@ -8112,6 +8828,16 @@ namespace Hak.Data.Migrations
                         .HasConstraintName("fk_voucher_lines_vouchers_voucher_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Advances.AdvanceRequest", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Advances.CashCount", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("Hak.Domain.Assets.AssetCount", b =>
                 {
                     b.Navigation("Lines");
@@ -8143,6 +8869,11 @@ namespace Hak.Data.Migrations
                 });
 
             modelBuilder.Entity("Hak.Domain.Cycles.SalesDispatchOrder", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Equity.DividendResolution", b =>
                 {
                     b.Navigation("Lines");
                 });
