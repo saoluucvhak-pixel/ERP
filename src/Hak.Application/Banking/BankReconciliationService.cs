@@ -277,11 +277,11 @@ public sealed class BankReconciliationService(HakDbContext db, AuditService audi
     private sealed record LedgerRow(Guid Id, string VoucherNumber, DateOnly PostingDate, decimal Amount, Side Side, string? Description, string VDesc);
 
     /// <summary>Dòng sổ của TK ngân hàng trong khoảng ngày, chưa được ghép với dòng sao kê nào.</summary>
-    private async Task<List<LedgerRow>> LoadLedgerRowsAsync(Guid companyId, Guid bankAccountId, DateOnly from, DateOnly to)
+    private async Task<List<LedgerRow>> LoadLedgerRowsAsync(Guid companyId, Guid bankAccountId, DateOnly fromDate, DateOnly toDate)
         => await (from l in db.JournalLines
                   join e in db.JournalEntries on l.JournalEntryId equals e.Id
                   join v in db.Vouchers on e.VoucherId equals v.Id
-                  where l.CompanyId == companyId && l.AccountId == bankAccountId && l.PostingDate >= from && l.PostingDate <= to
+                  where l.CompanyId == companyId && l.AccountId == bankAccountId && l.PostingDate >= fromDate && l.PostingDate <= toDate
                         && !db.ReconciliationMatches.Any(m => m.JournalLineId == l.Id && m.VoidedAt == null)
                   select new LedgerRow(l.Id, e.VoucherNumber, l.PostingDate, l.Amount, l.Side, l.Description, v.Description))
             .AsNoTracking().ToListAsync();
