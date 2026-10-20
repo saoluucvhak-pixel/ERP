@@ -17,7 +17,11 @@ public sealed record VatOffsetLine(Guid AccountId, string AccountCode, Side Side
 /// under VAT_OUTPUT. Offset = min(input, output); NetPayable = output − offset (to pay), CarryForward = input − offset (still deductible).
 /// </summary>
 public sealed record VatOffsetPreview(Guid PeriodId, DateOnly PeriodStart, DateOnly PeriodEnd, decimal InputBalance, decimal OutputBalance,
-    decimal OffsetAmount, decimal NetPayable, decimal CarryForward, IReadOnlyList<VatOffsetLine> Lines, string Note);
+    decimal OffsetAmount, decimal NetPayable, decimal CarryForward, IReadOnlyList<VatOffsetLine> Lines, string Note,
+    IReadOnlyList<VatOffsetAccount> InputAccounts, IReadOnlyList<VatOffsetAccount> OutputAccounts);
+
+/// <summary>Tài khoản tham gia khấu trừ (mặc định theo vai trò VAT_INPUT / VAT_OUTPUT, hoặc do người dùng chọn).</summary>
+public sealed record VatOffsetAccount(Guid AccountId, string Code, string Name);
 
 /// <summary>
 /// Kết chuyển / khấu trừ thuế GTGT cuối kỳ: Nợ thuế GTGT đầu ra / Có thuế GTGT đầu vào được khấu trừ, số tiền = phần nhỏ hơn của hai số dư.
@@ -31,19 +35,32 @@ public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine, A
     public const string InputRole = "VAT_INPUT";
     public const string OutputRole = "VAT_OUTPUT";
 
-    public async Task<VatOffsetPreview> PreviewAsync(SessionContext ctx, Guid periodId)
+    /// <param name="inputAccountIds">Tài khoản thuế đầu vào được khấu trừ do người dùng chọn; null = theo vai trò VAT_INPUT (cùng tài khoản con).</param>
+    /// <param name="outputAccountIds">Tài khoản thuế đầu ra do người dùng chọn; null = theo vai trò VAT_OUTPUT (cùng tài khoản con).</param>
+    public async Task<VatOffsetPreview> PreviewAsync(SessionContext ctx, Guid periodId, IReadOnlyList<Guid>? inputAccountIds = null, IReadOnlyList<Guid>? outputAccountIds = null)
     {
         ctx.Require(Permissions.ReportView);
         var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId)
                      ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại.");
-        var roles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && (m.RoleCode == InputRole || m.RoleCode == OutputRole))
-            .ToDictionaryAsync(m => m.RoleCode, m => m.AccountId);
-        if (!roles.TryGetValue(InputRole, out var inputRoot) || !roles.TryGetValue(OutputRole, out var outputRoot))
-            throw new DomainException(ErrorCodes.RuleMissing, "Chưa gán vai trò tài khoản VAT_INPUT (thuế GTGT được khấu trừ) và VAT_OUTPUT (thuế GTGT đầu ra) ở Thiết lập.");
-
         var accounts = await db.Accounts.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId).ToListAsync();
-        var inputAccounts = Subtree(accounts, inputRoot);
-        var outputAccounts = Subtree(accounts, outputRoot);
+        List<Domain.Catalog.Account> Chosen(IReadOnlyList<Guid> chosen, string what)
+        {
+            var list = chosen.Distinct().Select(id => accounts.FirstOrDefault(a => a.Id == id)
+                ?? throw new DomainException(ErrorCodes.NotFound, $"Tài khoản {what} đã chọn không tồn tại.")).ToList();
+            var bad = list.FirstOrDefault(a => !a.IsPostable);
+            if (bad is not null) throw new DomainException(ErrorCodes.ValidationFailed, $"Tài khoản {bad.Code} không hạch toán trực tiếp được; chọn tài khoản chi tiết.");
+            return list;
+        }
+        List<Domain.Catalog.Account> FromRole(string role, string label)
+        {
+            var root = db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.RoleCode == role).Select(m => (Guid?)m.AccountId).FirstOrDefault();
+            return root is { } r ? Subtree(accounts, r)
+                : throw new DomainException(ErrorCodes.RuleMissing, $"Chưa gán vai trò tài khoản {role} ({label}) ở Thiết lập; hoặc chọn tài khoản khấu trừ trực tiếp.");
+        }
+        var inputAccounts = inputAccountIds is { Count: > 0 } ? Chosen(inputAccountIds, "thuế đầu vào") : FromRole(InputRole, "thuế GTGT được khấu trừ");
+        var outputAccounts = outputAccountIds is { Count: > 0 } ? Chosen(outputAccountIds, "thuế đầu ra") : FromRole(OutputRole, "thuế GTGT đầu ra");
+        if (inputAccounts.Select(a => a.Id).Intersect(outputAccounts.Select(a => a.Id)).Any())
+            throw new DomainException(ErrorCodes.ValidationFailed, "Một tài khoản không thể vừa là thuế đầu vào vừa là thuế đầu ra.");
         var ids = inputAccounts.Concat(outputAccounts).Select(a => a.Id).ToList();
         var sums = await db.JournalLines.AsNoTracking().Where(l => l.CompanyId == ctx.CompanyId && ids.Contains(l.AccountId) && l.PostingDate <= period.EndDate)
             .GroupBy(l => new { l.AccountId, l.Side }).Select(g => new { g.Key.AccountId, g.Key.Side, T = g.Sum(x => x.Amount) }).ToListAsync();
@@ -70,10 +87,12 @@ public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine, A
         }
         if (offset > 0) { Allocate(outputs, Side.Debit); Allocate(inputs, Side.Credit); }
         return new VatOffsetPreview(period.Id, period.StartDate, period.EndDate, input, output, offset, output - offset, input - offset, lines,
-            "Số dư lũy kế đến hết kỳ (gồm thuế đầu vào chuyển từ kỳ trước). Chưa tính điều chỉnh khác và không phải tờ khai chính thức.");
+            "Số dư lũy kế đến hết kỳ (gồm thuế đầu vào chuyển từ kỳ trước). Chưa tính điều chỉnh khác và không phải tờ khai chính thức.",
+            inputAccounts.OrderBy(a => a.Code, StringComparer.Ordinal).Select(a => new VatOffsetAccount(a.Id, a.Code, a.Name)).ToList(),
+            outputAccounts.OrderBy(a => a.Code, StringComparer.Ordinal).Select(a => new VatOffsetAccount(a.Id, a.Code, a.Name)).ToList());
     }
 
-    public async Task<Voucher> GenerateAsync(SessionContext ctx, Guid periodId)
+    public async Task<Voucher> GenerateAsync(SessionContext ctx, Guid periodId, IReadOnlyList<Guid>? inputAccountIds = null, IReadOnlyList<Guid>? outputAccountIds = null)
     {
         ctx.Require(Permissions.VoucherCreate);
         var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId)
@@ -88,7 +107,7 @@ public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine, A
         if (pending > 0)
             throw new DomainException(ErrorCodes.PeriodHasPending, $"Còn {pending} chứng từ đã gửi/đã duyệt chưa ghi sổ trong kỳ; xử lý trước khi khấu trừ thuế.");
 
-        var preview = await PreviewAsync(ctx, periodId);
+        var preview = await PreviewAsync(ctx, periodId, inputAccountIds, outputAccountIds);
         if (preview.OffsetAmount <= 0)
             throw new DomainException(ErrorCodes.VoucherNoLines, "Không có số thuế GTGT để khấu trừ (thuế đầu vào hoặc đầu ra bằng 0).");
         var description = $"Khấu trừ thuế GTGT kỳ {period.StartDate:MM/yyyy}";

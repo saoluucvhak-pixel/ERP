@@ -160,6 +160,26 @@ public class VatTests
     }
 
     [Fact]
+    public async Task PeriodEndOffset_UsesTheAccountsTheUserPicks_AndRejectsOverlap()
+    {
+        using var fx = await SetupAsync();
+        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine, fx.S.Audit);
+        var period = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(3, 1));
+        await Book(fx, InvoiceKind.Purchase, fx.Sup, "1C26TAA", "0000911", 10_000_000, 10, D(3, 5));
+        await Book(fx, InvoiceKind.Sales, fx.Cus, "1C26TBB", "0000912", 20_000_000, 8, D(3, 10));
+        var vatIn = await fx.S.Db.Accounts.AsNoTracking().FirstAsync(a => a.CompanyId == fx.H.CompanyId && a.Code == "VATIN");
+        var vatOut = await fx.S.Db.Accounts.AsNoTracking().FirstAsync(a => a.CompanyId == fx.H.CompanyId && a.Code == "VATOUT");
+
+        var picked = await offset.PreviewAsync(fx.H.Auditor, period.Id, [vatIn.Id], [vatOut.Id]);
+        Assert.Equal(1_000_000m, picked.OffsetAmount);
+        Assert.Equal(["VATOUT"], picked.OutputAccounts.Select(a => a.Code));
+        Assert.Equal(["VATIN"], picked.InputAccounts.Select(a => a.Code));
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => offset.PreviewAsync(fx.H.Auditor, period.Id, [vatIn.Id], [vatIn.Id])));
+        Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => offset.PreviewAsync(fx.H.Auditor, period.Id, [vatIn.Id], [Guid.NewGuid()])));
+    }
+
+    [Fact]
     public async Task AddingMissingPartnerTaxCode_MakesTheInvoiceMatch()
     {
         using var fx = await SetupAsync();
