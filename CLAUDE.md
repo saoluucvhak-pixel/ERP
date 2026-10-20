@@ -26,8 +26,7 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - Dăm gỗ: BDMT = MT × độ khô % ÷ 100; đo khi nhập và đo ở tàu khi xuất (chứng từ là chứng thư); làm tròn độ khô 2, BDMT 3 chữ số; giá vốn theo MT, **giá mua/bán theo BDMT**; sổ kho giữ MT phiếu, MT chứng thư chỉ để tính BDMT.
 
 ## Câu hỏi đang chờ người dùng (không chặn việc khác)
-1. Dữ liệu thực: ĐÃ CÓ thư mục dữ liệu FAST (đường dẫn ghi trong bộ nhớ riêng, không ghi ở đây; FAST, VFP, TCVN3; chỉ đọc, KHÔNG đọc SYS\dmuser). Công cụ tools/migrate-fast; 2026 khớp BCĐPS 7/7 tháng và khớp BCĐPS in từ FAST T6/2026. Chị QUYẾT ĐỊNH ÁP DỤNG TT99 từ 01/01/2026 (16/10; chuyển cả 2025 làm số so sánh, đã chạy thử khớp 19/19 tháng + B01/B02/B03 2025); bảng ánh xạ CHỜ chị duyệt (dòng 338811, 4111 cần xác nhận; lưu ý mẫu FAST là S04-DNN/TT133 → TT99 là tự chọn với DNNVV).
-2. Chị (KTT) **xác minh** chế độ TT99 và các mẫu BCTC trong phần mềm (mẫu do người khác soạn/nhập).
+1. Dữ liệu thực: ĐÃ CÓ thư mục dữ liệu FAST (đường dẫn ghi trong bộ nhớ riêng, không ghi ở đây; FAST, VFP, TCVN3; chỉ đọc, KHÔNG đọc SYS\dmuser). Công cụ tools/migrate-fast; 2026 khớp BCĐPS 7/7 tháng và khớp BCĐPS in từ FAST T6/2026. Chị QUYẾT ĐỊNH ÁP DỤNG TT99 từ 01/01/2026 (16/10; chuyển cả 2025 làm số so sánh, đã chạy thử khớp 19/19 tháng + B01/B02/B03 2025).
 
 ## Đã trả lời 16/10/2026 (hỏi gộp một lần)
 - Sao kê không mã giao dịch, trùng tiền + ngày với đúng một bút toán: **chỉ gợi ý, bắt xác nhận tay** (không tự khớp).
@@ -58,7 +57,7 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - Đo hiệu năng (docs/09, tools/Hak.Bench; ghi log vào %TEMP%\hak-bench vì scratchpad có thể không ghi được) + bật pooling SQLite + sửa sổ chi tiết O(n²): XONG 2026-10-15. 235 test SQLite, 163/163 tích hợp PostgreSQL.
 - Report Engine (src/Hak.Domain/Reports, Application/Reports/ReportService.cs, màn hình "Báo cáo theo mẫu", migration Phase6Reports — trigger PG trong ImmutabilityTriggers.ReportStatements()): XONG 2026-10-15. 248 test. Lưu ý EF: thêm entity con có khóa GUID gán sẵn qua `db.AddRange`, không qua navigation của cha đang tracked (bị hiểu là UPDATE → lỗi xung đột).
 - Đợt 15/10 (sau Report Engine): phân trang chứng từ, in (CSS + phiếu kế toán có số tiền bằng chữ), nhập vật tư / tồn kho đầu kỳ / TSCĐ-CCDC đầu kỳ, đổi TK cấp trên, tạo chứng từ từ dòng sao kê (gợi ý phí/lãi). 252 test; 170/170 PG. Lưu ý: server chạy InvariantGlobalization → `string.Normalize` không tách dấu; bỏ dấu tiếng Việt bằng bảng (StatementVoucherService.Plain).
-- 16/10: TT99 bản gốc → `legal/TT99-2025` (Phụ lục II-A 184 TK, tệp nhập đề xuất, đề xuất vai trò). Đã nhận đủ Công báo (1579+1580 ngày 16/10). Đã dựng mẫu B01-DN, B02-DN (legal/TT99-2025/mau-*.json; nhãn TK DH/TDT/HCSD/HTM/BCC/SXDD/NO/BDSDT/DGL/LV/TLTS; NET_D/NET_C bỏ chứng từ CLS; MAX0). CHỜ chị: người xác minh chế độ và mẫu, quyết GRNI.
+- 16/10: TT99 bản gốc → `legal/TT99-2025` (Phụ lục II-A 184 TK, tệp nhập đề xuất, đề xuất vai trò). Đã nhận đủ Công báo (1579+1580 ngày 16/10). Đã dựng mẫu B01-DN, B02-DN (legal/TT99-2025/mau-*.json; nhãn TK DH/TDT/HCSD/HTM/BCC/SXDD/NO/BDSDT/DGL/LV/TLTS; NET_D/NET_C bỏ chứng từ CLS; MAX0).
 - Mã luồng tiền + B03-DN (trực tiếp): XONG 16/10 (Domain/Reports/CashFlow.cs, cột cash_flow_code ở voucher_lines/journal_lines, hàm CF(), cột Mã LCTT trong form chứng từ).
 - B03 gián tiếp + B09 (8 mẫu số liệu + khung văn bản) + mẫu nhiều cột (ReportDefinition.Columns, migration Phase6ReportColumns) + hàm PS_D/PS_C, FXR, VT_D/VT_C: XONG 16/10. 260 test SQLite. Sinh mẫu: `python legal/TT99-2025/tools/templates.py %TEMP%\hak-tt99\tables legal/TT99-2025` và `python legal/TT99-2025/tools/b09.py legal/TT99-2025`. Còn: thử tay mẫu nhiều cột trên giao diện; phần văn bản B09 nhập trong phần mềm (hiện là tệp .md).
 - Cây TK cha–con dạng modal (Setup.tsx Accounts + Modal trong common.tsx; SetupService.AccountTree.cs: AddChildAccountAsync, UpdateAccountAttributesAsync; API /accounts/{id}/children, /attributes) + áp dụng các quyết định 16/10 (sao kê không mã → chờ xác nhận; chi ngoại tệ theo bình quân di động; GRNI theo NCC): XONG 16/10. 262 test.
@@ -73,7 +72,7 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 2. GĐ4: ~~Thuế GTGT~~ (xong 2026-10-15, 160 test); ~~TSCĐ & khấu hao; CCDC phân bổ~~ (xong 2026-10-15, 173 test); ~~ngoại tệ: đánh giá lại tiền/vay~~ (xong 2026-10-15, 180 test); ~~công nợ ngoại tệ + chênh lệch tỷ giá đã thực hiện~~ (xong 2026-10-15, 190 test); ~~vay~~ (xong 2026-10-15, 198 test); ~~hàng mua trả lại / giảm giá hàng mua~~ (xong 2026-10-15, 200 test); ~~lương (import JSON)~~ (xong 2026-10-15, 205 test); ~~giá thành~~ (xong 2026-10-15, 209 test).
 3. GĐ5 đa công ty/LAN (PostgreSQL), GĐ6 Report Engine + BCTC (cần TT99 đã xác minh), GĐ7 đối chiếu dữ liệu thực, GĐ8 bộ cài.
 
-- 19/10 đợt 11: 2 đơn vị tính (Item.AltUnit/AltFactor cố định; BDMT ước tính bình quân thời điểm cho xuất chưa đo) — docs/10 mục 9l. Chờ chị quyết: chính sách theo kho, phiếu chênh lệch CL, lô, mượn/trả (như HAK_KHO_OFFLINE).
+- 19/10 đợt 11: 2 đơn vị tính (Item.AltUnit/AltFactor cố định; BDMT ước tính bình quân thời điểm cho xuất chưa đo) — docs/10 mục 9l.
 
 - 19/10 đợt 12: bảo trì & sửa chữa tài sản theo tệp CMMS (AssetRepairService: YCSC, phiếu thi công, lịch bảo trì, KPI MTBF/MTTR) + Nhật ký tài sản (AssetJournalService, nút "Nhật ký") — docs/10 mục 9m.
 
