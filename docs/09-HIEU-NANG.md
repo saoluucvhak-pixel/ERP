@@ -53,3 +53,14 @@ Mỗi chứng từ đi đủ 4 bước như người dùng thật: lập → g�
   - các phân hệ kho/giá thành, vì tính giá xuất cuối tháng phụ thuộc số dòng sổ kho.
 
   Các phép đo này cần làm trên máy chủ và mạng của doanh nghiệp.
+
+## Rà soát tĩnh 20/10/2026 (đọc mã, chưa đo)
+
+Đã làm: `AuditService.AppendAsync` không còn truy vấn bản ghi cuối khi đã có bản ghi chờ lưu cùng giao dịch (bớt 1 truy vấn cho mỗi lần ghi nhật ký thứ hai trở đi).
+
+Chưa làm (cần đo hoặc cần migration, xếp theo lợi ích):
+1. **Ổ khóa ghi toàn hệ thống.** `WriterLockKey` là một khóa duy nhất cho mọi công ty: nhiều công ty trên cùng máy chủ LAN xếp hàng chung (~30 chứng từ/giây tổng). Có thể khóa theo công ty cho nghiệp vụ chỉ chạm dữ liệu một công ty; dữ liệu dùng chung (người dùng, vai trò, loại tiền) vẫn cần khóa toàn cục.
+2. **Nhập hóa đơn điện tử (VatService):** mỗi hóa đơn một truy vấn kiểm tra trùng (N+1). Nên tải trước tập khóa (hướng, MST, ký hiệu, số) của lô.
+3. **Tự khớp sao kê:** mỗi dòng sao kê một truy vấn ứng viên. Có chỉ mục (công ty, TK, ngày) nên chấp nhận được tới vài nghìn dòng; nên tải trước theo khoảng ngày nếu sao kê lớn.
+4. **Chỉ mục thiếu cột đầu:** `StockMeasurement` (CompanyId, DocumentId, LineNo) và `CommercialInvoiceLine` (CompanyId, StockDocumentId, StockLineNo) bị truy vấn không kèm CompanyId ở vài chỗ (OrderService, InvoiceService) nên không dùng được chỉ mục trên SQLite. Thêm điều kiện CompanyId vào truy vấn (không cần migration).
+5. **Giao diện Tổng quan:** gọi báo cáo tuổi nợ riêng cho từng tài khoản công nợ đang mở; nên có một API trả gộp.
