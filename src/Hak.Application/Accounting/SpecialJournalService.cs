@@ -28,7 +28,7 @@ public sealed class SpecialJournalService(HakDbContext db)
         var roles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == cid).ToListAsync();
         HashSet<Guid> Role(params string[] codes) => roles.Where(r => codes.Contains(r.RoleCode)).Select(r => r.AccountId).ToHashSet();
         var inventory = (await db.Items.AsNoTracking().Where(i => i.CompanyId == cid && i.InventoryAccountId != null).Select(i => i.InventoryAccountId!.Value).Distinct().ToListAsync()).ToHashSet();
-        var context = new SpecialJournalContext(accounts.Values.Where(a => a.CashKind != Hak.Domain.Catalog.CashKind.None).Select(a => a.Id).ToHashSet(), inventory, Role("SALES_REVENUE"), Role("AP_TRADE", "ADVANCE", "GRNI"));
+        var context = new SpecialJournalContext(accounts.Values.Where(a => a.CashKind == Hak.Domain.Catalog.CashKind.Cash).Select(a => a.Id).ToHashSet(), accounts.Values.Where(a => a.CashKind == Hak.Domain.Catalog.CashKind.Bank).Select(a => a.Id).ToHashSet(), inventory, Role("SALES_REVENUE"), Role("AP_TRADE", "ADVANCE", "GRNI"));
 
         var partners = await db.BusinessPartners.AsNoTracking().Where(p => p.CompanyId == cid).ToDictionaryAsync(p => p.Id, p => p.Code);
         var raw = await (from l in db.JournalLines.AsNoTracking()

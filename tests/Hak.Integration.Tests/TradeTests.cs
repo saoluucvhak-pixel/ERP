@@ -1186,6 +1186,8 @@ public class TradeTests
         await Post("Rút tiền gửi nhập quỹ", new(fx.A("CASH"), Side.Debit, 10_000_000), new(fx.A("BANK"), Side.Credit, 10_000_000));
         // Hoàn ứng mua vật tư (INV là TK kho của vật tư DAM) kèm nộp lại tiền thừa → vừa mua hàng vừa thu tiền.
         await Post("Hoàn ứng mua vật tư", new(fx.A("INV"), Side.Debit, 8_000_000), new(fx.A("CASH"), Side.Debit, 2_000_000), new(fx.A("ADV"), Side.Credit, 10_000_000));
+        // Nộp tiền mặt vào ngân hàng: tiền mặt ưu tiên hơn ngân hàng → chiều Có tiền mặt quyết định, ghi ở chi tiền; hiện trùng ở thu tiền.
+        await Post("Nộp tiền mặt vào ngân hàng", new(fx.A("BANK"), Side.Debit, 4_000_000), new(fx.A("CASH"), Side.Credit, 4_000_000));
         await Post("Bán hàng", new(fx.A("AR"), Side.Debit, 5_000_000, h.Partner["KH01"]), new(fx.A("SALESREV"), Side.Credit, 5_000_000));
         await Post("Thu tiền khách", new(fx.A("CASH"), Side.Debit, 3_000_000), new(fx.A("AR"), Side.Credit, 3_000_000, h.Partner["KH01"]));
         await Post("Trích chi phí khác", new(fx.A("EXP"), Side.Debit, 1_000_000), new(fx.A("AP"), Side.Credit, 1_000_000, h.Partner["NCC01"]));
@@ -1195,13 +1197,13 @@ public class TradeTests
         // Mỗi bút toán chỉ cộng một lần, ưu tiên tiền mặt: rút tiền và hoàn ứng (có hoàn tiền thừa) đều cộng ở thu tiền.
         Assert.Equal((5_000_000m, 1, 0), (b[Hak.Domain.Ledger.SpecialJournal.Sales].Total, b[Hak.Domain.Ledger.SpecialJournal.Sales].Count, b[Hak.Domain.Ledger.SpecialJournal.Sales].DuplicateCount));
         Assert.Equal((0m, 0, 1), (b[Hak.Domain.Ledger.SpecialJournal.Purchases].Total, b[Hak.Domain.Ledger.SpecialJournal.Purchases].Count, b[Hak.Domain.Ledger.SpecialJournal.Purchases].DuplicateCount));    // hoàn ứng hiện ở mua hàng nhưng trùng
-        Assert.Equal((23_000_000m, 3, 0), (b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Total, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Count, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].DuplicateCount));   // rút tiền 10tr + hoàn ứng 10tr + thu khách 3tr
-        Assert.Equal((0m, 0, 1), (b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Total, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Count, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].DuplicateCount));   // rút tiền hiện ở chi tiền nhưng trùng
+        Assert.Equal((23_000_000m, 3, 1), (b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Total, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Count, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].DuplicateCount));   // rút tiền 10tr + hoàn ứng 10tr + thu khách 3tr
+        Assert.Equal((4_000_000m, 1, 1), (b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Total, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Count, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].DuplicateCount));   // nộp tiền mặt vào ngân hàng 4tr cộng ở chi tiền; rút tiền hiện ở chi tiền nhưng trùng
         Assert.Equal((1_000_000m, 1), (b[Hak.Domain.Ledger.SpecialJournal.General].Total, b[Hak.Domain.Ledger.SpecialJournal.General].Count));
-        var dup = b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Entries.Single();
+        var dup = b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Entries.Single(e => e.Duplicate);
         Assert.True(dup.Duplicate); Assert.Equal(Hak.Domain.Ledger.SpecialJournal.CashReceipts, dup.MainJournal);
         // Đối chiếu: tổng Nhật ký = tổng các sổ sau khi loại bút toán trùng.
-        Assert.Equal(29_000_000m, r.JournalTotal);
-        Assert.Equal(r.JournalTotal, r.BooksTotal); Assert.True(r.Balanced); Assert.Equal(2, r.DuplicateEntries);   // 1 ở chi tiền (rút tiền) + 1 ở mua hàng (hoàn ứng)
+        Assert.Equal(33_000_000m, r.JournalTotal);
+        Assert.Equal(r.JournalTotal, r.BooksTotal); Assert.True(r.Balanced); Assert.Equal(3, r.DuplicateEntries);   // rút tiền (hiện ở chi tiền), nộp tiền vào ngân hàng (hiện ở thu tiền), hoàn ứng (hiện ở mua hàng)
     }
 }

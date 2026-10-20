@@ -5,8 +5,8 @@ namespace Hak.Domain.Tests;
 
 public class SpecialJournalTests
 {
-    private static readonly Guid Cash = Guid.NewGuid(), Bank = Guid.NewGuid(), Inv = Guid.NewGuid(), Rev = Guid.NewGuid(), Ar = Guid.NewGuid(), Adv = Guid.NewGuid(), Exp = Guid.NewGuid(), Ap = Guid.NewGuid();
-    private static readonly SpecialJournalContext Ctx = new(new HashSet<Guid> { Cash, Bank }, new HashSet<Guid> { Inv }, new HashSet<Guid> { Rev }, new HashSet<Guid> { Ap, Adv });
+    private static readonly Guid Cash = Guid.NewGuid(), Bank = Guid.NewGuid(), Inv = Guid.NewGuid(), Rev = Guid.NewGuid(), Ar = Guid.NewGuid(), Adv = Guid.NewGuid(), Exp = Guid.NewGuid(), Ap = Guid.NewGuid(), Bank2 = Guid.NewGuid();
+    private static readonly SpecialJournalContext Ctx = new(new HashSet<Guid> { Cash }, new HashSet<Guid> { Bank, Bank2 }, new HashSet<Guid> { Inv }, new HashSet<Guid> { Rev }, new HashSet<Guid> { Ap, Adv });
 
     private static IReadOnlyList<SpecialJournal> Touch(string type, params (Guid, Side)[] lines) => SpecialJournals.Touched(type, lines, Ctx);
 
@@ -16,6 +16,17 @@ public class SpecialJournalTests
         var t = Touch(VoucherTypes.General, (Cash, Side.Debit), (Bank, Side.Credit));   // rút tiền gửi nhập quỹ
         Assert.Equal([SpecialJournal.CashReceipts, SpecialJournal.CashPayments], t);
         Assert.Equal(SpecialJournal.CashReceipts, SpecialJournals.Main(t));
+    }
+
+    [Fact]
+    public void CashPrecedesBank_DirectionOfCashAccountDecidesMainJournal()
+    {
+        var deposit = Touch(VoucherTypes.General, (Bank, Side.Debit), (Cash, Side.Credit));            // nộp tiền mặt vào ngân hàng: Có tiền mặt → chi tiền
+        Assert.Equal([SpecialJournal.CashPayments, SpecialJournal.CashReceipts], deposit);
+        Assert.Equal(SpecialJournal.CashPayments, SpecialJournals.Main(deposit));
+        var bankOnly = Touch(VoucherTypes.General, (Bank, Side.Debit), (Bank2, Side.Credit));         // chuyển giữa hai TK ngân hàng: không có tiền mặt, thu trước chi
+        Assert.Equal(SpecialJournal.CashReceipts, SpecialJournals.Main(bankOnly));
+        Assert.Equal([SpecialJournal.CashPayments], Touch(VoucherTypes.General, (Exp, Side.Debit), (Bank, Side.Credit)));
     }
 
     [Fact]
