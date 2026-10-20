@@ -3,18 +3,19 @@ import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { CashDocsView } from './CashDocs'
 import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES } from './voucherguards'
+import { SmartFilter, useFilterState } from './SmartFilter'
 import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
 const emptyLine = (side: 'D' | 'C'): LineDraft => ({ accountId: '', side, amount: '', partnerId: '', description: '', cashFlowCode: '' })
 
 export function VouchersView() {
-  const [from, setFrom] = useState(today().slice(0, 8) + '01')
-  const [to, setTo] = useState(today())
-  const [status, setStatus] = useState('')
-  const [type, setType] = useState('')
-  const [text, setText] = useState('')
-  const [search, setSearch] = useState('')
+  const [fs, patchFs, clearFs] = useFilterState('vouchers')
+  const { from, to } = fs
+  const status = fs.sel.status ?? ''
+  const type = fs.sel.type ?? ''
+  const [search, setSearch] = useState(fs.q.trim())
+  useEffect(() => { const t = setTimeout(() => { setSearch(fs.q.trim()); setPage(0) }, 350); return () => clearTimeout(t) }, [fs.q])
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [list, setList] = useState<Voucher[]>([])
@@ -67,30 +68,18 @@ export function VouchersView() {
     <>
       <div className="toolbar">
         <h2>Chứng từ kế toán</h2>
-        <label>Từ ngày<input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(0) }} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(0) }} /></label>
-        <label>Trạng thái
-          <select value={status} onChange={e => { setStatus(e.target.value); setPage(0) }}>
-            <option value="">Tất cả</option>
-            {Object.entries(STATUS_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-          </select>
-        </label>
-        <label>Loại
-          <select value={type} onChange={e => { setType(e.target.value); setPage(0) }}>
-            <option value="">Tất cả</option>
-            {Object.entries(TYPE_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-          </select>
-        </label>
-        <label>Tài khoản<AccountSelect accounts={allAccounts} value={accountId} onChange={id => { setAccountId(id); setPage(0) }} ariaLabel="Lọc theo tài khoản" /></label>
-        <form onSubmit={e => { e.preventDefault(); setSearch(text.trim()); setPage(0) }} style={{ display: 'contents' }}>
-          <label>Tìm<input value={text} onChange={e => setText(e.target.value)} placeholder="số, diễn giải" /></label>
-        </form>
         <button onClick={() => load()} disabled={busy}>Tải lại</button>
         <ExportButton fileName={`Chung_tu_${from}_${to}`} sheet="Chứng từ" disabled={list.length === 0}
           columns={[{ header: 'Ngày HT', width: 12 }, { header: 'Số', width: 16 }, { header: 'Loại', width: 22 }, { header: 'Diễn giải', width: 50 }, { header: 'Số tiền', numeric: true, width: 18 }, { header: 'Trạng thái', width: 14 }]}
           rows={list.map(x => [x.postingDate, x.number, TYPE_VI[x.voucherType] ?? x.voucherType, x.description ?? '', x.totalDebit, STATUS_VI[x.status] ?? x.status])} />
         <button className="primary" onClick={() => setEditing('new')}>Thêm chứng từ</button>
       </div>
+      <SmartFilter label="Chứng từ" state={fs} patch={p => { patchFs(p); setPage(0) }} clear={() => { clearFs(); setAccountId(''); setPage(0) }} dateLabel="ngày hạch toán"
+        placeholder="Tìm số chứng từ, diễn giải" hint="Tìm theo số chứng từ hoặc diễn giải (máy chủ tìm trên toàn bộ kỳ đã chọn)."
+        selects={[{ key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) },
+          { key: 'type', label: 'Loại', options: Object.entries(TYPE_VI).map(([value, label]) => ({ value, label })) }]}
+        shown={list.length} total={total} />
+      <div className="toolbar"><label>Tài khoản<AccountSelect accounts={allAccounts} value={accountId} onChange={id => { setAccountId(id); setPage(0) }} ariaLabel="Lọc theo tài khoản" /></label></div>
       <ErrorBox error={error} />
       {info && !error && <div className={info.includes('Không làm được') ? 'msg error' : 'msg ok'}>{info}</div>}
       {checked.size > 0 && <div className="toolbar panel">

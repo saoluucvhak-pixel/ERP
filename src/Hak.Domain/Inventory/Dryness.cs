@@ -22,6 +22,22 @@ public sealed class DrynessMethod
     public DateTime ApprovedAt { get; set; }
 }
 
+/// <summary>
+/// Độ khô công bố theo ngày của một vật tư (đơn vị tính phụ BDMT), dùng như tỷ giá: ngày không có số thì lấy số của ngày gần nhất trước đó.
+/// Chỉ dùng để tạm tính BDMT cho dòng chưa có kết quả đo; kết quả đo/chứng thư luôn được ưu tiên. Không ghi sổ cái.
+/// </summary>
+public sealed class DrynessDailyRate
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid ItemId { get; set; }
+    public DateOnly Date { get; set; }
+    public decimal DrynessPercent { get; set; }
+    public string? Note { get; set; }
+    public Guid UpdatedBy { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
 public enum MeasurementKind
 {
     /// <summary>Dryness measured when goods are received.</summary>

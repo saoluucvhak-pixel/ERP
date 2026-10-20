@@ -2368,6 +2368,58 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("costing_runs");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Inventory.DrynessDailyRate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<decimal>("DrynessPercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("dryness_percent");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_dryness_daily_rates");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_dryness_daily_rates_item_id");
+
+                    b.HasIndex("CompanyId", "ItemId", "Date")
+                        .IsUnique()
+                        .HasDatabaseName("ix_dryness_daily_rates_company_id_item_id_date");
+
+                    b.ToTable("dryness_daily_rates", t =>
+                        {
+                            t.HasCheckConstraint("ck_dryness_daily_rates_percent", "dryness_percent > 0 AND dryness_percent <= 100");
+                        });
+                });
+
             modelBuilder.Entity("Hak.Domain.Inventory.DrynessMethod", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7385,6 +7437,16 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_costing_policies_warehouses_warehouse_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Inventory.DrynessDailyRate", b =>
+                {
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_dryness_daily_rates_items_item_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Inventory.Item", b =>

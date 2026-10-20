@@ -17,6 +17,8 @@ public sealed record DrynessSummaryRow(Guid WarehouseId, string WarehouseCode, G
     decimal UnmeasuredInMt, decimal UnmeasuredOutMt,
     decimal EstimatedInBdmt = 0, decimal EstimatedOutBdmt = 0, decimal EstimatedClosingBdmt = 0, decimal? ClosingDrynessPercent = null);
 
+public sealed record DailyRateView(Guid Id, Guid ItemId, string ItemCode, DateOnly Date, decimal DrynessPercent, string? Note);
+
 public sealed record PendingMeasurement(Guid DocumentId, string DocumentNumber, StockDocumentType Type, DateOnly PostingDate, int LineNo,
     Guid ItemId, string ItemCode, decimal Quantity, MeasurementKind ExpectedKind);
 
@@ -69,6 +71,52 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
             await audit.AppendAsync(ctx.CompanyId, ctx, "item.tracks_dryness", "item", item.Id.ToString(), new { tracks });
             await db.SaveChangesAsync();
         });
+    }
+
+    /// <summary>
+    /// Ghi độ khô công bố của một ngày (đơn vị tính phụ BDMT, dùng như tỷ giá). Ghi lại cùng ngày thì thay số cũ (có nhật ký kiểm toán lưu số cũ).
+    /// Chỉ tạm tính BDMT cho dòng nhập chưa đo; không ghi sổ cái.
+    /// </summary>
+    public async Task<DrynessDailyRate> SetDailyRateAsync(SessionContext ctx, Guid itemId, DateOnly date, decimal drynessPercent, string? note)
+    {
+        ctx.Require(Permissions.StockDocument);
+        if (drynessPercent <= 0 || drynessPercent > 100) throw new DomainException(ErrorCodes.ValidationFailed, "Độ khô phải lớn hơn 0% và không vượt quá 100%.");
+        if (!MoneyMath.HasAtMostDecimals(drynessPercent, 4)) throw new DomainException(ErrorCodes.ValidationFailed, "Độ khô tối đa 4 chữ số thập phân.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId)
+                       ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            if (!item.TracksDryness) throw new DomainException(ErrorCodes.ValidationFailed, $"Vật tư {item.Code} không theo dõi độ khô/BDMT.");
+            var r = await db.DrynessDailyRates.FirstOrDefaultAsync(x => x.CompanyId == ctx.CompanyId && x.ItemId == itemId && x.Date == date);
+            var previous = r?.DrynessPercent;
+            if (r is null) db.DrynessDailyRates.Add(r = new DrynessDailyRate { Id = Ids.New(), CompanyId = ctx.CompanyId, ItemId = itemId, Date = date });
+            r.DrynessPercent = drynessPercent; r.Note = note; r.UpdatedBy = ctx.UserId; r.UpdatedAt = clock.UtcNow;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "dryness_rate.set", "dryness_daily_rate", r.Id.ToString(), new { item.Code, date, drynessPercent, previous, note });
+            await db.SaveChangesAsync();
+            return r;
+        });
+    }
+
+    public async Task DeleteDailyRateAsync(SessionContext ctx, Guid id)
+    {
+        ctx.Require(Permissions.StockDocument);
+        await db.InTransactionAsync(async () =>
+        {
+            var r = await db.DrynessDailyRates.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Không có độ khô ngày này.");
+            db.DrynessDailyRates.Remove(r);
+            await audit.AppendAsync(ctx.CompanyId, ctx, "dryness_rate.delete", "dryness_daily_rate", id.ToString(), new { r.ItemId, r.Date, r.DrynessPercent });
+            await db.SaveChangesAsync();
+        });
+    }
+
+    public async Task<IReadOnlyList<DailyRateView>> DailyRatesAsync(SessionContext ctx, Guid? itemId, DateOnly? fromDate, DateOnly? toDate)
+    {
+        ctx.Require(Permissions.ReportView);
+        var q = from r in db.DrynessDailyRates join i in db.Items on r.ItemId equals i.Id
+                where r.CompanyId == ctx.CompanyId && (itemId == null || r.ItemId == itemId) && (fromDate == null || r.Date >= fromDate) && (toDate == null || r.Date <= toDate)
+                select new { r, i.Code };
+        var rows = await q.AsNoTracking().ToListAsync();
+        return rows.OrderByDescending(x => x.r.Date).ThenBy(x => x.Code, StringComparer.Ordinal).Select(x => new DailyRateView(x.r.Id, x.r.ItemId, x.Code, x.r.Date, x.r.DrynessPercent, x.r.Note)).ToList();
     }
 
     /// <summary>
@@ -140,7 +188,7 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
     /// <summary>
     /// MT và BDMT nhập – xuất – tồn theo kho và vật tư. Các cột BDMT chính chỉ tính phần đã có kết quả đo (phiếu nhập đo, chứng thư xuất bán), không đoán.
     /// Phần xuất và chuyển kho CHƯA đo được tính tạm theo <b>bình quân thời điểm</b> của kho lúc xuất (BDMT tồn ÷ MT tồn, theo thứ tự phát sinh; hàng chuyển kho mang
-    /// đúng BDMT đó sang kho nhận) và báo riêng ở các cột "tạm tính", để hai đơn vị MT / BDMT luôn theo dõi được. Phần nhập chưa đo thì không đoán. Khi có kết quả đo
+    /// đúng BDMT đó sang kho nhận) và báo riêng ở các cột "tạm tính", để hai đơn vị MT / BDMT luôn theo dõi được. Phần nhập chưa đo chỉ được tạm tính khi đã khai báo độ khô theo ngày (đơn vị phụ như tỷ giá), nếu không thì không đoán. Khi có kết quả đo
     /// thì số đo thay số tạm tính. Không ghi sổ cái.
     /// </summary>
     public async Task<IReadOnlyList<DrynessSummaryRow>> SummaryAsync(SessionContext ctx, DateOnly from, DateOnly to, Guid? warehouseId = null)
@@ -150,7 +198,9 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
         var ids = tracked.Keys.ToList();
         var all = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && ids.Contains(m.ItemId) && m.MovementDate <= to).OrderBy(m => m.Sequence).ToListAsync();
         var bdmt = await BdmtByMovementAsync(ctx.CompanyId, all);
-        var estimate = EstimateAtTime(all, bdmt);
+        var rateRows = await db.DrynessDailyRates.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && ids.Contains(r.ItemId)).OrderBy(r => r.Date).ToListAsync();
+        var rates = rateRows.GroupBy(r => r.ItemId).ToDictionary(g => g.Key, g => g.Select(r => (r.Date, r.DrynessPercent)).ToList());
+        var estimate = EstimateAtTime(all, bdmt, rates);
         var moves = warehouseId is null ? all : all.Where(m => m.WarehouseId == warehouseId).ToList();
         var whs = await db.Warehouses.AsNoTracking().Where(w => w.CompanyId == ctx.CompanyId).ToDictionaryAsync(w => w.Id);
 
@@ -179,7 +229,8 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
     /// BDMT tạm tính theo bình quân thời điểm cho các dòng xuất / chuyển kho chưa có kết quả đo, duyệt theo thứ tự phát sinh toàn công ty.
     /// Số dư BDMT của kho dùng số đo (nếu có) cộng số tạm tính trước đó; dòng nhập chưa đo không đoán (kho nhận của chuyển kho lấy đúng BDMT kho xuất đã tính).
     /// </summary>
-    private static Dictionary<Guid, decimal> EstimateAtTime(IReadOnlyList<StockMovement> ordered, IReadOnlyDictionary<Guid, decimal> measured)
+    private static Dictionary<Guid, decimal> EstimateAtTime(IReadOnlyList<StockMovement> ordered, IReadOnlyDictionary<Guid, decimal> measured,
+        IReadOnlyDictionary<Guid, List<(DateOnly Date, decimal Percent)>> rates)
     {
         var balance = new Dictionary<(Guid Warehouse, Guid Item), (decimal Mt, decimal Bd)>();
         var carried = new Dictionary<(Guid Document, int Line), decimal>();
@@ -199,9 +250,22 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
                 }
             }
             else if (carried.TryGetValue((m.DocumentId, m.LineNo), out var c)) { signed = c; estimate[m.Id] = c; }
+            else if (RateOn(rates, m.ItemId, m.MovementDate) is { } pct)
+            {   // nhập chưa đo: quy đổi theo độ khô công bố của ngày (như tỷ giá), ưu tiên sau kết quả đo
+                signed = Math.Round(m.Quantity * pct / 100m, MoneyMath.StorageScale, MidpointRounding.AwayFromZero); estimate[m.Id] = signed.Value;
+            }
             balance[key] = (mt + m.Quantity, bd + (signed ?? 0));
         }
         return estimate;
+    }
+
+    /// <summary>Độ khô công bố của ngày gần nhất không sau <paramref name="date"/> (như tra tỷ giá), null nếu chưa có.</summary>
+    private static decimal? RateOn(IReadOnlyDictionary<Guid, List<(DateOnly Date, decimal Percent)>> rates, Guid itemId, DateOnly date)
+    {
+        if (!rates.TryGetValue(itemId, out var list)) return null;
+        decimal? found = null;
+        foreach (var (d, p) in list) { if (d > date) break; found = p; }
+        return found;
     }
 
     /// <summary>

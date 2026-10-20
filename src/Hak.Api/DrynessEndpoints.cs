@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Hak.Api;
 
 public sealed record DrynessMethodRequest(string Code, string Description, int DrynessDecimals, int BdmtDecimals, DateOnly EffectiveFrom, string ApprovalNote);
+public sealed record DailyRateRequest(Guid ItemId, DateOnly Date, decimal DrynessPercent, string? Note);
 public sealed record TracksDrynessRequest(bool Tracks);
 public sealed record SupersedeMeasurementRequest(MeasurementInput Measurement, string Reason);
 
@@ -34,6 +35,10 @@ public static class DrynessEndpoints
             return Results.Ok(new { m.Id, m.Bdmt });
         });
         api.MapGet("/measurements", async (HttpContext http, Guid? documentId, DrynessService s) => Results.Ok(await s.HistoryAsync(await http.SessionAsync(), documentId)));
+        api.MapGet("/dryness-rates", async (HttpContext http, Guid? itemId, DateOnly? from, DateOnly? to, DrynessService s) => Results.Ok(await s.DailyRatesAsync(await http.SessionAsync(), itemId, from, to)));
+        api.MapPost("/dryness-rates", async (HttpContext http, DailyRateRequest r, DrynessService s) =>
+            Results.Ok(new { (await s.SetDailyRateAsync(await http.SessionAsync(), r.ItemId, r.Date, r.DrynessPercent, r.Note)).Id }));
+        api.MapDelete("/dryness-rates/{id:guid}", async (HttpContext http, Guid id, DrynessService s) => { await s.DeleteDailyRateAsync(await http.SessionAsync(), id); return Results.NoContent(); });
         api.MapGet("/measurements/pending", async (HttpContext http, DrynessService s) => Results.Ok(await s.PendingAsync(await http.SessionAsync())));
         api.MapGet("/reports/dryness-summary", async (HttpContext http, DateOnly from, DateOnly to, Guid? warehouseId, DrynessService s) =>
             Results.Ok(await s.SummaryAsync(await http.SessionAsync(), from, to, warehouseId)));

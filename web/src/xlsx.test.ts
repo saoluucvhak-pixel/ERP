@@ -27,3 +27,15 @@ test('workbook keeps exact decimal text for numeric cells and escapes text', () 
   assert.ok(xlsx.includes('không phải số'))       // non-numeric text in a numeric column stays text
   assert.ok(xlsx.includes('name="BCĐPS"'))
 })
+
+test('exportText turns ISO dates into dd/MM/yyyy and leaves other text alone', async () => {
+  const { exportText } = await import('./xlsx.ts')
+  assert.equal(exportText('2026-10-19'), '19/10/2026')
+  assert.equal(exportText('2026-10-19T08:00:00Z'), '2026-10-19T08:00:00Z')
+  assert.equal(exportText('HĐ 2026-10-19'), 'HĐ 2026-10-19')
+})
+
+test('buildXlsx writes date cells as dd/MM/yyyy', () => {
+  const xml = dec.decode(buildXlsx('S', [{ header: 'Ngày' }], [['2026-10-19']]))
+  assert.ok(xml.includes('19/10/2026'))
+})

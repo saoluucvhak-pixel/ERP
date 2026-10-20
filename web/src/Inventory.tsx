@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toAlt, toMain } from './units'
-import { get, post, type Period } from './api'
+import { api, get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog } from './common'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 import type { Order } from './Orders'
@@ -38,7 +38,7 @@ export function InventoryView() {
       {tab === 'summary' && <Summary />}
       {tab === 'card' && <StockCard />}
       {tab === 'costing' && <Costing />}
-      {tab === 'bdmt' && <Bdmt />}
+      {tab === 'bdmt' && <><Bdmt /><DailyRates /></>}
     </>
   )
 }
@@ -397,6 +397,48 @@ interface DrySummary { warehouseCode: string; itemCode: string; openingMt: strin
 const KIND_VI: Record<string, string> = { Receipt: 'Đo khi nhập', Shipment: 'Đo ở tàu (xuất)', Other: 'Khác' }
 
 /** BDMT = MT × độ khô% / 100 (phương pháp đã được doanh nghiệp phê duyệt). Đo khi nhập và đo ở tàu khi xuất (chứng thư). */
+interface DailyRate { id: string; itemId: string; itemCode: string; date: string; drynessPercent: string; note: string | null }
+
+/** Độ khô công bố theo ngày: đơn vị tính phụ BDMT dùng như tỷ giá (ngày không có số thì lấy ngày gần nhất trước đó). */
+function DailyRates() {
+  const { items } = useStockCatalog()
+  const tracked = items.filter(i => i.tracksDryness)
+  const [rows, setRows] = useState<DailyRate[]>([])
+  const [itemId, setItemId] = useState('')
+  const [date, setDate] = useState(today())
+  const [pct, setPct] = useState('')
+  const [note, setNote] = useState('')
+  const { busy, error, setError, run } = useAction()
+  const load = useCallback(() => run(async () => setRows(await get('/dryness-rates'))), [run])
+  useEffect(() => { load() }, [load])
+  const save = () => run(async () => {
+    const v = parseMoney(pct)
+    if (!v || !(itemId || tracked[0])) { setError(new Error('Chọn vật tư và nhập độ khô % (dùng dấu phẩy, ví dụ 52,35).')); return }
+    await post('/dryness-rates', { itemId: itemId || tracked[0].id, date, drynessPercent: v, note: note || null })
+    setPct(''); setNote(''); await load()
+  })
+  const del = (r: DailyRate) => run(async () => { await api('DELETE', `/dryness-rates/${r.id}`); await load() })
+  return (
+    <div className="panel">
+      <strong>Độ khô theo ngày (đơn vị phụ BDMT, như tỷ giá)</strong>
+      <p className="muted">Nhập độ khô công bố hằng ngày. Dòng nhập chưa có kết quả đo được tạm tính BDMT theo độ khô của ngày nhập (ngày không có số lấy ngày gần nhất trước đó). Kết quả đo / chứng thư luôn được ưu tiên. Không ghi sổ cái.</p>
+      <ErrorBox error={error} />
+      <div className="toolbar">
+        <label>Vật tư<select value={itemId || tracked[0]?.id || ''} onChange={e => setItemId(e.target.value)}>{tracked.map(i => <option key={i.id} value={i.id}>{i.code} – {i.name}</option>)}</select></label>
+        <label>Ngày<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+        <label>Độ khô %<input className="num" size={7} value={pct} onChange={e => setPct(e.target.value)} /></label>
+        <label>Ghi chú<input value={note} onChange={e => setNote(e.target.value)} /></label>
+        <button className="primary" disabled={busy || tracked.length === 0} onClick={save}>Ghi độ khô</button>
+      </div>
+      <table className="grid">
+        <thead><tr><th>Ngày</th><th>Vật tư</th><th className="num">Độ khô %</th><th>Ghi chú</th><th /></tr></thead>
+        <tbody>{rows.slice(0, 60).map(r => <tr key={r.id}><td>{formatDate(r.date)}</td><td>{r.itemCode}</td><td className="num">{formatMoney(r.drynessPercent)}</td><td>{r.note}</td><td><button disabled={busy} onClick={() => del(r)}>Xóa</button></td></tr>)}
+          {rows.length === 0 && <tr><td colSpan={5} className="muted">Chưa có độ khô theo ngày.</td></tr>}</tbody>
+      </table>
+    </div>
+  )
+}
+
 function Bdmt() {
   const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())

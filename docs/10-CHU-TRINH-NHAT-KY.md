@@ -278,6 +278,11 @@ Mỗi thẻ chọn **phương pháp** (căn cứ pháp lý từng phương pháp
 - Thông số phương pháp (phương pháp, ngày kết thúc, hệ số, tổng sản lượng) đóng băng khi ghi tăng (interceptor SQLite; trigger PostgreSQL cập nhật trong migration Phase9DepreciationMethods; kỳ ghi sổ không còn bị đóng băng). Chia chi phí theo bộ phận (9q) chạy như cũ trên số ghi mỗi kỳ.
 - Chưa làm: số dư giảm dần cho tài sản chuyển từ hệ thống cũ; sản lượng nhập hàng loạt từ file / từ màn sản xuất; đổi phương pháp sau khi ghi tăng; hệ số số dư giảm dần cần đối chiếu văn bản hiện hành.
 
+## 9s. Đợt 18 (20/10/2026): đối chiếu quy định khấu hao, độ khô theo ngày (đơn vị phụ BDMT như tỷ giá), Excel ngày dd/MM/yyyy
+- Quy định khấu hao: căn cứ TT45/2013 (Điều 9, 13), TT147/2016, TT30/2025 ghi ở `legal/KHAU-HAO/CAN-CU-KHAU-HAO.md`; thẻ TSCĐ mới mặc định tính theo số ngày; cảnh báo điều kiện phương pháp số dư giảm dần.
+- **Độ khô theo ngày** (`DrynessDailyRate`, migration Phase9DrynessDailyRate): mỗi vật tư theo dõi độ khô một số/ngày, dùng như tỷ giá — ngày không có số thì lấy ngày gần nhất trước đó. Thứ tự ưu tiên khi tính BDMT một dòng: **kết quả đo/chứng thư > độ khô theo ngày > bình quân thời điểm** (chỉ cho xuất/chuyển kho chưa đo). Dòng nhập chưa đo có độ khô ngày thì được tạm tính (cột "tạm tính"), không ghi sổ cái. Đơn vị quy đổi cố định (`Item.AltUnit`) vẫn dùng cho vật tư thường; hai cách không dùng chung một vật tư.
+- Xuất Excel: ngày dạng yyyy-MM-dd đổi thành dd/MM/yyyy (`exportText` trong web/src/xlsx.ts).
+
 ## 10. Sổ việc chưa làm (lưu 19/10/2026 để tiếp tục ở các phiên sau)
 **Chu trình doanh thu** (mục 2): biên bản và phê duyệt hàng trả lại/giảm giá; xóa nợ có phê duyệt (thông báo nợ quá hạn đã có, chưa có gửi email); đơn ngoại tệ lập hóa đơn từ phiếu giao hàng (cần tỷ giá); liên kết số phiếu giao hàng hiện trên phiếu xuất kho ở màn Kho; đơn giao trễ (backorder) thành lệnh bán hàng tiếp theo tự động.
 **Chu trình cung ứng** (mục 3): chiết khấu thanh toán theo hạn (kế hoạch tiền đã có); hóa đơn mua ngoại tệ vào hàng chờ; biên bản kiểm nghiệm cho hàng nhận ngoài phiếu nhập (dịch vụ).

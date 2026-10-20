@@ -76,6 +76,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<CostingRun> CostingRuns => Set<CostingRun>();
     public DbSet<StockValueAdjustment> StockValueAdjustments => Set<StockValueAdjustment>();
     public DbSet<DrynessMethod> DrynessMethods => Set<DrynessMethod>();
+    public DbSet<DrynessDailyRate> DrynessDailyRates => Set<DrynessDailyRate>();
     public DbSet<StockMeasurement> StockMeasurements => Set<StockMeasurement>();
     public DbSet<CommercialInvoice> CommercialInvoices => Set<CommercialInvoice>();
     public DbSet<CommercialInvoiceLine> CommercialInvoiceLines => Set<CommercialInvoiceLine>();
@@ -367,6 +368,12 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.WarehouseId, x.PeriodId }).IsUnique().HasFilter("status = 1");
         });
         b.Entity<DrynessMethod>(e => e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique());
+        b.Entity<DrynessDailyRate>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.ItemId, x.Date }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_dryness_daily_rates_percent", $"dryness_percent > 0 AND dryness_percent <= {Bound(100)}"));
+        });
         b.Entity<StockMeasurement>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.DocumentId, x.LineNo }).IsUnique().HasFilter("superseded_at IS NULL");
@@ -833,6 +840,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<StockMovement>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<StockValuation>().Property(x => x.Value).HasConversion(money);
         b.Entity<StockValueAdjustment>().Property(x => x.Value).HasConversion(money);
+        b.Entity<DrynessDailyRate>().Property(x => x.DrynessPercent).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.MeasuredMt).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.DrynessPercent).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.Bdmt).HasConversion(money);

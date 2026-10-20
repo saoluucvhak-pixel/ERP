@@ -127,3 +127,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 | 20/10/2026 | Chia chi phí khấu hao/phân bổ trả trước cho nhiều bộ phận (migration Phase9ExpenseSplit) | 200 tích hợp (SQLite và PostgreSQL), 99 domain, web 31 | docs/10 mục 9q |
 
 | 20/10/2026 | Kỳ ghi sổ tháng/quý/năm (đổi được sau ghi tăng) + phương pháp theo thời gian, theo sản lượng, số dư giảm dần (migration Phase9AllocationFrequency, Phase9DepreciationMethods) | 206 tích hợp (SQLite và PostgreSQL), 117 domain, web 31 | docs/10 mục 9r |
+
+| 20/10/2026 | Độ khô theo ngày (đơn vị phụ BDMT như tỷ giá, migration Phase9DrynessDailyRate), Excel xuất ngày dd/MM/yyyy, căn cứ khấu hao legal/KHAU-HAO | xem lần chạy test cuối | docs/10 mục 9s |

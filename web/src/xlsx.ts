@@ -34,6 +34,13 @@ function colName(i: number): string {
 }
 
 const NUM = /^-?\d+(\.\d+)?$/
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/** Ngày ISO (yyyy-MM-dd) xuất ra Excel theo cách đọc của người dùng: dd/MM/yyyy. */
+export function exportText(v: string): string {
+  const m = ISO_DATE.exec(v)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : v
+}
 
 function sheetXml(columns: Column[], rows: Cell[][]): string {
   const cols = columns.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.width ?? (c.numeric ? 18 : 24)}" customWidth="1"/>`).join('')
@@ -41,7 +48,7 @@ function sheetXml(columns: Column[], rows: Cell[][]): string {
     const ref = `${colName(c)}${r}`
     if (v == null || v === '') return ''
     if (numeric && !header && NUM.test(v)) return `<c r="${ref}" s="1"><v>${v}</v></c>`
-    return `<c r="${ref}" t="inlineStr"${header ? ' s="2"' : ''}><is><t xml:space="preserve">${esc(v)}</t></is></c>`
+    return `<c r="${ref}" t="inlineStr"${header ? ' s="2"' : ''}><is><t xml:space="preserve">${esc(header ? v : exportText(v))}</t></is></c>`
   }
   const all = [columns.map(c => c.header), ...rows]
   const body = all.map((row, ri) => `<row r="${ri + 1}">${row.map((v, ci) => cell(v, ri + 1, ci, !!columns[ci]?.numeric, ri === 0)).join('')}</row>`).join('')

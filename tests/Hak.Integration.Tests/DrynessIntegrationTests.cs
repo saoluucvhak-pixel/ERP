@@ -82,6 +82,26 @@ public class DrynessIntegrationTests
     }
 
     [Fact]
+    public async Task DailyRate_ActsLikeAnExchangeRate_ForUnmeasuredReceipts_AndMeasurementWins()
+    {
+        using var fx = await SetupAsync();
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 1), 52m, "Độ khô công bố ngày 1/3");
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 4), 50m, null);
+        var r1 = await fx.Receive(D(3, 2), 100, 150_000_000);   // lấy độ khô ngày 1/3 (52%)
+        var r2 = await fx.Receive(D(3, 6), 40, 60_000_000);     // lấy độ khô ngày gần nhất 4/3 (50%)
+        var row = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal((0m, 140m, 72m, 72m), (row.InBdmt, row.UnmeasuredInMt, row.EstimatedInBdmt, row.EstimatedClosingBdmt));
+        // Kết quả đo thay số theo ngày.
+        await fx.Measure(r2, 51m, EvidenceType.InternalReport, "PĐ-9");
+        row = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal((20.4m, 52m, 72.4m), (row.InBdmt, row.EstimatedInBdmt, row.EstimatedClosingBdmt));
+        // Ghi lại cùng ngày thì thay số; độ khô sai bị chặn.
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 1), 53m, null);
+        Assert.Single((await fx.S.Dryness.DailyRatesAsync(fx.H.Auditor, fx.Dam, D(3, 1), D(3, 1))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 2), 101m, null)));
+    }
+
+    [Fact]
     public async Task ReceiptAndShipment_ProduceMtAndBdmtBalances()
     {
         using var fx = await SetupAsync();

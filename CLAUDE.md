@@ -88,3 +88,5 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - 20/10 đợt 16: chia chi phí khấu hao/phân bổ cho nhiều bộ phận (AssetExpenseSplit, ExpenseSplitter, báo cáo theo bộ phận) — docs/10 mục 9q.
 
 - 20/10 đợt 17: phương pháp khấu hao/phân bổ tùy chọn từng thẻ (đường thẳng, theo thời gian số ngày, theo sản lượng, số dư giảm dần) + kỳ ghi sổ tháng/quý/năm đổi được sau ghi tăng (DepreciationCalculator.Target/IsBookingPeriod, AssetUsage) — docs/10 mục 9r.
+
+- 20/10 đợt 18: đối chiếu khấu hao (legal/KHAU-HAO; thẻ TSCĐ mới mặc định tính theo ngày), độ khô theo ngày làm đơn vị phụ BDMT như tỷ giá (DrynessDailyRate; ưu tiên đo > độ khô ngày > bình quân thời điểm), Excel ngày dd/MM/yyyy — docs/10 mục 9s.
