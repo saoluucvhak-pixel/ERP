@@ -206,4 +206,21 @@ public class RulesCashClosingTests
         Assert.Equal(750m, second.TotalDebit);
         Assert.Equal(ErrorCodes.RuleInvalid, await CodeOf(() => s.Closing.CreateRuleSetAsync(h.Admin, "BAD", new(2026, 1, 1), null, [new ClosingStepInput("x", "RES", "RESULT")])));
     }
+
+    [Fact]
+    public async Task ListRuleSets_ShowsVersionsStepsAndStatus_NewestFirst()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var v1 = await s.Closing.CreateRuleSetAsync(h.Admin, "KC", new(2026, 1, 1), null, [new ClosingStepInput("Doanh thu", "REV", "RESULT")]);
+        await s.Closing.ActivateRuleSetAsync(h.Admin, v1.Id);
+        await s.Closing.CreateRuleSetAsync(h.Admin, "KC", new(2026, 1, 1), null,
+            [new ClosingStepInput("Doanh thu", "REV", "RESULT"), new ClosingStepInput("Chi phí", "EXP", "RESULT")]);
+
+        var list = await s.Closing.ListRuleSetsAsync(h.Preparer);
+        Assert.Equal([2, 1], list.Select(x => x.Version).ToArray());
+        Assert.Equal(("Draft", 2), (list[0].Status, list[0].Steps.Count));
+        Assert.Equal(("Active", "RESULT"), (list[1].Status, list[1].Steps.Single().TargetAccountCode));
+        Assert.Equal("REV", list[1].Steps.Single().SourcePrefixes);
+    }
 }
