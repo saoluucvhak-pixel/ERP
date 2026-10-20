@@ -17,6 +17,7 @@ public sealed record LoginRequest(string UserName, string Password, string? Devi
 public sealed record BootstrapRequest(string UserName, string FullName, string Password);
 public sealed record CreateUserRequest(string UserName, string FullName, string Password, bool IsSystemAdmin = false);
 public sealed record GrantRequest(Guid UserId, Guid CompanyId, string RoleCode);
+public sealed record ApprovalPolicyRequest(bool RequireDistinctApprover);
 public sealed record RegimeVersionRequest(string RegimeCode, string RegimeName, string VersionCode, DateOnly EffectiveFrom, DateOnly? EffectiveTo, List<LegalSourceInput> Sources);
 public sealed record VerifyRequest(string Note);
 public sealed record CompanyRequest(string Code, string Name, string? TaxCode, string FunctionalCurrency, Guid RegimeVersionId);
@@ -103,6 +104,10 @@ public static class Endpoints
             Results.Ok(new { (await s.CreateCompanyAsync(await AdminAsync(http), r.Code, r.Name, r.TaxCode, r.FunctionalCurrency, r.RegimeVersionId)).Id }));
 
         // ---- company-scoped configuration & catalog ----
+        api.MapGet("/settings/approval", async (HttpContext http, SetupService s) =>
+            Results.Ok(new { requireDistinctApprover = await s.GetRequireDistinctApproverAsync(await http.SessionAsync()) }));
+        api.MapPut("/settings/approval", async (HttpContext http, ApprovalPolicyRequest r, SetupService s) =>
+        { await s.SetRequireDistinctApproverAsync(await http.SessionAsync(), r.RequireDistinctApprover); return Results.NoContent(); });
         api.MapPost("/fiscal-years", async (HttpContext http, FiscalYearRequest r, SetupService s) =>
         {
             var fy = await s.CreateFiscalYearAsync(await http.SessionAsync(), r.Code, r.StartDate, r.EndDate);

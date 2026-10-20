@@ -156,6 +156,27 @@ public sealed partial class SetupService
             .Select(r => new RoleRow(r.Code, r.Name, r.Permissions.Select(p => p.Permission).OrderBy(p => p, StringComparer.Ordinal).ToList())).ToList();
     }
 
+    /// <summary>Whether the approver must differ from the preparer in this company (segregation of duties).</summary>
+    public async Task<bool> GetRequireDistinctApproverAsync(SessionContext ctx)
+    {
+        ctx.Require(Permissions.VoucherView);
+        return await db.Companies.AsNoTracking().Where(c => c.Id == ctx.CompanyId).Select(c => c.RequireDistinctApprover).FirstAsync();
+    }
+
+    /// <summary>Switches between "lập và duyệt do hai người khác nhau" and "một người được lập và duyệt". Applies to every approval step of the company.</summary>
+    public async Task SetRequireDistinctApproverAsync(SessionContext ctx, bool requireDistinct)
+    {
+        ctx.Require(Permissions.ConfigManage);
+        await db.InTransactionAsync(async () =>
+        {
+            var company = await db.Companies.FirstAsync(c => c.Id == ctx.CompanyId);
+            if (company.RequireDistinctApprover == requireDistinct) return;
+            company.RequireDistinctApprover = requireDistinct;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "company.approval_policy", "company", company.Id.ToString(), new { requireDistinctApprover = requireDistinct });
+            await db.SaveChangesAsync();
+        });
+    }
+
     public async Task RevokeRoleAsync(Guid adminId, Guid userId, Guid companyId, string roleCode, string reason)
     {
         await RequireSystemAdminAsync(adminId);
