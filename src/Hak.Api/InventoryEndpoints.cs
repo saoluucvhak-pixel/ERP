@@ -9,6 +9,7 @@ namespace Hak.Api;
 public sealed record WarehouseRequest(string Code, string Name);
 public sealed record ItemCommercialRequest(decimal? SalePrice, decimal? DefaultVatRate, decimal? MinStock, decimal? ReorderQty);
 public sealed record ItemAltUnitRequest(string? AltUnit, decimal? AltFactor);
+public sealed record ServiceItemRequest(string Code, string Name, string Unit, string? RevenueAccountCode, string? ExpenseAccountCode);
 public sealed record ItemRequest(string Code, string Name, string Unit, string InventoryAccountCode);
 public sealed record CostingPolicyRequest(Guid WarehouseId, CostingMethod Method, DateOnly EffectiveFrom, string Note);
 public sealed record CostingRunRequest(Guid WarehouseId, Guid PeriodId);
@@ -46,13 +47,15 @@ public static class InventoryEndpoints
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
             return Results.Ok(await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).OrderBy(i => i.Code)
-                .Select(i => new { i.Id, i.Code, i.Name, i.Unit, i.InventoryAccountId, i.IsActive, i.TracksDryness, i.RequiresQc, i.IssueDrynessBasis, i.AltUnit, i.AltFactor, i.SalePrice, i.DefaultVatRate, i.MinStock, i.ReorderQty }).ToListAsync());
+                .Select(i => new { i.Id, i.Code, i.Name, i.Unit, i.InventoryAccountId, i.IsService, i.RevenueAccountId, i.ExpenseAccountId, i.IsActive, i.TracksDryness, i.RequiresQc, i.IssueDrynessBasis, i.AltUnit, i.AltFactor, i.SalePrice, i.DefaultVatRate, i.MinStock, i.ReorderQty }).ToListAsync());
         });
         api.MapPut("/items/{id:guid}/commercial", async (HttpContext http, Guid id, ItemCommercialRequest r, StockService s) =>
         { await s.UpdateItemCommercialAsync(await http.SessionAsync(), id, r.SalePrice, r.DefaultVatRate, r.MinStock, r.ReorderQty); return Results.NoContent(); });
         api.MapPut("/items/{id:guid}/alt-unit", async (HttpContext http, Guid id, ItemAltUnitRequest r, StockService s) =>
         { await s.SetItemAltUnitAsync(await http.SessionAsync(), id, r.AltUnit, r.AltFactor); return Results.NoContent(); });
         api.MapPost("/items/{id:guid}/requires-qc", async (HttpContext http, Guid id, RequiresQcRequest r, StockService s) => { await s.SetItemRequiresQcAsync(await http.SessionAsync(), id, r.Requires); return Results.NoContent(); });
+        api.MapPost("/items/service", async (HttpContext http, ServiceItemRequest r, StockService s) =>
+            Results.Ok(new { (await s.CreateServiceItemAsync(await http.SessionAsync(), r.Code, r.Name, r.Unit, r.RevenueAccountCode, r.ExpenseAccountCode)).Id }));
         api.MapPost("/items", async (HttpContext http, ItemRequest r, StockService s) =>
             Results.Ok(new { (await s.CreateItemAsync(await http.SessionAsync(), r.Code, r.Name, r.Unit, r.InventoryAccountCode)).Id }));
 

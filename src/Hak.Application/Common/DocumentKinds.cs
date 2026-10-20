@@ -44,6 +44,7 @@ public static class DocumentKinds
         new("YCTH", "YCTH", "Yêu cầu trả hàng bán", "Bán hàng"), new("YCGG", "YCGG", "Yêu cầu giảm giá hàng bán", "Bán hàng"), new("XND", "XND", "Phiếu xóa nợ khó đòi", "Bán hàng"),
         V(VoucherTypes.PurchaseInvoice, "Chứng từ ghi sổ hóa đơn mua", "Mua hàng"), V(VoucherTypes.SalesInvoice, "Chứng từ ghi sổ hóa đơn bán", "Bán hàng"),
         new("BBKN", "BBKN", "Biên bản kiểm nghiệm", "Mua hàng"),
+        new("NTDV", "NTDV", "Biên bản nghiệm thu dịch vụ", "Bán hàng"), new("NTDM", "NTDM", "Biên bản nghiệm thu dịch vụ mua", "Mua hàng"),
         // Kho
         new("STK-PN", "PN", "Phiếu nhập kho", "Kho"), new("STK-PX", "PX", "Phiếu xuất kho", "Kho"), new("STK-DC", "DC", "Phiếu điều chuyển kho", "Kho"), new("STK-DP", "DP", "Phiếu đảo (kho)", "Kho"),
         V(VoucherTypes.InventoryReceipt, "Chứng từ ghi sổ nhập kho", "Kho"), V(VoucherTypes.InventoryIssue, "Chứng từ ghi sổ xuất kho", "Kho"), V(VoucherTypes.InventoryCosting, "Chứng từ tính giá xuất kho", "Kho"),

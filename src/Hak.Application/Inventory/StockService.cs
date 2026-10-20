@@ -76,6 +76,35 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         });
     }
 
+    /// <summary>
+    /// Dịch vụ (vận chuyển thuê, tư vấn…): không theo dõi kho. Khai tài khoản doanh thu (khi bán) và / hoặc tài khoản chi phí (khi mua) mặc định; bỏ trống thì bán lấy theo vai trò SALES_REVENUE,
+    /// mua phải chọn tài khoản chi phí khi lập hóa đơn.
+    /// </summary>
+    public async Task<Item> CreateServiceItemAsync(SessionContext ctx, string code, string name, string unit, string? revenueAccountCode, string? expenseAccountCode)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(unit)) throw new DomainException(ErrorCodes.ValidationFailed, "Mã, tên và đơn vị tính của dịch vụ bắt buộc.");
+        return await db.InTransactionAsync(async () =>
+        {
+            if (await db.Items.AnyAsync(i => i.CompanyId == ctx.CompanyId && i.Code == code))
+                throw new DomainException(ErrorCodes.DuplicateCode, $"Mã {code} đã tồn tại.");
+            async Task<Guid?> Acc(string? c, string what)
+            {
+                if (string.IsNullOrWhiteSpace(c)) return null;
+                var a = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.CompanyId == ctx.CompanyId && x.Code == c) ?? throw new DomainException(ErrorCodes.AccountNotFound, $"Tài khoản {c} không tồn tại.");
+                if (!a.IsPostable || !a.IsActive || a.CashKind != CashKind.None || a.OpenItemNature != OpenItemNature.None || a.RequiresPartner)
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Tài khoản {a.Code} không dùng làm tài khoản {what} (phải là TK chi tiết đang dùng, không phải tiền / công nợ).");
+                return a.Id;
+            }
+            var item = new Item { Id = Ids.New(), CompanyId = ctx.CompanyId, Code = code.Trim(), Name = name.Trim(), Unit = unit.Trim(), IsService = true,
+                RevenueAccountId = await Acc(revenueAccountCode, "doanh thu"), ExpenseAccountId = await Acc(expenseAccountCode, "chi phí"), CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            db.Items.Add(item);
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.create_service", "item", item.Id.ToString(), new { code, name, unit, revenueAccountCode, expenseAccountCode });
+            await db.SaveChangesAsync();
+            return item;
+        });
+    }
+
     /// <summary>Giá bán, thuế suất GTGT mặc định, tồn tối thiểu, số lượng đặt tối ưu của vật tư (danh mục hàng hóa theo tệp phân tích ERP).</summary>
     /// <summary>
     /// Khai báo hoặc xóa đơn vị tính quy đổi cố định của vật tư (1 đơn vị quy đổi = <paramref name="factor"/> đơn vị chính). Không dùng cho vật tư theo dõi độ khô:
@@ -176,6 +205,8 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             {
                 if (!items.TryGetValue(l.ItemId, out var item) || !item.IsActive)
                     throw new DomainException(ErrorCodes.NotFound, $"Dòng {n}: vật tư không tồn tại hoặc ngừng sử dụng.");
+                if (item.IsService)
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: {item.Code} là dịch vụ, không đi qua kho; dịch vụ nghiệm thu rồi lập hóa đơn.");
                 if (l.Quantity <= 0 || !MoneyMath.HasAtMostDecimals(l.Quantity, MoneyMath.StorageScale))
                     throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: số lượng phải lớn hơn 0, tối đa 4 chữ số thập phân.");
                 if (input.Type == StockDocumentType.Receipt && (l.Amount is not { } a || a < 0 || !MoneyMath.HasAtMostDecimals(a, dp)))
@@ -288,7 +319,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                     case StockDocumentType.Receipt:
                         await GuardOrderAsync(ctx.CompanyId, doc.WarehouseId, item.Id, doc.PostingDate);
                         await AddMovementAsync(doc, line, doc.WarehouseId, line.Quantity, line.Amount!.Value, ++seq, line.CounterAccountId, doc.PartnerId);
-                        AddGl(glLines, item.InventoryAccountId, line.CounterAccountId!.Value, doc.PartnerId, line.Amount.Value, line.Description);
+                        AddGl(glLines, item.InventoryAccountId!.Value, line.CounterAccountId!.Value, doc.PartnerId, line.Amount.Value, line.Description);
                         break;
 
                     case StockDocumentType.Issue:
@@ -296,7 +327,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                         var method = await GuardOrderAsync(ctx.CompanyId, doc.WarehouseId, item.Id, doc.PostingDate);
                         var value = await IssueValueAsync(ctx.CompanyId, doc.WarehouseId, item.Id, line.Quantity, method, dp);
                         await AddMovementAsync(doc, line, doc.WarehouseId, -line.Quantity, value is null ? null : -value.Value, ++seq, line.CounterAccountId, doc.PartnerId);
-                        if (value is { } v) AddGl(glLines, line.CounterAccountId!.Value, item.InventoryAccountId, doc.PartnerId, v, line.Description, debitPartner: true);
+                        if (value is { } v) AddGl(glLines, line.CounterAccountId!.Value, item.InventoryAccountId!.Value, doc.PartnerId, v, line.Description, debitPartner: true);
                         break;
                     }
 
@@ -582,7 +613,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                 {
                     db.StockValuations.Add(new StockValuation { Id = Ids.New(), CompanyId = ctx.CompanyId, MovementId = pending[i].Id, Value = -issueValues[i], CostingRunId = run.Id, CreatedAt = clock.UtcNow });
                     if (issueValues[i] > 0)
-                        AddGl(glLines, pending[i].CounterAccountId!.Value, item.InventoryAccountId, pending[i].PartnerId, issueValues[i], $"Giá vốn xuất {item.Code}", debitPartner: true);
+                        AddGl(glLines, pending[i].CounterAccountId!.Value, item.InventoryAccountId!.Value, pending[i].PartnerId, issueValues[i], $"Giá vốn xuất {item.Code}", debitPartner: true);
                 }
                 var totalQty = opening.Sum(m => m.Quantity) + valued.Sum(m => m.Quantity);
                 var totalValue = opening.Sum(m => values[m.Id]) + valued.Sum(m => values[m.Id]) + adjBefore + adjInside;
@@ -704,7 +735,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         var values = await ActiveValuesAsync(moves.Select(m => m.Id).ToList());
         var adjs = await db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.AdjustmentDate <= asOf).ToListAsync();
         var rows = new List<InventoryReconcileRow>();
-        foreach (var accId in items.Values.Select(i => i.InventoryAccountId).Distinct())
+        foreach (var accId in items.Values.Where(i => i.InventoryAccountId != null).Select(i => i.InventoryAccountId!.Value).Distinct())
         {
             var acc = await db.Accounts.AsNoTracking().FirstAsync(a => a.Id == accId);
             var accMoves = moves.Where(m => items[m.ItemId].InventoryAccountId == accId).ToList();

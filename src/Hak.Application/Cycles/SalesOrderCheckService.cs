@@ -62,7 +62,7 @@ public sealed class SalesOrderCheckService(HakDbContext db, SettlementService se
         var lines = order.Lines.OrderBy(l => l.LineNo).Select(l =>
         {
             var have = onHand.GetValueOrDefault(l.ItemId);
-            return new SalesOrderStockLine(l.LineNo, l.ItemId, items[l.ItemId].Code, items[l.ItemId].Name, items[l.ItemId].Unit, l.Quantity, have, Math.Max(0, l.Quantity - have));
+            return new SalesOrderStockLine(l.LineNo, l.ItemId, items[l.ItemId].Code, items[l.ItemId].Name, items[l.ItemId].Unit, l.Quantity, have, items[l.ItemId].IsService ? 0 : Math.Max(0, l.Quantity - have));
         }).ToList();
 
         var after = balance + value;

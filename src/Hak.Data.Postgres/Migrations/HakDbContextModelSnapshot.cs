@@ -3343,13 +3343,21 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("default_vat_rate");
 
-                    b.Property<Guid>("InventoryAccountId")
+                    b.Property<Guid?>("ExpenseAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expense_account_id");
+
+                    b.Property<Guid?>("InventoryAccountId")
                         .HasColumnType("uuid")
                         .HasColumnName("inventory_account_id");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
+
+                    b.Property<bool>("IsService")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_service");
 
                     b.Property<int>("IssueDrynessBasis")
                         .HasColumnType("integer")
@@ -3374,6 +3382,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("requires_qc");
 
+                    b.Property<Guid?>("RevenueAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revenue_account_id");
+
                     b.Property<decimal?>("SalePrice")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)")
@@ -3391,8 +3403,14 @@ namespace Hak.Data.Postgres.Migrations
                     b.HasKey("Id")
                         .HasName("pk_items");
 
+                    b.HasIndex("ExpenseAccountId")
+                        .HasDatabaseName("ix_items_expense_account_id");
+
                     b.HasIndex("InventoryAccountId")
                         .HasDatabaseName("ix_items_inventory_account_id");
+
+                    b.HasIndex("RevenueAccountId")
+                        .HasDatabaseName("ix_items_revenue_account_id");
 
                     b.HasIndex("CompanyId", "Code")
                         .IsUnique()
@@ -7630,6 +7648,116 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("debt_write_off_items");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateOnly>("AcceptanceDate")
+                        .HasColumnType("date")
+                        .HasColumnName("acceptance_date");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("decision_note");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("number");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("partner_id");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_acceptances");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("ix_service_acceptances_order_id");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_service_acceptances_company_id_number");
+
+                    b.ToTable("service_acceptances");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptanceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AcceptanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acceptance_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<int>("OrderLineNo")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_line_no");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("quantity");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_acceptance_lines");
+
+                    b.HasIndex("AcceptanceId")
+                        .HasDatabaseName("ix_service_acceptance_lines_acceptance_id");
+
+                    b.ToTable("service_acceptance_lines");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8690,10 +8818,21 @@ namespace Hak.Data.Postgres.Migrations
                 {
                     b.HasOne("Hak.Domain.Catalog.Account", null)
                         .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_accounts_expense_account_id");
+
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
                         .HasForeignKey("InventoryAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_items_accounts_inventory_account_id");
+
+                    b.HasOne("Hak.Domain.Catalog.Account", null)
+                        .WithMany()
+                        .HasForeignKey("RevenueAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_items_accounts_revenue_account_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Inventory.StockDocument", b =>
@@ -9432,6 +9571,16 @@ namespace Hak.Data.Postgres.Migrations
                         .HasConstraintName("fk_debt_write_off_items_debt_write_offs_write_off_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptanceLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.ServiceAcceptance", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("AcceptanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_acceptance_lines_service_acceptances_acceptance_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>
                 {
                     b.HasOne("Hak.Domain.Trade.Contract", null)
@@ -9654,6 +9803,11 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Trade.DebtWriteOff", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptance", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.TradeOrder", b =>

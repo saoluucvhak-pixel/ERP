@@ -19,7 +19,12 @@ public sealed class Item
     public string Name { get; set; } = "";
     public string Unit { get; set; } = "";
     /// <summary>Inventory (asset) account the item's value is carried on. Taken from the catalog, never hard-coded.</summary>
-    public Guid InventoryAccountId { get; set; }
+    public Guid? InventoryAccountId { get; set; }
+    /// <summary>Dịch vụ (vận chuyển thuê, tư vấn…): không theo dõi kho, không có tài khoản kho / giá vốn; bán ghi doanh thu, mua ghi chi phí theo tài khoản khai ở đây (như Service ở SAP / Odoo, non-stock Item ở ERPNext). Dịch vụ đi qua đơn hàng → nghiệm thu → hóa đơn.</summary>
+    public bool IsService { get; set; }
+    /// <summary>Tài khoản doanh thu / chi phí mặc định của dịch vụ khi lập hóa đơn bán / mua (null = lấy theo vai trò SALES_REVENUE; mua phải khai).</summary>
+    public Guid? RevenueAccountId { get; set; }
+    public Guid? ExpenseAccountId { get; set; }
     /// <summary>Wood chips etc.: every receipt/issue line needs a dryness measurement to derive BDMT.</summary>
     public bool TracksDryness { get; set; }
     /// <summary>Hàng phải qua kiểm tra chất lượng (biên bản kiểm nghiệm đạt toàn bộ số lượng) trước khi ghi sổ phiếu nhập từ nhà cung cấp / khách trả lại.</summary>

@@ -247,7 +247,7 @@ public sealed partial class InvoiceService
         Func<string, Guid> role, string label)
     {
         var original = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == orig.Id);
-        var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId);
+        var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).Where(i => i.InventoryAccountId != null).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId!.Value);
         var reduces = inv.Purpose != InvoicePurpose.Increase;
         var gl = new List<VoucherLineInput>();
         foreach (var l in inv.Lines.OrderBy(x => x.LineNo))

@@ -273,7 +273,7 @@ function ItemAltUnitCell({ item, busy, onSave }: { item: Item; busy: boolean; on
     {dirty && <button className="primary" disabled={busy} onClick={() => onSave(u.trim() || null, f.trim() ? parseMoney(f) : null)}>Lưu</button>}</td>
 }
 
-interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean; requiresQc?: boolean; issueDrynessBasis?: 'WarehouseAverage' | 'DailyRate'; altUnit?: string | null; altFactor?: string | null; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
+interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string | null; isService?: boolean; revenueAccountId?: string | null; expenseAccountId?: string | null; isActive: boolean; tracksDryness: boolean; requiresQc?: boolean; issueDrynessBasis?: 'WarehouseAverage' | 'DailyRate'; altUnit?: string | null; altFactor?: string | null; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
 
 function Stock() {
@@ -284,6 +284,7 @@ function Stock() {
   const [policy, setPolicy] = useState({ warehouseId: '', method: 'MovingAverage', effectiveFrom: '', note: '' })
   const itemGroups = useGroups('Item')
   const [item, setItem] = useState({ code: '', name: '', unit: '', inventoryAccountId: '', tracksDryness: false })
+  const [svc, setSvc] = useState({ code: '', name: '', unit: '', revenueAccountId: '', expenseAccountId: '' })
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => {
@@ -315,7 +316,7 @@ function Stock() {
       <section className="panel">
         <h3>Vật tư, hàng hóa</h3>
         <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đơn vị quy đổi cố định</th><th>Đo độ khô (MT/BDMT)</th><th title="Cách tính BDMT tạm cho phiếu xuất chưa có chứng thư">BDMT phiếu xuất</th><th title="Phiếu nhập từ nhà cung cấp / khách trả lại chỉ ghi sổ khi có biên bản kiểm nghiệm đạt toàn bộ số lượng">Bắt buộc kiểm tra chất lượng</th><th>Nhóm</th></tr></thead>
-          <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
+          <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{i.isService ? <span title={`Dịch vụ — không qua kho. TK doanh thu ${accounts.find(a => a.id === i.revenueAccountId)?.code ?? 'theo vai trò'}, TK chi phí ${accounts.find(a => a.id === i.expenseAccountId)?.code ?? '—'}`}>Dịch vụ</span> : accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
             <ItemCommercialCells item={i} busy={busy} onSave={(body) => act(() => put(`/items/${i.id}/commercial`, body), `Đã lưu thông tin thương mại ${i.code}.`)} />
             <ItemAltUnitCell key={`${i.id}-${i.altUnit}-${i.altFactor}`} item={i} busy={busy} onSave={(altUnit, altFactor) => act(() => put(`/items/${i.id}/alt-unit`, { altUnit, altFactor }), `Đã lưu đơn vị quy đổi ${i.code}.`)} />
             <td><input type="checkbox" aria-label={`Đo độ khô ${i.code}`} checked={i.tracksDryness} disabled={busy}
@@ -338,6 +339,19 @@ function Stock() {
             if (item.tracksDryness) await post(`/items/${created.id}/tracks-dryness`, { tracks: true })
             setItem({ code: '', name: '', unit: '', inventoryAccountId: '', tracksDryness: false })
           }, 'Đã thêm vật tư.')}>Thêm vật tư</button>
+        </div>
+        <div className="form-row" title="Dịch vụ (vận chuyển thuê, tư vấn…) không theo dõi kho: bán ghi doanh thu, mua ghi chi phí theo tài khoản khai ở đây">
+          <label>Dịch vụ — mã <input value={svc.code} onChange={e => setSvc(x => ({ ...x, code: e.target.value.toUpperCase() }))} /></label>
+          <label>Tên <input value={svc.name} onChange={e => setSvc(x => ({ ...x, name: e.target.value }))} /></label>
+          <label>ĐVT <input value={svc.unit} onChange={e => setSvc(x => ({ ...x, unit: e.target.value }))} size={6} /></label>
+          <label>TK doanh thu <AccountSelect accounts={accounts} value={svc.revenueAccountId} onChange={v => setSvc(x => ({ ...x, revenueAccountId: v }))}
+            filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK doanh thu dịch vụ" /></label>
+          <label>TK chi phí <AccountSelect accounts={accounts} value={svc.expenseAccountId} onChange={v => setSvc(x => ({ ...x, expenseAccountId: v }))}
+            filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK chi phí dịch vụ" /></label>
+          <button disabled={busy || !svc.code || !svc.name || !svc.unit} onClick={() => act(async () => {
+            await post('/items/service', { code: svc.code, name: svc.name, unit: svc.unit, revenueAccountCode: accounts.find(a => a.id === svc.revenueAccountId)?.code ?? null, expenseAccountCode: accounts.find(a => a.id === svc.expenseAccountId)?.code ?? null })
+            setSvc({ code: '', name: '', unit: '', revenueAccountId: '', expenseAccountId: '' })
+          }, 'Đã thêm dịch vụ.')}>Thêm dịch vụ</button>
         </div>
       </section>
     </>

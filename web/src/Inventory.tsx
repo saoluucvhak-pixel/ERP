@@ -19,7 +19,7 @@ function useStockCatalog() {
   const [items, setItems] = useState<Item[]>([])
   useEffect(() => {
     get<Warehouse[]>('/warehouses').then(setWarehouses).catch(() => setWarehouses([]))
-    get<Item[]>('/items').then(setItems).catch(() => setItems([]))
+    get<Item[]>('/items').then(r => setItems(r.filter(i => !(i as Item & { isService?: boolean }).isService))).catch(() => setItems([]))
   }, [])
   return { warehouses, items }
 }

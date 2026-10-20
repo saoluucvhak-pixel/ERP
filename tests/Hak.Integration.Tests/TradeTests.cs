@@ -1008,4 +1008,64 @@ public class TradeTests
         Assert.Equal(0m, await fx.Bal("AP"));
         Assert.Equal(-50_000m, await fx.Bal("FININC"));
     }
+
+    [Fact]
+    public async Task ServiceItem_OrderAcceptanceInvoice_SalesAndPurchase()
+    {
+        using var fx = await SetupAsync();
+        var orders = Orders(fx);
+        var acc = new ServiceAcceptanceService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        fx.H.Acc["TRANSPORT"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "TRANSPORT", "Chi phí vận chuyển thuê (thử)")).Id;
+        var haul = await fx.S.Stock.CreateServiceItemAsync(fx.H.Admin, "VANCHUYEN", "Vận chuyển thuê", "chuyến", "SALESREV", "TRANSPORT");
+        Assert.True(haul.IsService); Assert.Null(haul.InventoryAccountId);
+        Assert.Equal(ErrorCodes.DuplicateCode, await CodeOf(() => fx.S.Stock.CreateServiceItemAsync(fx.H.Admin, "VANCHUYEN", "x", "x", null, null)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Stock.CreateServiceItemAsync(fx.H.Admin, "S2", "x", "x", "AR", null)));          // TK công nợ không dùng làm doanh thu
+
+        // Dịch vụ không đi qua kho.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 1), D(3, 1), "Nhập dịch vụ",
+            [new StockLineInput(haul.Id, 1, 100, fx.A("GRNI"))], PartnerId: fx.H.Partner["NCC01"]))));
+
+        // Bán dịch vụ: đơn 10 chuyến → nghiệm thu → hóa đơn trong phạm vi nghiệm thu.
+        var order = await orders.CreateAsync(fx.H.Preparer, new OrderInput(InvoiceKind.Sales, fx.H.Partner["KH01"], D(3, 2), "Vận chuyển thuê tháng 3", [new OrderLineInput(haul.Id, 10, 2_000_000, VatRate: 8)]));
+        await orders.ConfirmAsync(fx.H.Approver, order.Id);
+        var line = new InvoiceLineInput(2_000_000, Quantity: 4, VatRate: 8, OrderId: order.Id, OrderLineNo: 1);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26T", "S1", D(3, 20), D(3, 20), "Chưa nghiệm thu", [line]))));
+        Assert.Equal(ErrorCodes.OverDelivered, await CodeOf(() => acc.CreateAsync(fx.H.Preparer, new(order.Id, D(3, 15), [new(1, 11)]))));
+        var nt = await acc.CreateAsync(fx.H.Preparer, new(order.Id, D(3, 15), [new(1, 4)]));
+        Assert.StartsWith("NTDV", nt.Number);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26T", "S1", D(3, 20), D(3, 20), "Chờ xác nhận", [line]))));
+        Assert.Empty(await acc.InvoiceCandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, null));
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => acc.DecideAsync(fx.H.Preparer with { Permissions = new HashSet<string>(fx.H.Preparer.Permissions) { "voucher.approve" } }, nt.Id, true, null)));
+        await acc.DecideAsync(fx.H.Approver, nt.Id, true, null);
+        var cand = (await acc.InvoiceCandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, fx.H.Partner["KH01"])).Single();
+        Assert.Equal((4m, 0m, 4m), (cand.Accepted, cand.Invoiced, cand.Remaining));
+        Assert.Equal(fx.A("SALESREV"), cand.AccountId);
+
+        var inv = await fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26T", "S1", D(3, 20), D(3, 20), "Vận chuyển thuê đợt 1", [line]));
+        Assert.Equal(haul.Id, inv.Lines[0].ItemId); Assert.Equal(fx.A("SALESREV"), inv.Lines[0].AccountId);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26T", "S2", D(3, 21), D(3, 21), "Vượt", [line with { Quantity = 1 }]))));
+        await fx.Inv.PostAsync(fx.H.Approver, inv.Id);
+        Assert.Equal(-8_000_000m, await fx.Bal("SALESREV"));
+        Assert.Equal(8_640_000m, await fx.Bal("AR", fx.H.Partner["KH01"]));
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => acc.CancelAsync(fx.H.Preparer, nt.Id, "Hủy nhầm")));   // đã lập hóa đơn hết phần nghiệm thu
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 22), D(3, 22), "Xuất dịch vụ",
+            [new StockLineInput(haul.Id, 1, CounterAccountId: fx.A("COGS"))], PartnerId: fx.H.Partner["KH01"]))));
+        var lbh = new SalesDispatchService(fx.S.Db, fx.S.Stock, fx.Inv, fx.S.Audit, fx.H.Clock);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => lbh.CreateDispatchAsync(fx.H.Preparer, new DispatchInput(order.Id, fx.Wh, D(3, 22), null, null, [new(1, 1)]))));
+
+        // Mua dịch vụ: chi phí theo TK của dịch vụ, người lập biên bản khác người xác nhận.
+        var po = await orders.CreateAsync(fx.H.Preparer, new OrderInput(InvoiceKind.Purchase, fx.H.Partner["NCC01"], D(3, 2), "Thuê xe", [new OrderLineInput(haul.Id, 5, 1_000_000, VatRate: 8)]));
+        await orders.ConfirmAsync(fx.H.Approver, po.Id);
+        var ntm = await acc.CreateAsync(fx.H.Preparer, new(po.Id, D(3, 16), [new(1, 5)]));
+        Assert.StartsWith("NTDM", ntm.Number);
+        await acc.DecideAsync(fx.H.Approver, ntm.Id, false, "Thiếu chứng từ vận chuyển");
+        Assert.Empty(await acc.InvoiceCandidatesAsync(fx.H.Auditor, InvoiceKind.Purchase, null));
+        var ntm2 = await acc.CreateAsync(fx.H.Preparer, new(po.Id, D(3, 17), [new(1, 5)]));       // biên bản bị từ chối không chiếm số lượng
+        await acc.DecideAsync(fx.H.Approver, ntm2.Id, true, null);
+        var pinv = await fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Purchase, fx.H.Partner["NCC01"], "1C26T", "M1", D(3, 25), D(3, 25), "Thuê xe",
+            [new InvoiceLineInput(1_000_000, Quantity: 5, VatRate: 8, OrderId: po.Id, OrderLineNo: 1)]));
+        await fx.Inv.PostAsync(fx.H.Approver, pinv.Id);
+        Assert.Equal(5_000_000m, await fx.Bal("TRANSPORT"));
+        Assert.Equal(-5_400_000m, await fx.Bal("AP", fx.H.Partner["NCC01"]));
+    }
 }

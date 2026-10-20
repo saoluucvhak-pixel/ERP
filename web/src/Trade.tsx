@@ -6,7 +6,8 @@ import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
 interface Invoice { id: string; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string }
-interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string }
+interface SvcCand { orderId: string; orderNumber: string; orderLineNo: number; itemCode: string; itemName: string; unit: string; remaining: string; unitPrice: string; vatRate: string | null; description: string | null }
+interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string; svc?: SvcCand }
 interface LineDraft { candidate: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string; qty: string; accountId: string; description: string }
 
 const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Posted: 'Đã ghi sổ', Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }
@@ -37,6 +38,10 @@ export function TradeView() {
       for (const d of drafts) for (const l of d.lines)
         c.push({ key: `${d.id}:${l.lineNo}`, docId: d.id, lineNo: l.lineNo, bdmt: null, remaining: l.quantity, label: `${d.number}/${l.lineNo} · ${d.postingDate} · phiếu nhập NHÁP ${formatMoney(l.quantity)} (ghi sổ cùng hóa đơn)` })
     }
+    // Dịch vụ đã nghiệm thu (đơn → biên bản nghiệm thu xác nhận) còn lập được hóa đơn.
+    const sv = await get<SvcCand[]>(`/service-acceptances/invoice-candidates?kind=${kind}`)
+    for (const s of sv) c.push({ key: `svc:${s.orderId}:${s.orderLineNo}`, docId: '', lineNo: 0, bdmt: null, remaining: s.remaining, svc: s,
+      label: `Dịch vụ · ${s.orderNumber}/${s.orderLineNo} · ${s.itemCode} ${s.itemName} · nghiệm thu còn ${formatMoney(s.remaining)} ${s.unit}` })
     setCandidates(c)
   }), [run, kind])
   useEffect(() => { load() }, [load])
@@ -52,6 +57,7 @@ export function TradeView() {
         const price = parseMoney(l.price)
         if (!price) throw new Error(`Dòng ${i + 1}: đơn giá không hợp lệ.`)
         const c = candidates.find(x => x.key === l.candidate)
+        if (c?.svc) return { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: null, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null, orderId: c.svc.orderId, orderLineNo: c.svc.orderLineNo }
         return c
           ? { unitPrice: price, stockDocumentId: c.docId, stockLineNo: c.lineNo, basis: l.basis, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null }
           : { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: l.accountId || null, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null }
@@ -100,12 +106,12 @@ export function TradeView() {
           <thead><tr><th>#</th><th>Dòng phiếu kho ({kind === 'Sales' ? 'xuất chưa lập HĐ' : 'nhập chưa có HĐ'}) / dịch vụ</th><th>Tính giá theo</th><th className="num">SL (dịch vụ)</th><th>TK (dịch vụ)</th><th className="num">Đơn giá</th><th className="num">Thuế suất %</th><th>Diễn giải</th><th /></tr></thead>
           <tbody>{lines.map((l, i) => (
             <tr key={i}><td>{i + 1}</td>
-              <td><select aria-label="Dòng phiếu kho" value={l.candidate} onChange={e => upd(i, { candidate: e.target.value })} style={{ maxWidth: 420 }}>
+              <td><select aria-label="Dòng phiếu kho" value={l.candidate} onChange={e => { const c = candidates.find(x => x.key === e.target.value); upd(i, c?.svc ? { candidate: e.target.value, qty: c.svc.remaining, price: c.svc.unitPrice, vat: c.svc.vatRate ?? '', description: c.svc.description ?? '' } : { candidate: e.target.value }) }} style={{ maxWidth: 420 }}>
                 <option value="">— dịch vụ / không gắn phiếu kho —</option>{candidates.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select></td>
-              <td><select aria-label="Tính giá theo" value={l.candidate ? l.basis : 'Quantity'} disabled={!l.candidate} onChange={e => upd(i, { basis: e.target.value as LineDraft['basis'] })}>
+              <td><select aria-label="Tính giá theo" value={l.candidate && !candidates.find(x => x.key === l.candidate)?.svc ? l.basis : 'Quantity'} disabled={!l.candidate || candidates.find(x => x.key === l.candidate)?.svc !== undefined} onChange={e => upd(i, { basis: e.target.value as LineDraft['basis'] })}>
                 <option value="Bdmt">BDMT</option><option value="Quantity">Số lượng (MT/ĐVT)</option></select></td>
-              <td><input className="num" aria-label="Số lượng" size={6} disabled={!!l.candidate} value={l.qty} onChange={e => upd(i, { qty: e.target.value })} /></td>
-              <td>{!l.candidate && <AccountSelect accounts={accounts} value={l.accountId} onChange={v => upd(i, { accountId: v })} ariaLabel="TK" />}</td>
+              <td><input className="num" aria-label="Số lượng" size={6} disabled={!!l.candidate && !candidates.find(x => x.key === l.candidate)?.svc} value={l.qty} onChange={e => upd(i, { qty: e.target.value })} /></td>
+              <td>{(!l.candidate) && <AccountSelect accounts={accounts} value={l.accountId} onChange={v => upd(i, { accountId: v })} ariaLabel="TK" />}</td>
               <td><input className="num" aria-label="Đơn giá" size={10} value={l.price} onChange={e => upd(i, { price: e.target.value })} /></td>
               <td><input className="num" aria-label="Thuế suất" size={4} value={l.vat} placeholder="KCT" onChange={e => upd(i, { vat: e.target.value })} /></td>
               <td><input aria-label="Diễn giải dòng" value={l.description} onChange={e => upd(i, { description: e.target.value })} /></td>

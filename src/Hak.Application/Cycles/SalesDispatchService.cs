@@ -69,6 +69,8 @@ public sealed class SalesDispatchService(HakDbContext db, StockService stock, In
             {
                 var ol = order.Lines.FirstOrDefault(x => x.LineNo == l.OrderLineNo) ?? throw new DomainException(ErrorCodes.NotFound, $"Đơn {order.Number} không có dòng {l.OrderLineNo}.");
                 if (l.Quantity <= 0) throw new DomainException(ErrorCodes.AmountNotPositive, "Số lượng lệnh bán hàng phải lớn hơn 0.");
+                if (await db.Items.AnyAsync(i => i.Id == ol.ItemId && i.IsService))
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {l.OrderLineNo} của đơn {order.Number} là dịch vụ: không lập lệnh bán hàng / giao hàng; lập biên bản nghiệm thu dịch vụ.");
                 var limit = ol.Quantity * (1 + order.OverDeliveryTolerancePercent / 100m);
                 var total = already.Where(a => a.OrderLineNo == l.OrderLineNo).Sum(a => a.Quantity) + l.Quantity;
                 if (total > limit)

@@ -20,6 +20,7 @@ import { ContractsView } from './Contracts'
 import { AdvancesView, CashCountView } from './Advances'
 import { EquityView } from './Equity'
 import { SalesApprovalsView } from './SalesApprovals'
+import { ServiceAcceptancesView } from './ServiceAcceptances'
 import { PaymentDiscountView } from './PaymentDiscount'
 import { GroupsView } from './Groups'
 import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
@@ -55,6 +56,7 @@ const SCREENS = [
   { key: 'cashcount', label: 'Kiểm kê quỹ', el: () => <CashCountView /> },
   { key: 'equity', label: 'Vốn góp, cổ tức', el: () => <EquityView /> },
   { key: 'salesapproval', label: 'Phê duyệt bán hàng', el: () => <SalesApprovalsView /> },
+  { key: 'services', label: 'Nghiệm thu dịch vụ', el: () => <ServiceAcceptancesView /> },
   { key: 'paydiscount', label: 'Chiết khấu thanh toán', el: () => <PaymentDiscountView /> },
   { key: 'groups', label: 'Nhóm danh mục', el: () => <GroupsView /> },
   { key: 'bank', label: 'Ngân hàng', el: () => <BankingView /> },
@@ -89,6 +91,7 @@ const LAUNCHER = [
   { key: 'cashcount', group: 'Tài chính, thanh toán', label: 'Kiểm kê quỹ' },
   { key: 'equity', group: 'Tài chính, thanh toán', label: 'Vốn góp, cổ tức' },
   { key: 'salesapproval', group: 'Chu trình doanh thu', label: 'Phê duyệt bán hàng' },
+  { key: 'services', group: 'Chu trình doanh thu', label: 'Nghiệm thu dịch vụ' },
   { key: 'paydiscount', group: 'Chu trình doanh thu', label: 'Chiết khấu thanh toán' },
   { key: 'groups', group: 'Danh mục và hệ thống', label: 'Nhóm danh mục' },
   { key: 'bank', group: 'Tài chính, thanh toán', label: 'Ngân hàng' },
