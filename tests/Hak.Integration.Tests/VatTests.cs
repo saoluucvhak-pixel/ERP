@@ -180,6 +180,26 @@ public class VatTests
     }
 
     [Fact]
+    public async Task PeriodEndOffset_Quarterly_CoversTheCalendarQuarter_AndSharesTheOncePerPeriodGuard()
+    {
+        using var fx = await SetupAsync();
+        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine, fx.S.Audit);
+        var jan = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(1, 1));
+        var mar = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(3, 1));
+        await Book(fx, InvoiceKind.Purchase, fx.Sup, "1C26TAA", "0000921", 10_000_000, 10, D(1, 15));
+        await Book(fx, InvoiceKind.Sales, fx.Cus, "1C26TBB", "0000922", 20_000_000, 8, D(3, 10));
+
+        var q = await offset.PreviewAsync(fx.H.Auditor, jan.Id, quarterly: true);   // any month of the quarter selects the same quarter
+        Assert.Equal((D(1, 1), D(3, 31), mar.Id, 1_000_000m), (q.PeriodStart, q.PeriodEnd, q.PeriodId, q.OffsetAmount));
+        Assert.Equal(0m, (await offset.PreviewAsync(fx.H.Auditor, jan.Id)).OffsetAmount);   // by month January has no output VAT yet
+
+        var voucher = await offset.GenerateAsync(fx.H.Preparer, jan.Id, quarterly: true);
+        Assert.Equal(D(3, 31), voucher.PostingDate);
+        Assert.Contains("quý 1/", voucher.Description);
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => offset.GenerateAsync(fx.H.Preparer, mar.Id)));
+    }
+
+    [Fact]
     public async Task AddingMissingPartnerTaxCode_MakesTheInvoiceMatch()
     {
         using var fx = await SetupAsync();

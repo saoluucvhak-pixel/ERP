@@ -37,11 +37,10 @@ public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine, A
 
     /// <param name="inputAccountIds">Tài khoản thuế đầu vào được khấu trừ do người dùng chọn; null = theo vai trò VAT_INPUT (cùng tài khoản con).</param>
     /// <param name="outputAccountIds">Tài khoản thuế đầu ra do người dùng chọn; null = theo vai trò VAT_OUTPUT (cùng tài khoản con).</param>
-    public async Task<VatOffsetPreview> PreviewAsync(SessionContext ctx, Guid periodId, IReadOnlyList<Guid>? inputAccountIds = null, IReadOnlyList<Guid>? outputAccountIds = null)
+    public async Task<VatOffsetPreview> PreviewAsync(SessionContext ctx, Guid periodId, IReadOnlyList<Guid>? inputAccountIds = null, IReadOnlyList<Guid>? outputAccountIds = null, bool quarterly = false)
     {
         ctx.Require(Permissions.ReportView);
-        var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId)
-                     ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại.");
+        var (period, start, end) = await ResolveAsync(ctx, periodId, quarterly);
         var accounts = await db.Accounts.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId).ToListAsync();
         List<Domain.Catalog.Account> Chosen(IReadOnlyList<Guid> chosen, string what)
         {
@@ -62,7 +61,7 @@ public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine, A
         if (inputAccounts.Select(a => a.Id).Intersect(outputAccounts.Select(a => a.Id)).Any())
             throw new DomainException(ErrorCodes.ValidationFailed, "Một tài khoản không thể vừa là thuế đầu vào vừa là thuế đầu ra.");
         var ids = inputAccounts.Concat(outputAccounts).Select(a => a.Id).ToList();
-        var sums = await db.JournalLines.AsNoTracking().Where(l => l.CompanyId == ctx.CompanyId && ids.Contains(l.AccountId) && l.PostingDate <= period.EndDate)
+        var sums = await db.JournalLines.AsNoTracking().Where(l => l.CompanyId == ctx.CompanyId && ids.Contains(l.AccountId) && l.PostingDate <= end)
             .GroupBy(l => new { l.AccountId, l.Side }).Select(g => new { g.Key.AccountId, g.Key.Side, T = g.Sum(x => x.Amount) }).ToListAsync();
         decimal Net(Guid accountId, Side positive)
             => sums.Where(s => s.AccountId == accountId && s.Side == positive).Sum(s => s.T) - sums.Where(s => s.AccountId == accountId && s.Side != positive).Sum(s => s.T);
@@ -86,35 +85,48 @@ public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine, A
             }
         }
         if (offset > 0) { Allocate(outputs, Side.Debit); Allocate(inputs, Side.Credit); }
-        return new VatOffsetPreview(period.Id, period.StartDate, period.EndDate, input, output, offset, output - offset, input - offset, lines,
+        return new VatOffsetPreview(period.Id, start, end, input, output, offset, output - offset, input - offset, lines,
             "Số dư lũy kế đến hết kỳ (gồm thuế đầu vào chuyển từ kỳ trước). Chưa tính điều chỉnh khác và không phải tờ khai chính thức.",
             inputAccounts.OrderBy(a => a.Code, StringComparer.Ordinal).Select(a => new VatOffsetAccount(a.Id, a.Code, a.Name)).ToList(),
             outputAccounts.OrderBy(a => a.Code, StringComparer.Ordinal).Select(a => new VatOffsetAccount(a.Id, a.Code, a.Name)).ToList());
     }
 
-    public async Task<Voucher> GenerateAsync(SessionContext ctx, Guid periodId, IReadOnlyList<Guid>? inputAccountIds = null, IReadOnlyList<Guid>? outputAccountIds = null)
+    public async Task<Voucher> GenerateAsync(SessionContext ctx, Guid periodId, IReadOnlyList<Guid>? inputAccountIds = null, IReadOnlyList<Guid>? outputAccountIds = null, bool quarterly = false)
     {
         ctx.Require(Permissions.VoucherCreate);
-        var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId)
-                     ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại.");
+        var (period, start, end) = await ResolveAsync(ctx, periodId, quarterly);
         var existing = await db.Vouchers.AsNoTracking()
-            .FirstOrDefaultAsync(v => v.CompanyId == ctx.CompanyId && v.SourceSystem == SourceSystem && v.SourceId == periodId.ToString() && v.Status != VoucherStatus.Cancelled);
+            .FirstOrDefaultAsync(v => v.CompanyId == ctx.CompanyId && v.SourceSystem == SourceSystem && v.SourceId == period.Id.ToString() && v.Status != VoucherStatus.Cancelled);
         if (existing is not null)
             throw new DomainException(ErrorCodes.DuplicateSource,
                 $"Kỳ đã có chứng từ khấu trừ thuế GTGT {existing.Number} ({existing.Status}). Hủy nháp hoặc đảo chứng từ đó trước khi tạo lại.");
-        var pending = await db.Vouchers.CountAsync(v => v.CompanyId == ctx.CompanyId && v.PostingDate >= period.StartDate && v.PostingDate <= period.EndDate
+        var pending = await db.Vouchers.CountAsync(v => v.CompanyId == ctx.CompanyId && v.PostingDate >= start && v.PostingDate <= end
                                                        && (v.Status == VoucherStatus.Submitted || v.Status == VoucherStatus.Approved));
         if (pending > 0)
             throw new DomainException(ErrorCodes.PeriodHasPending, $"Còn {pending} chứng từ đã gửi/đã duyệt chưa ghi sổ trong kỳ; xử lý trước khi khấu trừ thuế.");
 
-        var preview = await PreviewAsync(ctx, periodId, inputAccountIds, outputAccountIds);
+        var preview = await PreviewAsync(ctx, periodId, inputAccountIds, outputAccountIds, quarterly);
         if (preview.OffsetAmount <= 0)
             throw new DomainException(ErrorCodes.VoucherNoLines, "Không có số thuế GTGT để khấu trừ (thuế đầu vào hoặc đầu ra bằng 0).");
-        var description = $"Khấu trừ thuế GTGT kỳ {period.StartDate:MM/yyyy}";
-        var voucher = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, period.EndDate, period.EndDate, description,
+        var description = quarterly ? $"Khấu trừ thuế GTGT quý {(start.Month - 1) / 3 + 1}/{start.Year}" : $"Khấu trừ thuế GTGT kỳ {start:MM/yyyy}";
+        var voucher = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, end, end, description,
             preview.Lines.Select(l => new VoucherLineInput(l.AccountId, l.Side, l.Amount, Description: description)).ToList(),
-            SourceSystem: SourceSystem, SourceId: periodId.ToString(), SourceVersion: "1"));
+            SourceSystem: SourceSystem, SourceId: period.Id.ToString(), SourceVersion: "1"));
         return voucher;
+    }
+
+    /// <summary>Kỳ kê khai: tháng = chính kỳ được chọn; quý = quý dương lịch chứa kỳ đó, kết thúc ở kỳ kế toán cuối quý (dùng làm khóa chống tạo trùng).</summary>
+    private async Task<(Domain.Organization.AccountingPeriod Period, DateOnly Start, DateOnly End)> ResolveAsync(SessionContext ctx, Guid periodId, bool quarterly)
+    {
+        var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId)
+                     ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại.");
+        if (!quarterly) return (period, period.StartDate, period.EndDate);
+        var firstMonth = (period.StartDate.Month - 1) / 3 * 3 + 1;
+        var start = new DateOnly(period.StartDate.Year, firstMonth, 1);
+        var end = start.AddMonths(3).AddDays(-1);
+        var last = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= end && p.EndDate >= end)
+                   ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Chưa có kỳ kế toán chứa ngày cuối quý {end:dd/MM/yyyy}; mở năm tài chính trước.");
+        return (last, start, end);
     }
 
     private static List<Domain.Catalog.Account> Subtree(List<Domain.Catalog.Account> all, Guid rootId)
