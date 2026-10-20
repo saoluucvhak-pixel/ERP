@@ -54,7 +54,7 @@ public sealed class FxService(HakDbContext db, AccountingEngine engine, AuditSer
         return await db.InTransactionAsync(async () =>
         {
             var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= date && p.EndDate >= date)
-                         ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date}.");
+                         ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date.Vn()}.");
             if (period.Status == PeriodStatus.Locked) throw new DomainException(ErrorCodes.PeriodLocked, $"Kỳ {period.StartDate:MM/yyyy} đã khóa sổ.");
             var last = await LastActiveAsync(ctx.CompanyId);
             if (last is not null && last.RevaluationDate >= date)
@@ -86,7 +86,7 @@ public sealed class FxService(HakDbContext db, AccountingEngine engine, AuditSer
                 var rate = byCurrency.GetValueOrDefault(b.Currency) ?? new FxRate(b.Currency, 1, 1); // only reached for zero foreign balances
                 var (target, adjustment) = FxCalculator.Revalue(b, rate, dp);
                 if (adjustment == 0) continue;
-                var label = b.ForeignBalance == 0 ? $"Xử lý số dư quy đổi còn lại {b.Currency}" : $"Đánh giá lại {b.Currency} {b.ForeignBalance:N2} theo tỷ giá cuối kỳ";
+                var label = b.ForeignBalance == 0 ? $"Xử lý số dư quy đổi còn lại {b.Currency}" : $"Đánh giá lại {b.Currency} {b.ForeignBalance.Vn(2)} theo tỷ giá cuối kỳ";
                 gl.Add(new VoucherLineInput(b.AccountId, adjustment > 0 ? Side.Debit : Side.Credit, Math.Abs(adjustment), b.PartnerId, ForeignCurrency: b.Currency, Description: label));
                 if (adjustment > 0) gains += adjustment; else losses -= adjustment;
                 result.Add(new { account = accounts[b.AccountId].Code, b.PartnerId, b.Currency, b.ForeignBalance, book = b.BookBalance, target, adjustment });
@@ -114,7 +114,7 @@ public sealed class FxService(HakDbContext db, AccountingEngine engine, AuditSer
                         gl.Add(new VoucherLineInput(accountId, closeSide, item.Open, item.PartnerId, cur, openForeign, closeRate,
                             $"Tất toán {item.VoucherNumber} theo giá trị ghi sổ để đánh giá lại", SettleJournalLineId: item.JournalLineId));
                         gl.Add(new VoucherLineInput(accountId, item.Side, target, item.PartnerId, cur, openForeign, rate,
-                            $"{item.VoucherNumber} đánh giá lại {openForeign:N2} {cur} theo tỷ giá {rate:N2}", item.DueDate));
+                            $"{item.VoucherNumber} đánh giá lại {openForeign.Vn(2)} {cur} theo tỷ giá {rate.Vn(2)}", item.DueDate));
                     }
                     else if (item.Open != 0)
                         gl.Add(new VoucherLineInput(accountId, closeSide, item.Open, item.PartnerId, ForeignCurrency: cur,

@@ -55,6 +55,59 @@ public class ReportEngineTests
     }
 
     [Fact]
+    public async Task FinancialAnalysis_ComputesRatiosFromTemplateLineCodes()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        await SeedAsync(h, s);
+        var analysis = new FinancialAnalysisService(s.Db, s.Reports);
+        Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => analysis.AnalyseAsync(h.Auditor, new(2026, 1, 1), new(2026, 3, 31))));   // chưa có mẫu B01-DN
+
+        await s.Reports.SaveDraftAsync(h.Preparer, new("B01-DN", "Bảng cân đối (mẫu thử)", "Kiểm thử", null,
+        [
+            new("110", "Tiền", "BAL_D(CASH, BANK*)"), new("130", "Phải thu", "GROSS_D(AR)"), new("100", "Tài sản ngắn hạn", "LINE(110) + LINE(130)"),
+            new("280", "Tổng tài sản", "LINE(100)"), new("310", "Nợ ngắn hạn", "GROSS_C(AR)"), new("300", "Nợ phải trả", "LINE(310)"),
+            new("400", "Vốn chủ sở hữu", "BAL_C(EQUITY) + BAL_C(REV) - BAL_D(EXP)"),
+        ], []));
+        await s.Reports.SaveDraftAsync(h.Preparer, new("B02-DN", "Kết quả kinh doanh (mẫu thử)", "Kiểm thử", null,
+            [new("10", "Doanh thu thuần", "MOV_C(REV ; AR)"), new("60", "Lợi nhuận sau thuế", "MOV_C(REV ; AR)")], []));
+
+        var result = await analysis.AnalyseAsync(h.Auditor, new(2026, 1, 1), new(2026, 3, 31));
+        Assert.False(result.TemplatesVerified);
+        Assert.Equal(new DateOnly(2025, 10, 3), result.PreviousFrom);              // kỳ trước cùng độ dài, liền trước
+        var by = result.Ratios.ToDictionary(r => r.Name);
+        Assert.Equal(3.7m, by["Hệ số nợ"].Current);                              // 50 / 1.350
+        Assert.Equal(96.3m, by["Hệ số vốn tự có"].Current);                      // 1.300 / 1.350
+        Assert.Equal(27m, by["Hệ số khả năng thanh toán hiện hành"].Current);    // 1.350 / 50
+        Assert.Equal(100m, by["Tỷ suất lợi nhuận sau thuế trên doanh thu (ROS)"].Current);
+        Assert.Null(by["Vòng quay hàng tồn kho"].Current);                       // mẫu thử không có hàng tồn kho (140)
+        Assert.All(result.Ratios, r => Assert.Null(r.Previous));                 // kỳ trước chưa có số liệu → để trống
+    }
+
+    [Fact]
+    public async Task DashboardOverview_CashFlowByMonth_Position_AndIncomeFromTemplate()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        await SeedAsync(h, s);
+        var overview = new DashboardOverviewService(s.Db, s.Reports, s.Ledger, s.Stock, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement));
+
+        var before = await overview.OverviewAsync(h.Auditor, new(2026, 3, 31));
+        Assert.False(before.HasIncomeTemplate);
+        Assert.Empty(before.Income);
+        Assert.Equal((850m, 850m, 0m, 450m, 0m), (before.Cash, before.CashOnHand, before.Bank, before.Receivable, before.Payable));
+        Assert.Equal([(1, 1_000m, 0m, 1_000m), (2, 0m, 0m, 1_000m), (3, 50m, 200m, 850m)], before.CashFlow.Select(c => (c.Month, c.Inflow, c.Outflow, c.Closing)).ToArray());
+
+        await s.Reports.SaveDraftAsync(h.Preparer, new("B02-DN", "Kết quả kinh doanh (mẫu thử)", "Kiểm thử", null,
+            [new("10", "Doanh thu thuần", "MOV_C(REV ; AR)"), new("11", "Giá vốn", "MOV_D(EXP)")], []));
+        var after = await overview.OverviewAsync(h.Auditor, new(2026, 3, 31));
+        Assert.True(after.HasIncomeTemplate);
+        Assert.False(after.IncomeTemplateVerified);
+        Assert.Equal([(1, 0m, 0m, 0m), (2, 500m, 0m, 500m), (3, 0m, 200m, -200m)], after.Income.Select(i => (i.Month, i.Revenue, i.Cost, i.Profit)).ToArray());
+        Assert.Equal(("Giá vốn hàng bán", 200m), (after.CostBreakdown[0].Name, after.CostBreakdown[0].Amount));
+    }
+
+    [Fact]
     public async Task Templates_AreValidated_VerifiedByASecondPerson_ThenFrozen_NewVersionsAreDrafts()
     {
         using var h = await TestHost.CreateAsync();

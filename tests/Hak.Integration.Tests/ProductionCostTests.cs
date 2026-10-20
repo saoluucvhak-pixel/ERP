@@ -3,6 +3,7 @@ using Hak.Application.Inventory;
 using Hak.Application.Production;
 using Hak.Domain.Common;
 using Hak.Domain.Inventory;
+using Hak.Domain.Production;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,6 +43,66 @@ public class ProductionCostTests
     {
         var lines = await s.Db.JournalLines.AsNoTracking().Where(l => l.AccountId == account).Select(l => new { l.Side, l.Amount }).ToListAsync();
         return lines.Sum(l => l.Side == Side.Debit ? l.Amount : -l.Amount);
+    }
+
+    [Fact]
+    public async Task ProductionOrder_Bom_Issue_Confirm_Complete_PostsAllocationAndReceivesAtActualCost()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var fx = await SetupAsync(s, h);
+        var svc = new ProductionOrderService(s.Db, s.Engine, s.Stock, s.Audit, h.Clock);
+        foreach (var (code, name) in new[] { ("LAB_APPL", "Nhân công phân bổ"), ("OH_APPL", "Sản xuất chung phân bổ") })
+            h.Acc[code] = (await s.Setup.CreateAccountAsync(h.Admin, code, name + " (mã thử)")).Id;
+
+        // Định mức: 1 tấn gỗ + hao hụt 10% cho mỗi MT dăm; thiếu dòng, trùng dòng, tự tham chiếu bị từ chối.
+        Assert.Equal(ErrorCodes.VoucherNoLines, await CodeOf(() => svc.SaveBomAsync(h.Preparer, fx.Chip, [], null)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.SaveBomAsync(h.Preparer, fx.Chip, [new(fx.Chip, 1, 0)], null)));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.SaveBomAsync(h.Auditor, fx.Chip, [new(fx.Log, 1, 10)], null)));
+        var bom = await svc.SaveBomAsync(h.Preparer, fx.Chip, [new(fx.Log, 1, 10)], "Định mức dăm");
+        Assert.Equal((1, 1.1m), (bom.Lines.Count, bom.Lines[0].QuantityPerUnit * (1 + bom.Lines[0].ScrapRate / 100)));
+        var wc = await svc.SaveWorkCenterAsync(h.Preparer, null, "BAM", "Xưởng băm", 50_000, 100_000);
+
+        await PostDocAsync(s, h, StockDocumentType.Receipt, fx.Wh, fx.Log, 150, 90_000_000, h.Acc["EQUITY"], D(3, 1));   // 600,000/tấn
+        var order = await svc.CreateAsync(h.Preparer, new ProductionOrderInput(fx.Chip, fx.Object, fx.Wh, 100, D(3, 2)));
+        Assert.StartsWith("LSX2026-", order.Number);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.CreateIssueAsync(h.Preparer, order.Id, null, D(3, 3))));   // chưa ban hành
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => svc.ReleaseAsync(h.Preparer with { Permissions = new HashSet<string>(h.Preparer.Permissions) { "voucher.approve" } }, order.Id)));
+        await svc.ReleaseAsync(h.Approver, order.Id);
+
+        var need = Assert.Single(await svc.RequirementsAsync(h.Auditor, order.Id));
+        Assert.Equal((110m, 110m, 0m), (need.Required, need.Remaining, need.Shortage));       // 100 MT × 1,1 tấn; kho có 150
+        var issue = await svc.CreateIssueAsync(h.Preparer, order.Id, null, D(3, 3));
+        Assert.Equal(StockDocumentStatus.Draft, issue.Status);
+        await svc.ConfirmWorkAsync(h.Preparer, order.Id, wc.Id, D(3, 4), 40, 20, "Ca 1");
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.CompleteAsync(h.Approver, order.Id, 98, D(3, 10))));            // phiếu xuất chưa ghi sổ
+        await s.Stock.PostDocumentAsync(h.Approver, issue.Id);
+        Assert.Equal(0m, Assert.Single(await svc.RequirementsAsync(h.Auditor, order.Id)).Remaining);
+
+        var running = await svc.CostSheetAsync(h.Auditor, order.Id);
+        Assert.Equal((66_000_000m, 2_000_000m, 2_000_000m, 70_000_000m, 700_000m), (running.MaterialCost, running.LaborCost, running.OverheadCost, running.TotalCost, running.UnitCost));
+        Assert.Equal((40m, 20m), (running.LaborHours, running.MachineHours));
+
+        // Hoàn thành khi chưa ánh xạ vai trò phân bổ → từ chối; ánh xạ rồi mới ghi Nhật ký.
+        Assert.Equal(ErrorCodes.RuleRoleUnmapped, await CodeOf(() => svc.CompleteAsync(h.Approver, order.Id, 98, D(3, 10))));
+        await s.Rules.SetRoleMappingAsync(h.Admin, "PROD_LABOR_APPLIED", "LAB_APPL");
+        await s.Rules.SetRoleMappingAsync(h.Admin, "PROD_OVERHEAD_APPLIED", "OH_APPL");
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.CancelAsync(h.Preparer, order.Id, "x")));                   // đã phát sinh sản xuất
+        var done = await svc.CompleteAsync(h.Approver, order.Id, 98, D(3, 10));
+        Assert.Equal((ProductionOrderStatus.Completed, 70_000_000m, 714_285.7143m), (done.Status, done.TotalCost, done.UnitCost));
+        Assert.Equal(70_000_000m, await BalanceAsync(s, h.Acc["WIP"]));   // 66 triệu nguyên liệu + 4 triệu chế biến; phiếu nhập thành phẩm chưa ghi sổ
+        Assert.Equal(-2_000_000m, await BalanceAsync(s, h.Acc["LAB_APPL"]));
+        Assert.Equal(-2_000_000m, await BalanceAsync(s, h.Acc["OH_APPL"]));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.CloseAsync(h.Preparer, order.Id)));                               // phiếu nhập chưa ghi sổ
+
+        await s.Stock.PostDocumentAsync(h.Preparer, done.ReceiptDocumentId!.Value);   // người hoàn thành lệnh lập phiếu nhập nên người khác ghi sổ
+        Assert.Equal(0m, await BalanceAsync(s, h.Acc["WIP"]));
+        Assert.Equal(70_000_000m, await BalanceAsync(s, h.Acc["FG"]));
+        var sheet = await svc.CostSheetAsync(h.Auditor, order.Id);
+        var usage = Assert.Single(sheet.Materials);
+        Assert.Equal((107.8m, 110m, 2.2m), (usage.StandardQuantity, usage.IssuedQuantity, usage.Variance));   // hao hụt vượt định mức 2,2 tấn
+        Assert.Equal(ProductionOrderStatus.Closed, (await svc.CloseAsync(h.Preparer, order.Id)).Status);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.ConfirmWorkAsync(h.Preparer, order.Id, wc.Id, D(3, 11), 1, 0, null)));
     }
 
     [Fact]

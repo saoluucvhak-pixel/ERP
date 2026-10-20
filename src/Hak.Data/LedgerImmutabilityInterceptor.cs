@@ -130,8 +130,11 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                                                     && (Domain.Tax.DeclarationStatus)entry.OriginalValues[nameof(Domain.Tax.TaxDeclaration.Status)]! == Domain.Tax.DeclarationStatus.Filed:
                     throw Immutable("Tờ khai đã nộp không được sửa/xóa; lập tờ khai bổ sung theo quy định.");
 
+                case Domain.Attachments.FileAttachment when entry.State is EntityState.Modified or EntityState.Deleted:
+                    throw Immutable("Tệp đính kèm (ảnh sự cố, ảnh nghiệm thu) là chứng cứ: chỉ thêm, không sửa hoặc xóa.");
+
                 case Domain.Assets.LongTermAsset when entry.State == EntityState.Deleted:
-                case Domain.Assets.AssetCostSource when entry.State is EntityState.Modified or EntityState.Deleted:
+                case Domain.Assets.AssetCostSource or Domain.Assets.DepreciationEntrySplit when entry.State is EntityState.Modified or EntityState.Deleted:
                 case Domain.Assets.DepreciationRun or Domain.Assets.DepreciationEntry or Domain.Fx.FxRevaluationRun when entry.State == EntityState.Deleted:
                     throw Immutable("Thẻ tài sản, nguồn nguyên giá và số khấu hao đã ghi không được sửa hoặc xóa.");
 
@@ -139,7 +142,8 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                                                        && (Domain.Assets.AssetStatus)entry.OriginalValues[nameof(Domain.Assets.LongTermAsset.Status)]! != Domain.Assets.AssetStatus.Draft:
                     if (entry.Properties.Any(p => p.IsModified && !Equals(p.OriginalValue, p.CurrentValue) && p.Metadata.Name is not (
                             nameof(Domain.Assets.LongTermAsset.Status) or nameof(Domain.Assets.LongTermAsset.DisposalDate)
-                            or nameof(Domain.Assets.LongTermAsset.DisposalVoucherId) or nameof(Domain.Assets.LongTermAsset.RowVersion))))
+                            or nameof(Domain.Assets.LongTermAsset.DisposalVoucherId) or nameof(Domain.Assets.LongTermAsset.RowVersion)
+                            or nameof(Domain.Assets.LongTermAsset.AllocationFrequency))))
                         throw Immutable($"Tài sản {a.Code} đã ghi tăng, thông số khấu hao không được sửa.");
                     break;
 

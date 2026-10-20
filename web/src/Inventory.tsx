@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog } from './common'
-import { addMoney, formatMoney, parseMoney, today } from './money'
+import { toAlt, toMain } from './units'
+import { api, get, post, type Period } from './api'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, FlowStrip } from './common'
+import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
 interface Warehouse { id: string; code: string; name: string; policies: { method: string; effectiveFrom: string }[] }
-interface Item { id: string; code: string; name: string; unit: string }
+interface Item { id: string; code: string; name: string; unit: string; tracksDryness?: boolean; altUnit?: string | null; altFactor?: string | null }
 interface StockDoc { id: string; number: string; type: string; warehouseId: string; toWarehouseId: string | null; documentDate?: string; postingDate: string; description: string; partnerId?: string | null; status: string; voucherId: string | null; lines: { lineNo: number; itemId: string; quantity: string; amount: string | null; counterAccountId?: string | null; description?: string | null }[] }
 
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
@@ -18,13 +19,17 @@ function useStockCatalog() {
   const [items, setItems] = useState<Item[]>([])
   useEffect(() => {
     get<Warehouse[]>('/warehouses').then(setWarehouses).catch(() => setWarehouses([]))
-    get<Item[]>('/items').then(setItems).catch(() => setItems([]))
+    get<Item[]>('/items').then(r => setItems(r.filter(i => !(i as Item & { isService?: boolean }).isService))).catch(() => setItems([]))
   }, [])
   return { warehouses, items }
 }
 
 export function InventoryView() {
   const [tab, setTab] = useState<'docs' | 'count' | 'summary' | 'card' | 'costing' | 'bdmt'>('docs')
+  const [counts, setCounts] = useState<{ draft: number; posted: number; pending: number }>({ draft: 0, posted: 0, pending: 0 })
+  useEffect(() => {
+    Promise.all([get<StockDoc[]>('/stock-documents'), get<unknown[]>('/measurements/pending').catch(() => [])]).then(([d, p]) => setCounts({ draft: d.filter(x => x.status === 'Draft').length, posted: d.filter(x => x.status === 'Posted').length, pending: p.length })).catch(() => undefined)
+  }, [tab])
   const tabs = { docs: 'Phiếu kho', count: 'Kiểm kê', summary: 'Nhập – xuất – tồn', card: 'Thẻ kho', costing: 'Tính giá cuối tháng', bdmt: 'MT / BDMT' } as const
   return (
     <>
@@ -32,12 +37,19 @@ export function InventoryView() {
         <h2>Kho</h2>
         {(Object.keys(tabs) as (keyof typeof tabs)[]).map(k => <button key={k} className={tab === k ? 'primary' : ''} onClick={() => setTab(k)}>{tabs[k]}</button>)}
       </div>
+      <FlowStrip steps={[
+        { label: 'Phiếu nhập / xuất / chuyển (nháp)', journal: false, count: `${counts.draft} phiếu nháp` },
+        { label: 'Ghi sổ: sổ kho + Nhật ký (người khác ghi sổ)', journal: true, count: `${counts.posted} phiếu đã ghi sổ` },
+        { label: 'Tính giá xuất cuối tháng (kho bình quân tháng)', journal: true, count: 'tab Tính giá cuối tháng' },
+        { label: 'Kiểm kê định kỳ, đối chiếu sổ', journal: false, count: 'tab Kiểm kê' },
+        { label: 'MT / BDMT (hàng theo dõi độ khô)', journal: false, count: `${counts.pending} dòng chờ kết quả đo` },
+      ]} />
       {tab === 'docs' && <StockDocs />}
       {tab === 'count' && <StockCount />}
       {tab === 'summary' && <Summary />}
       {tab === 'card' && <StockCard />}
       {tab === 'costing' && <Costing />}
-      {tab === 'bdmt' && <Bdmt />}
+      {tab === 'bdmt' && <><Bdmt /><DailyRates /></>}
     </>
   )
 }
@@ -58,7 +70,7 @@ function StockDocs() {
   const [info, setInfo] = useState('')
   const { busy, error, setError, run } = useAction()
   const [orders, setOrders] = useState<Order[]>([])
-  const [from, setFrom] = useState(today().slice(0, 4) + '-01-01')
+  const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
   const [statusFilter, setStatusFilter] = useState('')
   const [selId, setSelId] = useState('')
@@ -106,7 +118,11 @@ function StockDocs() {
           <tbody>{lines.map((l, i) => (
             <tr key={i}><td>{i + 1}</td>
               <td><select aria-label="Vật tư" value={l.itemId} onChange={e => upd(i, { itemId: e.target.value })}><option value="">— chọn —</option>{items.map(it => <option key={it.id} value={it.id}>{it.code} – {it.name} ({it.unit})</option>)}</select></td>
-              <td><input className="num" aria-label="Số lượng" value={l.quantity} onChange={e => upd(i, { quantity: e.target.value })} /></td>
+              <td><input className="num" aria-label="Số lượng" value={l.quantity} onChange={e => upd(i, { quantity: e.target.value })} />
+                {(() => { const it = items.find(x => x.id === l.itemId); if (!it?.altUnit || !it.altFactor) return null
+                  const q = parseMoney(l.quantity); const alt = q ? toAlt(q, it.altFactor) : null
+                  return <div className="muted" style={{ fontSize: 12 }}>= <input className="num" aria-label={`Số lượng theo ${it.altUnit}`} size={7} placeholder={it.altUnit} value={alt ? formatMoney(alt) : ''}
+                    onChange={e => { const a = parseMoney(e.target.value); if (a) { const m = toMain(a, it.altFactor!); if (m) upd(i, { quantity: formatMoney(m) }) } else if (e.target.value.trim() === '') upd(i, { quantity: '' }) }} /> {it.altUnit}</div> })()}</td>
               {type === 'Receipt' && <td><input className="num" aria-label="Giá trị" value={l.amount} onChange={e => upd(i, { amount: e.target.value })} onBlur={() => { const p = parseMoney(l.amount); if (p) upd(i, { amount: formatMoney(p) }) }} /></td>}
               {type !== 'Transfer' && <td><AccountSelect accounts={accounts} value={l.counterAccountId} onChange={v => upd(i, { counterAccountId: v })} ariaLabel="TK đối ứng" /></td>}
               {type !== 'Transfer' && <td><select aria-label="Theo đơn hàng" value={l.orderLine} onChange={e => upd(i, { orderLine: e.target.value })}><option value="">—</option>{orderLines.filter(o => !l.itemId || o.itemId === l.itemId).map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select></td>}
@@ -129,7 +145,7 @@ function StockDocs() {
         <table className="grid">
           <thead><tr><th>Ngày</th><th>Số</th><th>Loại</th><th>Kho</th><th>Diễn giải</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{shown.map(d => (
-            <tr key={d.id} className={d.id === selId ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelId(d.id)}><td>{d.postingDate}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
+            <tr key={d.id} className={d.id === selId ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelId(d.id)}><td>{formatDate(d.postingDate)}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
                 {d.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
@@ -158,7 +174,7 @@ function StockDocDetail({ doc: d, warehouses, items, partners, accounts }: { doc
   return (
     <div className="panel">
       <div className="toolbar">
-        <strong>{d.number}</strong> <span className="muted">{TYPE_VI[d.type]} · {wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''} · {d.postingDate} · {STATUS_VI[d.status] ?? d.status}</span>
+        <strong>{d.number}</strong> <span className="muted">{TYPE_VI[d.type]} · {wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''} · {formatDate(d.postingDate)} · {STATUS_VI[d.status] ?? d.status}</span>
         <span style={{ marginLeft: 'auto' }} /><button onClick={printSheet}>In phiếu</button>
       </div>
       <table className="grid">
@@ -273,7 +289,15 @@ function StockCount() {
 
 interface SummaryRow { warehouseCode: string; itemCode: string; itemName: string; unit: string; openingQty: string; openingValue: string; inQty: string; inValue: string; outQty: string; outValue: string; closingQty: string; closingValue: string; pendingOutQty: string }
 
+/** Số lượng theo đơn vị quy đổi cố định của vật tư (ví dụ 2 tấn); vật tư không có đơn vị quy đổi cố định thì để trống. */
+const altText = (item: Item | undefined, mainQty: string) => {
+  if (!item?.altUnit || !item.altFactor) return item?.tracksDryness ? <span className="muted" title="Quy đổi theo độ khô từng thời điểm: xem tab MT / BDMT">BDMT</span> : ''
+  const v = toAlt(mainQty, item.altFactor)
+  return v == null || v === '0' ? '' : `${formatMoney(v)} ${item.altUnit}`
+}
+
 function Summary() {
+  const { items } = useStockCatalog()
   const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
   const [rows, setRows] = useState<SummaryRow[] | null>(null)
@@ -298,9 +322,11 @@ function Summary() {
       {recon.map(r => <div key={r.accountCode} className={`msg ${r.difference === '0' ? 'ok' : 'error'}`}>
         TK {r.accountCode}: {r.difference === '0' ? 'sổ kho khớp sổ cái' : `sổ kho lệch sổ cái ${formatMoney(r.difference)}`}{r.pendingIssueQty !== '0' ? ` · ${formatMoney(r.pendingIssueQty)} đơn vị xuất chờ tính giá cuối tháng` : ''}</div>)}
       {rows && <div className="scroll"><table className="grid">
-        <thead><tr><th>Kho</th><th>Vật tư</th><th>ĐVT</th><th className="num">Tồn đầu SL</th><th className="num">Tồn đầu GT</th><th className="num">Nhập SL</th><th className="num">Nhập GT</th><th className="num">Xuất SL</th><th className="num">Xuất GT</th><th className="num">Tồn cuối SL</th><th className="num">Tồn cuối GT</th><th className="num">Chờ tính giá</th></tr></thead>
+        <thead><tr><th>Kho</th><th>Vật tư</th><th>ĐVT</th><th className="num">Tồn đầu SL</th><th className="num">Tồn đầu GT</th><th className="num">Nhập SL</th><th className="num">Nhập GT</th><th className="num">Xuất SL</th><th className="num">Xuất GT</th><th className="num">Tồn cuối SL</th><th className="num" title="Tồn cuối theo đơn vị quy đổi cố định của vật tư (1 đơn vị quy đổi = hệ số × đơn vị chính)">Tồn quy đổi</th><th className="num">Tồn cuối GT</th><th className="num">Chờ tính giá</th></tr></thead>
         <tbody>{rows.map(r => <tr key={r.warehouseCode + r.itemCode}><td>{r.warehouseCode}</td><td>{r.itemCode} – {r.itemName}</td><td>{r.unit}</td>
-          {[r.openingQty, r.openingValue, r.inQty, r.inValue, r.outQty, r.outValue, r.closingQty, r.closingValue, r.pendingOutQty].map((v, i) => <td key={i} className="num">{f(v)}</td>)}</tr>)}</tbody>
+          {[r.openingQty, r.openingValue, r.inQty, r.inValue, r.outQty, r.outValue, r.closingQty].map((v, i) => <td key={i} className="num">{f(v)}</td>)}
+          <td className="num">{altText(items.find(i => i.code === r.itemCode), r.closingQty)}</td>
+          {[r.closingValue, r.pendingOutQty].map((v, i) => <td key={i} className="num">{f(v)}</td>)}</tr>)}</tbody>
       </table></div>}
     </>
   )
@@ -315,6 +341,7 @@ function StockCard() {
   const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
   const [rows, setRows] = useState<CardRow[] | null>(null)
+  const selItem = items.find(i => i.id === itemId)
   const { busy, error, run } = useAction()
   const load = () => run(async () => setRows(await get(`/reports/stock-card?warehouseId=${warehouseId}&itemId=${itemId}&from=${from}&to=${to}`)))
   return (
@@ -328,11 +355,11 @@ function StockCard() {
       </div>
       <ErrorBox error={error} />
       {rows && <table className="grid">
-        <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Diễn giải</th><th className="num">Nhập</th><th className="num">Xuất</th><th className="num">Giá trị</th><th className="num">Tồn SL</th><th className="num">Tồn GT</th></tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i}><td>{r.date}</td><td>{r.documentNumber}</td><td>{r.description}</td>
+        <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Diễn giải</th><th className="num">Nhập</th><th className="num">Xuất</th><th className="num">Giá trị</th><th className="num">Tồn SL</th>{selItem?.altUnit && <th className="num">Tồn quy đổi ({selItem.altUnit})</th>}<th className="num">Tồn GT</th></tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}><td>{formatDate(r.date)}</td><td>{r.documentNumber}</td><td>{r.description}</td>
           <td className="num">{r.inQty === '0' ? '' : formatMoney(r.inQty)}</td><td className="num">{r.outQty === '0' ? '' : formatMoney(r.outQty)}</td>
           <td className="num">{r.value == null ? <span className="muted">chờ tính giá</span> : formatMoney(r.value)}</td>
-          <td className="num">{formatMoney(r.balanceQty)}</td><td className="num">{r.balanceValue == null ? '—' : formatMoney(r.balanceValue)}</td></tr>)}</tbody>
+          <td className="num">{formatMoney(r.balanceQty)}</td>{selItem?.altUnit && <td className="num">{altText(selItem, r.balanceQty)}</td>}<td className="num">{r.balanceValue == null ? '—' : formatMoney(r.balanceValue)}</td></tr>)}</tbody>
       </table>}
     </>
   )
@@ -357,13 +384,13 @@ function Costing() {
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="toolbar">
         <label>Kho (bình quân cuối tháng)<select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}><option value="">— chọn —</option>{monthly.map(w => <option key={w.id} value={w.id}>{w.code} – {w.name}</option>)}</select></label>
-        <label>Kỳ<select value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">— chọn —</option>{periods.map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
+        <label>Kỳ<select value={periodId} onChange={e => setPeriodId(e.target.value)}><option value="">— chọn —</option>{periods.map(p => <option key={p.id} value={p.id}>{formatMonth(p.startDate)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
         <button className="primary" disabled={busy || !warehouseId || !periodId} onClick={() => run(async () => { await post('/costing-runs', { warehouseId, periodId }); setInfo('Đã tính giá và ghi sổ giá vốn xuất kho của kỳ.'); await load() })}>Tính giá</button>
       </div>
       <table className="grid">
         <thead><tr><th>Kỳ</th><th>Kho</th><th>Trạng thái</th><th>Kết quả</th><th /></tr></thead>
         <tbody>{runs.map(r => (
-          <tr key={r.id}><td>{r.periodStart.slice(0, 7)}</td><td>{warehouses.find(w => w.id === r.warehouseId)?.code}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
+          <tr key={r.id}><td>{formatMonth(r.periodStart)}</td><td>{warehouses.find(w => w.id === r.warehouseId)?.code}</td><td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
             <td style={{ whiteSpace: 'normal' }}>{(JSON.parse(r.resultJson || '[]') as { item: string; issuedQty: number | string; issuedValue: number | string }[])
               .map(x => `${x.item}: xuất ${formatMoney(String(x.issuedQty))} = ${formatMoney(String(x.issuedValue))}`).join('; ')}</td>
             <td>{r.status === 'Active' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy lần tính giá:'); if (reason) run(async () => { await post(`/costing-runs/${r.id}/reverse`, { reason }); await load() }) }}>Hủy</button>}</td></tr>))}
@@ -376,11 +403,53 @@ function Costing() {
 
 interface Pending { documentId: string; documentNumber: string; type: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; expectedKind: string }
 interface Measurement { id: string; documentNumber: string; lineNo: number; kind: string; measuredMt: string; lineMt: string; drynessPercent: string; bdmt: string; methodCode: string; evidenceType: string; evidenceNo: string; evidenceIssuer: string | null; evidenceDate: string; supersededAt: string | null; supersedeReason: string | null }
-interface DrySummary { warehouseCode: string; itemCode: string; openingMt: string; openingBdmt: string; inMt: string; inBdmt: string; outMt: string; outBdmt: string; closingMt: string; closingBdmt: string; unmeasuredInMt: string; unmeasuredOutMt: string }
+interface DrySummary { warehouseCode: string; itemCode: string; openingMt: string; openingBdmt: string; inMt: string; inBdmt: string; outMt: string; outBdmt: string; closingMt: string; closingBdmt: string; unmeasuredInMt: string; unmeasuredOutMt: string; estimatedInBdmt: string; estimatedOutBdmt: string; estimatedClosingBdmt: string; closingDrynessPercent: string | null }
 
 const KIND_VI: Record<string, string> = { Receipt: 'Đo khi nhập', Shipment: 'Đo ở tàu (xuất)', Other: 'Khác' }
 
 /** BDMT = MT × độ khô% / 100 (phương pháp đã được doanh nghiệp phê duyệt). Đo khi nhập và đo ở tàu khi xuất (chứng thư). */
+interface DailyRate { id: string; itemId: string; itemCode: string; date: string; drynessPercent: string; note: string | null }
+
+/** Độ khô công bố theo ngày: đơn vị tính phụ BDMT dùng như tỷ giá (ngày không có số thì lấy ngày gần nhất trước đó). */
+function DailyRates() {
+  const { items } = useStockCatalog()
+  const tracked = items.filter(i => i.tracksDryness)
+  const [rows, setRows] = useState<DailyRate[]>([])
+  const [itemId, setItemId] = useState('')
+  const [date, setDate] = useState(today())
+  const [pct, setPct] = useState('')
+  const [note, setNote] = useState('')
+  const { busy, error, setError, run } = useAction()
+  const load = useCallback(() => run(async () => setRows(await get('/dryness-rates'))), [run])
+  useEffect(() => { load() }, [load])
+  const save = () => run(async () => {
+    const v = parseMoney(pct)
+    if (!v || !(itemId || tracked[0])) { setError(new Error('Chọn vật tư và nhập độ khô % (dùng dấu phẩy, ví dụ 52,35).')); return }
+    await post('/dryness-rates', { itemId: itemId || tracked[0].id, date, drynessPercent: v, note: note || null })
+    setPct(''); setNote(''); await load()
+  })
+  const del = (r: DailyRate) => run(async () => { await api('DELETE', `/dryness-rates/${r.id}`); await load() })
+  return (
+    <div className="panel">
+      <strong>Độ khô theo ngày (đơn vị phụ BDMT, như tỷ giá)</strong>
+      <p className="muted">Nhập độ khô công bố hằng ngày. Dòng nhập chưa có kết quả đo được tạm tính BDMT theo độ khô của ngày nhập (ngày không có số lấy ngày gần nhất trước đó). Kết quả đo / chứng thư luôn được ưu tiên. Không ghi sổ cái.</p>
+      <ErrorBox error={error} />
+      <div className="toolbar">
+        <label>Vật tư<select value={itemId || tracked[0]?.id || ''} onChange={e => setItemId(e.target.value)}>{tracked.map(i => <option key={i.id} value={i.id}>{i.code} – {i.name}</option>)}</select></label>
+        <label>Ngày<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+        <label>Độ khô %<input className="num" size={7} value={pct} onChange={e => setPct(e.target.value)} /></label>
+        <label>Ghi chú<input value={note} onChange={e => setNote(e.target.value)} /></label>
+        <button className="primary" disabled={busy || tracked.length === 0} onClick={save}>Ghi độ khô</button>
+      </div>
+      <table className="grid">
+        <thead><tr><th>Ngày</th><th>Vật tư</th><th className="num">Độ khô %</th><th>Ghi chú</th><th /></tr></thead>
+        <tbody>{rows.slice(0, 60).map(r => <tr key={r.id}><td>{formatDate(r.date)}</td><td>{r.itemCode}</td><td className="num">{formatMoney(r.drynessPercent)}</td><td>{r.note}</td><td><button disabled={busy} onClick={() => del(r)}>Xóa</button></td></tr>)}
+          {rows.length === 0 && <tr><td colSpan={5} className="muted">Chưa có độ khô theo ngày.</td></tr>}</tbody>
+      </table>
+    </div>
+  )
+}
+
 function Bdmt() {
   const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
@@ -443,18 +512,21 @@ function Bdmt() {
       <div className="panel">
         <strong>Tồn MT / BDMT</strong>
         <table className="grid">
-          <thead><tr><th>Kho</th><th>Vật tư</th><th className="num">Đầu MT</th><th className="num">Đầu BDMT</th><th className="num">Nhập MT</th><th className="num">Nhập BDMT</th><th className="num">Xuất MT</th><th className="num">Xuất BDMT</th><th className="num">Cuối MT</th><th className="num">Cuối BDMT</th><th className="num">MT chưa có kết quả đo</th></tr></thead>
+          <thead><tr><th>Kho</th><th>Vật tư</th><th className="num">Đầu MT</th><th className="num">Đầu BDMT</th><th className="num">Nhập MT</th><th className="num">Nhập BDMT</th><th className="num">Xuất MT</th><th className="num">Xuất BDMT</th><th className="num">Cuối MT</th><th className="num">Cuối BDMT (đã đo)</th><th className="num" title="Tồn BDMT gồm cả phần xuất, chuyển kho chưa đo được tính tạm theo độ khô bình quân của kho lúc xuất">Cuối BDMT (kể cả tạm tính)</th><th className="num">Độ khô bình quân tồn %</th><th className="num">MT chưa có kết quả đo</th></tr></thead>
           <tbody>{rows.map(r => <tr key={r.warehouseCode + r.itemCode}><td>{r.warehouseCode}</td><td>{r.itemCode}</td>
             {[r.openingMt, r.openingBdmt, r.inMt, r.inBdmt, r.outMt, r.outBdmt, r.closingMt, r.closingBdmt].map((v, i) => <td key={i} className="num">{n(v)}</td>)}
+            <td className="num" title={r.estimatedOutBdmt !== '0' ? `Xuất tạm tính ${formatMoney(r.estimatedOutBdmt)} BDMT theo bình quân thời điểm` : undefined}>{n(r.estimatedClosingBdmt)}{r.estimatedOutBdmt !== '0' || r.estimatedInBdmt !== '0' ? ' *' : ''}</td>
+            <td className="num">{r.closingDrynessPercent == null ? '' : formatMoney(r.closingDrynessPercent)}</td>
             <td className="num">{n(r.unmeasuredInMt)}{r.unmeasuredOutMt !== '0' ? ` / xuất ${formatMoney(r.unmeasuredOutMt)}` : ''}</td></tr>)}</tbody>
         </table>
+        {rows.some(r => r.estimatedOutBdmt !== '0' || r.estimatedInBdmt !== '0') && <p className="muted">* Có phần tạm tính: xuất và chuyển kho chưa có kết quả đo được tính BDMT theo <b>độ khô bình quân thời điểm</b> của kho lúc xuất (BDMT tồn ÷ MT tồn); hàng chuyển kho mang đúng BDMT đó sang kho nhận. Có chứng thư hoặc kết quả đo thì số đo thay số tạm tính. Không ghi sổ cái.</p>}
       </div>
       <div className="panel">
         <strong>Chờ kết quả đo / chứng thư ({pending.length})</strong>
         <table className="grid">
           <thead><tr><th>Ngày</th><th>Phiếu</th><th>Vật tư</th><th className="num">MT trên phiếu</th><th>Loại đo</th><th>Độ khô %</th><th>MT theo chứng thư</th><th>Số chứng thư / phiếu đo</th><th>Đơn vị giám định</th><th>Ngày</th><th /></tr></thead>
           <tbody>{pending.map(p => (
-            <tr key={key(p)}><td>{p.postingDate}</td><td>{p.documentNumber}/{p.lineNo}</td><td>{p.itemCode}</td><td className="num">{formatMoney(p.quantity)}</td><td>{KIND_VI[p.expectedKind]}</td>
+            <tr key={key(p)}><td>{formatDate(p.postingDate)}</td><td>{p.documentNumber}/{p.lineNo}</td><td>{p.itemCode}</td><td className="num">{formatMoney(p.quantity)}</td><td>{KIND_VI[p.expectedKind]}</td>
               <td><input className="num" aria-label="Độ khô %" size={6} value={f(p).dryness} onChange={e => setF(p, { dryness: e.target.value })} /></td>
               <td><input className="num" aria-label="MT theo chứng thư" size={8} placeholder="= phiếu" value={f(p).mt} onChange={e => setF(p, { mt: e.target.value })} /></td>
               <td><input aria-label="Số chứng thư" value={f(p).evidenceNo} onChange={e => setF(p, { evidenceNo: e.target.value })} placeholder={p.expectedKind === 'Shipment' ? 'Chứng thư (bắt buộc)' : 'Phiếu đo'} /></td>
@@ -473,7 +545,7 @@ function Bdmt() {
             <tr key={m.id} style={m.supersededAt ? { opacity: .6 } : undefined}><td>{m.documentNumber}/{m.lineNo}</td><td>{KIND_VI[m.kind]}</td>
               <td className="num">{formatMoney(m.measuredMt)}{m.measuredMt !== m.lineMt ? ` (phiếu ${formatMoney(m.lineMt)})` : ''}</td>
               <td className="num">{formatMoney(m.drynessPercent)}</td><td className="num">{formatMoney(m.bdmt)}</td>
-              <td>{m.evidenceType === 'Certificate' ? 'Chứng thư' : 'Phiếu đo'} {m.evidenceNo}{m.evidenceIssuer ? ` · ${m.evidenceIssuer}` : ''} · {m.evidenceDate}</td>
+              <td>{m.evidenceType === 'Certificate' ? 'Chứng thư' : 'Phiếu đo'} {m.evidenceNo}{m.evidenceIssuer ? ` · ${m.evidenceIssuer}` : ''} · {formatDate(m.evidenceDate)}</td>
               <td>{m.supersededAt ? `Đã thay thế: ${m.supersedeReason}` : 'Hiệu lực'}</td>
               <td>{!m.supersededAt && <button onClick={() => supersede(m)}>Thay thế</button>}</td></tr>))}
           </tbody>

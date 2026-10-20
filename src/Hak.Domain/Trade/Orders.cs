@@ -17,6 +17,8 @@ public sealed class TradeOrder
     public string Number { get; set; } = "";
     public Guid PartnerId { get; set; }
     public string? ContractNo { get; set; }
+    /// <summary>Hợp đồng mà đơn kế thừa (call-off); đơn trừ lùi số lượng / giá trị còn lại của hợp đồng.</summary>
+    public Guid? ContractId { get; set; }
     public DateOnly OrderDate { get; set; }
     public DateOnly? ExpectedDate { get; set; }
     public string? Currency { get; set; }

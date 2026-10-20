@@ -1,0 +1,38 @@
+name: setup-exe
+# Tao bo cai HAK-Setup.exe tren may Windows cua GitHub (khong the build .exe tren Linux).
+# Chay tay: Actions -> setup-exe -> Run workflow; hoac tu dong khi dat tag v*.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+    branches: ['ccr-825b7ba0-llbo2o']
+    paths: ['tools/package/**', '.github/workflows/setup-exe.yml']
+jobs:
+  setup:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dong goi thu muc chuong trinh
+        shell: pwsh
+        run: ./tools/package/package.ps1
+      - name: Cai Inno Setup neu chua co
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and -not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Bien dich bo cai
+        shell: pwsh
+        run: |
+          $iscc = if (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") { "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" } else { (Get-Command iscc).Source }
+          & $iscc "/DAppVersion=1.0.${{ github.run_number }}" tools/package/HAK.iss
+          if ($LASTEXITCODE) { throw "iscc loi" }
+          Get-FileHash artifacts/HAK-Setup.exe -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HAK-Setup
+          path: artifacts/HAK-Setup.exe

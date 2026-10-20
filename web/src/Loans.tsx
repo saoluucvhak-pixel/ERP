@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, parseRate, today } from './money'
+import { get, post, put, type Period } from './api'
+import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
+import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, parseRate, today } from './money'
 
 interface LoanRow {
   id: string; code: string; description: string; lenderCode: string; accountCode: string; currency: string | null
@@ -24,6 +24,7 @@ export function LoansView() {
   const [creating, setCreating] = useState(false)
   const [linking, setLinking] = useState<{ loan: LoanRow; items: Candidate[]; picked: string[] } | null>(null)
   const [rateFor, setRateFor] = useState<LoanRow | null>(null)
+  const [scheduleFor, setScheduleFor] = useState<LoanRow | null>(null)
   const [periodId, setPeriodId] = useState('')
   const [fxRates, setFxRates] = useState<Record<string, string>>({})
   const [info, setInfo] = useState('')
@@ -65,6 +66,13 @@ export function LoansView() {
           rows={rows.map(r => [r.code, r.description, r.lenderCode, r.accountCode, r.currency ?? 'VND', STATUS_VI[r.status], r.contractAmount, r.drawn, r.repaid, r.outstanding, r.outstandingForeign, r.currentRatePercent, r.maturityDate, r.dueWithin12Months ? 'Có' : '', r.interestAccrued])} />
       </div>
       <p className="muted">Giải ngân / trả nợ hạch toán bằng chứng từ thông thường (Nợ tiền / Có TK vay chi tiết bên cho vay) rồi gắn vào khế ước. Lãi tính theo dư nợ từng ngày × lãi suất từng ngày ÷ số ngày cơ sở; ngày giải ngân tính lãi, ngày trả nợ không tính [CẦN XÁC MINH theo hợp đồng].</p>
+      <FlowStrip steps={[
+        { label: 'Khế ước (nháp → hiệu lực, người khác duyệt)', journal: false, count: `${rows.filter(r => r.status === 'Draft').length} nháp · ${rows.filter(r => r.status === 'Active').length} hiệu lực` },
+        { label: 'Giải ngân, trả nợ gốc (liên kết chứng từ)', journal: true, screen: 'cash', count: 'chứng từ thu / chi gắn khế ước' },
+        { label: 'Trích lãi hằng kỳ', journal: true, count: `${runs.filter(r => r.status === 'Active').length} kỳ đã trích` },
+        { label: 'Đáo hạn trong 12 tháng', journal: false, count: `${rows.filter(r => r.dueWithin12Months).length} khế ước` },
+        { label: 'Lịch trả nợ vào kế hoạch tiền', journal: false, screen: 'procurement', count: 'Dự báo dòng tiền ở Tổng quan' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 
@@ -79,7 +87,7 @@ export function LoansView() {
             <td><span className={`badge ${r.status}`}>{STATUS_VI[r.status]}</span>{r.dueWithin12Months && <span className="muted"> · đến hạn ≤ 12 tháng</span>}</td>
             <td className="num">{formatMoney(r.contractAmount)}</td><td className="num">{formatMoney(r.drawn)}</td><td className="num">{formatMoney(r.repaid)}</td>
             <td className="num">{formatMoney(r.outstanding)}{r.outstandingForeign != null && <div className="muted">{formatMoney(r.outstandingForeign)} {r.currency}</div>}</td>
-            <td className="num">{formatMoney(r.currentRatePercent)}</td><td>{r.maturityDate}</td><td className="num">{formatMoney(r.interestAccrued)}</td>
+            <td className="num">{formatMoney(r.currentRatePercent)}</td><td>{formatDate(r.maturityDate)}</td><td className="num">{formatMoney(r.interestAccrued)}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               {r.status === 'Draft' && <>
                 <button disabled={busy} onClick={() => act(() => post(`/loans/${r.id}/activate`), `Đã duyệt khế ước ${r.code}.`)}>Duyệt</button>
@@ -88,6 +96,7 @@ export function LoansView() {
               {r.status === 'Active' && <>
                 <button disabled={busy} onClick={() => run(async () => setLinking({ loan: r, items: await get<Candidate[]>(`/loans/${r.id}/candidates`), picked: [] }))}>Gắn giải ngân / trả nợ</button>
                 <button disabled={busy} onClick={() => setRateFor(r)}>Đổi lãi suất</button>
+                <button disabled={busy} onClick={() => setScheduleFor(r)}>Lịch trả nợ</button>
                 <button disabled={busy} onClick={() => confirm(`Tất toán khế ước ${r.code}?`) && act(() => post(`/loans/${r.id}/close`), `Đã tất toán ${r.code}.`)}>Tất toán</button>
               </>}
             </td>
@@ -103,13 +112,15 @@ export function LoansView() {
             <tbody>{linking.items.map(c => <tr key={c.journalLineId}>
               <td><input type="checkbox" aria-label={`Chọn ${c.voucherNumber}`} checked={linking.picked.includes(c.journalLineId)}
                 onChange={e => setLinking(l => l && ({ ...l, picked: e.target.checked ? [...l.picked, c.journalLineId] : l.picked.filter(x => x !== c.journalLineId) }))} /></td>
-              <td>{c.voucherNumber}</td><td>{c.postingDate}</td><td>{c.side}</td><td className="num">{formatMoney(c.amount)}</td><td className="num">{formatMoney(c.foreignAmount)}</td><td>{c.description}</td>
+              <td>{c.voucherNumber}</td><td>{formatDate(c.postingDate)}</td><td>{c.side}</td><td className="num">{formatMoney(c.amount)}</td><td className="num">{formatMoney(c.foreignAmount)}</td><td>{c.description}</td>
             </tr>)}</tbody></table>}
           <button className="primary" disabled={busy || linking.picked.length === 0} onClick={() => act(async () => {
             await post(`/loans/${linking.loan.id}/links`, { journalLineIds: linking.picked }); setLinking(null)
           }, 'Đã gắn bút toán vào khế ước.')}>Gắn</button>
         </section>
       )}
+
+      {scheduleFor && <SchedulePanel loan={scheduleFor} onClose={() => setScheduleFor(null)} />}
 
       {rateFor && <RateForm loan={rateFor} busy={busy} onCancel={() => setRateFor(null)}
         onSubmit={(effectiveFrom, rate, note) => act(async () => { await post(`/loans/${rateFor.id}/rates`, { effectiveFrom, annualRatePercent: rate, note }); setRateFor(null) },
@@ -121,13 +132,13 @@ export function LoansView() {
         <div className="form-row">
           <select value={periodId || nextPeriod?.id || ''} onChange={e => setPeriodId(e.target.value)} aria-label="Kỳ trích lãi">
             <option value="">— chọn kỳ —</option>
-            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}</option>)}
+            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{formatMonth(p.startDate)}</option>)}
           </select>
           {foreignCurrencies.map(c => <label key={c}>Tỷ giá {c} <input inputMode="decimal" value={fxRates[c] ?? ''} onChange={e => setFxRates(x => ({ ...x, [c]: e.target.value }))} /></label>)}
           <button className="primary" disabled={busy} onClick={accrue}>Trích lãi</button>
         </div>
         <table className="grid"><thead><tr><th>Kỳ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{r.periodStart.slice(0, 7)}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{formatMonth(r.periodStart)}</td>
             <td>{r.status === 'Active' ? (r.voucherId ? 'Hiệu lực' : 'Hiệu lực (không phát sinh)') : 'Đã hủy'}</td>
             <td>{r.id === lastActive?.id && <button disabled={busy} onClick={() => {
               const reason = prompt('Lý do hủy lần trích lãi:')
@@ -136,7 +147,7 @@ export function LoansView() {
       </section>
 
       <section className="panel">
-        <div className="toolbar"><h3>Đối chiếu sổ vay ↔ sổ cái tại {asOf}</h3>
+        <div className="toolbar"><h3>Đối chiếu sổ vay ↔ sổ cái tại {formatDate(asOf)}</h3>
           <button onClick={() => run(async () => setRecon(await get<ReconRow[]>(`/loans/reconciliation?asOf=${asOf}`)))}>Đối chiếu</button></div>
         {recon && <table className="grid"><thead><tr><th>TK</th><th>Bên cho vay</th><th className="num">Sổ cái (dư Có)</th><th className="num">Theo khế ước</th><th className="num">Đánh giá lại tỷ giá</th><th className="num">Chênh lệch</th></tr></thead>
           <tbody>{recon.map(r => <tr key={`${r.accountId}|${r.lenderId}`} className={r.difference !== '0' ? 'warn' : ''}><td>{r.accountCode}</td><td>{r.lenderCode}</td>
@@ -205,6 +216,57 @@ function NewLoan({ accounts, partners, onDone }: { accounts: ReturnType<typeof u
         <button className="primary" disabled={busy || !f.code || !f.lenderId || !f.principalAccountId || !f.maturityDate} onClick={submit}>Lưu nháp</button>
         <button onClick={() => onDone()}>Hủy</button>
       </div>
+    </section>
+  )
+}
+
+interface ScheduleRow { id?: string; dueDate: string; principalDue: string; interestDue: string; principalOpen?: string; status?: 'Pending' | 'Paid' | 'Overdue' }
+const SCHEDULE_VI = { Pending: 'Chờ trả', Paid: 'Đã trả', Overdue: 'Quá hạn' } as const
+
+/** Lịch trả nợ gốc và lãi của khế ước (tài liệu chu trình tài chính): sinh lịch trả gốc đều, sửa, lưu; trạng thái suy ra từ các lần trả gốc đã ghi sổ và gắn khế ước. */
+function SchedulePanel({ loan, onClose }: { loan: LoanRow; onClose: () => void }) {
+  const [rows, setRows] = useState<ScheduleRow[]>([])
+  const [draft, setDraft] = useState<ScheduleRow[] | null>(null)
+  const [gen, setGen] = useState({ installments: '12', firstDue: today(), rate: '' })
+  const [info, setInfo] = useState('')
+  const { busy, error, run, setError } = useAction()
+  const load = useCallback(() => run(async () => setRows(await get<ScheduleRow[]>(`/loans/${loan.id}/schedule?asOf=${today()}`))), [run, loan.id])
+  useEffect(() => { load() }, [load])
+  const shown = draft ?? rows
+  const total = (k: 'principalDue' | 'interestDue') => addMoney(shown.map(r => r[k]))
+  return (
+    <section className="panel">
+      <div className="toolbar"><h3>Lịch trả nợ {loan.code}</h3><span className="muted">hạn mức {formatMoney(loan.contractAmount)} · đáo hạn {formatDate(loan.maturityDate)}</span><button onClick={onClose}>Đóng</button></div>
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+      <div className="form-row">
+        <label>Số kỳ (trả gốc đều theo tháng)<input inputMode="numeric" value={gen.installments} onChange={e => setGen({ ...gen, installments: e.target.value })} /></label>
+        <label>Ngày trả đầu tiên<input type="date" value={gen.firstDue} onChange={e => setGen({ ...gen, firstDue: e.target.value })} /></label>
+        <label>Lãi suất %/năm (trống = theo khế ước)<input inputMode="decimal" value={gen.rate} onChange={e => setGen({ ...gen, rate: e.target.value })} /></label>
+        <button disabled={busy} onClick={() => run(async () => {
+          const rate = gen.rate.trim() ? parseRate(gen.rate) : null
+          if (gen.rate.trim() && rate == null) throw new Error('Lãi suất không hợp lệ.')
+          const items = await post<{ dueDate: string; principalDue: string; interestDue: string }[]>(`/loans/${loan.id}/schedule/preview`, { installments: Number(gen.installments), firstDue: gen.firstDue, annualRatePercent: rate })
+          setDraft(items)
+        })}>Sinh lịch xem trước</button>
+      </div>
+      <table className="grid"><thead><tr><th>Ngày đến hạn</th><th className="num">Nợ gốc</th><th className="num">Lãi</th><th className="num">Cộng</th><th className="num">Gốc còn phải trả</th><th>Trạng thái</th></tr></thead>
+        <tbody>{shown.map((r, i) => <tr key={r.id ?? i}><td>{formatDate(r.dueDate)}</td>
+          <td className="num">{draft ? <input aria-label={`Gốc kỳ ${i + 1}`} style={{ width: 130, textAlign: 'right' }} value={r.principalDue} onChange={e => setDraft(draft.map((x, j) => j === i ? { ...x, principalDue: e.target.value } : x))} /> : formatMoney(r.principalDue)}</td>
+          <td className="num">{draft ? <input aria-label={`Lãi kỳ ${i + 1}`} style={{ width: 130, textAlign: 'right' }} value={r.interestDue} onChange={e => setDraft(draft.map((x, j) => j === i ? { ...x, interestDue: e.target.value } : x))} /> : formatMoney(r.interestDue)}</td>
+          <td className="num">{formatMoney(addMoney([r.principalDue, r.interestDue]))}</td>
+          <td className="num">{r.principalOpen != null ? formatMoney(r.principalOpen) : ''}</td>
+          <td style={{ color: r.status === 'Overdue' ? 'var(--danger)' : undefined }}>{draft ? 'Bản xem trước' : r.status ? SCHEDULE_VI[r.status] : ''}</td></tr>)}
+          {shown.length === 0 && <tr><td colSpan={6} className="muted">Chưa có lịch trả nợ.</td></tr>}</tbody>
+        {shown.length > 0 && <tfoot><tr><td><b>Cộng</b></td><td className="num"><b>{formatMoney(total('principalDue'))}</b></td><td className="num"><b>{formatMoney(total('interestDue'))}</b></td><td className="num"><b>{formatMoney(addMoney([total('principalDue'), total('interestDue')]))}</b></td><td /><td /></tr></tfoot>}
+      </table>
+      {draft && <div className="toolbar">
+        <button className="primary" disabled={busy} onClick={() => run(async () => {
+          const items = draft.map(r => ({ dueDate: r.dueDate, principalDue: parseMoney(r.principalDue), interestDue: parseMoney(r.interestDue) }))
+          if (items.some(i => i.principalDue == null || i.interestDue == null)) { setError(new Error('Có số tiền không hợp lệ.')); return }
+          await put(`/loans/${loan.id}/schedule`, items); setDraft(null); setInfo('Đã lưu lịch trả nợ; kế hoạch tiền ở màn Tổng quan sẽ tính các kỳ chưa trả.'); await load()
+        })}>Lưu lịch</button>
+        <button onClick={() => setDraft(null)}>Bỏ bản xem trước</button></div>}
     </section>
   )
 }

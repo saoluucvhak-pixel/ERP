@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
-import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { CashDocsView } from './CashDocs'
 import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES } from './voucherguards'
-import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
+import { SmartFilter, useFilterState } from './SmartFilter'
+import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 
 interface LineDraft { accountId: string; side: 'D' | 'C'; amount: string; partnerId: string; description: string; cashFlowCode: string }
 const emptyLine = (side: 'D' | 'C'): LineDraft => ({ accountId: '', side, amount: '', partnerId: '', description: '', cashFlowCode: '' })
 
 export function VouchersView() {
-  const [from, setFrom] = useState(today().slice(0, 8) + '01')
-  const [to, setTo] = useState(today())
-  const [status, setStatus] = useState('')
-  const [type, setType] = useState('')
-  const [text, setText] = useState('')
-  const [search, setSearch] = useState('')
+  const [fs, patchFs, clearFs] = useFilterState('vouchers')
+  const { from, to } = fs
+  const status = fs.sel.status ?? ''
+  const type = fs.sel.type ?? ''
+  const [search, setSearch] = useState(fs.q.trim())
+  useEffect(() => { const t = setTimeout(() => { setSearch(fs.q.trim()); setPage(0) }, 350); return () => clearTimeout(t) }, [fs.q])
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
   const [list, setList] = useState<Voucher[]>([])
@@ -67,30 +68,18 @@ export function VouchersView() {
     <>
       <div className="toolbar">
         <h2>Chứng từ kế toán</h2>
-        <label>Từ ngày<input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(0) }} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(0) }} /></label>
-        <label>Trạng thái
-          <select value={status} onChange={e => { setStatus(e.target.value); setPage(0) }}>
-            <option value="">Tất cả</option>
-            {Object.entries(STATUS_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-          </select>
-        </label>
-        <label>Loại
-          <select value={type} onChange={e => { setType(e.target.value); setPage(0) }}>
-            <option value="">Tất cả</option>
-            {Object.entries(TYPE_VI).map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-          </select>
-        </label>
-        <label>Tài khoản<AccountSelect accounts={allAccounts} value={accountId} onChange={id => { setAccountId(id); setPage(0) }} ariaLabel="Lọc theo tài khoản" /></label>
-        <form onSubmit={e => { e.preventDefault(); setSearch(text.trim()); setPage(0) }} style={{ display: 'contents' }}>
-          <label>Tìm<input value={text} onChange={e => setText(e.target.value)} placeholder="số, diễn giải" /></label>
-        </form>
         <button onClick={() => load()} disabled={busy}>Tải lại</button>
         <ExportButton fileName={`Chung_tu_${from}_${to}`} sheet="Chứng từ" disabled={list.length === 0}
           columns={[{ header: 'Ngày HT', width: 12 }, { header: 'Số', width: 16 }, { header: 'Loại', width: 22 }, { header: 'Diễn giải', width: 50 }, { header: 'Số tiền', numeric: true, width: 18 }, { header: 'Trạng thái', width: 14 }]}
           rows={list.map(x => [x.postingDate, x.number, TYPE_VI[x.voucherType] ?? x.voucherType, x.description ?? '', x.totalDebit, STATUS_VI[x.status] ?? x.status])} />
         <button className="primary" onClick={() => setEditing('new')}>Thêm chứng từ</button>
       </div>
+      <SmartFilter label="Chứng từ" state={fs} patch={p => { patchFs(p); setPage(0) }} clear={() => { clearFs(); setAccountId(''); setPage(0) }} dateLabel="ngày hạch toán"
+        placeholder="Tìm số chứng từ, diễn giải" hint="Tìm theo số chứng từ hoặc diễn giải (máy chủ tìm trên toàn bộ kỳ đã chọn)."
+        selects={[{ key: 'status', label: 'Trạng thái', options: Object.entries(STATUS_VI).map(([value, label]) => ({ value, label })) },
+          { key: 'type', label: 'Loại', options: Object.entries(TYPE_VI).map(([value, label]) => ({ value, label })) }]}
+        shown={list.length} total={total} />
+      <div className="toolbar"><label>Tài khoản<AccountSelect accounts={allAccounts} value={accountId} onChange={id => { setAccountId(id); setPage(0) }} ariaLabel="Lọc theo tài khoản" /></label></div>
       <ErrorBox error={error} />
       {info && !error && <div className={info.includes('Không làm được') ? 'msg error' : 'msg ok'}>{info}</div>}
       {checked.size > 0 && <div className="toolbar panel">
@@ -106,19 +95,13 @@ export function VouchersView() {
         <div className="panel">
           <div className="toolbar">
             <strong>{v.number}</strong> <span className={`badge ${v.status}`}>{STATUS_VI[v.status]}</span>
-            <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {v.postingDate} · {v.description}</span>
+            <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {formatDate(v.postingDate)} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
             {v.status === 'Draft' && (!CASH_TYPES.includes(v.voucherType) || canEditAsCashDoc(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
             <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
               const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
               setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')
             })}>Kiểm tra</button>
-            {v.status === 'Draft' && <button onClick={() => act('Đã gửi duyệt', () => post(`/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`))}>Gửi duyệt</button>}
-            {v.status === 'Submitted' && <button onClick={() => act('Đã duyệt', () => post(`/vouchers/${v.id}/approve?rowVersion=${v.rowVersion}`))}>Duyệt</button>}
-            {(v.status === 'Submitted' || v.status === 'Approved') && <button onClick={() => {
-              const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(`/vouchers/${v.id}/reject?rowVersion=${v.rowVersion}`, { reason }))
-            }}>Trả lại</button>}
-            {v.status === 'Approved' && <button className="primary" onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
             {v.status === 'Posted' && <button className="danger" onClick={() => {
               const reason = prompt('Lý do đảo bút toán:'); if (!reason) return
               const date = prompt('Ngày đảo (yyyy-mm-dd):', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }))
@@ -129,6 +112,14 @@ export function VouchersView() {
             {canCopyVoucher(v) && <button onClick={() => setEditing({ copyOf: v })}>Sao chép</button>}
             <button onClick={printSheet}>In chứng từ</button>
           </div>
+          <StatusBar steps={VOUCHER_STEPS} current={v.status} stopped={{ Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }}>
+              {v.status === 'Draft' && <button onClick={() => act('Đã gửi duyệt', () => post(`/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`))}>Gửi duyệt</button>}
+              {v.status === 'Submitted' && <button onClick={() => act('Đã duyệt', () => post(`/vouchers/${v.id}/approve?rowVersion=${v.rowVersion}`))}>Duyệt</button>}
+              {(v.status === 'Submitted' || v.status === 'Approved') && <button onClick={() => {
+              const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(`/vouchers/${v.id}/reject?rowVersion=${v.rowVersion}`, { reason }))
+            }}>Trả lại</button>}
+              {v.status === 'Approved' && <button className="primary" onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
+          </StatusBar>
           <LinesTable voucher={v} />
           <VoucherPrint voucher={v} />
         </div>
@@ -143,7 +134,7 @@ export function VouchersView() {
               <tr key={x.id} className={x.id === v?.id ? 'selected' : ''} onClick={() => setSelected(x)} style={{ cursor: 'pointer' }}>
                 <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Chọn ${x.number}`} checked={checked.has(x.id)}
                   onChange={e => setChecked(c => { const n = new Set(c); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} /></td>
-                <td>{x.postingDate}</td><td>{x.number}</td><td>{TYPE_VI[x.voucherType] ?? x.voucherType}</td><td>{x.description}</td>
+                <td>{formatDate(x.postingDate)}</td><td>{x.number}</td><td>{TYPE_VI[x.voucherType] ?? x.voucherType}</td><td>{x.description}</td>
                 <td className="num">{formatMoney(x.totalDebit)}</td><td><span className={`badge ${x.status}`}>{STATUS_VI[x.status]}</span></td>
               </tr>
             ))}
@@ -161,6 +152,8 @@ export function VouchersView() {
 }
 
 const PAGE = 200
+
+const VOUCHER_STEPS = [{ key: 'Draft', label: 'Nháp' }, { key: 'Submitted', label: 'Chờ duyệt' }, { key: 'Approved', label: 'Đã duyệt' }, { key: 'Posted', label: 'Đã ghi sổ' }]
 
 /** Printed voucher (internal layout — the legal forms of the accounting regime are not reproduced until verified). */
 function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
@@ -183,8 +176,8 @@ function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
         <div className="center">Ngày {d(v.voucherDate)} · Số: <b>{v.number}</b></div>
         <div className="center">{receipt ? 'Nợ' : 'Có'}: {main} · {receipt ? 'Có' : 'Nợ'}: {counter}</div>
         {v.status !== 'Posted' && <div className="center" style={{ marginTop: 6 }}><span className="stamp">{STATUS_VI[v.status]?.toUpperCase()} — CHƯA GHI SỔ</span></div>}
-        <p>Họ và tên người {receipt ? 'nộp' : 'nhận'} tiền: <b>{p ? p.name : '…………………………………'}</b></p>
-        <p>Địa chỉ: …………………………………………………{p?.taxCode ? ` · MST: ${p.taxCode}` : ''}</p>
+        <p>Họ và tên người {receipt ? 'nộp' : 'nhận'} tiền: <b>{v.counterpartyName || (p ? p.name : '…………………………………')}</b></p>
+        <p>Đơn vị, địa chỉ: {v.counterpartyUnit || p?.address || '…………………………………………………'}{p?.taxCode ? ` · MST: ${p.taxCode}` : ''}</p>
         <p>Lý do {receipt ? 'nộp' : 'chi'}: {v.description}</p>
         <p>Số tiền: <b>{formatMoney(v.totalDebit)}</b> đồng</p>
         <p>Bằng chữ: <i>{amountInWords(v.totalDebit)}</i></p>

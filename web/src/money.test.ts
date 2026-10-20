@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addMoney, amountInWords, formatMoney, parseMoney, parseRate, today } from './money.ts'
+import { addMoney, amountInWords, formatMoney, parseMoney, parseRate, today, formatDate, formatDateTime, formatMonth } from './money.ts'
 
 test('formatMoney groups with dots and uses comma decimals, never via Number', () => {
   assert.equal(formatMoney('1234567'), '1.234.567')
@@ -58,4 +58,17 @@ test('amountInWords reads Vietnamese money', () => {
   assert.equal(amountInWords('2000000000000'), 'Hai nghìn tỷ đồng')
   assert.equal(amountInWords('-30'), 'Âm ba mươi đồng')
   assert.equal(amountInWords('12.50', 'đô la Mỹ'), 'Mười hai phẩy năm đô la Mỹ')
+})
+test('formatDate hiển thị dd/MM/yyyy, giữ nguyên chuỗi không phải ngày', () => {
+  assert.equal(formatDate('2026-10-19'), '19/10/2026')
+  assert.equal(formatDate(''), '')
+  assert.equal(formatDate(null), '')
+  assert.equal(formatDate('không có'), 'không có')
+})
+
+test('formatMonth và formatDateTime', () => {
+  assert.equal(formatMonth('2026-10-19'), '10/2026')
+  assert.equal(formatMonth('2026-03'), '03/2026')
+  assert.match(formatDateTime('2026-10-19T08:05:00'), /^19\/10\/2026 08:05$/)
+  assert.equal(formatDateTime('2026-10-19'), '19/10/2026')
 })

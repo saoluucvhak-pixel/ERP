@@ -55,6 +55,9 @@ public sealed class Account
 [Flags]
 public enum PartnerRoles { None = 0, Customer = 1, Supplier = 2, Employee = 4, Other = 8 }
 
+/// <summary>Trạng thái phê duyệt nhà cung cấp (tệp phân tích ERP, mục V.2: danh mục nhà cung cấp được duyệt). Chỉ nhà cung cấp Approved mới được đặt hàng.</summary>
+public enum SupplierStatus { Approved = 0, Pending = 1, Blocked = 2 }
+
 public sealed class BusinessPartner
 {
     public Guid Id { get; set; }
@@ -62,7 +65,21 @@ public sealed class BusinessPartner
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public string? TaxCode { get; set; }
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    /// <summary>Hạn mức tín dụng (VND) cho bán chịu; null = không kiểm tra (danh mục khách hàng theo tệp phân tích ERP, mục V.1.2.1).</summary>
+    public decimal? CreditLimit { get; set; }
+    /// <summary>Điều kiện thanh toán: số ngày từ ngày hóa đơn đến hạn thanh toán.</summary>
+    public int? PaymentTermsDays { get; set; }
+    /// <summary>Điều khoản chiết khấu thanh toán mặc định của đối tượng (điền sẵn khi lập hóa đơn): P% nếu trả trong N ngày.</summary>
+    public decimal? PaymentDiscountPercent { get; set; }
+    public int? PaymentDiscountDays { get; set; }
     public PartnerRoles Roles { get; set; }
+    public SupplierStatus SupplierStatus { get; set; } = SupplierStatus.Approved;
+    public string? SupplierStatusReason { get; set; }
+    public Guid? SupplierDecidedBy { get; set; }
+    public DateTime? SupplierDecidedAt { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }

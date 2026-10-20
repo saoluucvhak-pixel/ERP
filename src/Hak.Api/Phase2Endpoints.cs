@@ -14,7 +14,7 @@ public sealed record RuleRequest(string Code, string DocumentType, string Busine
     JsonElement Definition, JsonElement TestCases, string? Description);
 public sealed record DocumentLineRequest(decimal Amount, Guid? CounterAccountId, Guid? SettleJournalLineId, string? Description, DateOnly? DueDate);
 public sealed record DocumentRequest(string DocumentType, string BusinessEvent, DateOnly VoucherDate, DateOnly PostingDate, string Description,
-    Guid? PartnerId, Guid? MainAccountId, List<DocumentLineRequest> Lines);
+    Guid? PartnerId, Guid? MainAccountId, List<DocumentLineRequest> Lines, string? CounterpartyName = null, string? CounterpartyUnit = null);
 public sealed record AllocateRequest(Guid LineA, Guid LineB, decimal Amount, DateOnly? Date, decimal? ForeignAmount = null);
 public sealed record AutoAllocateRequest(Guid AccountId, Guid PartnerId, DateOnly Date);
 public sealed record ClosingRuleSetRequest(string Code, DateOnly EffectiveFrom, DateOnly? EffectiveTo, List<ClosingStepInput> Steps, string? Description);
@@ -23,7 +23,8 @@ public sealed record PeriodRequest(Guid PeriodId);
 public static class Phase2Endpoints
 {
     private static BusinessDocument ToDoc(DocumentRequest r) => new(r.DocumentType, r.BusinessEvent, r.VoucherDate, r.PostingDate, r.Description,
-        r.PartnerId, r.MainAccountId, r.Lines.Select(l => new BusinessDocumentLine(l.Amount, l.CounterAccountId, l.SettleJournalLineId, l.Description, l.DueDate)).ToList());
+        r.PartnerId, r.MainAccountId, r.Lines.Select(l => new BusinessDocumentLine(l.Amount, l.CounterAccountId, l.SettleJournalLineId, l.Description, l.DueDate)).ToList(),
+        CounterpartyName: r.CounterpartyName, CounterpartyUnit: r.CounterpartyUnit);
 
     public static void MapPhase2Endpoints(this WebApplication app)
     {

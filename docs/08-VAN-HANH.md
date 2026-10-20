@@ -142,3 +142,7 @@ pg_dump -h 127.0.0.1 -U hak_app -Fc -f D:\hak-backup\hak-%DATE%.dump hak
 | `RULE_ROLE_UNMAPPED` | Thiếu ánh xạ vai trò TK — Thiết lập → Vai trò tài khoản |
 | Tài khoản bị khóa | Chờ 15 phút hoặc quản trị đặt lại mật khẩu |
 | Quên mật khẩu quản trị duy nhất | Trên máy chạy API (cùng cấu hình CSDL), mở cửa sổ dòng lệnh: `Hak.Api.exe --reset-admin-password <tên đăng nhập>` → nhập mật khẩu mới 2 lần (không hiện ký tự). Chỉ áp dụng cho quản trị hệ thống đang hoạt động; tài khoản được mở khóa, mọi phiên bị đóng, ghi nhật ký `user.password_recover_local` (tên máy, tài khoản Windows). Vẫn nên duy trì ít nhất 2 quản trị hệ thống |
+
+## Ảnh đính kèm và điện thoại
+- Ảnh sự cố / nghiệm thu nằm ở thư mục `attachments` cạnh tệp cơ sở dữ liệu (đổi bằng cấu hình `Hak:AttachmentsPath`). **Bản sao lưu mã hóa chỉ gồm cơ sở dữ liệu — sao chép thư mục `attachments` cùng lúc khi sao lưu** (mỗi tệp có mã SHA-256 trong cơ sở dữ liệu để kiểm tra).
+- Điện thoại truy cập bằng địa chỉ IP của máy chủ trong mạng Wi-Fi nội bộ (ví dụ `http://192.168.1.10:5080`); mở cổng đó trên tường lửa Windows cho mạng riêng. Quét QR bằng ứng dụng Camera của điện thoại. Quét ngay trong trang và cài ứng dụng offline cần HTTPS (đặt sau một proxy có chứng chỉ).

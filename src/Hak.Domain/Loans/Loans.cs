@@ -126,3 +126,42 @@ public static class InterestCalculator
         return MoneyMath.Round(numerator / (100m * days), decimals);
     }
 }
+
+/// <summary>Một kỳ trả nợ theo lịch của khế ước (bảng debt_schedules): nợ gốc và lãi phải trả ngày đến hạn. Trạng thái Đã trả / Quá hạn suy ra từ số đã trả gốc, không lưu.</summary>
+public sealed class LoanScheduleItem
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid LoanId { get; set; }
+    public DateOnly DueDate { get; set; }
+    public decimal PrincipalDue { get; set; }
+    public decimal InterestDue { get; set; }
+    public string? Note { get; set; }
+}
+
+public sealed record ScheduleDraftItem(DateOnly DueDate, decimal PrincipalDue, decimal InterestDue);
+
+/// <summary>Sinh lịch trả gốc đều theo tháng: lãi kỳ = dư nợ đầu kỳ × lãi suất năm × số ngày ÷ cơ sở ngày (365 hoặc 360), làm tròn từng kỳ; kỳ cuối trả hết phần gốc còn lại.</summary>
+public static class LoanScheduleCalculator
+{
+    public static IReadOnlyList<ScheduleDraftItem> EqualPrincipal(decimal principal, int installments, DateOnly drawdown, DateOnly firstDue, decimal annualRatePercent, DayCountBasis basis, int decimals)
+    {
+        if (principal <= 0) throw new DomainException(ErrorCodes.AmountNotPositive, "Số tiền vay phải lớn hơn 0.");
+        if (installments is < 1 or > 600) throw new DomainException(ErrorCodes.ValidationFailed, "Số kỳ trả từ 1 đến 600.");
+        if (annualRatePercent < 0) throw new DomainException(ErrorCodes.ValidationFailed, "Lãi suất không được âm.");
+        if (firstDue <= drawdown) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày trả đầu tiên phải sau ngày giải ngân.");
+        var days = basis == DayCountBasis.Actual360 ? 360m : 365m;
+        var each = Math.Round(principal / installments, decimals, MidpointRounding.AwayFromZero);
+        var rows = new List<ScheduleDraftItem>();
+        var balance = principal; var previous = drawdown;
+        for (var i = 0; i < installments; i++)
+        {
+            var due = firstDue.AddMonths(i);
+            var interest = Math.Round(balance * annualRatePercent / 100m * (due.DayNumber - previous.DayNumber) / days, decimals, MidpointRounding.AwayFromZero);
+            var part = i == installments - 1 ? balance : Math.Min(each, balance);
+            rows.Add(new ScheduleDraftItem(due, part, interest));
+            balance -= part; previous = due;
+        }
+        return rows;
+    }
+}

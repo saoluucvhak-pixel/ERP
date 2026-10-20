@@ -23,6 +23,9 @@ public static class ReportEngineEndpoints
         api.MapPost("/{id:guid}/discard", async (HttpContext http, Guid id, ReportService s) =>
         { await s.DiscardDraftAsync(await http.SessionAsync(), id); return Results.NoContent(); });
 
+        app.MapGet("/api/dashboard/overview", async (HttpContext http, DateOnly asOf, DashboardOverviewService s) => Results.Ok(await s.OverviewAsync(await http.SessionAsync(), asOf)));
+        app.MapGet("/api/analysis/ratios", async (HttpContext http, DateOnly from, DateOnly to, FinancialAnalysisService s) => Results.Ok(await s.AnalyseAsync(await http.SessionAsync(), from, to)));
+
         var reports = app.MapGroup("/api/report-runs");
         reports.MapPost("", async (HttpContext http, ReportRunRequest r, ReportService s) =>
             Results.Ok(await s.RunAsync(await http.SessionAsync(), r.DefinitionId, r.FromDate, r.ToDate, r.CompareFrom, r.CompareTo)));

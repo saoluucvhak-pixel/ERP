@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, get, post, session } from './api'
-import { ErrorBox, ExportButton, useAction } from './common'
+import { ErrorBox, ExportButton, useAction, FlowStrip } from './common'
 import { eInvoiceFromXml, type EInvoiceJson } from './einvoicexml'
-import { formatMoney, parseMoney, today } from './money'
+import { formatDate, formatMoney, parseMoney, today } from './money'
 
 const DIFF_VI: Record<string, string> = {
   MissingInBooks: 'Có HĐĐT, chưa ghi sổ', MissingEInvoice: 'Có trong sổ, không có HĐĐT', AmountDifference: 'Lệch tiền hàng', VatDifference: 'Lệch thuế',
@@ -48,6 +48,13 @@ function Reconciliation() {
           columns={[{ header: 'Loại sai lệch', width: 26 }, { header: 'Hóa đơn / chỉ tiêu', width: 30 }, { header: 'Tiền HĐĐT', numeric: true }, { header: 'Tiền sổ', numeric: true }, { header: 'Thuế HĐĐT', numeric: true }, { header: 'Thuế sổ', numeric: true }, { header: 'Chênh lệch', numeric: true }, { header: 'Hướng xử lý', width: 60 }]}
           rows={(data?.differences ?? []).map(d => [DIFF_VI[d.type] ?? d.type, d.key, d.eInvoiceAmount, d.booksAmount, d.eInvoiceVat, d.booksVat, d.difference, d.suggestion])} />
       </div>
+      <FlowStrip steps={[
+        { label: 'Hóa đơn đầu vào, đầu ra (từ chu trình mua, bán)', journal: true, screen: 'trade', count: 'thuế ghi theo hóa đơn' },
+        { label: 'Bảng kê từ sổ', journal: false, count: 'mua vào, bán ra theo kỳ' },
+        { label: 'Nhập hóa đơn điện tử (XML)', journal: false, count: 'chứng cứ gốc, không sửa' },
+        { label: 'Đối chiếu 3 nguồn (sổ, tờ khai, hóa đơn điện tử)', journal: false, count: 'lệch kỳ, thiếu, thừa' },
+        { label: 'Tờ khai GTGT (số đã kê khai)', journal: false, count: 'nộp thì khóa, bổ sung khi sai' },
+      ]} />
       <ErrorBox error={error} />
       {sum && <div className="panel">Thuế đầu ra <strong>{formatMoney(sum.outputVat)}</strong> − đầu vào <strong>{formatMoney(sum.inputVat)}</strong> = <strong>{formatMoney(sum.netPayable)}</strong> <span className="muted">· {sum.note}</span></div>}
       {data && <>
@@ -85,7 +92,7 @@ function Listing() {
       <ErrorBox error={error} />
       {rows && <div className="scroll"><table className="grid">
         <thead><tr><th>Ký hiệu/Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>MST</th><th>Tên</th><th>Thuế suất</th><th className="num">Tiền hàng</th><th className="num">Thuế</th></tr></thead>
-        <tbody>{rows.flatMap(r => r.byRate.map(b => <tr key={r.invoiceId + b.rate}><td>{r.series}/{r.invoiceNo}{r.purpose !== 'Normal' ? ` (${r.purpose})` : ''}</td><td>{r.invoiceDate}</td><td>{r.postingDate}</td>
+        <tbody>{rows.flatMap(r => r.byRate.map(b => <tr key={r.invoiceId + b.rate}><td>{r.series}/{r.invoiceNo}{r.purpose !== 'Normal' ? ` (${r.purpose})` : ''}</td><td>{formatDate(r.invoiceDate)}</td><td>{formatDate(r.postingDate)}</td>
           <td>{r.counterpartyTaxCode ?? <span className="muted">thiếu MST</span>}</td><td>{r.counterpartyName}</td><td>{b.rate === 'KCT' ? 'KCT' : b.rate + '%'}</td><td className="num">{formatMoney(b.amount)}</td><td className="num">{formatMoney(b.vat)}</td></tr>))}</tbody>
       </table></div>}
     </>
@@ -134,7 +141,7 @@ function ImportEInvoices() {
         {xmlRows.length > 0 && <>
           <table className="grid">
             <thead><tr><th>Tệp</th><th>Ký hiệu/Số</th><th>Ngày</th><th>Người bán</th><th className="num">Tiền hàng</th><th className="num">Thuế</th><th>Tính chất</th><th>Kết quả đọc</th></tr></thead>
-            <tbody>{xmlRows.map((r, i) => <tr key={i}><td>{r.file}</td><td>{r.invoice ? `${r.invoice.series}/${r.invoice.number}` : ''}</td><td>{r.invoice?.issueDate}</td>
+            <tbody>{xmlRows.map((r, i) => <tr key={i}><td>{r.file}</td><td>{r.invoice ? `${r.invoice.series}/${r.invoice.number}` : ''}</td><td>{formatDate(r.invoice?.issueDate)}</td>
               <td>{r.invoice ? `${r.invoice.sellerTaxCode} – ${r.invoice.sellerName}` : ''}</td><td className="num">{formatMoney(r.invoice?.amountBeforeVat)}</td><td className="num">{formatMoney(r.invoice?.vatAmount)}</td>
               <td>{r.invoice && ({ Original: 'Gốc', Replacement: 'Thay thế', Adjustment: 'Điều chỉnh' })[r.invoice.status]}</td>
               <td style={{ whiteSpace: 'normal', color: r.errors.length ? 'var(--danger)' : 'var(--ok)' }}>{r.errors.length ? r.errors.join(' ') : 'Đọc được'}</td></tr>)}</tbody>
@@ -196,7 +203,7 @@ function Declarations() {
       </div>
       <table className="grid">
         <thead><tr><th>Kỳ</th><th>Trạng thái</th><th>Chỉ tiêu</th><th /></tr></thead>
-        <tbody>{list.map(d => <tr key={d.id}><td>{d.periodFrom} → {d.periodTo}</td><td>{d.status === 'Filed' ? `Đã nộp (${d.filingReference})` : 'Nháp'}</td>
+        <tbody>{list.map(d => <tr key={d.id}><td>{formatDate(d.periodFrom)} → {formatDate(d.periodTo)}</td><td>{d.status === 'Filed' ? `Đã nộp (${d.filingReference})` : 'Nháp'}</td>
           <td style={{ whiteSpace: 'normal' }}>{d.lines.map(l => `${l.indicatorCode}: ${formatMoney(l.declaredAmount)}`).join('; ')}</td>
           <td>{d.status !== 'Filed' && <button onClick={() => { const ref = prompt('Mã giao dịch / số tham chiếu nộp tờ khai:'); if (ref) run(async () => { await post(`/vat/declarations/${d.id}/filed`, { filingReference: ref, filedDate: today() }); await load() }) }}>Đánh dấu đã nộp</button>}</td></tr>)}</tbody>
       </table>

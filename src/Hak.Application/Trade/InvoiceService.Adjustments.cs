@@ -39,6 +39,7 @@ public sealed partial class InvoiceService
         var returned = await ReturnedQuantityAsync(orig.Id, originalLineNo, null);
         if (returned + quantity > line.StockQuantity)
             throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {originalLineNo}: đã trả {returned}, thêm {quantity} vượt số đã bán {line.StockQuantity}.");
+        await RequireAdjustmentApprovalAsync(ctx, orig.Id, originalLineNo, AdjustmentKind.Return, await SalesApprovalService.ReturnUsedAsync(db, orig.Id, originalLineNo) + quantity);
 
         var issue = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstAsync(d => d.Id == issueId);
         var issueLine = issue.Lines.Single(l => l.LineNo == line.StockLineNo);
@@ -51,7 +52,7 @@ public sealed partial class InvoiceService
 
         return await stock.CreateDocumentAsync(ctx, new StockDocumentInput(StockDocumentType.Receipt, warehouseId ?? issue.WarehouseId, date, date,
             description ?? $"Hàng bán bị trả lại theo HĐ {orig.InvoiceSeries}/{orig.InvoiceNo}",
-            [new StockLineInput(issueLine.ItemId, quantity, value, issueLine.CounterAccountId, $"Trả lại từ {issue.Number}")], PartnerId: orig.PartnerId));
+            [new StockLineInput(issueLine.ItemId, quantity, value, issueLine.CounterAccountId, $"Trả lại từ {issue.Number}", SourceInvoiceId: orig.Id, SourceInvoiceLineNo: originalLineNo)], PartnerId: orig.PartnerId));
     }
 
     /// <summary>
@@ -97,7 +98,7 @@ public sealed partial class InvoiceService
             var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
             var (_, rate, curDp, funcDp) = await CurrencyAsync(company, orig.Currency, orig.ExchangeRate);
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.PostingDate && f.EndDate >= input.PostingDate)
-                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate}.");
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate.Vn()}.");
 
             var inv = new CommercialInvoice
             {
@@ -165,6 +166,7 @@ public sealed partial class InvoiceService
                         var already = await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Discount) + await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Return);
                         if (already + line.FunctionalAmount > ol.FunctionalAmount)
                             throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: tổng giảm trừ {already + line.FunctionalAmount} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
+                        if (!purchase) await RequireAdjustmentApprovalAsync(ctx, orig.Id, ol.LineNo, AdjustmentKind.Discount, await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Discount) + line.FunctionalAmount);
                     }
                 }
                 inv.Lines.Add(line);
@@ -245,7 +247,7 @@ public sealed partial class InvoiceService
         Func<string, Guid> role, string label)
     {
         var original = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == orig.Id);
-        var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId);
+        var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).Where(i => i.InventoryAccountId != null).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId!.Value);
         var reduces = inv.Purpose != InvoicePurpose.Increase;
         var gl = new List<VoucherLineInput>();
         foreach (var l in inv.Lines.OrderBy(x => x.LineNo))

@@ -23,6 +23,7 @@ public sealed record CompanyRequest(string Code, string Name, string? TaxCode, s
 public sealed record FiscalYearRequest(string Code, DateOnly StartDate, DateOnly EndDate);
 public sealed record AccountRequest(string Code, string Name, string? ParentCode, bool IsPostable = true, bool RequiresPartner = false, BalanceDisplay BalanceDisplay = BalanceDisplay.Net,
     OpenItemNature OpenItemNature = OpenItemNature.None, CashKind CashKind = CashKind.None, NegativeBalancePolicy NegativeBalancePolicy = NegativeBalancePolicy.None);
+public sealed record PartnerCommercialRequest(string? Address, string? Phone, string? Email, decimal? CreditLimit, int? PaymentTermsDays, decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null);
 public sealed record PartnerRequest(string Code, string Name, PartnerRoles Roles, string? TaxCode);
 public sealed record LineRequest(Guid AccountId, string Side, decimal Amount, Guid? PartnerId, string? ForeignCurrency, decimal? ForeignAmount, decimal? ExchangeRate, string? Description, string? CashFlowCode = null);
 public sealed record VoucherRequest(string VoucherType, DateOnly VoucherDate, DateOnly PostingDate, string Description, List<LineRequest> Lines, Guid? BranchId = null);
@@ -33,13 +34,13 @@ public sealed record LineDto(int LineNo, Guid AccountId, string Side, decimal Am
     Guid? SettleJournalLineId = null, DateOnly? DueDate = null);
 public sealed record VoucherDto(Guid Id, string Number, string VoucherType, string Status, DateOnly VoucherDate, DateOnly PostingDate, string Description,
     decimal TotalDebit, decimal TotalCredit, long RowVersion, Guid? ReversesVoucherId, Guid? AdjustsVoucherId, string? SourceSystem, string? SourceId, List<LineDto> Lines,
-    string? BusinessEvent = null, Guid? MainAccountId = null, Guid? PartnerId = null)
+    string? BusinessEvent = null, Guid? MainAccountId = null, Guid? PartnerId = null, string? CounterpartyName = null, string? CounterpartyUnit = null)
 {
     public static VoucherDto From(Voucher v) => new(v.Id, v.Number, v.VoucherType, v.Status.ToString(), v.VoucherDate, v.PostingDate, v.Description,
         v.TotalDebit, v.TotalCredit, v.RowVersion, v.ReversesVoucherId, v.AdjustsVoucherId, v.SourceSystem, v.SourceId,
         v.Lines.OrderBy(l => l.LineNo).Select(l => new LineDto(l.LineNo, l.AccountId, l.Side == Side.Debit ? "D" : "C", l.Amount, l.PartnerId,
             l.ForeignCurrency, l.ForeignAmount, l.ExchangeRate, l.Description, l.CashFlowCode, l.SettleJournalLineId, l.DueDate)).ToList(),
-        v.BusinessEvent, v.MainAccountId, v.PartnerId);
+        v.BusinessEvent, v.MainAccountId, v.PartnerId, v.CounterpartyName, v.CounterpartyUnit);
 }
 
 public static class Endpoints
@@ -130,8 +131,11 @@ public static class Endpoints
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
             return Results.Ok(await db.BusinessPartners.Where(p => p.CompanyId == ctx.CompanyId).OrderBy(p => p.Code)
-                .Select(p => new { p.Id, p.Code, p.Name, p.TaxCode, p.IsActive }).ToListAsync());
+                .Select(p => new { p.Id, p.Code, p.Name, p.TaxCode, p.IsActive, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays, p.PaymentDiscountPercent, p.PaymentDiscountDays,
+                    isSupplier = (p.Roles & PartnerRoles.Supplier) != 0, isCustomer = (p.Roles & PartnerRoles.Customer) != 0, isEmployee = (p.Roles & PartnerRoles.Employee) != 0, supplierStatus = p.SupplierStatus.ToString(), p.SupplierStatusReason }).ToListAsync());
         });
+        api.MapPut("/partners/{id:guid}/commercial", async (HttpContext http, Guid id, PartnerCommercialRequest r, SetupService s) =>
+        { await s.UpdatePartnerCommercialAsync(await http.SessionAsync(), id, r.Address, r.Phone, r.Email, r.CreditLimit, r.PaymentTermsDays, r.PaymentDiscountPercent, r.PaymentDiscountDays); return Results.NoContent(); });
         api.MapPost("/partners", async (HttpContext http, PartnerRequest r, SetupService s) =>
             Results.Ok(new { (await s.CreatePartnerAsync(await http.SessionAsync(), r.Code, r.Name, r.Roles, r.TaxCode)).Id }));
 
@@ -207,6 +211,8 @@ public static class Endpoints
         });
         api.MapGet("/reports/general-journal", async (HttpContext http, DateOnly from, DateOnly to, LedgerQueryService q) =>
             Results.Ok(await q.GeneralJournalAsync(await http.SessionAsync(), from, to)));
+        api.MapGet("/reports/special-journals", async (HttpContext http, DateOnly from, DateOnly to, SpecialJournalService s) =>
+            Results.Ok(await s.ReportAsync(await http.SessionAsync(), from, to)));
 
         // ---- JSON exchange ----
         api.MapPost("/exchange/journal-vouchers", async (HttpContext http, bool commit, JournalVoucherPackageService svc) =>

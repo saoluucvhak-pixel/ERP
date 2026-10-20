@@ -184,7 +184,7 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                     "Thuế GTGT trong sổ khác HĐĐT: kiểm tra thuế suất từng dòng.", b.InvoiceId, e.Id));
             if (b.PostingDate < from || b.PostingDate > to)
                 diffs.Add(new(TaxDiffType.PeriodDifference, e.Direction, label, e.AmountBeforeVat, b.AmountBeforeVat, e.VatAmount, b.VatAmount, 0,
-                    $"Hóa đơn lập ngày {e.IssueDate} nhưng hạch toán ngày {b.PostingDate}: xác định đúng kỳ kê khai [CẦN XÁC MINH quy định kê khai bổ sung].", b.InvoiceId, e.Id));
+                    $"Hóa đơn lập ngày {e.IssueDate.Vn()} nhưng hạch toán ngày {b.PostingDate.Vn()}: xác định đúng kỳ kê khai [CẦN XÁC MINH quy định kê khai bổ sung].", b.InvoiceId, e.Id));
         }
 
         foreach (var b in books.Where(b => b.Purpose == InvoicePurpose.Normal && b.PostingDate >= from && b.PostingDate <= to && !seenBookIds.Contains(b.InvoiceId)))

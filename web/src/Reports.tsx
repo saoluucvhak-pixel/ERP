@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post, session, type OpenItem, type TrialBalanceRow } from './api'
 import { AccountSelect, ErrorBox, ExportButton, navStore, PartnerSelect, PrintSheet, printSheet, TYPE_VI, useAction, useCatalog } from './common'
-import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
+import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 
 const firstOfMonth = () => today().slice(0, 8) + '01'
 
@@ -98,7 +98,7 @@ export function AccountLedgerView() {
             <tbody>
               <tr><td colSpan={7}><strong>Số dư đầu kỳ</strong></td><td className="num">{signed(data.openingBalance)}</td></tr>
               {data.rows.map((r, i) => (
-                <tr key={i}><td>{r.postingDate}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td><td>{r.description}</td><td>{r.counterAccounts}</td>
+                <tr key={i}><td>{formatDate(r.postingDate)}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td><td>{r.description}</td><td>{r.counterAccounts}</td>
                   <td className="num">{r.debit === '0' ? '' : formatMoney(r.debit)}</td><td className="num">{r.credit === '0' ? '' : formatMoney(r.credit)}</td><td className="num">{signed(r.runningBalance)}</td></tr>))}
             </tbody>
             <tfoot><tr><td colSpan={5}>Cộng phát sinh / Số dư cuối kỳ</td><td className="num">{formatMoney(data.totalDebit)}</td><td className="num">{formatMoney(data.totalCredit)}</td><td className="num">{signed(data.closingBalance)}</td></tr></tfoot>
@@ -215,7 +215,7 @@ export function ReceivablesView() {
       {recon && <div className={`msg ${recon.isReconciled ? 'ok' : 'error'}`}>{recon.isReconciled ? 'Sổ chi tiết công nợ khớp sổ cái.' : `Sổ chi tiết lệch sổ cái: ${recon.rows.length} dòng cần kiểm tra.`}</div>}
       {aging && (
         <div className="panel">
-          <strong>Tuổi nợ đến {asOf}</strong>
+          <strong>Tuổi nợ đến {formatDate(asOf)}</strong>
           <table className="grid">
             <thead><tr><th>Đối tượng</th><th className="num">Chưa đến hạn</th>{aging.bucketLabels.map(b => <th key={b} className="num">Quá hạn {b} ngày</th>)}<th className="num">Tổng còn nợ</th><th className="num">Trả trước chưa phân bổ</th><th className="num">Thuần</th></tr></thead>
             <tbody>{aging.rows.map(r => (
@@ -241,7 +241,7 @@ export function ReceivablesView() {
             <tbody>{items.map(o => (
               <tr key={o.journalLineId}><td><input type="checkbox" aria-label={`Chọn ${o.voucherNumber}`} checked={sel.includes(o.journalLineId)}
                 onChange={e => setSel(s => e.target.checked ? [...s.filter(id => items.find(i => i.journalLineId === id)?.side !== o.side), o.journalLineId] : s.filter(id => id !== o.journalLineId))} /></td>
-                <td>{o.postingDate}</td><td>{o.dueDate}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
+                <td>{formatDate(o.postingDate)}</td><td>{formatDate(o.dueDate)}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
                 <td>{o.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(o.amount)}</td><td className="num">{formatMoney(o.allocated)}</td><td className="num">{formatMoney(o.open)}</td></tr>))}
             </tbody>
           </table>
@@ -254,7 +254,7 @@ export function ReceivablesView() {
             <thead><tr><th>Ngày</th><th>CT bên Nợ</th><th>CT bên Có</th><th className="num">Số tiền</th><th>Nguồn</th><th>Trạng thái</th><th /></tr></thead>
             <tbody>{allocs.map(a => (
               <tr key={a.id} style={a.isActive ? undefined : { opacity: 0.55 }}>
-                <td>{a.allocationDate}</td><td>{a.debitVoucherNumber}</td><td>{a.creditVoucherNumber}</td><td className="num">{formatMoney(a.amount)}</td>
+                <td>{formatDate(a.allocationDate)}</td><td>{a.debitVoucherNumber}</td><td>{a.creditVoucherNumber}</td><td className="num">{formatMoney(a.amount)}</td>
                 <td>{ORIGIN_VI[a.origin] ?? a.origin}</td><td>{a.isActive ? 'Hiệu lực' : `Đã hủy: ${a.voidReason ?? ''}`}</td>
                 <td>{a.isActive && <button className="danger" disabled={busy} onClick={() => voidAlloc(a)}>Hủy</button>}</td></tr>))}
             </tbody>
@@ -288,7 +288,7 @@ export function GeneralJournalView() {
       <ErrorBox error={error} />
       {rows && <div className="scroll"><table className="grid">
         <thead><tr><th>Ngày</th><th>Số CT</th><th>Loại</th><th>Diễn giải</th><th>TK</th><th>Đối tượng</th><th className="num">Nợ</th><th className="num">Có</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={`${r.voucherNumber}-${r.lineNo}`}><td>{r.postingDate}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td>
+        <tbody>{rows.map(r => <tr key={`${r.voucherNumber}-${r.lineNo}`}><td>{formatDate(r.postingDate)}</td><td>{r.voucherNumber}</td><td>{TYPE_VI[r.voucherType] ?? r.voucherType}</td>
           <td>{r.description}</td><td>{r.accountCode}</td><td>{r.partnerCode}</td>
           <td className="num">{r.debit === '0' ? '' : formatMoney(r.debit)}</td><td className="num">{r.credit === '0' ? '' : formatMoney(r.credit)}</td></tr>)}
           {rows.length === 0 && <tr><td colSpan={8} className="muted">Không có bút toán trong khoảng ngày.</td></tr>}</tbody>

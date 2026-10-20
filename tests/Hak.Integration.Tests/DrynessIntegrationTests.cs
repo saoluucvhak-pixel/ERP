@@ -54,6 +54,69 @@ public class DrynessIntegrationTests
     }
 
     [Fact]
+    public async Task UnmeasuredIssuesAndTransfers_AreEstimatedAtTheAverageDrynessOfTheTime_AndReportedSeparately()
+    {
+        using var fx = await SetupAsync();
+        var r1 = await fx.Receive(D(3, 1), 100, 150_000_000);
+        var r2 = await fx.Receive(D(3, 5), 50, 80_000_000);
+        await fx.Measure(r1, 52.35m, EvidenceType.InternalReport, "PĐ-001");          // 52,35 BDMT
+        await fx.Measure(r2, 50m, EvidenceType.InternalReport, "PĐ-002");             // 25 BDMT → tồn 150 MT / 77,35 BDMT
+        await fx.Ship(D(3, 10), 30);                                                  // xuất chưa có chứng thư
+        var transfer = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Transfer, fx.Yard, D(3, 12), D(3, 12), "Chuyển ra cảng",
+            [new StockLineInput(fx.Dam, 20)], ToWarehouseId: fx.Port));
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, transfer.Id);
+
+        var rows = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31))).ToDictionary(r => r.WarehouseCode);
+        var yard = rows["BAI"]; var port = rows["CANG"];
+        // Cột chính chỉ gồm phần đã đo; phần xuất chưa đo vẫn báo là chưa đo.
+        Assert.Equal((150m, 77.35m, 50m, 0m, 50m), (yard.InMt, yard.InBdmt, yard.OutMt, yard.OutBdmt, yard.UnmeasuredOutMt));
+        // Tạm tính theo bình quân thời điểm: 30 MT × 77,35/150 = 15,47; 20 MT × 61,88/120 = 10,3133 (kho nhận mang đúng số đó).
+        Assert.Equal((25.7833m, 100m, 51.5667m, 51.57m), (yard.EstimatedOutBdmt, yard.ClosingMt, yard.EstimatedClosingBdmt, yard.ClosingDrynessPercent));
+        Assert.Equal((20m, 20m, 10.3133m, 10.3133m, 51.57m), (port.InMt, port.UnmeasuredInMt, port.EstimatedInBdmt, port.EstimatedClosingBdmt, port.ClosingDrynessPercent));
+
+        // Có chứng thư thì số đo thay số tạm tính.
+        var ship = await fx.S.Db.StockDocuments.AsNoTracking().FirstAsync(d => d.Type == StockDocumentType.Issue);
+        await fx.Measure(ship, 55m, EvidenceType.Certificate, "CT-1");
+        var after = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31))).ToDictionary(r => r.WarehouseCode)["BAI"];
+        Assert.Equal((16.5m, 20m), (after.OutBdmt, after.UnmeasuredOutMt));
+    }
+
+    [Fact]
+    public async Task DailyRate_ActsLikeAnExchangeRate_ForUnmeasuredReceipts_AndMeasurementWins()
+    {
+        using var fx = await SetupAsync();
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 1), 52m, "Độ khô công bố ngày 1/3");
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 4), 50m, null);
+        var r1 = await fx.Receive(D(3, 2), 100, 150_000_000);   // lấy độ khô ngày 1/3 (52%)
+        var r2 = await fx.Receive(D(3, 6), 40, 60_000_000);     // lấy độ khô ngày gần nhất 4/3 (50%)
+        var row = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal((0m, 140m, 72m, 72m), (row.InBdmt, row.UnmeasuredInMt, row.EstimatedInBdmt, row.EstimatedClosingBdmt));
+        // Kết quả đo thay số theo ngày.
+        await fx.Measure(r2, 51m, EvidenceType.InternalReport, "PĐ-9");
+        row = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal((20.4m, 52m, 72.4m), (row.InBdmt, row.EstimatedInBdmt, row.EstimatedClosingBdmt));
+        // Ghi lại cùng ngày thì thay số; độ khô sai bị chặn.
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 1), 53m, null);
+        Assert.Single((await fx.S.Dryness.DailyRatesAsync(fx.H.Auditor, fx.Dam, D(3, 1), D(3, 1))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 2), 101m, null)));
+    }
+
+    [Fact]
+    public async Task IssueBasis_WarehouseAverageByDefault_OrDailyRateWhenChosen()
+    {
+        using var fx = await SetupAsync();
+        var r1 = await fx.Receive(D(3, 1), 100, 150_000_000);
+        await fx.Measure(r1, 50m, EvidenceType.InternalReport, "PĐ-1");                       // kho: 100 MT / 50 BDMT → bình quân 50%
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 9), 40m, null);
+        await fx.Ship(D(3, 10), 20);
+        var avg = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal(10m, avg.EstimatedOutBdmt);                                              // 20 × 50%: bình quân độ khô kho xuất
+        await fx.S.Dryness.SetIssueBasisAsync(fx.H.Admin, fx.Dam, IssueDrynessBasis.DailyRate);
+        var daily = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal(8m, daily.EstimatedOutBdmt);                                             // 20 × 40%: độ khô công bố ngày xuất
+    }
+
+    [Fact]
     public async Task ReceiptAndShipment_ProduceMtAndBdmtBalances()
     {
         using var fx = await SetupAsync();

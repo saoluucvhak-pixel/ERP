@@ -6,14 +6,30 @@ import { BankingView } from './Banking'
 import { CashDocsView } from './CashDocs'
 import { CatalogView } from './Catalog'
 import { DashboardView } from './Dashboard'
+import { HomeLauncher } from './Home'
+import { FlowTab, MODULES, moduleOfScreen } from './Modules'
+import { AnalysisView } from './Analysis'
+import { OpeningBalancesView } from './OpeningBalances'
+import { QuickAdd } from './QuickAdd'
 import { ErrorBox, navStore, useAction } from './common'
 import { FxView } from './Fx'
 import { InventoryView } from './Inventory'
 import { LoansView } from './Loans'
 import { OrdersView } from './Orders'
+import { ContractsView } from './Contracts'
+import { AdvancesView, CashCountView } from './Advances'
+import { EquityView } from './Equity'
+import { SalesApprovalsView } from './SalesApprovals'
+import { ServiceAcceptancesView } from './ServiceAcceptances'
+import { SpecialJournalsView } from './SpecialJournals'
+import { PaymentDiscountView } from './PaymentDiscount'
+import { GroupsView } from './Groups'
+import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
 import { PayrollView } from './Payroll'
+import { ProcurementView } from './Procurement'
+import { RevenueView } from './Revenue'
 import { SetupView } from './Setup'
-import { ProductionView } from './Production'
+import { ProductionView } from './ProductionOrders'
 import { ReportEngineView } from './ReportEngine'
 import { PeriodsView } from './Periods'
 import { TradeView } from './Trade'
@@ -23,30 +39,80 @@ import { VouchersView } from './Vouchers'
 
 interface Company { id: string; code: string; name: string; roles?: string[]; permissions?: string[] }
 
+/** Các màn hình (tab) của phần mềm; phân hệ ở thanh bên xếp chúng thành tab theo cấu trúc trong Modules.tsx. */
 const SCREENS = [
   { key: 'home', label: 'Tổng quan', el: () => <DashboardView /> },
-  { key: 'vouchers', label: 'Chứng từ', el: () => <VouchersView /> },
-  { key: 'cash', label: 'Thu / Chi tiền', el: () => <CashDocsView /> },
-  { key: 'bank', label: 'Ngân hàng', el: () => <BankingView /> },
-  { key: 'arap', label: 'Công nợ', el: () => <ReceivablesView /> },
+  { key: 'cycles', label: 'Quản lý chu trình', el: () => <HomeLauncher screens={LAUNCHER} /> },
+  { key: 'contracts', label: 'Hợp đồng', el: () => <ContractsView /> },
   { key: 'orders', label: 'Đơn hàng', el: () => <OrdersView /> },
-  { key: 'trade', label: 'Mua / Bán', el: () => <TradeView /> },
+  { key: 'revenue', label: 'Bán hàng → Thu tiền', el: () => <RevenueView /> },
+  { key: 'arap', label: 'Công nợ', el: () => <ReceivablesView /> },
+  { key: 'procurement', label: 'Mua hàng → Thanh toán', el: () => <ProcurementView /> },
+  { key: 'trade', label: 'Hóa đơn', el: () => <TradeView /> },
   { key: 'stock', label: 'Kho', el: () => <InventoryView /> },
-  { key: 'production', label: 'Giá thành', el: () => <ProductionView /> },
-  { key: 'assets', label: 'Tài sản / CCDC', el: () => <AssetsView /> },
+  { key: 'production', label: 'Sản xuất', el: () => <ProductionView /> },
+  { key: 'payroll', label: 'Lương', el: () => <PayrollView /> },
+  { key: 'cash', label: 'Thu / Chi tiền', el: () => <CashDocsView /> },
+  { key: 'advances', label: 'Tạm ứng', el: () => <AdvancesView /> },
+  { key: 'cashcount', label: 'Kiểm kê quỹ', el: () => <CashCountView /> },
+  { key: 'equity', label: 'Vốn góp, cổ tức', el: () => <EquityView /> },
+  { key: 'salesapproval', label: 'Phê duyệt bán hàng', el: () => <SalesApprovalsView /> },
+  { key: 'services', label: 'Nghiệm thu dịch vụ', el: () => <ServiceAcceptancesView /> },
+  { key: 'paydiscount', label: 'Chiết khấu thanh toán', el: () => <PaymentDiscountView /> },
+  { key: 'groups', label: 'Nhóm danh mục', el: () => <GroupsView /> },
+  { key: 'bank', label: 'Ngân hàng', el: () => <BankingView /> },
   { key: 'fx', label: 'Ngoại tệ', el: () => <FxView /> },
   { key: 'loans', label: 'Vay', el: () => <LoansView /> },
-  { key: 'payroll', label: 'Lương', el: () => <PayrollView /> },
   { key: 'vat', label: 'Thuế GTGT', el: () => <VatView /> },
-  { key: 'tb', label: 'Cân đối phát sinh', el: () => <TrialBalanceView /> },
-  { key: 'ledger', label: 'Sổ chi tiết / Sổ quỹ', el: () => <AccountLedgerView /> },
+  { key: 'assets', label: 'Tài sản / CCDC', el: () => <AssetsView /> },
+  { key: 'vouchers', label: 'Chứng từ kế toán', el: () => <VouchersView /> },
   { key: 'journal', label: 'Sổ Nhật ký chung', el: () => <GeneralJournalView /> },
+  { key: 'specialjournals', label: 'Sổ nhật ký đặc biệt', el: () => <SpecialJournalsView /> },
+  { key: 'ledger', label: 'Sổ chi tiết / Sổ quỹ', el: () => <AccountLedgerView /> },
+  { key: 'tb', label: 'Cân đối phát sinh', el: () => <TrialBalanceView /> },
   { key: 'reports', label: 'Báo cáo theo mẫu', el: () => <ReportEngineView /> },
   { key: 'catalog', label: 'Danh mục đối tượng', el: () => <CatalogView /> },
   { key: 'setup', label: 'Thiết lập', el: () => <SetupView /> },
   { key: 'periods', label: 'Kỳ kế toán', el: () => <PeriodsView /> },
   { key: 'admin', label: 'Quản trị', el: () => <AdminView /> },
+  { key: 'opening', label: 'Số dư ban đầu', el: () => <OpeningBalancesView /> },
+  { key: 'analysis', label: 'Các chỉ số phân tích', el: () => <AnalysisView /> },
 ] as const
+/** Màn hình "Việc cần làm" giữ nguyên: ô theo chu trình, mỗi ô một màn hình; bấm ô mở đúng tab trong phân hệ tương ứng. */
+const LAUNCHER = [
+  { key: 'orders', group: 'Chu trình doanh thu', label: 'Đơn hàng (bán, mua)' },
+  { key: 'revenue', group: 'Chu trình doanh thu', label: 'Bán hàng → Thu tiền' },
+  { key: 'arap', group: 'Chu trình doanh thu', label: 'Công nợ phải thu / phải trả' },
+  { key: 'procurement', group: 'Chu trình cung ứng', label: 'Mua hàng → Thanh toán' },
+  { key: 'trade', group: 'Chu trình cung ứng', label: 'Hóa đơn mua / bán' },
+  { key: 'stock', group: 'Chu trình cung ứng', label: 'Kho (phiếu, kiểm kê, tồn)' },
+  { key: 'production', group: 'Chu trình chuyển đổi', label: 'Sản xuất (lệnh, giá thành)' },
+  { key: 'payroll', group: 'Nhân sự – tiền lương', label: 'Lương' },
+  { key: 'cash', group: 'Tài chính, thanh toán', label: 'Thu / Chi tiền' },
+  { key: 'advances', group: 'Tài chính, thanh toán', label: 'Tạm ứng' },
+  { key: 'cashcount', group: 'Tài chính, thanh toán', label: 'Kiểm kê quỹ' },
+  { key: 'equity', group: 'Tài chính, thanh toán', label: 'Vốn góp, cổ tức' },
+  { key: 'salesapproval', group: 'Chu trình doanh thu', label: 'Phê duyệt bán hàng' },
+  { key: 'services', group: 'Chu trình doanh thu', label: 'Nghiệm thu dịch vụ' },
+  { key: 'paydiscount', group: 'Chu trình doanh thu', label: 'Chiết khấu thanh toán' },
+  { key: 'groups', group: 'Danh mục và hệ thống', label: 'Nhóm danh mục' },
+  { key: 'bank', group: 'Tài chính, thanh toán', label: 'Ngân hàng' },
+  { key: 'fx', group: 'Tài chính, thanh toán', label: 'Ngoại tệ' },
+  { key: 'loans', group: 'Tài chính, thanh toán', label: 'Vay' },
+  { key: 'vat', group: 'Tài chính, thanh toán', label: 'Thuế GTGT' },
+  { key: 'assets', group: 'Tài chính, thanh toán', label: 'Tài sản / CCDC' },
+  { key: 'vouchers', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Chứng từ kế toán' },
+  { key: 'journal', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ Nhật ký chung' },
+  { key: 'specialjournals', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ nhật ký đặc biệt' },
+  { key: 'ledger', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ chi tiết / Sổ quỹ' },
+  { key: 'tb', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Cân đối phát sinh' },
+  { key: 'reports', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Báo cáo theo mẫu' },
+  { key: 'catalog', group: 'Danh mục và hệ thống', label: 'Danh mục đối tượng' },
+  { key: 'setup', group: 'Danh mục và hệ thống', label: 'Thiết lập' },
+  { key: 'periods', group: 'Danh mục và hệ thống', label: 'Kỳ kế toán' },
+  { key: 'admin', group: 'Danh mục và hệ thống', label: 'Quản trị' },
+] as const
+const SCREEN_LABELS: Record<string, string> = Object.fromEntries(SCREENS.map(s => [s.key, s.label]))
 
 export default function App() {
   const [token, setToken] = useState(session.token)
@@ -54,7 +120,11 @@ export default function App() {
   const [companyId, setCompanyId] = useState(session.companyId)
   const [isSystemAdmin, setIsSystemAdmin] = useState(false)
   const [systemAdmin, setSystemAdmin] = useState(false)
-  const [screen, setScreen] = useState<(typeof SCREENS)[number]['key']>('home')
+  const [moduleKey, setModuleKey] = useState('home')
+  const [tab, setTab] = useState<string>('flow')
+  const [work, setWork] = useState<Record<string, number>>({})
+  const [mobile, setMobile] = useState(isMobileRoute())
+  useEffect(() => { const h = () => setMobile(isMobileRoute()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h) }, [])
 
   useEffect(() => {
     if (!token) return
@@ -63,7 +133,18 @@ export default function App() {
     get<{ isSystemAdmin: boolean }>('/me').then(m => setIsSystemAdmin(m.isSystemAdmin)).catch(() => setIsSystemAdmin(false))
   }, [token])
 
-  useEffect(() => { navStore.go = key => setScreen(key as typeof screen) }, [])
+  useEffect(() => {
+    navStore.go = key => {
+      if (key === 'home' || key === 'cycles') { setModuleKey(key); setTab('flow'); return }
+      const m = moduleOfScreen(key)
+      if (m) { setModuleKey(m.key); setTab(key) }
+    }
+  }, [])
+  // Số việc đang chờ theo phân hệ để hiện trên thanh bên.
+  useEffect(() => {
+    if (!token || !companyId) return
+    get<{ screen: string; count: number }[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.screen, x.count])))).catch(() => setWork({}))
+  }, [token, companyId, moduleKey, tab])
 
   const logout = async () => {
     try { await post('/auth/logout') } catch { /* already expired */ }
@@ -106,17 +187,34 @@ export default function App() {
       </div></div>
     )
   }
-  const current = SCREENS.find(s => s.key === screen)!
+  if (mobile) return <MobileMaintenance company={`${company.code} – ${company.name}`} onFull={() => { window.location.hash = '' }} onLogout={logout} />
+  const module = MODULES.find(m => m.key === moduleKey) ?? MODULES[0]
+  const moduleCount = (m: (typeof MODULES)[number]) => m.screens.reduce((n, k) => n + (work[k] ?? 0), 0)
+  const screenEl = (key: string) => SCREENS.find(s => s.key === key)?.el()
+  const openModule = (key: string) => { setModuleKey(key); setTab('flow') }
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Phân hệ">
         <h1>HAK Accounting</h1>
         <div className="company">{company.code} – {company.name}</div>
-        {SCREENS.map(s => <button key={s.key} className={s.key === screen ? 'active' : ''} onClick={() => setScreen(s.key)}>{s.label}</button>)}
+        <QuickAdd />
+        {MODULES.map(m => <button key={m.key} className={m.key === moduleKey ? 'active' : ''} onClick={() => openModule(m.key)}>
+          <span className="nav-icon" aria-hidden>{m.icon}</span>{m.label}{moduleCount(m) > 0 && <span className="nav-count" aria-label={`${moduleCount(m)} việc đang chờ`}>{moduleCount(m)}</span>}</button>)}
         <button onClick={() => { session.setCompany(null); setCompanyId(null) }}>Đổi công ty</button>
         <button onClick={logout}>Đăng xuất</button>
       </nav>
-      <main className="main" key={company.id}>{current.el()}</main>
+      <div className="content">
+        {module.screens.length > 0 && <div className="module-tabs" role="tablist" aria-label={module.label}>
+          <button role="tab" aria-selected={tab === 'flow'} className={tab === 'flow' ? 'active' : ''} onClick={() => setTab('flow')}>Quy trình</button>
+          {module.screens.map(k => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
+            {SCREEN_LABELS[k]}{work[k] ? <span className="nav-count">{work[k]}</span> : null}</button>)}
+        </div>}
+        <main className="main" key={company.id + module.key + tab}>
+          {module.screens.length === 0 ? screenEl(module.key)
+            : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[k]).map(k => [k, work[k]]))} />
+            : screenEl(tab)}
+        </main>
+      </div>
     </div>
   )
 }

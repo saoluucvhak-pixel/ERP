@@ -318,8 +318,36 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
             if (await db.BusinessPartners.AnyAsync(p => p.CompanyId == ctx.CompanyId && p.Code == code))
                 throw new DomainException(ErrorCodes.DuplicateCode, $"Mã đối tượng {code} đã tồn tại.");
             var p = new BusinessPartner { Id = Ids.New(), CompanyId = ctx.CompanyId, Code = code, Name = name, Roles = roles, TaxCode = taxCode, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            // Công ty bật "duyệt nhà cung cấp": nhà cung cấp mới chờ duyệt, chưa được đặt hàng.
+            if (roles.HasFlag(PartnerRoles.Supplier) && await db.Companies.AnyAsync(c => c.Id == ctx.CompanyId && c.RequireSupplierApproval))
+                p.SupplierStatus = SupplierStatus.Pending;
             db.BusinessPartners.Add(p);
             await audit.AppendAsync(ctx.CompanyId, ctx, "partner.create", "business_partner", p.Id.ToString(), new { code, name, taxCode });
+            await db.SaveChangesAsync();
+            return p;
+        });
+    }
+
+    /// <summary>Thông tin thương mại của đối tượng theo tệp phân tích ERP: địa chỉ, điện thoại, email, hạn mức tín dụng, điều kiện thanh toán.</summary>
+    public async Task<BusinessPartner> UpdatePartnerCommercialAsync(SessionContext ctx, Guid partnerId, string? address, string? phone, string? email,
+        decimal? creditLimit, int? paymentTermsDays, decimal? paymentDiscountPercent = null, int? paymentDiscountDays = null)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        if ((paymentDiscountPercent is null) != (paymentDiscountDays is null)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán phải nhập đủ cả tỷ lệ % và số ngày.");
+        if (paymentDiscountPercent is { } dp && (dp <= 0 || dp > 100 || paymentDiscountDays is < 1 or > 365)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán: tỷ lệ lớn hơn 0 đến 100%, số ngày từ 1 đến 365.");
+        if (creditLimit is < 0) throw new DomainException(ErrorCodes.ValidationFailed, "Hạn mức tín dụng không được âm.");
+        if (paymentTermsDays is < 0 or > 3650) throw new DomainException(ErrorCodes.ValidationFailed, "Điều kiện thanh toán từ 0 đến 3650 ngày.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var p = await db.BusinessPartners.FirstOrDefaultAsync(x => x.Id == partnerId && x.CompanyId == ctx.CompanyId)
+                    ?? throw new DomainException(ErrorCodes.NotFound, "Đối tượng không tồn tại.");
+            static string? T(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+            var old = new { p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays };
+            p.Address = T(address); p.Phone = T(phone); p.Email = T(email); p.CreditLimit = creditLimit; p.PaymentTermsDays = paymentTermsDays;
+            p.PaymentDiscountPercent = paymentDiscountPercent; p.PaymentDiscountDays = paymentDiscountDays;
+            p.RowVersion++;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "partner.update_commercial", "business_partner", p.Id.ToString(),
+                new { old, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays }, p.RowVersion);
             await db.SaveChangesAsync();
             return p;
         });

@@ -7,6 +7,8 @@ public sealed record LoanRateRequest(DateOnly EffectiveFrom, decimal AnnualRateP
 public sealed record LoanLinkRequest(List<Guid> JournalLineIds);
 public sealed record LoanAccrueRequest(Guid PeriodId, List<FxRate>? Rates);
 
+public sealed record SchedulePreviewRequest(int Installments, DateOnly FirstDue, decimal? AnnualRatePercent);
+
 public static class LoanEndpoints
 {
     public static void MapLoanEndpoints(this WebApplication app)
@@ -20,6 +22,11 @@ public static class LoanEndpoints
         api.MapPost("/{id:guid}/close", async (HttpContext http, Guid id, LoanService s) => Results.Ok(await s.CloseAsync(await http.SessionAsync(), id)));
         api.MapPost("/{id:guid}/rates", async (HttpContext http, Guid id, LoanRateRequest r, LoanService s) =>
             Results.Ok(await s.AddRateAsync(await http.SessionAsync(), id, r.EffectiveFrom, r.AnnualRatePercent, r.Note)));
+        api.MapPost("/{id:guid}/schedule/preview", async (HttpContext http, Guid id, SchedulePreviewRequest r, Hak.Application.Loans.LoanScheduleService s) =>
+            Results.Ok(await s.PreviewEqualPrincipalAsync(await http.SessionAsync(), id, r.Installments, r.FirstDue, r.AnnualRatePercent)));
+        api.MapGet("/{id:guid}/schedule", async (HttpContext http, Guid id, DateOnly asOf, Hak.Application.Loans.LoanScheduleService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), id, asOf)));
+        api.MapPut("/{id:guid}/schedule", async (HttpContext http, Guid id, List<Hak.Domain.Loans.ScheduleDraftItem> items, Hak.Application.Loans.LoanScheduleService s) =>
+            Results.Ok(await s.SaveAsync(await http.SessionAsync(), id, items)));
         api.MapGet("/{id:guid}/candidates", async (HttpContext http, Guid id, LoanService s) => Results.Ok(await s.CandidatesAsync(await http.SessionAsync(), id)));
         api.MapPost("/{id:guid}/links", async (HttpContext http, Guid id, LoanLinkRequest r, LoanService s) =>
         { await s.LinkAsync(await http.SessionAsync(), id, r.JournalLineIds); return Results.NoContent(); });

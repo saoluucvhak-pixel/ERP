@@ -19,9 +19,30 @@ public sealed class Item
     public string Name { get; set; } = "";
     public string Unit { get; set; } = "";
     /// <summary>Inventory (asset) account the item's value is carried on. Taken from the catalog, never hard-coded.</summary>
-    public Guid InventoryAccountId { get; set; }
+    public Guid? InventoryAccountId { get; set; }
+    /// <summary>Dịch vụ (vận chuyển thuê, tư vấn…): không theo dõi kho, không có tài khoản kho / giá vốn; bán ghi doanh thu, mua ghi chi phí theo tài khoản khai ở đây (như Service ở SAP / Odoo, non-stock Item ở ERPNext). Dịch vụ đi qua đơn hàng → nghiệm thu → hóa đơn.</summary>
+    public bool IsService { get; set; }
+    /// <summary>Tài khoản doanh thu / chi phí mặc định của dịch vụ khi lập hóa đơn bán / mua (null = lấy theo vai trò SALES_REVENUE; mua phải khai).</summary>
+    public Guid? RevenueAccountId { get; set; }
+    public Guid? ExpenseAccountId { get; set; }
     /// <summary>Wood chips etc.: every receipt/issue line needs a dryness measurement to derive BDMT.</summary>
     public bool TracksDryness { get; set; }
+    /// <summary>Hàng phải qua kiểm tra chất lượng (biên bản kiểm nghiệm đạt toàn bộ số lượng) trước khi ghi sổ phiếu nhập từ nhà cung cấp / khách trả lại.</summary>
+    public bool RequiresQc { get; set; }
+    /// <summary>Cách tính BDMT tạm cho phiếu xuất / chuyển kho chưa có chứng thư (vật tư theo dõi độ khô): bình quân độ khô của kho xuất lúc xuất (mặc định) hoặc độ khô công bố theo ngày.</summary>
+    public IssueDrynessBasis IssueDrynessBasis { get; set; } = IssueDrynessBasis.WarehouseAverage;
+    /// <summary>
+    /// Đơn vị tính quy đổi cố định (ví dụ 1 tấn = 1000 kg, 1 thùng = 12 chai): sổ kho chỉ giữ số lượng theo đơn vị chính, số theo đơn vị quy đổi suy ra bằng
+    /// <see cref="AltFactor"/>. Vật tư theo dõi độ khô (dăm gỗ) không dùng hệ số cố định: đơn vị quy đổi của nó là BDMT với hệ số theo độ khô đo tại từng thời điểm.
+    /// </summary>
+    public string? AltUnit { get; set; }
+    /// <summary>Số đơn vị chính trong 1 đơn vị quy đổi.</summary>
+    public decimal? AltFactor { get; set; }
+    /// <summary>Giá bán mặc định (VND/đơn vị chính), thuế suất GTGT mặc định (%), tồn tối thiểu và số lượng đặt tối ưu (danh mục hàng hóa theo tệp phân tích ERP). Null = chưa khai báo.</summary>
+    public decimal? SalePrice { get; set; }
+    public decimal? DefaultVatRate { get; set; }
+    public decimal? MinStock { get; set; }
+    public decimal? ReorderQty { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
@@ -52,6 +73,8 @@ public sealed class CostingPolicy
 }
 
 public enum StockDocumentType { Receipt = 1, Issue = 2, Transfer = 3 }
+
+public enum IssueDrynessBasis { WarehouseAverage = 1, DailyRate = 2 }
 
 public enum StockDocumentStatus { Draft = 1, Posted = 4, Reversed = 5, Cancelled = 9 }
 
@@ -96,6 +119,9 @@ public sealed class StockDocumentLine
     /// <summary>Purchase/sales order line this stock line fulfils.</summary>
     public Guid? OrderId { get; set; }
     public int? OrderLineNo { get; set; }
+    /// <summary>Hàng bán trả lại: dòng hóa đơn bán gốc mà phiếu nhập này nhận lại (để đối chiếu phạm vi đã duyệt trả hàng).</summary>
+    public Guid? SourceInvoiceId { get; set; }
+    public int? SourceInvoiceLineNo { get; set; }
 }
 
 /// <summary>Immutable quantity ledger row. Quantity is signed: + in, − out. Value lives in <see cref="StockValuation"/>.</summary>

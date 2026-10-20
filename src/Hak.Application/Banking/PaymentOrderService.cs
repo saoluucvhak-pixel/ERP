@@ -39,18 +39,24 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
             if (!MoneyMath.HasAtMostDecimals(input.Amount, dp))
                 throw new DomainException(ErrorCodes.AmountPrecision, $"Số tiền vượt quá {dp} chữ số thập phân.");
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.RequestedDate && f.EndDate >= input.RequestedDate)
-                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.RequestedDate}.");
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.RequestedDate.Vn()}.");
 
-            var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == ctx.CompanyId && s.FiscalYearId == fy.Id && s.VoucherType == "UNC");
-            if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = ctx.CompanyId, FiscalYearId = fy.Id, VoucherType = "UNC" });
-            seq.LastNumber++;
-            seq.RowVersion++;
+            var uncNumber = await Numbering.NextAsync(db, ctx.CompanyId, fy, "UNC");
+
+            // Không nhập tay thông tin thụ hưởng: lấy tài khoản ngân hàng mặc định của đối tượng (chụp lại, đổi danh mục sau không đổi lệnh).
+            var beneficiaryNo = input.BeneficiaryAccountNo; var beneficiaryBank = input.BeneficiaryBank;
+            if (string.IsNullOrWhiteSpace(beneficiaryNo) && string.IsNullOrWhiteSpace(beneficiaryBank))
+            {
+                var def = await db.PartnerBankAccounts.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.PartnerId == input.PartnerId && a.IsActive)
+                    .OrderByDescending(a => a.IsDefault).ThenBy(a => a.CreatedAt).FirstOrDefaultAsync();
+                if (def is not null) { beneficiaryNo = def.AccountNo; beneficiaryBank = string.IsNullOrWhiteSpace(def.Branch) ? def.BankName : $"{def.BankName} – {def.Branch}"; }
+            }
 
             var po = new PaymentOrder
             {
-                Id = Ids.New(), CompanyId = ctx.CompanyId, Number = $"UNC{fy.Code}-{seq.LastNumber:D6}", BankAccountId = input.BankAccountId,
+                Id = Ids.New(), CompanyId = ctx.CompanyId, Number = uncNumber, BankAccountId = input.BankAccountId,
                 PartnerId = input.PartnerId, BusinessEvent = input.BusinessEvent, Amount = input.Amount, RequestedDate = input.RequestedDate,
-                Description = input.Description.Trim(), BeneficiaryAccountNo = input.BeneficiaryAccountNo, BeneficiaryBank = input.BeneficiaryBank,
+                Description = input.Description.Trim(), BeneficiaryAccountNo = beneficiaryNo, BeneficiaryBank = beneficiaryBank,
                 SettleJournalLineId = input.SettleJournalLineId, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
             };
             db.PaymentOrders.Add(po);

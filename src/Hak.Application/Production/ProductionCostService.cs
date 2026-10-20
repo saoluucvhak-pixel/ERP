@@ -116,7 +116,7 @@ public sealed class ProductionCostService(HakDbContext db, AccountingEngine engi
                 }
                 var label = $"Giá thành {obj.Code} {period.StartDate:MM/yyyy}";
                 var gl = new List<VoucherLineInput>();
-                if (inStock != 0) gl.Add(new VoucherLineInput(item.InventoryAccountId, inStock > 0 ? Side.Debit : Side.Credit, Math.Abs(inStock), Description: $"{label} – thành phẩm còn tồn"));
+                if (inStock != 0) gl.Add(new VoucherLineInput(item.InventoryAccountId!.Value, inStock > 0 ? Side.Debit : Side.Credit, Math.Abs(inStock), Description: $"{label} – thành phẩm còn tồn"));
                 if (issued != 0)
                     gl.Add(new VoucherLineInput(roles ?? throw new DomainException(ErrorCodes.RuleRoleUnmapped, "Chưa ánh xạ vai trò tài khoản COGS."),
                         issued > 0 ? Side.Debit : Side.Credit, Math.Abs(issued), Description: $"{label} – thành phẩm đã xuất"));

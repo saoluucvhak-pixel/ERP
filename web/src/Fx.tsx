@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type OpenItem } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, parseRate, today } from './money'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
+import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface BalanceRow {
   accountId: string; accountCode: string; partnerId: string | null; partnerCode: string | null; currency: string
@@ -36,7 +36,7 @@ export function FxView() {
       return { currency: c, debitBalanceRate: debit, creditBalanceRate: credit }
     })
     await post('/fx/revaluations', { date: asOf, rates: payload, rateSource: source })
-  }, `Đã đánh giá lại số dư ngoại tệ ngày ${asOf} và ghi sổ.`)
+  }, `Đã đánh giá lại số dư ngoại tệ ngày ${formatDate(asOf)} và ghi sổ.`)
 
   return (
     <>
@@ -46,6 +46,12 @@ export function FxView() {
         <button onClick={() => load()}>Tải lại</button>
       </div>
       <p className="muted">Số dư theo từng tài khoản – đối tượng – loại tiền. Đánh giá lại áp dụng cho tiền, tiền gửi, vay… (không theo dõi công nợ chi tiết); chênh lệch ghi vào TK ánh xạ vai trò FX_REVALUATION. Tỷ giá áp cho số dư Nợ / số dư Có theo chính sách của doanh nghiệp [CẦN XÁC MINH căn cứ TT99].</p>
+      <FlowStrip steps={[
+        { label: 'Tỷ giá theo ngày (nhập tay, có nguồn)', journal: false, count: 'bảng tỷ giá' },
+        { label: 'Thu, chi ngoại tệ theo hóa đơn (tỷ giá bình quân di động)', journal: true, count: 'chênh lệch tỷ giá đã thực hiện' },
+        { label: 'Đánh giá lại cuối kỳ (tiền, công nợ, vay)', journal: true, count: `${runs.length} lần đánh giá` },
+        { label: 'Chênh lệch tỷ giá chưa thực hiện → kết chuyển', journal: true, screen: 'periods', count: 'khóa kỳ, kết chuyển' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 
@@ -64,7 +70,7 @@ export function FxView() {
       <FxPaymentPanel date={asOf} onDone={msg => { setInfo(msg); load() }} />
 
       <section className="panel">
-        <h3>Đánh giá lại ngày {asOf}</h3>
+        <h3>Đánh giá lại ngày {formatDate(asOf)}</h3>
         {currencies.length === 0 && <p className="muted">Không còn số dư nguyên tệ cần tỷ giá; chạy đánh giá lại vẫn xử lý phần quy đổi còn sót trên số dư nguyên tệ bằng 0.</p>}
         <div className="form-grid">
           {currencies.map(c => <div key={c}>
@@ -79,7 +85,7 @@ export function FxView() {
       <section className="panel">
         <h3>Các lần đánh giá lại</h3>
         <table className="grid"><thead><tr><th>Ngày</th><th>Nguồn tỷ giá</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{r.revaluationDate}</td><td>{r.rateSource}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{formatDate(r.revaluationDate)}</td><td>{r.rateSource}</td>
             <td>{r.status === 'Active' ? (r.voucherId ? 'Hiệu lực' : 'Hiệu lực (không phát sinh)') : 'Đã hủy'}</td>
             <td>{r.id === lastActive?.id && <button disabled={busy} onClick={() => {
               const reason = prompt('Lý do hủy lần đánh giá lại:')
@@ -143,7 +149,7 @@ function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) 
         <tbody>{items.map(i => <tr key={i.journalLineId}>
           <td><input type="checkbox" aria-label={`Chọn ${i.voucherNumber}`} checked={i.journalLineId in picked} onChange={e => { setPreview(null); setPicked(p => {
             const n = { ...p }; if (e.target.checked) n[i.journalLineId] = i.openForeign ?? ''; else delete n[i.journalLineId]; return n }) }} /></td>
-          <td>{i.voucherNumber}</td><td>{i.dueDate}</td><td>{i.foreignCurrency}</td>
+          <td>{i.voucherNumber}</td><td>{formatDate(i.dueDate)}</td><td>{i.foreignCurrency}</td>
           <td className="num">{formatMoney(i.openForeign)}</td><td className="num">{formatMoney(i.open)}</td>
           <td className="num">{i.journalLineId in picked && <input inputMode="decimal" aria-label="Nguyên tệ thanh toán" value={picked[i.journalLineId]}
             onChange={e => { setPreview(null); setPicked(p => ({ ...p, [i.journalLineId]: e.target.value })) }} />}</td>

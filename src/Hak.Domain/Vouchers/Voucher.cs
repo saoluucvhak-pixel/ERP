@@ -88,6 +88,9 @@ public sealed class Voucher
     /// <summary>Cash fund / bank account the document is about (cash-book key).</summary>
     public Guid? MainAccountId { get; set; }
     public Guid? PartnerId { get; set; }
+    /// <summary>Họ tên người giao / nhận và đơn vị, địa chỉ ghi trên chứng từ (yếu tố chung của mọi chứng từ trong kho thông tin chung; không bắt buộc có trong danh mục đối tượng).</summary>
+    public string? CounterpartyName { get; set; }
+    public string? CounterpartyUnit { get; set; }
 
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }

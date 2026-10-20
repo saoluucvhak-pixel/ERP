@@ -19,7 +19,7 @@ namespace Hak.Application.Rules;
 public sealed record BusinessDocument(
     string DocumentType, string BusinessEvent, DateOnly VoucherDate, DateOnly PostingDate, string Description,
     Guid? PartnerId, Guid? MainAccountId, IReadOnlyList<BusinessDocumentLine> Lines,
-    string? SourceSystem = null, string? SourceId = null);
+    string? SourceSystem = null, string? SourceId = null, string? CounterpartyName = null, string? CounterpartyUnit = null);
 
 public sealed record BusinessDocumentLine(decimal Amount, Guid? CounterAccountId = null, Guid? SettleJournalLineId = null,
     string? Description = null, DateOnly? DueDate = null);
@@ -190,7 +190,7 @@ public sealed class PostingRuleService(HakDbContext db, AuditService audit, IClo
                         && r.EffectiveFrom <= date && (r.EffectiveTo == null || r.EffectiveTo >= date))
             .ToListAsync();
         if (candidates.Count == 0)
-            throw new DomainException(ErrorCodes.RuleMissing, $"Chưa có quy tắc định khoản đang hiệu lực cho {documentType}/{businessEvent} ngày {date}.");
+            throw new DomainException(ErrorCodes.RuleMissing, $"Chưa có quy tắc định khoản đang hiệu lực cho {documentType}/{businessEvent} ngày {date.Vn()}.");
         var top = candidates.Max(r => r.Priority);
         var best = candidates.Where(r => r.Priority == top).ToList();
         if (best.Count > 1)

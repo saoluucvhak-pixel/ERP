@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney } from './money'
+import { formatDate, formatMoney, formatMonth, parseMoney } from './money'
 
 interface CostObject { id: string; code: string; name: string; itemId: string; wipAccountId: string; plannedUnitCost: string; isActive: boolean }
 interface Item { id: string; code: string; name: string; unit: string }
@@ -11,7 +11,7 @@ interface Preview {
 }
 interface Run { id: string; costObjectId: string; periodStart: string; outputQuantity: string; actualCost: string; unitCost: string; closingWip: string; difference: string; status: 'Active' | 'Reversed' }
 
-export function ProductionView() {
+export function PeriodCostingView() {
   const { accounts } = useCatalog()
   const [objects, setObjects] = useState<CostObject[]>([])
   const [items, setItems] = useState<Item[]>([])
@@ -72,7 +72,7 @@ export function ProductionView() {
           <label>Đối tượng <select value={pick.costObjectId} onChange={e => { setPreview(null); setPick(p => ({ ...p, costObjectId: e.target.value })) }}><option value="">— chọn —</option>
             {objects.map(o => <option key={o.id} value={o.id}>{o.code} – {o.name}</option>)}</select></label>
           <label>Kỳ <select value={pick.periodId} onChange={e => { setPreview(null); setPick(p => ({ ...p, periodId: e.target.value })) }}><option value="">— chọn —</option>
-            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{p.startDate.slice(0, 7)}</option>)}</select></label>
+            {periods.filter(p => p.status === 'Open').map(p => <option key={p.id} value={p.id}>{formatMonth(p.startDate)}</option>)}</select></label>
           <label>Dở dang cuối kỳ <input inputMode="decimal" value={pick.closingWip} onChange={e => { setPreview(null); setPick(p => ({ ...p, closingWip: e.target.value })) }} /></label>
           <label>Căn cứ đánh giá dở dang <input value={pick.note} onChange={e => setPick(p => ({ ...p, note: e.target.value }))} placeholder="Biên bản kiểm kê dở dang…" /></label>
           <button disabled={busy || !pick.costObjectId || !pick.periodId} onClick={() => run(async () => setPreview(await post<Preview>('/production/cost-runs/preview', body())))}>Xem trước</button>
@@ -90,14 +90,14 @@ export function ProductionView() {
             <tr><td>Chênh lệch so với giá kế hoạch (phân bổ theo số lượng từng phiếu nhập)</td><td className="num">{formatMoney(preview.difference)}</td></tr>
           </tbody></table>
           <table className="grid"><thead><tr><th>Phiếu nhập thành phẩm</th><th>Ngày</th><th className="num">Số lượng</th><th className="num">Giá trị đã nhập</th></tr></thead>
-            <tbody>{preview.receipts.map(r => <tr key={`${r.documentId}|${r.lineNo}`}><td>{r.documentNumber}</td><td>{r.date}</td><td className="num">{formatMoney(r.quantity)}</td><td className="num">{formatMoney(r.value)}</td></tr>)}</tbody></table>
+            <tbody>{preview.receipts.map(r => <tr key={`${r.documentId}|${r.lineNo}`}><td>{r.documentNumber}</td><td>{formatDate(r.date)}</td><td className="num">{formatMoney(r.quantity)}</td><td className="num">{formatMoney(r.value)}</td></tr>)}</tbody></table>
         </>}
       </section>
 
       <section className="panel">
         <h3>Các lần tính giá thành</h3>
         <table className="grid"><thead><tr><th>Đối tượng</th><th>Kỳ</th><th className="num">Sản lượng</th><th className="num">Giá thành</th><th className="num">Đơn vị</th><th className="num">Dở dang cuối</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{runs.map(r => <tr key={r.id}><td>{objName(r.costObjectId)}</td><td>{r.periodStart.slice(0, 7)}</td><td className="num">{formatMoney(r.outputQuantity)}</td>
+          <tbody>{runs.map(r => <tr key={r.id}><td>{objName(r.costObjectId)}</td><td>{formatMonth(r.periodStart)}</td><td className="num">{formatMoney(r.outputQuantity)}</td>
             <td className="num">{formatMoney(r.actualCost)}</td><td className="num">{formatMoney(r.unitCost)}</td><td className="num">{formatMoney(r.closingWip)}</td>
             <td>{r.status === 'Active' ? 'Hiệu lực' : 'Đã hủy'}</td>
             <td>{r.status === 'Active' && latest(r) && <button disabled={busy} onClick={() => {

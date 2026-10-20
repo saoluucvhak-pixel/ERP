@@ -2,8 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
 import { AccountSelect, ErrorBox, Modal, useAction } from './common'
 import { ImportData } from './ImportData'
+import { CompanyBanks } from './BankAccounts'
+import { NumberingView } from './Numbering'
+import { EntityGroupsButton, useGroups } from './groupLib'
+import { formatMoney, parseMoney } from './money'
+import { matchesQuery } from './filter'
+import { SmartFilter, useFilterState } from './SmartFilter'
 
-const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', import: 'Nhập từ Excel/CSV' } as const
+const TABS = { accounts: 'Hệ thống tài khoản', roles: 'Vai trò tài khoản', stock: 'Kho & vật tư', years: 'Năm tài chính', banks: 'Tài khoản ngân hàng', numbering: 'Bộ mã chứng từ', import: 'Nhập từ Excel/CSV' } as const
 
 /** Thiết lập công ty: catalogue the modules depend on. Codes are the company's own (legal chart [CẦN XÁC MINH TT99]). */
 export function SetupView() {
@@ -17,6 +23,8 @@ export function SetupView() {
       {tab === 'roles' && <Roles />}
       {tab === 'stock' && <Stock />}
       {tab === 'years' && <Years />}
+      {tab === 'banks' && <CompanyBanks />}
+      {tab === 'numbering' && <NumberingView />}
       {tab === 'import' && <ImportData />}
     </>
   )
@@ -48,7 +56,7 @@ const attrsOf = (a: Account): Attrs => ({ requiresPartner: a.requiresPartner, op
 function Accounts() {
   const [list, setList] = useState<Account[]>([])
   const [open, setOpen] = useState<Set<string>>(new Set())
-  const [filter, setFilter] = useState('')
+  const [fs, patchFs, clearFs] = useFilterState('accounts')
   const [dialog, setDialog] = useState<Dialog>(null)
   const [info, setInfo] = useState('')
   const { error, run } = useAction()
@@ -59,9 +67,10 @@ function Accounts() {
   const children: Record<string, Account[]> = {}
   for (const a of [...list].sort((x, y) => (x.code < y.code ? -1 : 1))) (children[a.parentId && byId[a.parentId] ? a.parentId : ''] ??= []).push(a)
   // With a search: matching accounts plus their ancestors, all expanded.
-  const q = filter.trim().toLowerCase()
+  const chipOf = (a: Account, k: string | null) => !k || (k === 'group' ? !a.isPostable : k === 'detail' ? a.isPostable : k === 'partner' ? a.requiresPartner : k === 'cash' ? a.cashKind !== 'None' : k === 'inactive' ? !a.isActive : true)
+  const q = fs.q.trim() || fs.chip || ''
   const visible = new Set<string>()
-  if (q) for (const a of list) if (`${a.code} ${a.name}`.toLowerCase().includes(q)) for (let p: Account | undefined = a; p; p = p.parentId ? byId[p.parentId] : undefined) visible.add(p.id)
+  if (q) for (const a of list) if (chipOf(a, fs.chip) && matchesQuery(`${a.code} ${a.name}`, null, fs.q)) for (let p: Account | undefined = a; p; p = p.parentId ? byId[p.parentId] : undefined) visible.add(p.id)
   const rows: { a: Account; depth: number }[] = []
   const walk = (parent: string, depth: number) => {
     for (const a of children[parent] ?? []) {
@@ -80,11 +89,14 @@ function Accounts() {
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="toolbar">
         <button className="primary" onClick={() => setDialog({ kind: 'new' })}>Thêm TK cấp 1</button>
-        <label>Tìm <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="mã, tên" /></label>
         <button onClick={() => setOpen(new Set(list.filter(a => children[a.id]).map(a => a.id)))}>Mở hết</button>
         <button onClick={() => setOpen(new Set())}>Thu gọn</button>
         <span className="muted">{list.length} tài khoản · TK in đậm là TK tổng hợp</span>
       </div>
+      <SmartFilter label="Tài khoản" state={fs} patch={patchFs} clear={clearFs} shown={rows.length} total={list.length} placeholder="Tìm mã hoặc tên tài khoản"
+        chips={[{ key: 'group', label: 'Tổng hợp', count: list.filter(a => !a.isPostable).length }, { key: 'detail', label: 'Chi tiết', count: list.filter(a => a.isPostable).length },
+          { key: 'partner', label: 'Theo đối tượng', count: list.filter(a => a.requiresPartner).length }, { key: 'cash', label: 'Tiền', count: list.filter(a => a.cashKind !== 'None').length },
+          { key: 'inactive', label: 'Ngừng dùng', count: list.filter(a => !a.isActive).length }]} />
       <div className="scroll"><table className="grid">
         <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th><th title="Nhãn dùng trong công thức BCTC (DH, TDT, HCSD, LV, DT, KH…)">Nhãn BC</th><th>Đang dùng</th><th /></tr></thead>
         <tbody>{rows.map(({ a, depth }) => {
@@ -233,7 +245,35 @@ function Roles() {
 }
 
 interface Warehouse { id: string; code: string; name: string; isActive: boolean; policies: { method: string; effectiveFrom: string; note: string }[] }
-interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string; isActive: boolean; tracksDryness: boolean }
+/** Giá bán, thuế suất, tồn tối thiểu, số lượng đặt tối ưu của một vật tư (danh mục hàng hóa theo tệp phân tích ERP). */
+function ItemCommercialCells({ item, busy, onSave }: { item: Item; busy: boolean; onSave: (body: Record<string, string | null>) => void }) {
+  const init = { salePrice: item.salePrice ? formatMoney(item.salePrice) : '', vat: item.defaultVatRate ? formatMoney(item.defaultVatRate) : '', min: item.minStock ? formatMoney(item.minStock) : '', reorder: item.reorderQty ? formatMoney(item.reorderQty) : '' }
+  const [v, setV] = useState(init)
+  const [err, setErr] = useState('')
+  const dirty = (Object.keys(init) as (keyof typeof init)[]).some(k => v[k] !== init[k])
+  const p = (t: string) => (t.trim() ? parseMoney(t) : null)
+  const field = (k: keyof typeof init, label: string) => <td><input className="num" aria-label={`${label} ${item.code}`} value={v[k]} size={9} onChange={e => setV(x => ({ ...x, [k]: e.target.value }))} /></td>
+  return <>
+    {field('salePrice', 'Giá bán')}{field('vat', 'Thuế GTGT')}{field('min', 'Tồn tối thiểu')}{field('reorder', 'SL đặt tối ưu')}
+    <td>{dirty && <button className="primary" disabled={busy} title={err} onClick={() => {
+      const q = { salePrice: p(v.salePrice), defaultVatRate: p(v.vat), minStock: p(v.min), reorderQty: p(v.reorder) }
+      if ((Object.entries({ salePrice: v.salePrice, vat: v.vat, min: v.min, reorder: v.reorder })).some(([, t]) => t.trim() && parseMoney(t) == null)) { setErr('Có ô không hợp lệ'); return }
+      setErr(''); onSave(q)
+    }}>Lưu</button>}{err && <span className="muted"> {err}</span>}</td>
+  </>
+}
+
+/** Đơn vị quy đổi cố định: 1 <ĐVT phụ> = <hệ số> ĐVT chính. Vật tư đo độ khô dùng BDMT (quy đổi theo thời điểm) nên không đặt ở đây. */
+function ItemAltUnitCell({ item, busy, onSave }: { item: Item; busy: boolean; onSave: (altUnit: string | null, altFactor: string | null) => void }) {
+  const [u, setU] = useState(item.altUnit ?? '')
+  const [f, setF] = useState(item.altFactor ? formatMoney(item.altFactor) : '')
+  if (item.tracksDryness) return <td className="muted" title="Hệ số quy đổi theo độ khô tại từng thời điểm đo">BDMT – theo độ khô thời điểm</td>
+  const dirty = u !== (item.altUnit ?? '') || f !== (item.altFactor ? formatMoney(item.altFactor) : '')
+  return <td>1 <input aria-label={`ĐVT phụ ${item.code}`} value={u} size={5} onChange={e => setU(e.target.value)} /> = <input className="num" aria-label={`Hệ số quy đổi ${item.code}`} value={f} size={7} onChange={e => setF(e.target.value)} /> {item.unit}
+    {dirty && <button className="primary" disabled={busy} onClick={() => onSave(u.trim() || null, f.trim() ? parseMoney(f) : null)}>Lưu</button>}</td>
+}
+
+interface Item { id: string; code: string; name: string; unit: string; inventoryAccountId: string | null; isService?: boolean; revenueAccountId?: string | null; expenseAccountId?: string | null; isActive: boolean; tracksDryness: boolean; requiresQc?: boolean; issueDrynessBasis?: 'WarehouseAverage' | 'DailyRate'; altUnit?: string | null; altFactor?: string | null; salePrice?: string | null; defaultVatRate?: string | null; minStock?: string | null; reorderQty?: string | null }
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
 
 function Stock() {
@@ -242,7 +282,9 @@ function Stock() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [wh, setWh] = useState({ code: '', name: '' })
   const [policy, setPolicy] = useState({ warehouseId: '', method: 'MovingAverage', effectiveFrom: '', note: '' })
+  const itemGroups = useGroups('Item')
   const [item, setItem] = useState({ code: '', name: '', unit: '', inventoryAccountId: '', tracksDryness: false })
+  const [svc, setSvc] = useState({ code: '', name: '', unit: '', revenueAccountId: '', expenseAccountId: '' })
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => {
@@ -273,10 +315,18 @@ function Stock() {
       </section>
       <section className="panel">
         <h3>Vật tư, hàng hóa</h3>
-        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th>Đo độ khô (MT/BDMT)</th></tr></thead>
-          <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
+        <table className="grid"><thead><tr><th>Mã</th><th>Tên</th><th>ĐVT</th><th>TK kho</th><th className="num">Giá bán</th><th className="num">Thuế GTGT %</th><th className="num" title="Tồn dưới mức này thì vật tư vào danh mục cần đặt hàng">Tồn tối thiểu</th><th className="num">SL đặt tối ưu</th><th /><th>Đơn vị quy đổi cố định</th><th>Đo độ khô (MT/BDMT)</th><th title="Cách tính BDMT tạm cho phiếu xuất chưa có chứng thư">BDMT phiếu xuất</th><th title="Phiếu nhập từ nhà cung cấp / khách trả lại chỉ ghi sổ khi có biên bản kiểm nghiệm đạt toàn bộ số lượng">Bắt buộc kiểm tra chất lượng</th><th>Nhóm</th></tr></thead>
+          <tbody>{items.map(i => <tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.unit}</td><td>{i.isService ? <span title={`Dịch vụ — không qua kho. TK doanh thu ${accounts.find(a => a.id === i.revenueAccountId)?.code ?? 'theo vai trò'}, TK chi phí ${accounts.find(a => a.id === i.expenseAccountId)?.code ?? '—'}`}>Dịch vụ</span> : accounts.find(a => a.id === i.inventoryAccountId)?.code}</td>
+            <ItemCommercialCells item={i} busy={busy} onSave={(body) => act(() => put(`/items/${i.id}/commercial`, body), `Đã lưu thông tin thương mại ${i.code}.`)} />
+            <ItemAltUnitCell key={`${i.id}-${i.altUnit}-${i.altFactor}`} item={i} busy={busy} onSave={(altUnit, altFactor) => act(() => put(`/items/${i.id}/alt-unit`, { altUnit, altFactor }), `Đã lưu đơn vị quy đổi ${i.code}.`)} />
             <td><input type="checkbox" aria-label={`Đo độ khô ${i.code}`} checked={i.tracksDryness} disabled={busy}
-              onChange={e => act(() => post(`/items/${i.id}/tracks-dryness`, { tracks: e.target.checked }), 'Đã cập nhật theo dõi độ khô.')} /></td></tr>)}</tbody></table>
+              onChange={e => act(() => post(`/items/${i.id}/tracks-dryness`, { tracks: e.target.checked }), 'Đã cập nhật theo dõi độ khô.')} /></td>
+            <td>{i.tracksDryness && <select aria-label={`Cách tính BDMT xuất ${i.code}`} value={i.issueDrynessBasis ?? 'WarehouseAverage'} disabled={busy}
+              onChange={e => act(() => post(`/items/${i.id}/issue-dryness-basis`, { basis: e.target.value }), 'Đã đổi cách tính BDMT phiếu xuất.')}>
+              <option value="WarehouseAverage">Bình quân độ khô kho xuất</option><option value="DailyRate">Độ khô công bố theo ngày</option></select>}</td>
+            <td><input type="checkbox" aria-label={`Bắt buộc kiểm tra chất lượng ${i.code}`} checked={!!i.requiresQc} disabled={busy}
+              onChange={e => act(() => post(`/items/${i.id}/requires-qc`, { requires: e.target.checked }), 'Đã cập nhật yêu cầu kiểm tra chất lượng.')} /></td>
+            <td><EntityGroupsButton g={itemGroups} domain="Item" entityId={i.id} title={i.name} /></td></tr>)}</tbody></table>
         <div className="form-row" style={{ marginTop: 8 }}>
           <label>Mã <input value={item.code} onChange={e => setItem(x => ({ ...x, code: e.target.value.toUpperCase() }))} /></label>
           <label>Tên <input value={item.name} onChange={e => setItem(x => ({ ...x, name: e.target.value }))} /></label>
@@ -289,6 +339,19 @@ function Stock() {
             if (item.tracksDryness) await post(`/items/${created.id}/tracks-dryness`, { tracks: true })
             setItem({ code: '', name: '', unit: '', inventoryAccountId: '', tracksDryness: false })
           }, 'Đã thêm vật tư.')}>Thêm vật tư</button>
+        </div>
+        <div className="form-row" title="Dịch vụ (vận chuyển thuê, tư vấn…) không theo dõi kho: bán ghi doanh thu, mua ghi chi phí theo tài khoản khai ở đây">
+          <label>Dịch vụ — mã <input value={svc.code} onChange={e => setSvc(x => ({ ...x, code: e.target.value.toUpperCase() }))} /></label>
+          <label>Tên <input value={svc.name} onChange={e => setSvc(x => ({ ...x, name: e.target.value }))} /></label>
+          <label>ĐVT <input value={svc.unit} onChange={e => setSvc(x => ({ ...x, unit: e.target.value }))} size={6} /></label>
+          <label>TK doanh thu <AccountSelect accounts={accounts} value={svc.revenueAccountId} onChange={v => setSvc(x => ({ ...x, revenueAccountId: v }))}
+            filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK doanh thu dịch vụ" /></label>
+          <label>TK chi phí <AccountSelect accounts={accounts} value={svc.expenseAccountId} onChange={v => setSvc(x => ({ ...x, expenseAccountId: v }))}
+            filter={a => a.cashKind === 'None' && a.openItemNature === 'None' && !a.requiresPartner} ariaLabel="TK chi phí dịch vụ" /></label>
+          <button disabled={busy || !svc.code || !svc.name || !svc.unit} onClick={() => act(async () => {
+            await post('/items/service', { code: svc.code, name: svc.name, unit: svc.unit, revenueAccountCode: accounts.find(a => a.id === svc.revenueAccountId)?.code ?? null, expenseAccountCode: accounts.find(a => a.id === svc.expenseAccountId)?.code ?? null })
+            setSvc({ code: '', name: '', unit: '', revenueAccountId: '', expenseAccountId: '' })
+          }, 'Đã thêm dịch vụ.')}>Thêm dịch vụ</button>
         </div>
       </section>
     </>

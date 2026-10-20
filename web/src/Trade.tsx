@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatMoney, parseMoney, today } from './money'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
+import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
 interface Invoice { id: string; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string }
-interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string }
+interface SvcCand { orderId: string; orderNumber: string; orderLineNo: number; itemCode: string; itemName: string; unit: string; remaining: string; unitPrice: string; vatRate: string | null; description: string | null }
+interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string; svc?: SvcCand }
 interface LineDraft { candidate: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string; qty: string; accountId: string; description: string }
 
 const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Posted: 'Đã ghi sổ', Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }
@@ -19,7 +20,7 @@ export function TradeView() {
   const [kind, setKind] = useState<'Purchase' | 'Sales'>('Sales')
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [list, setList] = useState<Invoice[]>([])
-  const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '' })
+  const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '', discPct: '', discDays: '' })
   const [lines, setLines] = useState<LineDraft[]>([empty()])
   const [info, setInfo] = useState('')
   const [adjusting, setAdjusting] = useState<Invoice | null>(null)
@@ -37,6 +38,10 @@ export function TradeView() {
       for (const d of drafts) for (const l of d.lines)
         c.push({ key: `${d.id}:${l.lineNo}`, docId: d.id, lineNo: l.lineNo, bdmt: null, remaining: l.quantity, label: `${d.number}/${l.lineNo} · ${d.postingDate} · phiếu nhập NHÁP ${formatMoney(l.quantity)} (ghi sổ cùng hóa đơn)` })
     }
+    // Dịch vụ đã nghiệm thu (đơn → biên bản nghiệm thu xác nhận) còn lập được hóa đơn.
+    const sv = await get<SvcCand[]>(`/service-acceptances/invoice-candidates?kind=${kind}`)
+    for (const s of sv) c.push({ key: `svc:${s.orderId}:${s.orderLineNo}`, docId: '', lineNo: 0, bdmt: null, remaining: s.remaining, svc: s,
+      label: `Dịch vụ · ${s.orderNumber}/${s.orderLineNo} · ${s.itemCode} ${s.itemName} · nghiệm thu còn ${formatMoney(s.remaining)} ${s.unit}` })
     setCandidates(c)
   }), [run, kind])
   useEffect(() => { load() }, [load])
@@ -47,10 +52,12 @@ export function TradeView() {
     const body = {
       kind, partnerId: head.partnerId, invoiceSeries: head.series, invoiceNo: head.no, invoiceDate: head.invoiceDate, postingDate: head.postingDate,
       dueDate: head.dueDate || null, currency: head.currency || null, exchangeRate: head.currency ? parseMoney(head.rate) : null, description: head.description,
+      paymentDiscountPercent: head.discPct.trim() ? parseRate(head.discPct) : null, paymentDiscountDays: head.discDays.trim() ? Number(head.discDays) : null,
       lines: lines.map((l, i) => {
         const price = parseMoney(l.price)
         if (!price) throw new Error(`Dòng ${i + 1}: đơn giá không hợp lệ.`)
         const c = candidates.find(x => x.key === l.candidate)
+        if (c?.svc) return { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: null, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null, orderId: c.svc.orderId, orderLineNo: c.svc.orderLineNo }
         return c
           ? { unitPrice: price, stockDocumentId: c.docId, stockLineNo: c.lineNo, basis: l.basis, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null }
           : { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: l.accountId || null, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null }
@@ -72,6 +79,13 @@ export function TradeView() {
         <button className={kind === 'Sales' ? 'primary' : ''} onClick={() => setKind('Sales')}>Hóa đơn bán</button>
         <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => setKind('Purchase')}>Hóa đơn mua</button>
       </div>
+      <FlowStrip steps={[
+        { label: 'Hóa đơn nháp (từ phiếu kho / phiếu giao hàng)', journal: false, count: `${list.filter(i => i.status === 'Draft').length} hóa đơn nháp` },
+        { label: 'Ghi sổ hóa đơn (Nhật ký: doanh thu / hàng tồn, thuế, công nợ)', journal: true, count: `${list.filter(i => i.status === 'Posted').length} đã ghi sổ` },
+        { label: 'Theo dõi công nợ, thanh toán', journal: true, screen: 'arap', count: 'bù trừ với phiếu thu / chi' },
+        { label: 'Chiết khấu thanh toán (trả / thu trong hạn)', journal: true, screen: 'paydiscount', count: 'theo điều khoản trên hóa đơn' },
+        { label: 'Điều chỉnh: trả hàng, giảm giá (duyệt)', journal: true, screen: 'salesapproval', count: 'hóa đơn điều chỉnh liên kết hóa đơn gốc' },
+      ]} />
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="panel">
@@ -82,6 +96,8 @@ export function TradeView() {
           <label>Ngày hóa đơn<input type="date" value={head.invoiceDate} onChange={e => setHead(h => ({ ...h, invoiceDate: e.target.value }))} /></label>
           <label>Ngày hạch toán<input type="date" value={head.postingDate} onChange={e => setHead(h => ({ ...h, postingDate: e.target.value }))} /></label>
           <label>Hạn thanh toán<input type="date" value={head.dueDate} onChange={e => setHead(h => ({ ...h, dueDate: e.target.value }))} /></label>
+          <label title="Chiết khấu thanh toán: giảm P% tiền hàng nếu trả đủ trong N ngày kể từ ngày hóa đơn. Để trống thì lấy theo điều khoản của đối tượng.">CK thanh toán %<input className="num" size={5} value={head.discPct} onChange={e => setHead(h => ({ ...h, discPct: e.target.value }))} placeholder="vd 2" /></label>
+          <label>trong (ngày)<input className="num" size={4} inputMode="numeric" value={head.discDays} onChange={e => setHead(h => ({ ...h, discDays: e.target.value.replace(/\D/g, '') }))} placeholder="vd 10" /></label>
           <label>Nguyên tệ<select value={head.currency} onChange={e => setHead(h => ({ ...h, currency: e.target.value }))}><option value="">VND</option><option>USD</option><option>EUR</option><option>CNY</option><option>JPY</option></select></label>
           {head.currency && <label>Tỷ giá<input className="num" value={head.rate} onChange={e => setHead(h => ({ ...h, rate: e.target.value }))} /></label>}
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>
@@ -90,12 +106,12 @@ export function TradeView() {
           <thead><tr><th>#</th><th>Dòng phiếu kho ({kind === 'Sales' ? 'xuất chưa lập HĐ' : 'nhập chưa có HĐ'}) / dịch vụ</th><th>Tính giá theo</th><th className="num">SL (dịch vụ)</th><th>TK (dịch vụ)</th><th className="num">Đơn giá</th><th className="num">Thuế suất %</th><th>Diễn giải</th><th /></tr></thead>
           <tbody>{lines.map((l, i) => (
             <tr key={i}><td>{i + 1}</td>
-              <td><select aria-label="Dòng phiếu kho" value={l.candidate} onChange={e => upd(i, { candidate: e.target.value })} style={{ maxWidth: 420 }}>
+              <td><select aria-label="Dòng phiếu kho" value={l.candidate} onChange={e => { const c = candidates.find(x => x.key === e.target.value); upd(i, c?.svc ? { candidate: e.target.value, qty: c.svc.remaining, price: c.svc.unitPrice, vat: c.svc.vatRate ?? '', description: c.svc.description ?? '' } : { candidate: e.target.value }) }} style={{ maxWidth: 420 }}>
                 <option value="">— dịch vụ / không gắn phiếu kho —</option>{candidates.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select></td>
-              <td><select aria-label="Tính giá theo" value={l.candidate ? l.basis : 'Quantity'} disabled={!l.candidate} onChange={e => upd(i, { basis: e.target.value as LineDraft['basis'] })}>
+              <td><select aria-label="Tính giá theo" value={l.candidate && !candidates.find(x => x.key === l.candidate)?.svc ? l.basis : 'Quantity'} disabled={!l.candidate || candidates.find(x => x.key === l.candidate)?.svc !== undefined} onChange={e => upd(i, { basis: e.target.value as LineDraft['basis'] })}>
                 <option value="Bdmt">BDMT</option><option value="Quantity">Số lượng (MT/ĐVT)</option></select></td>
-              <td><input className="num" aria-label="Số lượng" size={6} disabled={!!l.candidate} value={l.qty} onChange={e => upd(i, { qty: e.target.value })} /></td>
-              <td>{!l.candidate && <AccountSelect accounts={accounts} value={l.accountId} onChange={v => upd(i, { accountId: v })} ariaLabel="TK" />}</td>
+              <td><input className="num" aria-label="Số lượng" size={6} disabled={!!l.candidate && !candidates.find(x => x.key === l.candidate)?.svc} value={l.qty} onChange={e => upd(i, { qty: e.target.value })} /></td>
+              <td>{(!l.candidate) && <AccountSelect accounts={accounts} value={l.accountId} onChange={v => upd(i, { accountId: v })} ariaLabel="TK" />}</td>
               <td><input className="num" aria-label="Đơn giá" size={10} value={l.price} onChange={e => upd(i, { price: e.target.value })} /></td>
               <td><input className="num" aria-label="Thuế suất" size={4} value={l.vat} placeholder="KCT" onChange={e => upd(i, { vat: e.target.value })} /></td>
               <td><input aria-label="Diễn giải dòng" value={l.description} onChange={e => upd(i, { description: e.target.value })} /></td>
@@ -113,7 +129,7 @@ export function TradeView() {
         <table className="grid">
           <thead><tr><th>Số</th><th>Ký hiệu / Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Đối tượng</th><th className="num">Tiền hàng (VND)</th><th className="num">Thuế</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{list.map(i => (
-            <tr key={i.id}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{i.invoiceDate}</td><td>{i.postingDate}</td>
+            <tr key={i.id}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
@@ -194,7 +210,7 @@ function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) 
         {purpose === 'Return' ? <>
           <label>SL trả lại (MT)<input className="num" value={qty} onChange={e => setQty(e.target.value)} /></label>
           <button style={{ alignSelf: 'flex-end' }} disabled={busy} onClick={makeReceipt}>{purchase ? '1. Lập phiếu xuất trả NCC' : '1. Lập phiếu nhập trả lại'}</button>
-          <label>{purchase ? 'Phiếu xuất trả' : 'Phiếu nhập trả lại'}<select value={receiptId} onChange={e => setReceiptId(e.target.value)}><option value="">— chọn —</option>{receipts.map(r => <option key={r.id} value={r.id}>{r.number} · {r.postingDate}</option>)}</select></label>
+          <label>{purchase ? 'Phiếu xuất trả' : 'Phiếu nhập trả lại'}<select value={receiptId} onChange={e => setReceiptId(e.target.value)}><option value="">— chọn —</option>{receipts.map(r => <option key={r.id} value={r.id}>{r.number} · {formatDate(r.postingDate)}</option>)}</select></label>
         </> : <label>Số tiền ({invoice.currency ?? 'VND'})<input className="num" value={amount} onChange={e => setAmount(e.target.value)} /></label>}
         <label>Ký hiệu HĐ<input value={series} onChange={e => setSeries(e.target.value)} /></label>
         <label>Số HĐ điều chỉnh<input value={no} onChange={e => setNo(e.target.value)} /></label>

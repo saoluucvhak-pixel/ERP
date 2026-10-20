@@ -19,7 +19,8 @@ public sealed record InvoiceLineInput(decimal UnitPrice, Guid? StockDocumentId =
     Guid? OrderId = null, int? OrderLineNo = null);
 
 public sealed record InvoiceInput(InvoiceKind Kind, Guid PartnerId, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate,
-    string Description, IReadOnlyList<InvoiceLineInput> Lines, DateOnly? DueDate = null, string? Currency = null, decimal? ExchangeRate = null);
+    string Description, IReadOnlyList<InvoiceLineInput> Lines, DateOnly? DueDate = null, string? Currency = null, decimal? ExchangeRate = null,
+    decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null);
 
 public sealed record PriceDifferenceWarning(int LineNo, string ReceiptNumber, decimal ReceiptValue, decimal InvoiceValue, decimal Difference,
     decimal ReceiptQuantity, decimal QuantityInStock, decimal InventoryPart, decimal CogsPart, string Method);
@@ -54,9 +55,16 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             await CheckDuplicateAsync(ctx.CompanyId, input.Kind, input.PartnerId, input.InvoiceSeries.Trim(), input.InvoiceNo.Trim(), null);
 
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.PostingDate && f.EndDate >= input.PostingDate)
-                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate}.");
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate.Vn()}.");
+            // Chiết khấu thanh toán: lấy điều khoản nhập tay, nếu để trống thì điền sẵn theo đối tượng.
+            var partnerTerms = await db.BusinessPartners.AsNoTracking().Where(p => p.Id == input.PartnerId).Select(p => new { p.PaymentDiscountPercent, p.PaymentDiscountDays }).FirstAsync();
+            var discPct = input.PaymentDiscountPercent ?? (input.PaymentDiscountDays is null ? partnerTerms.PaymentDiscountPercent : null);
+            var discDays = input.PaymentDiscountDays ?? (input.PaymentDiscountPercent is null ? partnerTerms.PaymentDiscountDays : null);
+            if ((discPct is null) != (discDays is null)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán phải nhập đủ cả tỷ lệ % và số ngày.");
+            if (discPct is { } dp0 && (dp0 <= 0 || dp0 > 100 || discDays is < 1 or > 365)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán: tỷ lệ lớn hơn 0 đến 100%, số ngày từ 1 đến 365.");
             var inv = new CommercialInvoice
             {
+                PaymentDiscountPercent = discPct, PaymentDiscountDays = discDays,
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, InvoiceSeries = input.InvoiceSeries.Trim(), InvoiceNo = input.InvoiceNo.Trim(),
                 InvoiceDate = input.InvoiceDate, PostingDate = input.PostingDate, DueDate = input.DueDate, PartnerId = input.PartnerId,
                 Currency = currency, ExchangeRate = rate, Description = input.Description.Trim(), CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
@@ -124,7 +132,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                     $"điều chỉnh tồn kho {warnings.Sum(w => w.InventoryPart)}, điều chỉnh giá vốn {warnings.Sum(w => w.CogsPart)}. Xác nhận để ghi sổ.",
                     warnings.Select(w => new ValidationError(ErrorCodes.PriceDifference,
                         $"Phiếu {w.ReceiptNumber}: nhập kho {w.ReceiptValue}, hóa đơn {w.InvoiceValue}, chênh {w.Difference} → tồn kho {w.InventoryPart} (còn {w.QuantityInStock}/{w.ReceiptQuantity}), giá vốn {w.CogsPart}", w.LineNo)).ToList());
-            var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId);
+            var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).Where(i => i.InventoryAccountId != null).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId!.Value);
 
             var roles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId).ToDictionaryAsync(m => m.RoleCode, m => m.AccountId);
             Guid Role(string code) => roles.TryGetValue(code, out var id) ? id
@@ -323,11 +331,27 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         else
         {
             if (l.Basis == PricingBasis.Bdmt) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: giá theo BDMT phải gắn phiếu kho có kết quả đo.");
-            if (l.AccountId is null || l.Quantity is not { } q || q <= 0)
+            // Dòng dịch vụ gắn đơn hàng: vật tư của dòng đơn là dịch vụ → tài khoản mặc định theo dịch vụ, số lượng không vượt phần đã nghiệm thu xác nhận.
+            Item? service = null;
+            TradeOrder? svcOrder = null;
+            if (l.OrderId is { } sid && l.OrderLineNo is { } sln)
+            {
+                svcOrder = await db.TradeOrders.AsNoTracking().Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == sid && o.CompanyId == ctx.CompanyId);
+                var sol = svcOrder?.Lines.FirstOrDefault(x => x.LineNo == sln);
+                if (sol is not null) service = await db.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == sol.ItemId && i.IsService);
+            }
+            var accountId = l.AccountId ?? (service is null ? null : inv.Kind == InvoiceKind.Sales ? service.RevenueAccountId : service.ExpenseAccountId);
+            if (accountId is null || l.Quantity is not { } q || q <= 0)
                 throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: dòng không gắn phiếu kho phải có tài khoản hạch toán và số lượng > 0.");
-            if (!await db.Accounts.AnyAsync(a => a.Id == l.AccountId && a.CompanyId == ctx.CompanyId && a.IsPostable && a.IsActive))
+            if (!await db.Accounts.AnyAsync(a => a.Id == accountId && a.CompanyId == ctx.CompanyId && a.IsPostable && a.IsActive))
                 throw new DomainException(ErrorCodes.AccountNotFound, $"Dòng {lineNo}: tài khoản không hợp lệ.");
+            line.AccountId = accountId;
             line.BasisQuantity = q;
+            if (service is not null)
+            {
+                line.ItemId = service.Id;
+                await ServiceAcceptanceService.CheckInvoiceAgainstAcceptanceAsync(db, svcOrder!.Id, l.OrderLineNo!.Value, svcOrder.Number, q, null);
+            }
             if (l.OrderId is { } oid)
             {
                 var order = await db.TradeOrders.AsNoTracking().Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == oid && o.CompanyId == ctx.CompanyId)
@@ -352,6 +376,12 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
     /// <summary>At posting: quantities still available and the BDMT basis still equal to the active measurement.</summary>
     private async Task RecheckLineAsync(SessionContext ctx, CommercialInvoice inv, CommercialInvoiceLine l)
     {
+        if (l.StockDocumentId is null && l.ItemId is { } svcItem && l.OrderId is { } svcOrder && l.OrderLineNo is { } svcLine && await db.Items.AnyAsync(i => i.Id == svcItem && i.IsService))
+        {
+            var number = await db.TradeOrders.AsNoTracking().Where(o => o.Id == svcOrder).Select(o => o.Number).FirstAsync();
+            await ServiceAcceptanceService.CheckInvoiceAgainstAcceptanceAsync(db, svcOrder, svcLine, number, l.BasisQuantity, inv.Id);
+            return;
+        }
         if (l.StockDocumentId is not { } sd) return;
         var doc = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstAsync(d => d.Id == sd);
         if (inv.Kind == InvoiceKind.Sales && doc.Status != StockDocumentStatus.Posted || doc.Status is StockDocumentStatus.Reversed or StockDocumentStatus.Cancelled)
@@ -409,13 +439,5 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         return (currency, r, dp, funcDp);
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix)
-    {
-        var key = "INV-" + prefix;
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == key);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = key });
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"{prefix}{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix) => Numbering.NextAsync(db, companyId, fy, "INV-" + prefix);
 }

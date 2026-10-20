@@ -1,7 +1,10 @@
 using Hak.Application.Audit;
 using Hak.Application.Common;
+using Hak.Application.Cycles;
+using Hak.Application.Settlement;
 using Hak.Application.Security;
 using Hak.Data;
+using Hak.Domain.Catalog;
 using Hak.Domain.Common;
 using Hak.Domain.Inventory;
 using Hak.Domain.Organization;
@@ -15,7 +18,7 @@ namespace Hak.Application.Trade;
 public sealed record OrderLineInput(Guid ItemId, decimal Quantity, decimal UnitPrice, PricingBasis Basis = PricingBasis.Quantity, decimal? VatRate = null, string? Description = null);
 
 public sealed record OrderInput(InvoiceKind Kind, Guid PartnerId, DateOnly OrderDate, string Description, IReadOnlyList<OrderLineInput> Lines,
-    DateOnly? ExpectedDate = null, string? ContractNo = null, string? Currency = null, decimal OverDeliveryTolerancePercent = 0);
+    DateOnly? ExpectedDate = null, string? ContractNo = null, string? Currency = null, decimal OverDeliveryTolerancePercent = 0, Guid? ContractId = null);
 
 public sealed record OrderLineFulfilment(int LineNo, Guid ItemId, string ItemCode, decimal Ordered, PricingBasis Basis, decimal UnitPrice,
     decimal StockPosted, decimal StockDraft, decimal Bdmt, decimal Invoiced, decimal InvoicedAmount, decimal ReturnedQty, decimal ReturnedAmount, decimal Outstanding);
@@ -35,16 +38,23 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         if (input.OverDeliveryTolerancePercent is < 0 or > 100) throw new DomainException(ErrorCodes.ValidationFailed, "Dung sai giao vượt từ 0 đến 100%.");
         return await db.InTransactionAsync(async () =>
         {
-            if (!await db.BusinessPartners.AnyAsync(p => p.Id == input.PartnerId && p.CompanyId == ctx.CompanyId))
-                throw new DomainException(ErrorCodes.PartnerWrongCompany, "Đối tượng không thuộc công ty.");
+            var partner = await db.BusinessPartners.AsNoTracking().FirstOrDefaultAsync(p => p.Id == input.PartnerId && p.CompanyId == ctx.CompanyId)
+                          ?? throw new DomainException(ErrorCodes.PartnerWrongCompany, "Đối tượng không thuộc công ty.");
+            if (input.Kind == InvoiceKind.Purchase) RequireApprovedSupplier(partner);
             if (input.Currency is { } cur && !await db.Currencies.AnyAsync(c => c.Code == cur))
                 throw new DomainException(ErrorCodes.ValidationFailed, $"Đồng tiền {cur} chưa khai báo.");
+            string? contractNo = input.ContractNo;
+            if (input.ContractId is { } cid)
+            {
+                await ContractControl.ValidateCallOffAsync(db, ctx.CompanyId, cid, input.Kind, input.PartnerId, input.OrderDate, input.Lines);
+                contractNo = await db.Contracts.AsNoTracking().Where(c => c.Id == cid).Select(c => c.Code).FirstAsync();
+            }
             var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.OrderDate && f.EndDate >= input.OrderDate)
-                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.OrderDate}.");
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.OrderDate.Vn()}.");
             var order = new TradeOrder
             {
-                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, PartnerId = input.PartnerId, ContractNo = input.ContractNo, OrderDate = input.OrderDate,
+                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, PartnerId = input.PartnerId, ContractNo = contractNo, ContractId = input.ContractId, OrderDate = input.OrderDate,
                 ExpectedDate = input.ExpectedDate, Currency = input.Currency, Description = input.Description.Trim(),
                 OverDeliveryTolerancePercent = input.OverDeliveryTolerancePercent, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
                 Number = await NextNumberAsync(ctx.CompanyId, fy, input.Kind == InvoiceKind.Purchase ? "DMH" : "DBH"),
@@ -70,11 +80,37 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         });
     }
 
-    public Task<TradeOrder> ConfirmAsync(SessionContext ctx, Guid id) => TransitionAsync(ctx, id, Permissions.VoucherApprove, "confirm", async (o, company) =>
+    /// <summary>
+    /// Xác nhận đơn. Đơn bán VND của khách có hạn mức tín dụng: nếu số dư công nợ + giá trị đơn vượt hạn mức thì bị từ chối (CREDIT_LIMIT_EXCEEDED),
+    /// trừ khi người có quyền credit.override xác nhận kèm lý do (được ghi nhật ký). Thiếu tồn kho không chặn.
+    /// </summary>
+    public Task<TradeOrder> ConfirmAsync(SessionContext ctx, Guid id, string? creditOverrideReason = null) => TransitionAsync(ctx, id, Permissions.VoucherApprove, "confirm", async (o, company) =>
     {
         o.Confirm(ctx.UserId, clock.UtcNow, company.RequireDistinctApprover);
-        await Task.CompletedTask;
+        if (o.ContractId is { } cid)
+        {
+            var ls = await db.TradeOrderLines.AsNoTracking().Where(l => l.OrderId == o.Id).Select(l => new OrderLineInput(l.ItemId, l.Quantity, l.UnitPrice, l.Basis, l.VatRate, l.Description)).ToListAsync();
+            await ContractControl.ValidateCallOffAsync(db, ctx.CompanyId, cid, o.Kind, o.PartnerId, o.OrderDate, ls, o.Id);
+        }
+        if (o.Kind == InvoiceKind.Purchase)
+            RequireApprovedSupplier(await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == o.PartnerId));
+        if (o.Kind != InvoiceKind.Sales) return;
+        var check = await new SalesOrderCheckService(db, new SettlementService(db, audit, clock), clock).ComputeAsync(ctx, o);
+        if (!check.ExceedsCredit) return;
+        var detail = $"Số dư công nợ {check.CurrentBalance.Vn(0)} + đơn {check.OrderValue.Vn(0)} = {check.BalanceAfter.Vn(0)} vượt hạn mức tín dụng {check.CreditLimit.Vn(0)} của {check.PartnerName}.";
+        if (string.IsNullOrWhiteSpace(creditOverrideReason))
+            throw new DomainException(ErrorCodes.CreditLimitExceeded, detail + " Cần người có thẩm quyền xác nhận kèm lý do, hoặc yêu cầu khách thanh toán nợ cũ.");
+        ctx.Require(Permissions.CreditOverride);
+        await audit.AppendAsync(ctx.CompanyId, ctx, "order.credit_override", "order", o.Id.ToString(),
+            new { o.Number, check.CreditLimit, check.CurrentBalance, check.OrderValue, check.BalanceAfter, reason = creditOverrideReason.Trim() });
     });
+
+    private static void RequireApprovedSupplier(BusinessPartner p)
+    {
+        if (p.SupplierStatus == SupplierStatus.Approved) return;
+        throw new DomainException(ErrorCodes.SupplierNotApproved,
+            $"Nhà cung cấp {p.Code} – {p.Name} {(p.SupplierStatus == SupplierStatus.Pending ? "đang chờ duyệt" : "đã bị chặn")}; chưa được đặt hàng.");
+    }
 
     public Task<TradeOrder> CloseAsync(SessionContext ctx, Guid id, string reason)
         => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "close", (o, _) => { o.Close(reason); return Task.CompletedTask; });
@@ -160,15 +196,7 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         });
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix)
-    {
-        var key = "ORD-" + prefix;
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == key);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = key });
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"{prefix}{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix) => Numbering.NextAsync(db, companyId, fy, "ORD-" + prefix);
 
     /// <summary>
     /// Shared guard used by stock documents: the order line must belong to a confirmed order of the right kind and
@@ -196,6 +224,6 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         var limit = line.Quantity * (1 + order.OverDeliveryTolerancePercent / 100m);
         if (used + alsoInThisDocument + quantity > limit)
             throw new DomainException(ErrorCodes.OverDelivered,
-                $"Đơn {order.Number} dòng {orderLineNo}: đặt {line.Quantity} (dung sai {order.OverDeliveryTolerancePercent}%), đã có {used + alsoInThisDocument}, thêm {quantity} vượt giới hạn {limit:0.####}.");
+                $"Đơn {order.Number} dòng {orderLineNo}: đặt {line.Quantity} (dung sai {order.OverDeliveryTolerancePercent}%), đã có {used + alsoInThisDocument}, thêm {quantity} vượt giới hạn {limit.Vn()}.");
     }
 }

@@ -28,6 +28,11 @@ public static class ErrorCodes
     public const string SodViolation = "SOD_VIOLATION";
     public const string AlreadyPosted = "ALREADY_POSTED";
     public const string DuplicateSource = "DUPLICATE_SOURCE";
+    public const string CreditLimitExceeded = "CREDIT_LIMIT_EXCEEDED";
+    public const string SupplierNotApproved = "SUPPLIER_NOT_APPROVED";
+    public const string ContractExpired = "CONTRACT_EXPIRED";
+    public const string ContractLimitExceeded = "CONTRACT_LIMIT_EXCEEDED";
+    public const string PaymentMatchFailed = "PAYMENT_MATCH_FAILED";
     public const string ConcurrencyConflict = "CONCURRENCY_CONFLICT";
     public const string Forbidden = "FORBIDDEN";
     public const string NotFound = "NOT_FOUND";
@@ -40,6 +45,9 @@ public static class ErrorCodes
     public const string RuleMissing = "RULE_MISSING";
     public const string RuleAmbiguous = "RULE_AMBIGUOUS";
     public const string RuleRoleUnmapped = "RULE_ROLE_UNMAPPED";
+    public const string QualityCheckRequired = "QUALITY_CHECK_REQUIRED";
+    public const string ApprovalRequired = "APPROVAL_REQUIRED";
+    public const string IntegrityViolation = "INTEGRITY_VIOLATION";
     public const string RuleInvalid = "RULE_INVALID";
     public const string RuleTestFailed = "RULE_TEST_FAILED";
     public const string RuleConstraint = "RULE_CONSTRAINT";

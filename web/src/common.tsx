@@ -4,6 +4,37 @@ import { ApiError, get, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
 
+/**
+ * Thanh trạng thái của chứng từ (kiểu Odoo): các bước theo thứ tự, bước hiện tại tô đậm, các bước đã qua đánh dấu; trạng thái dừng ngoài luồng
+ * (đã đảo, đã hủy) hiện thành một bước đỏ ở cuối. Nút hành động của luồng (gửi duyệt, duyệt, ghi sổ…) đặt ở bên phải qua children.
+ */
+export function StatusBar({ steps, current, stopped, children }: { steps: { key: string; label: string }[]; current: string; stopped?: Record<string, string>; children?: ReactNode }) {
+  const idx = steps.findIndex(s => s.key === current)
+  return (
+    <div className="statusbar" role="group" aria-label="Trạng thái chứng từ">
+      {steps.map((s, i) => <span key={s.key} className={`step${stopped?.[current] ? (i < steps.length ? ' done' : '') : i < idx ? ' done' : i === idx ? ' current' : ''}`} aria-current={i === idx ? 'step' : undefined}>{s.label}</span>)}
+      {stopped?.[current] && <span className="step stopped" aria-current="step">{stopped[current]}</span>}
+      {children && <span className="actions">{children}</span>}
+    </div>
+  )
+}
+
+export interface FlowStep { label: string; journal: boolean; screen?: string; note?: string; count?: string | null }
+
+/** Dải các khâu của một chu trình (tệp phân tích ERP, mục V): khâu nào ghi Nhật ký, bấm để sang màn hình của khâu, số chứng từ đang chờ ở khâu. */
+export function FlowStrip({ steps }: { steps: FlowStep[] }) {
+  return (
+    <div className="panel" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'stretch' }}>
+      {steps.map((st, i) => (
+        <div key={st.label} style={{ flex: '1 1 140px', border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', cursor: st.screen ? 'pointer' : undefined }} onClick={() => st.screen && navStore.go?.(st.screen)}>
+          <div style={{ fontWeight: 600 }}>{i + 1}. {st.label}</div>
+          <div className="muted">{st.note ?? (st.journal ? 'ghi Nhật ký' : 'không ghi Nhật ký')}</div>
+          {st.count != null && <div>{st.count}</div>}
+        </div>))}
+    </div>
+  )
+}
+
 /** "Xuất Excel" for any report table: exact decimal values, typed numeric columns. */
 export function ExportButton({ fileName, sheet, columns, rows, disabled, title, subtitle }:
   { fileName: string; sheet: string; columns: Column[]; rows: Cell[][]; disabled?: boolean; title?: string; subtitle?: string }) {
@@ -16,7 +47,7 @@ export function ExportButton({ fileName, sheet, columns, rows, disabled, title, 
 }
 
 /** Cross-screen jump (e.g. trial balance row → account ledger): App registers `go`, the target screen consumes `ledger` once on mount. */
-export const navStore: { go?: (screen: string) => void; ledger?: { accountId: string; from: string; to: string } } = {}
+export const navStore: { go?: (screen: string) => void; ledger?: { accountId: string; from: string; to: string }; receipt?: { partnerId: string; settleJournalLineId: string; amount: string } } = {}
 
 export function useCompanyName() {
   const [name, setName] = useState('')

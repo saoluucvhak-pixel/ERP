@@ -1,8 +1,12 @@
 using System.Text;
+using Hak.Domain.Advances;
 using Hak.Domain.Assets;
+using Hak.Domain.Attachments;
 using Hak.Domain.Banking;
 using Hak.Domain.Catalog;
 using Hak.Domain.Common;
+using Hak.Domain.Cycles;
+using Hak.Domain.Equity;
 using Hak.Domain.Fx;
 using Hak.Domain.Integration;
 using Hak.Domain.Inventory;
@@ -55,6 +59,13 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<ClosingRuleSet> ClosingRuleSets => Set<ClosingRuleSet>();
     public DbSet<ClosingStep> ClosingSteps => Set<ClosingStep>();
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
+    public DbSet<PaymentAcceptance> PaymentAcceptances => Set<PaymentAcceptance>();
+    public DbSet<GoodsInspection> GoodsInspections => Set<GoodsInspection>();
+    public DbSet<GoodsInspectionLine> GoodsInspectionLines => Set<GoodsInspectionLine>();
+    public DbSet<SalesDispatchOrder> SalesDispatchOrders => Set<SalesDispatchOrder>();
+    public DbSet<SalesDispatchLine> SalesDispatchLines => Set<SalesDispatchLine>();
+    public DbSet<SalesDelivery> SalesDeliveries => Set<SalesDelivery>();
+    public DbSet<SalesDeliveryLine> SalesDeliveryLines => Set<SalesDeliveryLine>();
     public DbSet<BankStatement> BankStatements => Set<BankStatement>();
     public DbSet<BankStatementLine> BankStatementLines => Set<BankStatementLine>();
     public DbSet<ReconciliationMatch> ReconciliationMatches => Set<ReconciliationMatch>();
@@ -68,6 +79,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<CostingRun> CostingRuns => Set<CostingRun>();
     public DbSet<StockValueAdjustment> StockValueAdjustments => Set<StockValueAdjustment>();
     public DbSet<DrynessMethod> DrynessMethods => Set<DrynessMethod>();
+    public DbSet<DrynessDailyRate> DrynessDailyRates => Set<DrynessDailyRate>();
     public DbSet<StockMeasurement> StockMeasurements => Set<StockMeasurement>();
     public DbSet<CommercialInvoice> CommercialInvoices => Set<CommercialInvoice>();
     public DbSet<CommercialInvoiceLine> CommercialInvoiceLines => Set<CommercialInvoiceLine>();
@@ -82,11 +94,57 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<LongTermAsset> LongTermAssets => Set<LongTermAsset>();
     public DbSet<AssetCostSource> AssetCostSources => Set<AssetCostSource>();
     public DbSet<DepreciationRun> DepreciationRuns => Set<DepreciationRun>();
+    public DbSet<Bom> Boms => Set<Bom>();
+    public DbSet<BomLine> BomLines => Set<BomLine>();
+    public DbSet<WorkCenter> WorkCenters => Set<WorkCenter>();
+    public DbSet<ProductionOrder> ProductionOrders => Set<ProductionOrder>();
+    public DbSet<ProductionOrderIssue> ProductionOrderIssues => Set<ProductionOrderIssue>();
+    public DbSet<ProductionConfirmation> ProductionConfirmations => Set<ProductionConfirmation>();
+    public DbSet<AssetRequest> AssetRequests => Set<AssetRequest>();
+    public DbSet<AssetAssignment> AssetAssignments => Set<AssetAssignment>();
+    public DbSet<Contract> Contracts => Set<Contract>();
+    public DbSet<ContractLine> ContractLines => Set<ContractLine>();
+    public DbSet<ContractMilestone> ContractMilestones => Set<ContractMilestone>();
+    public DbSet<ContractAmendment> ContractAmendments => Set<ContractAmendment>();
+    public DbSet<ContractDocument> ContractDocuments => Set<ContractDocument>();
+    public DbSet<AssetRepair> AssetRepairs => Set<AssetRepair>();
+    public DbSet<AssetRepairMaterial> AssetRepairMaterials => Set<AssetRepairMaterial>();
+    public DbSet<MaintenanceRequest> MaintenanceRequests => Set<MaintenanceRequest>();
+    public DbSet<PreventiveSchedule> PreventiveSchedules => Set<PreventiveSchedule>();
+    public DbSet<AssetCount> AssetCounts => Set<AssetCount>();
+    public DbSet<AssetCountLine> AssetCountLines => Set<AssetCountLine>();
     public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
+    public DbSet<AssetUsage> AssetUsages => Set<AssetUsage>();
+    public DbSet<PartnerBankAccount> PartnerBankAccounts => Set<PartnerBankAccount>();
+    public DbSet<CompanyBankAccount> CompanyBankAccounts => Set<CompanyBankAccount>();
+    public DbSet<Shareholder> Shareholders => Set<Shareholder>();
+    public DbSet<CapitalMovement> CapitalMovements => Set<CapitalMovement>();
+    public DbSet<DividendResolution> DividendResolutions => Set<DividendResolution>();
+    public DbSet<DividendLine> DividendLines => Set<DividendLine>();
+    public DbSet<ServiceAcceptance> ServiceAcceptances => Set<ServiceAcceptance>();
+    public DbSet<ServiceAcceptanceLine> ServiceAcceptanceLines => Set<ServiceAcceptanceLine>();
+    public DbSet<ContractAcceptancePlan> ContractAcceptancePlans => Set<ContractAcceptancePlan>();
+    public DbSet<ServiceMilestone> ServiceMilestones => Set<ServiceMilestone>();
+    public DbSet<ServiceTimeEntry> ServiceTimeEntries => Set<ServiceTimeEntry>();
+    public DbSet<CatalogGroup> CatalogGroups => Set<CatalogGroup>();
+    public DbSet<CatalogGroupMember> CatalogGroupMembers => Set<CatalogGroupMember>();
+    public DbSet<NumberingRule> NumberingRules => Set<NumberingRule>();
+    public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
+    public DbSet<AdjustmentRequest> AdjustmentRequests => Set<AdjustmentRequest>();
+    public DbSet<AdjustmentRequestLine> AdjustmentRequestLines => Set<AdjustmentRequestLine>();
+    public DbSet<DebtWriteOff> DebtWriteOffs => Set<DebtWriteOff>();
+    public DbSet<DebtWriteOffItem> DebtWriteOffItems => Set<DebtWriteOffItem>();
+    public DbSet<AdvanceRequest> AdvanceRequests => Set<AdvanceRequest>();
+    public DbSet<AdvanceSettlementLine> AdvanceSettlementLines => Set<AdvanceSettlementLine>();
+    public DbSet<CashCount> CashCounts => Set<CashCount>();
+    public DbSet<CashCountLine> CashCountLines => Set<CashCountLine>();
+    public DbSet<AssetExpenseSplit> AssetExpenseSplits => Set<AssetExpenseSplit>();
+    public DbSet<DepreciationEntrySplit> DepreciationEntrySplits => Set<DepreciationEntrySplit>();
     public DbSet<FxRevaluationRun> FxRevaluationRuns => Set<FxRevaluationRun>();
     public DbSet<LoanContract> LoanContracts => Set<LoanContract>();
     public DbSet<LoanRate> LoanRates => Set<LoanRate>();
     public DbSet<LoanLink> LoanLinks => Set<LoanLink>();
+    public DbSet<LoanScheduleItem> LoanScheduleItems => Set<LoanScheduleItem>();
     public DbSet<LoanInterestRun> LoanInterestRuns => Set<LoanInterestRun>();
     public DbSet<LoanInterestEntry> LoanInterestEntries => Set<LoanInterestEntry>();
     public DbSet<PayrollSheet> PayrollSheets => Set<PayrollSheet>();
@@ -165,6 +223,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         });
         b.Entity<Voucher>(e =>
         {
+            e.Property(x => x.CounterpartyName).HasMaxLength(200);
+            e.Property(x => x.CounterpartyUnit).HasMaxLength(300);
             e.HasIndex(x => new { x.CompanyId, x.VoucherType, x.FiscalYearId, x.Number }).IsUnique();
             e.HasIndex(x => new { x.CompanyId, x.SourceSystem, x.SourceId }).IsUnique().HasFilter("source_id IS NOT NULL AND status <> 9"); // cancelled drafts do not block re-creation
             e.HasIndex(x => new { x.CompanyId, x.ReversesVoucherId }).IsUnique().HasFilter("reverses_voucher_id IS NOT NULL");
@@ -286,6 +346,14 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         {
             e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.InventoryAccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.RevenueAccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ServiceAcceptance>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => x.OrderId);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(l => l.AcceptanceId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<CostingPolicy>(e =>
         {
@@ -334,6 +402,12 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.WarehouseId, x.PeriodId }).IsUnique().HasFilter("status = 1");
         });
         b.Entity<DrynessMethod>(e => e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique());
+        b.Entity<DrynessDailyRate>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.ItemId, x.Date }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_dryness_daily_rates_percent", $"dryness_percent > 0 AND dryness_percent <= {Bound(100)}"));
+        });
         b.Entity<StockMeasurement>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.DocumentId, x.LineNo }).IsUnique().HasFilter("superseded_at IS NULL");
@@ -407,6 +481,62 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.Property(x => x.RowVersion).IsConcurrencyToken();
             e.ToTable(t => t.HasCheckConstraint("ck_payment_orders_amount", "amount > 0"));
         });
+        b.Entity<GoodsInspection>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.StockDocumentId });
+            e.HasOne<StockDocument>().WithMany().HasForeignKey(x => x.StockDocumentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.InspectionId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<GoodsInspectionLine>(e =>
+        {
+            e.HasIndex(x => new { x.InspectionId, x.StockLineNo }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_goods_inspection_lines_qty", "accepted_qty >= 0 AND accepted_qty <= received_qty"));
+        });
+        b.Entity<SalesDispatchOrder>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.OrderId });
+            e.HasOne<TradeOrder>().WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.DispatchOrderId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<SalesDispatchLine>(e =>
+        {
+            e.HasIndex(x => new { x.DispatchOrderId, x.LineNo }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_sales_dispatch_lines_qty", "quantity > 0"));
+        });
+        b.Entity<SalesDelivery>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.DispatchOrderId });
+            e.HasIndex(x => new { x.CompanyId, x.StockDocumentId });
+            e.HasOne<SalesDispatchOrder>().WithMany().HasForeignKey(x => x.DispatchOrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<StockDocument>().WithMany().HasForeignKey(x => x.StockDocumentId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.DeliveryId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<SalesDeliveryLine>(e =>
+        {
+            e.HasIndex(x => new { x.DeliveryId, x.LineNo }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_sales_delivery_lines_qty", "quantity > 0"));
+        });
+        b.Entity<PaymentAcceptance>(e =>
+        {
+            // One active acceptance per invoice is enforced by the service inside the single-writer transaction.
+            e.HasIndex(x => new { x.CompanyId, x.InvoiceId });
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+            e.ToTable(t => t.HasCheckConstraint("ck_payment_acceptances_amount", "amount > 0"));
+        });
         b.Entity<BankStatement>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.BankAccountId, x.SourceSha256 }).IsUnique();
@@ -451,10 +581,233 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasOne<JournalLine>().WithMany().HasForeignKey(x => x.JournalLineId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("ck_asset_cost_sources_amount", "amount > 0"));
         });
+        b.Entity<LoanScheduleItem>(e =>
+        {
+            e.HasIndex(x => new { x.LoanId, x.DueDate });
+            e.HasOne<LoanContract>().WithMany().HasForeignKey(x => x.LoanId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Bom>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.ItemId }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.BomId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<BomLine>(e =>
+        {
+            e.HasIndex(x => new { x.BomId, x.RawItemId }).IsUnique();
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.RawItemId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<WorkCenter>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<ProductionOrder>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<CostObject>().WithMany().HasForeignKey(x => x.CostObjectId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<ProductionOrderIssue>(e =>
+        {
+            e.HasIndex(x => x.StockDocumentId).IsUnique();
+            e.HasOne<ProductionOrder>().WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<StockDocument>().WithMany().HasForeignKey(x => x.StockDocumentId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ProductionConfirmation>(e =>
+        {
+            e.HasIndex(x => new { x.OrderId, x.WorkDate });
+            e.HasOne<ProductionOrder>().WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<WorkCenter>().WithMany().HasForeignKey(x => x.WorkCenterId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AssetRequest>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<AssetAssignment>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.AssetId, x.StartDate });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Contract>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(l => l.ContractId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Milestones).WithOne().HasForeignKey(m => m.ContractId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<ContractLine>(e =>
+        {
+            e.HasIndex(x => new { x.ContractId, x.ItemId }).IsUnique();
+            e.HasOne<Hak.Domain.Inventory.Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.Ignore(x => x.NetPrice); e.Ignore(x => x.CommittedAmount);
+        });
+        b.Entity<ContractAmendment>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();
+            e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<ContractDocument>(e =>
+        {
+            e.HasIndex(x => x.ContractId);
+            e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<TradeOrder>().HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<MaintenanceRequest>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.AssetId });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<PreventiveSchedule>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.AssetId });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<AssetRepair>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.AssetId });
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<MaintenanceRequest>().WithMany().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<PreventiveSchedule>().WithMany().HasForeignKey(x => x.ScheduleId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Materials).WithOne().HasForeignKey(m => m.RepairId).OnDelete(DeleteBehavior.Cascade);
+            e.Ignore(x => x.EstimatedTotal); e.Ignore(x => x.ActualMaterialCost); e.Ignore(x => x.ActualTotal);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<AssetRepairMaterial>(e =>
+        {
+            e.HasIndex(x => x.RepairId);
+            e.HasOne<Hak.Domain.Inventory.Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AssetCount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.CountId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<AssetCountLine>(e =>
+        {
+            e.HasIndex(x => new { x.CountId, x.AssetId }).IsUnique();
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<DepreciationRun>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.PeriodId }).IsUnique().HasFilter("status = 1");
             e.HasIndex(x => new { x.CompanyId, x.PeriodStart });
+        });
+        b.Entity<CatalogGroup>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Domain, x.Code }).IsUnique();
+            e.HasOne<CatalogGroup>().WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CatalogGroupMember>(e =>
+        {
+            e.HasIndex(x => new { x.GroupId, x.EntityId }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.EntityId });
+            e.HasOne<CatalogGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<NumberingRule>(e => e.HasIndex(x => new { x.CompanyId, x.Key }).IsUnique());
+        b.Entity<FileAttachment>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.EntityType, x.EntityId });
+        });
+        b.Entity<AdjustmentRequest>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.InvoiceId, x.Status });
+            e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<AdjustmentRequestLine>(e => e.HasIndex(x => new { x.RequestId, x.OriginalLineNo }).IsUnique());
+        b.Entity<DebtWriteOff>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Items).WithOne().HasForeignKey(x => x.WriteOffId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<DebtWriteOffItem>(e => e.HasIndex(x => new { x.WriteOffId, x.JournalLineId }).IsUnique());
+        b.Entity<PartnerBankAccount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.PartnerId, x.AccountNo, x.BankName }).IsUnique();
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CompanyBankAccount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.AccountNo, x.BankName }).IsUnique();
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<Shareholder>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.PartnerId }).IsUnique();
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CapitalMovement>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.ShareholderId, x.Date });
+            e.HasOne<Shareholder>().WithMany().HasForeignKey(x => x.ShareholderId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_capital_movements_amount", "amount > 0"));
+        });
+        b.Entity<DividendResolution>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.ResolutionId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<DividendLine>(e =>
+        {
+            e.HasIndex(x => new { x.ResolutionId, x.ShareholderId }).IsUnique();
+            e.HasOne<Shareholder>().WithMany().HasForeignKey(x => x.ShareholderId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AdvanceRequest>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.EmployeeId, x.Status });
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.AdvanceId).OnDelete(DeleteBehavior.Cascade);
+            e.ToTable(t => t.HasCheckConstraint("ck_advance_requests_amount", "amount > 0"));
+        });
+        b.Entity<AdvanceSettlementLine>(e =>
+        {
+            e.HasIndex(x => new { x.AdvanceId, x.LineNo }).IsUnique();
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CashCount>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.CashAccountId, x.CountDate });
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.CashAccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.CashCountId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<CashCountLine>(e => e.HasIndex(x => new { x.CashCountId, x.Denomination }).IsUnique());
+        b.Entity<AssetUsage>(e =>
+        {
+            e.HasIndex(x => new { x.AssetId, x.PeriodId }).IsUnique();
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<AccountingPeriod>().WithMany().HasForeignKey(x => x.PeriodId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AssetExpenseSplit>(e =>
+        {
+            e.HasIndex(x => new { x.AssetId, x.ExpenseAccountId, x.Label }).IsUnique();
+            e.HasOne<LongTermAsset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<DepreciationEntrySplit>(e =>
+        {
+            e.HasIndex(x => x.EntryId);
+            e.HasIndex(x => new { x.CompanyId, x.ExpenseAccountId });
+            e.HasOne<DepreciationEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<DepreciationEntry>(e =>
         {
@@ -585,6 +938,32 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<SettlementAllocation>().Property(x => x.Amount).HasConversion(money);
         b.Entity<SettlementAllocation>().Property(x => x.ForeignAmount).HasConversion(moneyNullable);
         b.Entity<PaymentOrder>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<PaymentAcceptance>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<GoodsInspectionLine>().Property(x => x.ReceivedQty).HasConversion(money);
+        b.Entity<GoodsInspectionLine>().Property(x => x.AcceptedQty).HasConversion(money);
+        b.Entity<SalesDispatchLine>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<SalesDeliveryLine>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<BusinessPartner>().Property(x => x.CreditLimit).HasConversion(moneyNullable);
+        b.Entity<ServiceAcceptanceLine>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<ContractAcceptancePlan>(e =>
+        {
+            e.HasIndex(x => new { x.ContractId, x.ContractLineNo, x.PlanNo }).IsUnique();
+            e.HasOne<Contract>().WithMany().HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<ContractAcceptancePlan>().Property(x => x.PlannedQty).HasConversion(money);
+        b.Entity<ServiceMilestone>(e => { e.HasIndex(x => new { x.OrderId, x.OrderLineNo, x.MilestoneNo }).IsUnique(); e.HasIndex(x => x.AcceptanceId); });
+        b.Entity<ServiceMilestone>().Property(x => x.Percentage).HasConversion(money);
+        b.Entity<ServiceTimeEntry>(e => { e.HasIndex(x => new { x.OrderId, x.OrderLineNo, x.WorkDate }); e.HasIndex(x => x.AcceptanceId); });
+        b.Entity<ServiceTimeEntry>().Property(x => x.Hours).HasConversion(money);
+        b.Entity<CatalogGroup>().Property(x => x.DefaultCreditLimit).HasConversion(moneyNullable);
+        b.Entity<CatalogGroup>().Property(x => x.DefaultVatRate).HasConversion(moneyNullable);
+        b.Entity<BusinessPartner>().Property(x => x.PaymentDiscountPercent).HasConversion(moneyNullable);
+        b.Entity<CommercialInvoice>().Property(x => x.PaymentDiscountPercent).HasConversion(moneyNullable);
+        b.Entity<Item>().Property(x => x.SalePrice).HasConversion(moneyNullable);
+        b.Entity<Item>().Property(x => x.AltFactor).HasConversion(moneyNullable);
+        b.Entity<Item>().Property(x => x.DefaultVatRate).HasConversion(moneyNullable);
+        b.Entity<Item>().Property(x => x.MinStock).HasConversion(moneyNullable);
+        b.Entity<Item>().Property(x => x.ReorderQty).HasConversion(moneyNullable);
         b.Entity<BankStatement>().Property(x => x.OpeningBalance).HasConversion(money);
         b.Entity<BankStatement>().Property(x => x.ClosingBalance).HasConversion(money);
         b.Entity<BankStatementLine>().Property(x => x.Amount).HasConversion(money);
@@ -593,6 +972,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<StockMovement>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<StockValuation>().Property(x => x.Value).HasConversion(money);
         b.Entity<StockValueAdjustment>().Property(x => x.Value).HasConversion(money);
+        b.Entity<DrynessDailyRate>().Property(x => x.DrynessPercent).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.MeasuredMt).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.DrynessPercent).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.Bdmt).HasConversion(money);
@@ -610,12 +990,68 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<EInvoiceRateLine>().Property(x => x.AmountBeforeVat).HasConversion(money);
         b.Entity<EInvoiceRateLine>().Property(x => x.VatAmount).HasConversion(money);
         b.Entity<TaxDeclarationLine>().Property(x => x.DeclaredAmount).HasConversion(money);
+        b.Entity<AssetRequest>().Property(x => x.EstimatedCost).HasConversion(money);
+        foreach (var prop in new[] { nameof(Contract.ExchangeRate), nameof(Contract.TotalAmount), nameof(Contract.TaxAmount) }) b.Entity<Contract>().Property(prop).HasConversion(money);
+        foreach (var prop in new[] { nameof(ContractLine.CommittedQty), nameof(ContractLine.UnitPrice), nameof(ContractLine.DiscountRate), nameof(ContractLine.TaxRate) }) b.Entity<ContractLine>().Property(prop).HasConversion(money);
+        b.Entity<ContractMilestone>().Property(x => x.Percentage).HasConversion(moneyNullable);
+        b.Entity<ContractMilestone>().Property(x => x.DueAmount).HasConversion(money);
+        b.Entity<ContractMilestone>().Property(x => x.PaidAmount).HasConversion(money);
+        b.Entity<ContractAmendment>().Property(x => x.ValueChange).HasConversion(money);
+        b.Entity<AssetRepair>().Property(x => x.EstimatedLaborCost).HasConversion(money);
+        b.Entity<AssetRepair>().Property(x => x.EstimatedMaterialCost).HasConversion(money);
+        b.Entity<AssetRepair>().Property(x => x.ActualLaborCost).HasConversion(moneyNullable);
+        b.Entity<AssetRepairMaterial>().Property(x => x.QtyRequested).HasConversion(money);
+        b.Entity<AssetRepairMaterial>().Property(x => x.QtyIssued).HasConversion(money);
+        b.Entity<AssetRepairMaterial>().Property(x => x.UnitPrice).HasConversion(money);
+        b.Entity<BomLine>().Property(x => x.QuantityPerUnit).HasConversion(money);
+        b.Entity<BomLine>().Property(x => x.ScrapRate).HasConversion(money);
+        b.Entity<WorkCenter>().Property(x => x.LaborRatePerHour).HasConversion(money);
+        b.Entity<WorkCenter>().Property(x => x.OverheadRatePerHour).HasConversion(money);
+        b.Entity<ProductionOrder>().Property(x => x.PlannedQuantity).HasConversion(money);
+        b.Entity<ProductionOrder>().Property(x => x.ActualQuantity).HasConversion(moneyNullable);
+        b.Entity<ProductionOrder>().Property(x => x.MaterialCost).HasConversion(money);
+        b.Entity<ProductionOrder>().Property(x => x.LaborCost).HasConversion(money);
+        b.Entity<ProductionOrder>().Property(x => x.OverheadCost).HasConversion(money);
+        b.Entity<ProductionOrder>().Property(x => x.TotalCost).HasConversion(money);
+        b.Entity<ProductionOrder>().Property(x => x.UnitCost).HasConversion(money);
+        b.Entity<ProductionConfirmation>().Property(x => x.LaborHours).HasConversion(money);
+        b.Entity<ProductionConfirmation>().Property(x => x.MachineHours).HasConversion(money);
+        b.Entity<ProductionConfirmation>().Property(x => x.LaborRate).HasConversion(money);
+        b.Entity<ProductionConfirmation>().Property(x => x.OverheadRate).HasConversion(money);
+        b.Entity<ProductionConfirmation>().Property(x => x.LaborCost).HasConversion(money);
+        b.Entity<ProductionConfirmation>().Property(x => x.OverheadCost).HasConversion(money);
         b.Entity<LongTermAsset>().Property(x => x.OriginalCost).HasConversion(money);
         b.Entity<LongTermAsset>().Property(x => x.ResidualValue).HasConversion(money);
         b.Entity<LongTermAsset>().Property(x => x.OpeningAccumulated).HasConversion(money);
         b.Entity<AssetCostSource>().Property(x => x.Amount).HasConversion(money);
         b.Entity<DepreciationEntry>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<AssetExpenseSplit>().Property(x => x.Percent).HasConversion(money);
+        b.Entity<AssetUsage>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<AdjustmentRequestLine>().Property(x => x.Quantity).HasConversion(moneyNullable);
+        b.Entity<AdjustmentRequestLine>().Property(x => x.Amount).HasConversion(moneyNullable);
+        b.Entity<DebtWriteOffItem>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<DebtWriteOffItem>().Property(x => x.ProvisionUsed).HasConversion(money);
+        b.Entity<Shareholder>().Property(x => x.CommittedCapital).HasConversion(money);
+        b.Entity<CapitalMovement>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<DividendResolution>().Property(x => x.TotalAmount).HasConversion(money);
+        b.Entity<DividendResolution>().Property(x => x.PitRatePercent).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.CapitalBasis).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.Gross).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.PitWithheld).HasConversion(money);
+        b.Entity<DividendLine>().Property(x => x.Net).HasConversion(money);
+        b.Entity<AdvanceRequest>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<AdvanceRequest>().Property(x => x.SpentAmount).HasConversion(moneyNullable);
+        b.Entity<AdvanceSettlementLine>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<CashCount>().Property(x => x.CountedTotal).HasConversion(money);
+        b.Entity<CashCount>().Property(x => x.BookBalance).HasConversion(moneyNullable);
+        b.Entity<CashCount>().Property(x => x.Difference).HasConversion(moneyNullable);
+        b.Entity<CashCountLine>().Property(x => x.Denomination).HasConversion(money);
+        b.Entity<LongTermAsset>().Property(x => x.DecliningFactor).HasConversion(moneyNullable);
+        b.Entity<LongTermAsset>().Property(x => x.TotalUnits).HasConversion(moneyNullable);
+        b.Entity<DepreciationEntrySplit>().Property(x => x.Amount).HasConversion(money);
         b.Entity<LoanContract>().Property(x => x.ContractAmount).HasConversion(money);
+        b.Entity<LoanScheduleItem>().Property(x => x.PrincipalDue).HasConversion(money);
+        b.Entity<LoanScheduleItem>().Property(x => x.InterestDue).HasConversion(money);
         b.Entity<LoanRate>().Property(x => x.AnnualRatePercent).HasConversion(money);
         b.Entity<LoanInterestEntry>().Property(x => x.Amount).HasConversion(money);
         b.Entity<LoanInterestEntry>().Property(x => x.ForeignAmount).HasConversion(moneyNullable);

@@ -89,6 +89,13 @@ public class RulesCashClosingTests
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1) with { VoucherType = VoucherTypes.CashReceipt })));
         var updated = await s.Documents.UpdateAsync(h.Preparer, v.Id, v.RowVersion, Receipt(h, 2_500_000, Mar10));
         Assert.Equal(2_500_000m, updated.TotalDebit);
+        // Họ tên người nộp và đơn vị ghi trên chứng từ (yếu tố chung của kho thông tin chung), có thể khác danh mục đối tượng; xóa trống thì về null.
+        Assert.Null(updated.CounterpartyName);
+        var named = await s.Documents.UpdateAsync(h.Preparer, v.Id, updated.RowVersion, Receipt(h, 2_500_000, Mar10) with { CounterpartyName = "  Trần Thị B ", CounterpartyUnit = "Cty ABC, Đà Nẵng" });
+        Assert.Equal(("Trần Thị B", "Cty ABC, Đà Nẵng"), (named.CounterpartyName, named.CounterpartyUnit));
+        var cleared = await s.Documents.UpdateAsync(h.Preparer, v.Id, named.RowVersion, Receipt(h, 2_500_000, Mar10) with { CounterpartyName = " " });
+        Assert.Null(cleared.CounterpartyName);
+        updated = cleared;
 
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Documents.CreateAsync(h.Auditor, Receipt(h, 1, Mar10))));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Documents.CreateAsync(h.Preparer, Receipt(h, 1, Mar10) with { MainAccountId = h.Acc["BANK"] })));

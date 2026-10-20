@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { formatDate } from './money'
 import { get, post, type Period, type Voucher } from './api'
 import { ErrorBox, useAction } from './common'
 
@@ -20,7 +21,7 @@ export function PeriodsView() {
         <thead><tr><th>Kỳ</th><th>Từ</th><th>Đến</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
         <tbody>{periods.map(p => (
           <tr key={p.id}>
-            <td>{p.periodNo}</td><td>{p.startDate}</td><td>{p.endDate}</td>
+            <td>{p.periodNo}</td><td>{formatDate(p.startDate)}</td><td>{formatDate(p.endDate)}</td>
             <td><span className={`badge ${p.status}`}>{p.status === 'Open' ? 'Mở' : 'Đã khóa'}</span></td>
             <td style={{ display: 'flex', gap: 6 }}>
               {p.status === 'Open' && <>

@@ -17,16 +17,27 @@ public sealed record AssetCostSourceInput(Guid JournalLineId, decimal Amount);
 
 public sealed record AssetInput(string Code, string Name, AssetClass Class, Guid AssetAccountId, Guid? AccumulatedAccountId, Guid ExpenseAccountId,
     ProrationPolicy Proration, decimal ResidualValue, int UsefulLifeMonths, DateOnly InServiceDate, IReadOnlyList<AssetCostSourceInput> CostSources,
-    decimal OpeningAccumulated = 0, int? RemainingLifeMonths = null, DateOnly? ScheduleStartDate = null, string? Note = null);
+    decimal OpeningAccumulated = 0, int? RemainingLifeMonths = null, DateOnly? ScheduleStartDate = null, string? Note = null,
+    AllocationFrequency Frequency = AllocationFrequency.Monthly,
+    DepreciationMethod Method = DepreciationMethod.StraightLine, DateOnly? ScheduleEndDate = null, decimal? DecliningFactor = null, decimal? TotalUnits = null, string? UnitName = null);
 
 public sealed record AssetRegisterRow(Guid Id, string Code, string Name, AssetClass Class, AssetStatus Status, string AssetAccountCode,
-    DateOnly InServiceDate, DateOnly ScheduleStartDate, int UsefulLifeMonths, decimal OriginalCost, decimal Accumulated, decimal NetBookValue, DateOnly? DisposalDate);
+    DateOnly InServiceDate, DateOnly ScheduleStartDate, int UsefulLifeMonths, decimal OriginalCost, decimal Accumulated, decimal NetBookValue, DateOnly? DisposalDate,
+    DepreciationMethod Method = DepreciationMethod.StraightLine, AllocationFrequency Frequency = AllocationFrequency.Monthly, decimal? TotalUnits = null, string? UnitName = null, DateOnly? ScheduleEndDate = null);
 
 public sealed record AssetScheduleRow(DateOnly PeriodEnd, decimal Planned, decimal Cumulative, decimal? Booked);
 
 public sealed record AssetSourceRow(Guid JournalLineId, string VoucherNumber, DateOnly PostingDate, string AccountCode, decimal LineAmount, decimal Amount);
 
 public sealed record AssetDetail(LongTermAsset Asset, IReadOnlyList<AssetSourceRow> Sources, IReadOnlyList<DepreciationEntry> Entries, IReadOnlyList<AssetScheduleRow> Schedule);
+
+public sealed record AssetUsageRow(Guid PeriodId, DateOnly PeriodStart, DateOnly PeriodEnd, decimal Quantity, decimal Cumulative, decimal? Remaining, bool Locked);
+
+public sealed record ExpenseSplitInput(Guid ExpenseAccountId, string? Label, decimal Percent);
+
+public sealed record ExpenseSplitView(Guid ExpenseAccountId, string AccountCode, string AccountName, string? Label, decimal Percent);
+
+public sealed record ExpenseAllocationRow(Guid ExpenseAccountId, string AccountCode, string AccountName, string? Label, decimal Amount);
 
 public sealed record AssetReconcileRow(Guid AccountId, string AccountCode, string Kind, decimal RegisterBalance, decimal LedgerBalance, decimal Difference);
 
@@ -39,7 +50,7 @@ public sealed record AssetCostCandidate(Guid JournalLineId, string VoucherNumber
 /// company-wide run per accounting period, in period order; each run books (cumulative target) − (already booked) per asset.
 /// Disposal books the last partial depreciation and removes cost and accumulated depreciation; the net book value goes to
 /// the account the user chooses (proceeds are invoiced separately). Every run and disposal can be reversed, latest first.
-/// Legal basis of methods and proration: [CẦN XÁC MINH].
+/// Căn cứ pháp lý của các phương pháp và cách tính tháng đầu / cuối: legal/KHAU-HAO/CAN-CU-KHAU-HAO.md.
 /// </summary>
 public sealed class AssetService(HakDbContext db, AccountingEngine engine, AuditService audit, IClock clock)
 {
@@ -52,16 +63,42 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
         ctx.Require(Permissions.AssetManage);
         if (string.IsNullOrWhiteSpace(input.Code) || string.IsNullOrWhiteSpace(input.Name))
             throw new DomainException(ErrorCodes.ValidationFailed, "Mã và tên tài sản bắt buộc.");
-        if (input.UsefulLifeMonths <= 0) throw new DomainException(ErrorCodes.ValidationFailed, "Thời gian sử dụng phải lớn hơn 0 tháng.");
+        if (!Enum.IsDefined(input.Method)) throw new DomainException(ErrorCodes.ValidationFailed, "Phương pháp khấu hao / phân bổ không hợp lệ.");
+        var monthBased = input.Method is DepreciationMethod.StraightLine or DepreciationMethod.DecliningBalance;
+        if (monthBased && input.UsefulLifeMonths <= 0) throw new DomainException(ErrorCodes.ValidationFailed, "Thời gian sử dụng phải lớn hơn 0 tháng.");
+        if (input.Method != DepreciationMethod.TimeBased && input.ScheduleEndDate is not null) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày kết thúc phân bổ chỉ dùng cho phương pháp theo thời gian.");
+        if (input.Method == DepreciationMethod.DecliningBalance)
+        {
+            if (input.Class != AssetClass.FixedAsset) throw new DomainException(ErrorCodes.ValidationFailed, "Số dư giảm dần chỉ áp dụng cho TSCĐ, không áp dụng cho CCDC / chi phí trả trước.");
+            if (input.RemainingLifeMonths is not null || input.OpeningAccumulated > 0) throw new DomainException(ErrorCodes.ValidationFailed, "Số dư giảm dần chưa hỗ trợ tài sản chuyển từ hệ thống cũ (cần lịch năm đã qua); dùng đường thẳng cho số còn lại.");
+            if (input.DecliningFactor is { } fac && (fac <= 0 || fac > 5)) throw new DomainException(ErrorCodes.ValidationFailed, "Hệ số số dư giảm dần phải lớn hơn 0 và không quá 5.");
+        }
+        else if (input.DecliningFactor is not null) throw new DomainException(ErrorCodes.ValidationFailed, "Hệ số chỉ dùng cho phương pháp số dư giảm dần.");
+        if (input.Method == DepreciationMethod.UnitsOfProduction)
+        {
+            if (input.TotalUnits is not > 0) throw new DomainException(ErrorCodes.ValidationFailed, "Phương pháp theo sản lượng cần tổng sản lượng dự kiến lớn hơn 0.");
+            if (input.RemainingLifeMonths is not null) throw new DomainException(ErrorCodes.ValidationFailed, "Phương pháp theo sản lượng dùng tổng sản lượng, không dùng số tháng còn lại.");
+            if (input.Frequency != AllocationFrequency.Monthly) throw new DomainException(ErrorCodes.ValidationFailed, "Phương pháp theo sản lượng ghi sổ hàng tháng, theo sản lượng từng kỳ.");
+        }
+        else if (input.TotalUnits is not null || !string.IsNullOrWhiteSpace(input.UnitName)) throw new DomainException(ErrorCodes.ValidationFailed, "Tổng sản lượng và đơn vị chỉ dùng cho phương pháp theo sản lượng.");
+        if (input.Method == DepreciationMethod.TimeBased && input.RemainingLifeMonths is not null) throw new DomainException(ErrorCodes.ValidationFailed, "Phương pháp theo thời gian dùng ngày kết thúc, không dùng số tháng còn lại.");
+        if (!Enum.IsDefined(input.Frequency)) throw new DomainException(ErrorCodes.ValidationFailed, "Kỳ ghi sổ khấu hao / phân bổ không hợp lệ.");
         if (input.ResidualValue < 0 || input.OpeningAccumulated < 0) throw new DomainException(ErrorCodes.AmountNotPositive, "Giá trị thu hồi và hao mòn lũy kế đầu kỳ không được âm.");
         if (input.CostSources.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Phải chọn bút toán đã ghi sổ hình thành nguyên giá.");
         if (input.CostSources.Select(s => s.JournalLineId).Distinct().Count() != input.CostSources.Count)
             throw new DomainException(ErrorCodes.ValidationFailed, "Một dòng bút toán chỉ chọn một lần cho mỗi tài sản.");
         var takenOver = input.OpeningAccumulated > 0 || input.RemainingLifeMonths is not null;
-        if (takenOver && (input.RemainingLifeMonths is not > 0 || input.ScheduleStartDate is null))
+        if (takenOver && ((input.Method == DepreciationMethod.StraightLine && input.RemainingLifeMonths is not > 0) || input.ScheduleStartDate is null))
             throw new DomainException(ErrorCodes.ValidationFailed, "Tài sản chuyển từ hệ thống cũ phải có số tháng còn lại và ngày bắt đầu khấu hao trên hệ thống mới.");
         var scheduleStart = input.ScheduleStartDate ?? input.InServiceDate;
         if (scheduleStart < input.InServiceDate) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày bắt đầu khấu hao không được trước ngày đưa vào sử dụng.");
+        var usefulMonths = input.UsefulLifeMonths;
+        if (input.Method == DepreciationMethod.TimeBased)
+        {
+            if (input.ScheduleEndDate is not { } end || end < scheduleStart) throw new DomainException(ErrorCodes.ValidationFailed, "Phương pháp theo thời gian cần ngày kết thúc phân bổ, không trước ngày bắt đầu.");
+            if (end > scheduleStart.AddYears(50)) throw new DomainException(ErrorCodes.ValidationFailed, "Thời gian phân bổ không quá 50 năm.");
+            usefulMonths = (end.Year * 12 + end.Month) - (scheduleStart.Year * 12 + scheduleStart.Month) + 1;
+        }
         if (input.Class == AssetClass.FixedAsset && (input.AccumulatedAccountId is null || input.AccumulatedAccountId == input.AssetAccountId))
             throw new DomainException(ErrorCodes.ValidationFailed, "TSCĐ phải có tài khoản hao mòn riêng.");
         if (input.Class == AssetClass.Tool && input.AccumulatedAccountId is not null)
@@ -86,7 +123,8 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Code = code, Name = input.Name.Trim(), Class = input.Class,
                 AssetAccountId = input.AssetAccountId, AccumulatedAccountId = input.AccumulatedAccountId, ExpenseAccountId = input.ExpenseAccountId,
-                Proration = input.Proration, ResidualValue = input.ResidualValue, UsefulLifeMonths = input.UsefulLifeMonths,
+                Proration = input.Proration, AllocationFrequency = input.Frequency, Method = input.Method, ScheduleEndDate = input.ScheduleEndDate, DecliningFactor = input.DecliningFactor,
+                TotalUnits = input.TotalUnits, UnitName = string.IsNullOrWhiteSpace(input.UnitName) ? null : input.UnitName.Trim(), ResidualValue = input.ResidualValue, UsefulLifeMonths = Math.Max(0, usefulMonths),
                 InServiceDate = input.InServiceDate, OpeningAccumulated = input.OpeningAccumulated, RemainingLifeMonths = input.RemainingLifeMonths,
                 ScheduleStartDate = scheduleStart, Note = input.Note, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
             };
@@ -173,7 +211,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var taken = used.Where(u => u.JournalLineId == l.Id).Sum(u => u.Amount);
             if (taken + s.Amount > l.Amount)
                 throw new DomainException(ErrorCodes.AssetCostMismatch,
-                    $"Dòng của chứng từ {l.Number}: {l.Amount:N0}, đã gán cho tài sản khác {taken:N0}, không đủ để gán thêm {s.Amount:N0}.");
+                    $"Dòng của chứng từ {l.Number}: {l.Amount.Vn(0)}, đã gán cho tài sản khác {taken.Vn(0)}, không đủ để gán thêm {s.Amount.Vn(0)}.");
         }
     }
 
@@ -202,6 +240,13 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
 
             var booked = await BookedAsync(ctx.CompanyId, assets.Select(a => a.Id).ToList());
             var dp = await DecimalsAsync(ctx.CompanyId);
+            var splits = await SplitsByAssetAsync(assets.Select(a => a.Id).ToList());
+            var units = await UnitsThroughAsync(ctx.CompanyId, assets.Where(a => a.Method == DepreciationMethod.UnitsOfProduction).Select(a => a.Id).ToList(), period.EndDate);
+            foreach (var a in assets.Where(a => a.Method == DepreciationMethod.UnitsOfProduction))
+                if (!await db.AssetUsages.AnyAsync(u => u.AssetId == a.Id && u.PeriodId == period.Id))
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Thẻ {a.Code} phân bổ theo sản lượng: chưa nhập sản lượng kỳ {period.StartDate.Vn()} (nhập 0 nếu không phát sinh).");
+            var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= period.StartDate && f.EndDate >= period.StartDate)
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa kỳ {period.StartDate.Vn()}.");
             var run = new DepreciationRun
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, PeriodId = period.Id, PeriodStart = period.StartDate, PeriodEnd = period.EndDate,
@@ -212,17 +257,23 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var result = new List<object>();
             foreach (var a in assets)
             {
-                var target = DepreciationCalculator.CumulativeTarget(a.ScheduleBase, a.ScheduleMonths, a.ScheduleStartDate, period.EndDate, a.Proration, dp);
+                var target = DepreciationCalculator.Target(a, period.EndDate, dp, units.GetValueOrDefault(a.Id));
+                if (!DepreciationCalculator.IsBookingPeriod(a.AllocationFrequency, fy.StartDate, fy.EndDate, period.EndDate, target >= a.ScheduleBase)) continue;   // thẻ ghi theo quý / năm: chưa đến kỳ ghi
                 var amount = target - booked.GetValueOrDefault(a.Id);
                 if (amount < 0) throw new DomainException(ErrorCodes.AssetCostMismatch, $"Số khấu hao đã ghi của {a.Code} vượt kế hoạch; kiểm tra dữ liệu.");
                 if (amount == 0) continue;
+                var entryId = Ids.New();
                 db.DepreciationEntries.Add(new DepreciationEntry
                 {
-                    Id = Ids.New(), CompanyId = ctx.CompanyId, AssetId = a.Id, RunId = run.Id, PeriodStart = period.StartDate, PeriodEnd = period.EndDate,
+                    Id = entryId, CompanyId = ctx.CompanyId, AssetId = a.Id, RunId = run.Id, PeriodStart = period.StartDate, PeriodEnd = period.EndDate,
                     Amount = amount, CreatedAt = clock.UtcNow,
                 });
                 var label = $"{(a.Class == AssetClass.FixedAsset ? "Khấu hao" : "Phân bổ")} {a.Code} {period.StartDate:MM/yyyy}";
-                gl.Add(new VoucherLineInput(a.ExpenseAccountId, Side.Debit, amount, Description: label));
+                foreach (var part in ExpensePartsFor(a, amount, splits, dp))
+                {
+                    gl.Add(new VoucherLineInput(part.AccountId, Side.Debit, part.Amount, Description: part.Label is null ? label : $"{label} – {part.Label}"));
+                    db.DepreciationEntrySplits.Add(new DepreciationEntrySplit { Id = Ids.New(), CompanyId = ctx.CompanyId, EntryId = entryId, ExpenseAccountId = part.AccountId, Label = part.Label, Amount = part.Amount });
+                }
                 gl.Add(new VoucherLineInput(a.AccumulatedAccountId ?? a.AssetAccountId, Side.Credit, amount, Description: label));
                 result.Add(new { asset = a.Code, amount });
             }
@@ -296,13 +347,14 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
 
             var dp = await DecimalsAsync(ctx.CompanyId);
             var booked = (await BookedAsync(ctx.CompanyId, [asset.Id])).GetValueOrDefault(asset.Id);
-            var through = DepreciationCalculator.LastDepreciationDay(date, asset.Proration);
-            var final = DepreciationCalculator.CumulativeTarget(asset.ScheduleBase, asset.ScheduleMonths, asset.ScheduleStartDate, through, asset.Proration, dp) - booked;
+            var through = DepreciationCalculator.LastDay(asset, date);
+            var final = DepreciationCalculator.Target(asset, through, dp, (await UnitsThroughAsync(ctx.CompanyId, [asset.Id], through)).GetValueOrDefault(asset.Id)) - booked;
             if (final < 0) throw new DomainException(ErrorCodes.AssetCostMismatch, $"Số khấu hao đã ghi của {asset.Code} vượt kế hoạch; kiểm tra dữ liệu.");
             var accumulated = asset.OpeningAccumulated + booked + final;
             var remaining = asset.OriginalCost - accumulated;
 
             var disposalId = Ids.New();
+            var splits = await SplitsByAssetAsync([asset.Id]);
             if (final > 0)
                 db.DepreciationEntries.Add(new DepreciationEntry
                 {
@@ -313,7 +365,11 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             var credit = asset.AccumulatedAccountId ?? asset.AssetAccountId;
             if (final > 0)
             {
-                gl.Add(new VoucherLineInput(asset.ExpenseAccountId, Side.Debit, final, Description: $"Khấu hao tháng ghi giảm {asset.Code}"));
+                foreach (var part in ExpensePartsFor(asset, final, splits, dp))
+                {
+                    gl.Add(new VoucherLineInput(part.AccountId, Side.Debit, part.Amount, Description: part.Label is null ? $"Khấu hao tháng ghi giảm {asset.Code}" : $"Khấu hao tháng ghi giảm {asset.Code} – {part.Label}"));
+                    db.DepreciationEntrySplits.Add(new DepreciationEntrySplit { Id = Ids.New(), CompanyId = ctx.CompanyId, EntryId = disposalId, ExpenseAccountId = part.AccountId, Label = part.Label, Amount = part.Amount });
+                }
                 gl.Add(new VoucherLineInput(credit, Side.Credit, final, Description: $"Khấu hao tháng ghi giảm {asset.Code}"));
             }
             if (asset.Class == AssetClass.FixedAsset)
@@ -382,7 +438,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
         {
             var acc = a.Status == AssetStatus.Draft ? 0 : a.OpeningAccumulated + entries.Where(e => e.AssetId == a.Id && e.PeriodEnd <= asOf).Sum(e => e.Amount);
             return new AssetRegisterRow(a.Id, a.Code, a.Name, a.Class, a.Status, accounts[a.AssetAccountId], a.InServiceDate, a.ScheduleStartDate, a.UsefulLifeMonths,
-                a.OriginalCost, acc, a.OriginalCost - acc, a.DisposalDate);
+                a.OriginalCost, acc, a.OriginalCost - acc, a.DisposalDate, a.Method, a.AllocationFrequency, a.TotalUnits, a.UnitName, a.ScheduleEndDate);
         }).ToList();
     }
 
@@ -402,21 +458,34 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
             return new AssetSourceRow(s.JournalLineId, l.VoucherNumber, l.PostingDate, l.Code, l.Amount, s.Amount);
         }).ToList();
         var entries = await db.DepreciationEntries.AsNoTracking().Where(e => e.AssetId == asset.Id).OrderBy(e => e.PeriodEnd).ThenBy(e => e.CreatedAt).ToListAsync();
-        return new AssetDetail(asset, sources, entries, Schedule(asset, entries.Where(e => e.VoidedAt == null).ToList(), await DecimalsAsync(ctx.CompanyId)));
+        var usage = asset.Method == DepreciationMethod.UnitsOfProduction ? await UsageAsync(ctx, asset.Id) : [];
+        return new AssetDetail(asset, sources, entries, Schedule(asset, entries.Where(e => e.VoidedAt == null).ToList(), await DecimalsAsync(ctx.CompanyId), usage));
     }
 
     /// <summary>Monthly plan from the schedule start to the end of life, next to what has actually been booked.</summary>
-    private static List<AssetScheduleRow> Schedule(LongTermAsset a, List<DepreciationEntry> active, int dp)
+    private static List<AssetScheduleRow> Schedule(LongTermAsset a, List<DepreciationEntry> active, int dp, IReadOnlyList<AssetUsageRow> usage)
     {
         var rows = new List<AssetScheduleRow>();
         if (a.ScheduleBase <= 0) return rows;
+        if (a.Method == DepreciationMethod.UnitsOfProduction)
+        {
+            decimal prev = 0;
+            foreach (var u in usage)
+            {
+                var cum = DepreciationCalculator.Target(a, u.PeriodEnd, dp, u.Cumulative);
+                var booked = active.Where(e => e.PeriodEnd >= u.PeriodStart && e.PeriodEnd <= u.PeriodEnd).ToList();
+                rows.Add(new AssetScheduleRow(u.PeriodEnd, cum - prev, cum, booked.Count == 0 ? null : booked.Sum(e => e.Amount)));
+                prev = cum;
+            }
+            return rows;
+        }
         var monthStart = new DateOnly(a.ScheduleStartDate.Year, a.ScheduleStartDate.Month, 1);
         decimal previous = 0;
-        for (var i = 0; i <= a.ScheduleMonths && previous < a.ScheduleBase; i++)
+        for (var i = 0; i <= a.ScheduleSpanMonths && previous < a.ScheduleBase; i++)
         {
             var start = monthStart.AddMonths(i);
             var end = start.AddMonths(1).AddDays(-1);
-            var cumulative = DepreciationCalculator.CumulativeTarget(a.ScheduleBase, a.ScheduleMonths, a.ScheduleStartDate, end, a.Proration, dp);
+            var cumulative = DepreciationCalculator.Target(a, end, dp);
             var booked = active.Where(e => e.PeriodEnd >= start && e.PeriodEnd <= end).ToList();
             rows.Add(new AssetScheduleRow(end, cumulative - previous, cumulative, booked.Count == 0 ? null : booked.Sum(e => e.Amount)));
             previous = cumulative;
@@ -493,6 +562,136 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
 
     // ------------------------------------------------------------------ helpers
 
+    // ------------------------------------------------------------------ sản lượng thực tế, đổi kỳ ghi sổ
+
+    /// <summary>Nhập sản lượng thực tế của thẻ (phương pháp theo sản lượng) cho một kỳ kế toán. Sửa được đến khi kỳ đó chạy khấu hao; tổng lũy kế không vượt tổng sản lượng dự kiến.</summary>
+    public async Task<IReadOnlyList<AssetUsageRow>> RecordUsageAsync(SessionContext ctx, Guid assetId, Guid periodId, decimal quantity)
+    {
+        ctx.Require(Permissions.AssetManage);
+        if (quantity < 0 || !MoneyMath.HasAtMostDecimals(quantity, MoneyMath.StorageScale)) throw new DomainException(ErrorCodes.ValidationFailed, "Sản lượng không được âm và tối đa 4 chữ số thập phân.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var asset = await LoadAsync(ctx, assetId, tracking: false);
+            if (asset.Method != DepreciationMethod.UnitsOfProduction) throw new DomainException(ErrorCodes.ValidationFailed, $"Thẻ {asset.Code} không phân bổ theo sản lượng.");
+            if (asset.Status != AssetStatus.Active) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Thẻ {asset.Code} chưa ghi tăng hoặc đã ghi giảm.");
+            var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại.");
+            if (period.EndDate < asset.ScheduleStartDate) throw new DomainException(ErrorCodes.ValidationFailed, "Kỳ này trước ngày bắt đầu phân bổ của thẻ.");
+            if (await db.DepreciationRuns.AnyAsync(r => r.CompanyId == ctx.CompanyId && r.PeriodId == periodId && r.Status == DepreciationRunStatus.Active))
+                throw new DomainException(ErrorCodes.PeriodDepreciated, $"Kỳ {period.StartDate.Vn()} đã chạy khấu hao; hủy lần chạy đó mới sửa được sản lượng.");
+            var others = await db.AssetUsages.Where(u => u.AssetId == assetId && u.PeriodId != periodId).Join(db.AccountingPeriods, u => u.PeriodId, p => p.Id, (u, p) => new { u.Quantity, p.EndDate }).ToListAsync();
+            var cumulative = others.Where(o => o.EndDate <= period.EndDate).Sum(o => o.Quantity) + quantity;
+            if (cumulative > asset.TotalUnits) throw new DomainException(ErrorCodes.ValidationFailed, $"Sản lượng lũy kế {cumulative.Vn()} vượt tổng sản lượng dự kiến {asset.TotalUnits.Vn()}.");
+            if (others.Any(o => o.EndDate > period.EndDate) && others.Where(o => o.EndDate > period.EndDate).Sum(o => o.Quantity) + cumulative > asset.TotalUnits)
+                throw new DomainException(ErrorCodes.ValidationFailed, "Tổng sản lượng các kỳ sau cộng thêm vượt tổng sản lượng dự kiến.");
+            var u = await db.AssetUsages.FirstOrDefaultAsync(x => x.AssetId == assetId && x.PeriodId == periodId);
+            if (u is null) db.AssetUsages.Add(u = new AssetUsage { Id = Ids.New(), CompanyId = ctx.CompanyId, AssetId = assetId, PeriodId = periodId });
+            u.Quantity = quantity; u.RecordedAt = clock.UtcNow; u.RecordedBy = ctx.UserId;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "asset.usage", "asset", assetId.ToString(), new { asset.Code, period = period.StartDate, quantity });
+            await db.SaveChangesAsync();
+            return await UsageAsync(ctx, assetId);
+        });
+    }
+
+    public async Task<IReadOnlyList<AssetUsageRow>> UsageAsync(SessionContext ctx, Guid assetId)
+    {
+        ctx.Require(Permissions.ReportView);
+        var asset = await LoadAsync(ctx, assetId, tracking: false);
+        var rows = await (from u in db.AssetUsages join p in db.AccountingPeriods on u.PeriodId equals p.Id where u.AssetId == assetId orderby p.StartDate
+                          select new { u.PeriodId, p.StartDate, p.EndDate, u.Quantity }).AsNoTracking().ToListAsync();
+        var runs = (await db.DepreciationRuns.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && r.Status == DepreciationRunStatus.Active).Select(r => r.PeriodId).ToListAsync()).ToHashSet();
+        decimal cum = 0;
+        return rows.Select(r => { cum += r.Quantity; return new AssetUsageRow(r.PeriodId, r.StartDate, r.EndDate, r.Quantity, cum, asset.TotalUnits is { } t ? t - cum : null, runs.Contains(r.PeriodId)); }).ToList();
+    }
+
+    /// <summary>Đổi kỳ ghi sổ (tháng / quý / năm) của thẻ đang dùng. Áp dụng từ lần chạy sau: số phải ghi luôn là lũy kế kế hoạch trừ số đã ghi nên không mất, không trùng.</summary>
+    public async Task<LongTermAsset> SetFrequencyAsync(SessionContext ctx, Guid assetId, AllocationFrequency frequency)
+    {
+        ctx.Require(Permissions.AssetManage);
+        if (!Enum.IsDefined(frequency)) throw new DomainException(ErrorCodes.ValidationFailed, "Kỳ ghi sổ không hợp lệ.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var asset = await LoadAsync(ctx, assetId, tracking: true);
+            if (asset.Status is not (AssetStatus.Draft or AssetStatus.Active)) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Thẻ {asset.Code} đã ghi giảm hoặc hủy.");
+            if (frequency != AllocationFrequency.Monthly && asset.Method == DepreciationMethod.UnitsOfProduction)
+                throw new DomainException(ErrorCodes.ValidationFailed, "Phương pháp theo sản lượng ghi sổ hàng tháng.");
+            if (asset.AllocationFrequency == frequency) return asset;
+            var old = asset.AllocationFrequency;
+            asset.AllocationFrequency = frequency; asset.RowVersion++;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "asset.set_frequency", "asset", asset.Id.ToString(), new { asset.Code, old = old.ToString(), frequency = frequency.ToString() }, asset.RowVersion);
+            await db.SaveChangesAsync();
+            return asset;
+        });
+    }
+
+    /// <summary>Sản lượng lũy kế của các thẻ theo sản lượng đến hết ngày <paramref name="through"/> (theo ngày cuối kỳ).</summary>
+    private async Task<Dictionary<Guid, decimal>> UnitsThroughAsync(Guid companyId, IReadOnlyList<Guid> assetIds, DateOnly through)
+    {
+        if (assetIds.Count == 0) return [];
+        var rows = await (from u in db.AssetUsages join p in db.AccountingPeriods on u.PeriodId equals p.Id
+                          where u.CompanyId == companyId && assetIds.Contains(u.AssetId) && p.EndDate <= through select new { u.AssetId, u.Quantity }).AsNoTracking().ToListAsync();
+        return rows.GroupBy(r => r.AssetId).ToDictionary(g => g.Key, g => g.Sum(r => r.Quantity));
+    }
+
+    // ------------------------------------------------------------------ chia chi phí cho nhiều bộ phận
+
+    /// <summary>Đặt cách chia chi phí khấu hao / phân bổ cho nhiều tài khoản chi phí (bộ phận). Danh sách rỗng = dùng tài khoản chi phí của thẻ. Chỉ áp dụng cho các kỳ chạy sau.</summary>
+    public async Task<IReadOnlyList<ExpenseSplitView>> SetExpenseSplitsAsync(SessionContext ctx, Guid assetId, IReadOnlyList<ExpenseSplitInput> input)
+    {
+        ctx.Require(Permissions.AssetManage);
+        if (input.Count > 0)
+        {
+            if (input.Any(x => x.Percent <= 0 || x.Percent > 100 || !MoneyMath.HasAtMostDecimals(x.Percent, 4))) throw new DomainException(ErrorCodes.ValidationFailed, "Tỷ lệ chia phải lớn hơn 0, không quá 100 và tối đa 4 chữ số thập phân.");
+            if (input.Sum(x => x.Percent) != 100m) throw new DomainException(ErrorCodes.ValidationFailed, $"Tổng tỷ lệ chia phải đúng 100% (hiện {input.Sum(x => x.Percent).Vn()}%).");
+            if (input.GroupBy(x => (x.ExpenseAccountId, Label: string.IsNullOrWhiteSpace(x.Label) ? null : x.Label.Trim().ToLowerInvariant())).Any(g => g.Count() > 1))
+                throw new DomainException(ErrorCodes.ValidationFailed, "Trùng tài khoản chi phí và bộ phận trong danh sách chia.");
+        }
+        return await db.InTransactionAsync(async () =>
+        {
+            var asset = await LoadAsync(ctx, assetId, tracking: false);
+            if (asset.Status is not (AssetStatus.Draft or AssetStatus.Active)) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Tài sản {asset.Code} đã ghi giảm hoặc hủy; không đổi cách chia chi phí.");
+            foreach (var x in input)
+            {
+                var acc = await PostableAccountAsync(ctx, x.ExpenseAccountId);
+                if (acc.CashKind != CashKind.None || acc.OpenItemNature != OpenItemNature.None || acc.RequiresPartner)
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Tài khoản {acc.Code} là tài khoản tiền / công nợ, không dùng làm tài khoản chi phí chia.");
+            }
+            db.AssetExpenseSplits.RemoveRange(await db.AssetExpenseSplits.Where(x => x.AssetId == assetId).ToListAsync());
+            foreach (var x in input)
+                db.AssetExpenseSplits.Add(new AssetExpenseSplit { Id = Ids.New(), CompanyId = ctx.CompanyId, AssetId = assetId, ExpenseAccountId = x.ExpenseAccountId, Label = string.IsNullOrWhiteSpace(x.Label) ? null : x.Label.Trim(), Percent = x.Percent });
+            await audit.AppendAsync(ctx.CompanyId, ctx, "asset.expense_split", "asset", assetId.ToString(), new { asset.Code, splits = input.Select(x => new { x.ExpenseAccountId, x.Label, x.Percent }) });
+            await db.SaveChangesAsync();
+            return await ExpenseSplitsAsync(ctx, assetId);
+        });
+    }
+
+    public async Task<IReadOnlyList<ExpenseSplitView>> ExpenseSplitsAsync(SessionContext ctx, Guid assetId)
+    {
+        ctx.Require(Permissions.ReportView);
+        return await (from x in db.AssetExpenseSplits join a in db.Accounts on x.ExpenseAccountId equals a.Id
+                      where x.AssetId == assetId && x.CompanyId == ctx.CompanyId orderby a.Code, x.Label
+                      select new ExpenseSplitView(x.ExpenseAccountId, a.Code, a.Name, x.Label, x.Percent)).AsNoTracking().ToListAsync();
+    }
+
+    /// <summary>Chi phí khấu hao / phân bổ đã ghi sổ theo tài khoản chi phí và bộ phận trong khoảng ngày (kỳ khấu hao giao với khoảng ngày; không tính các dòng đã hủy).</summary>
+    public async Task<IReadOnlyList<ExpenseAllocationRow>> ExpenseAllocationAsync(SessionContext ctx, DateOnly fromDate, DateOnly toDate)
+    {
+        ctx.Require(Permissions.ReportView);
+        var rows = await (from sp in db.DepreciationEntrySplits join e in db.DepreciationEntries on sp.EntryId equals e.Id join a in db.Accounts on sp.ExpenseAccountId equals a.Id
+                          where sp.CompanyId == ctx.CompanyId && e.VoidedAt == null && e.PeriodEnd >= fromDate && e.PeriodStart <= toDate
+                          select new { sp.ExpenseAccountId, a.Code, a.Name, sp.Label, sp.Amount }).AsNoTracking().ToListAsync();
+        return rows.GroupBy(r => (r.ExpenseAccountId, r.Code, r.Name, r.Label)).OrderBy(g => g.Key.Code, StringComparer.Ordinal).ThenBy(g => g.Key.Label, StringComparer.Ordinal)
+            .Select(g => new ExpenseAllocationRow(g.Key.ExpenseAccountId, g.Key.Code, g.Key.Name, g.Key.Label, g.Sum(r => r.Amount))).ToList();
+    }
+
+    private async Task<Dictionary<Guid, List<AssetExpenseSplit>>> SplitsByAssetAsync(IReadOnlyList<Guid> assetIds)
+        => (await db.AssetExpenseSplits.AsNoTracking().Where(x => assetIds.Contains(x.AssetId)).ToListAsync()).GroupBy(x => x.AssetId).ToDictionary(g => g.Key, g => g.OrderBy(x => x.Id).ToList());
+
+    private static List<(Guid AccountId, string? Label, decimal Amount)> ExpensePartsFor(LongTermAsset a, decimal amount, Dictionary<Guid, List<AssetExpenseSplit>> splits, int dp)
+    {
+        if (!splits.TryGetValue(a.Id, out var list) || list.Count == 0) return [(a.ExpenseAccountId, null, amount)];
+        return ExpenseSplitter.Split(amount, list.Select(x => x.Percent).ToList(), dp).Where(p => p.Amount != 0).Select(p => (list[p.Index].ExpenseAccountId, list[p.Index].Label, p.Amount)).ToList();
+    }
+
     private async Task<LongTermAsset> LoadAsync(SessionContext ctx, Guid id, bool tracking)
     {
         var q = db.LongTermAssets.Include(a => a.CostSources).Where(a => a.Id == id && a.CompanyId == ctx.CompanyId);
@@ -531,7 +730,7 @@ public sealed class AssetService(HakDbContext db, AccountingEngine engine, Audit
     private async Task<AccountingPeriod> RequireOpenPeriodAsync(Guid companyId, DateOnly date)
     {
         var p = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.CompanyId == companyId && x.StartDate <= date && x.EndDate >= date)
-                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date}.");
+                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date.Vn()}.");
         if (p.Status == PeriodStatus.Locked) throw new DomainException(ErrorCodes.PeriodLocked, $"Kỳ {p.StartDate:MM/yyyy} đã khóa sổ.");
         return p;
     }

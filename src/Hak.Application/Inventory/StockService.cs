@@ -15,7 +15,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Hak.Application.Inventory;
 
 public sealed record StockLineInput(Guid ItemId, decimal Quantity, decimal? Amount = null, Guid? CounterAccountId = null, string? Description = null,
-    Guid? OrderId = null, int? OrderLineNo = null);
+    Guid? OrderId = null, int? OrderLineNo = null, Guid? SourceInvoiceId = null, int? SourceInvoiceLineNo = null);
 
 public sealed record StockDocumentInput(StockDocumentType Type, Guid WarehouseId, DateOnly DocumentDate, DateOnly PostingDate, string Description,
     IReadOnlyList<StockLineInput> Lines, Guid? ToWarehouseId = null, Guid? PartnerId = null);
@@ -77,6 +77,81 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     }
 
     /// <summary>
+    /// Dịch vụ (vận chuyển thuê, tư vấn…): không theo dõi kho. Khai tài khoản doanh thu (khi bán) và / hoặc tài khoản chi phí (khi mua) mặc định; bỏ trống thì bán lấy theo vai trò SALES_REVENUE,
+    /// mua phải chọn tài khoản chi phí khi lập hóa đơn.
+    /// </summary>
+    public async Task<Item> CreateServiceItemAsync(SessionContext ctx, string code, string name, string unit, string? revenueAccountCode, string? expenseAccountCode)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(unit)) throw new DomainException(ErrorCodes.ValidationFailed, "Mã, tên và đơn vị tính của dịch vụ bắt buộc.");
+        return await db.InTransactionAsync(async () =>
+        {
+            if (await db.Items.AnyAsync(i => i.CompanyId == ctx.CompanyId && i.Code == code))
+                throw new DomainException(ErrorCodes.DuplicateCode, $"Mã {code} đã tồn tại.");
+            async Task<Guid?> Acc(string? c, string what)
+            {
+                if (string.IsNullOrWhiteSpace(c)) return null;
+                var a = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.CompanyId == ctx.CompanyId && x.Code == c) ?? throw new DomainException(ErrorCodes.AccountNotFound, $"Tài khoản {c} không tồn tại.");
+                if (!a.IsPostable || !a.IsActive || a.CashKind != CashKind.None || a.OpenItemNature != OpenItemNature.None || a.RequiresPartner)
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Tài khoản {a.Code} không dùng làm tài khoản {what} (phải là TK chi tiết đang dùng, không phải tiền / công nợ).");
+                return a.Id;
+            }
+            var item = new Item { Id = Ids.New(), CompanyId = ctx.CompanyId, Code = code.Trim(), Name = name.Trim(), Unit = unit.Trim(), IsService = true,
+                RevenueAccountId = await Acc(revenueAccountCode, "doanh thu"), ExpenseAccountId = await Acc(expenseAccountCode, "chi phí"), CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            db.Items.Add(item);
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.create_service", "item", item.Id.ToString(), new { code, name, unit, revenueAccountCode, expenseAccountCode });
+            await db.SaveChangesAsync();
+            return item;
+        });
+    }
+
+    /// <summary>Giá bán, thuế suất GTGT mặc định, tồn tối thiểu, số lượng đặt tối ưu của vật tư (danh mục hàng hóa theo tệp phân tích ERP).</summary>
+    /// <summary>
+    /// Khai báo hoặc xóa đơn vị tính quy đổi cố định của vật tư (1 đơn vị quy đổi = <paramref name="factor"/> đơn vị chính). Không dùng cho vật tư theo dõi độ khô:
+    /// đơn vị quy đổi của dăm gỗ là BDMT, hệ số theo độ khô đo tại từng thời điểm (DrynessService). Số lượng trên sổ kho luôn giữ theo đơn vị chính.
+    /// </summary>
+    public async Task<Item> SetItemAltUnitAsync(SessionContext ctx, Guid itemId, string? altUnit, decimal? factor)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        var clear = string.IsNullOrWhiteSpace(altUnit) && factor is null;
+        if (!clear)
+        {
+            if (string.IsNullOrWhiteSpace(altUnit) || factor is null) throw new DomainException(ErrorCodes.ValidationFailed, "Đơn vị quy đổi cần có cả tên đơn vị và hệ số.");
+            if (altUnit.Trim().Length > 20) throw new DomainException(ErrorCodes.ValidationFailed, "Tên đơn vị quy đổi tối đa 20 ký tự.");
+            if (factor <= 0 || !MoneyMath.HasAtMostDecimals(factor.Value, MoneyMath.StorageScale)) throw new DomainException(ErrorCodes.ValidationFailed, "Hệ số quy đổi phải lớn hơn 0 (tối đa 4 chữ số thập phân).");
+        }
+        return await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId)
+                       ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            if (!clear && item.TracksDryness) throw new DomainException(ErrorCodes.ValidationFailed, $"{item.Code} theo dõi độ khô: đơn vị quy đổi là BDMT theo độ khô từng thời điểm, không khai báo hệ số cố định.");
+            if (!clear && string.Equals(altUnit!.Trim(), item.Unit, StringComparison.OrdinalIgnoreCase)) throw new DomainException(ErrorCodes.ValidationFailed, "Đơn vị quy đổi phải khác đơn vị chính.");
+            var old = new { item.AltUnit, item.AltFactor };
+            item.AltUnit = clear ? null : altUnit!.Trim(); item.AltFactor = clear ? null : factor;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.alt_unit", "item", item.Id.ToString(), new { old, item.AltUnit, item.AltFactor });
+            await db.SaveChangesAsync();
+            return item;
+        });
+    }
+
+    public async Task<Item> UpdateItemCommercialAsync(SessionContext ctx, Guid itemId, decimal? salePrice, decimal? defaultVatRate, decimal? minStock, decimal? reorderQty)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        if (salePrice is < 0 || minStock is < 0 || reorderQty is < 0) throw new DomainException(ErrorCodes.ValidationFailed, "Giá bán, tồn tối thiểu và số lượng đặt không được âm.");
+        if (defaultVatRate is < 0 or > 100) throw new DomainException(ErrorCodes.ValidationFailed, "Thuế suất GTGT từ 0 đến 100%.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId)
+                       ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            var old = new { item.SalePrice, item.DefaultVatRate, item.MinStock, item.ReorderQty };
+            item.SalePrice = salePrice; item.DefaultVatRate = defaultVatRate; item.MinStock = minStock; item.ReorderQty = reorderQty;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.update_commercial", "item", item.Id.ToString(), new { old, salePrice, defaultVatRate, minStock, reorderQty });
+            await db.SaveChangesAsync();
+            return item;
+        });
+    }
+
+    /// <summary>
     /// Sets the warehouse costing method from <paramref name="effectiveFrom"/>, which must be the first day of a fiscal
     /// year with no stock movement on or after it (consistency principle: no retroactive change of method).
     /// </summary>
@@ -104,7 +179,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     public async Task<CostingMethod> MethodForAsync(Guid companyId, Guid warehouseId, DateOnly date)
         => (await db.CostingPolicies.AsNoTracking().Where(p => p.CompanyId == companyId && p.WarehouseId == warehouseId && p.EffectiveFrom <= date)
                .OrderByDescending(p => p.EffectiveFrom).FirstOrDefaultAsync())?.Method
-           ?? throw new DomainException(ErrorCodes.CostingPolicyMissing, $"Kho chưa được thiết lập phương pháp tính giá xuất kho tại ngày {date}.");
+           ?? throw new DomainException(ErrorCodes.CostingPolicyMissing, $"Kho chưa được thiết lập phương pháp tính giá xuất kho tại ngày {date.Vn()}.");
 
     // ------------------------------------------------------------------ documents
 
@@ -130,6 +205,8 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             {
                 if (!items.TryGetValue(l.ItemId, out var item) || !item.IsActive)
                     throw new DomainException(ErrorCodes.NotFound, $"Dòng {n}: vật tư không tồn tại hoặc ngừng sử dụng.");
+                if (item.IsService)
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: {item.Code} là dịch vụ, không đi qua kho; dịch vụ nghiệm thu rồi lập hóa đơn.");
                 if (l.Quantity <= 0 || !MoneyMath.HasAtMostDecimals(l.Quantity, MoneyMath.StorageScale))
                     throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: số lượng phải lớn hơn 0, tối đa 4 chữ số thập phân.");
                 if (input.Type == StockDocumentType.Receipt && (l.Amount is not { } a || a < 0 || !MoneyMath.HasAtMostDecimals(a, dp)))
@@ -154,7 +231,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             }
 
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.PostingDate && f.EndDate >= input.PostingDate)
-                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate}.");
+                     ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate.Vn()}.");
             var prefix = input.Type switch { StockDocumentType.Receipt => "PN", StockDocumentType.Issue => "PX", _ => "DC" };
             var doc = new StockDocument
             {
@@ -166,6 +243,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             {
                 Id = Ids.New(), DocumentId = doc.Id, CompanyId = ctx.CompanyId, LineNo = i + 1, ItemId = l.ItemId, Quantity = l.Quantity,
                 Amount = l.Amount, CounterAccountId = l.CounterAccountId, Description = l.Description, OrderId = l.OrderId, OrderLineNo = l.OrderLineNo,
+                SourceInvoiceId = l.SourceInvoiceId, SourceInvoiceLineNo = l.SourceInvoiceLineNo,
             }).ToList();
             db.StockDocuments.Add(doc);
             await audit.AppendAsync(ctx.CompanyId, ctx, "stock.create", "stock_document", doc.Id.ToString(), new { doc.Number, doc.Type, lines = doc.Lines.Count });
@@ -178,6 +256,36 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     /// Posts a stock document: quantity ledger + valuation (FIFO / moving average immediately, monthly average later)
     /// + the GL voucher for whatever value is known now. One transaction; any failure leaves the document a Draft.
     /// </summary>
+    /// <summary>
+    /// Kiểm tra chất lượng trước nhập kho: phiếu nhập có đối tác (mua hàng, khách trả lại) chứa vật tư bắt buộc kiểm tra chất lượng chỉ ghi sổ được khi có biên bản kiểm nghiệm
+    /// còn hiệu lực và các dòng đó đạt toàn bộ số lượng (số không đạt phải bỏ khỏi phiếu hoặc nhập riêng sau xử lý). Nhập thành phẩm, tồn đầu kỳ không có đối tác nên không bị chặn.
+    /// </summary>
+    private async Task RequireQualityCheckAsync(StockDocument doc, IReadOnlyDictionary<Guid, Item> items)
+    {
+        if (doc.Type != StockDocumentType.Receipt || doc.PartnerId is null || doc.ReversesDocumentId is not null) return;
+        var needed = doc.Lines.Where(l => items[l.ItemId].RequiresQc).ToList();
+        if (needed.Count == 0) return;
+        var bb = await db.GoodsInspections.AsNoTracking().FirstOrDefaultAsync(i => i.StockDocumentId == doc.Id && !i.IsCancelled);
+        if (bb is null)
+            throw new DomainException(ErrorCodes.QualityCheckRequired, $"Phiếu {doc.Number} có vật tư bắt buộc kiểm tra chất lượng ({string.Join(", ", needed.Select(l => items[l.ItemId].Code).Distinct())}); lập biên bản kiểm nghiệm đạt trước khi ghi sổ.");
+        var lines = await db.GoodsInspectionLines.AsNoTracking().Where(l => l.InspectionId == bb.Id).ToDictionaryAsync(l => l.StockLineNo);
+        foreach (var l in needed)
+            if (!lines.TryGetValue(l.LineNo, out var il) || il.AcceptedQty < l.Quantity)
+                throw new DomainException(ErrorCodes.QualityCheckRequired, $"Dòng {l.LineNo} ({items[l.ItemId].Code}) chưa đạt kiểm tra chất lượng: đạt {(lines.TryGetValue(l.LineNo, out var x) ? x.AcceptedQty : 0)}/{l.Quantity}; chỉ nhập phần đạt (sửa số lượng phiếu) hoặc lập lại biên bản.");
+    }
+
+    public async Task SetItemRequiresQcAsync(SessionContext ctx, Guid itemId, bool requires)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            item.RequiresQc = requires;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.requires_qc", "item", item.Id.ToString(), new { requires });
+            await db.SaveChangesAsync();
+        });
+    }
+
     public async Task<StockDocument> PostDocumentAsync(SessionContext ctx, Guid documentId)
     {
         ctx.Require(Permissions.VoucherPost);
@@ -199,6 +307,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             }
             var dp = await DecimalsAsync(company);
             var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
+            await RequireQualityCheckAsync(doc, items);
             var seq = await MaxSequenceAsync(ctx.CompanyId);
 
             var glLines = new List<VoucherLineInput>();
@@ -210,7 +319,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                     case StockDocumentType.Receipt:
                         await GuardOrderAsync(ctx.CompanyId, doc.WarehouseId, item.Id, doc.PostingDate);
                         await AddMovementAsync(doc, line, doc.WarehouseId, line.Quantity, line.Amount!.Value, ++seq, line.CounterAccountId, doc.PartnerId);
-                        AddGl(glLines, item.InventoryAccountId, line.CounterAccountId!.Value, doc.PartnerId, line.Amount.Value, line.Description);
+                        AddGl(glLines, item.InventoryAccountId!.Value, line.CounterAccountId!.Value, doc.PartnerId, line.Amount.Value, line.Description);
                         break;
 
                     case StockDocumentType.Issue:
@@ -218,7 +327,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                         var method = await GuardOrderAsync(ctx.CompanyId, doc.WarehouseId, item.Id, doc.PostingDate);
                         var value = await IssueValueAsync(ctx.CompanyId, doc.WarehouseId, item.Id, line.Quantity, method, dp);
                         await AddMovementAsync(doc, line, doc.WarehouseId, -line.Quantity, value is null ? null : -value.Value, ++seq, line.CounterAccountId, doc.PartnerId);
-                        if (value is { } v) AddGl(glLines, line.CounterAccountId!.Value, item.InventoryAccountId, doc.PartnerId, v, line.Description, debitPartner: true);
+                        if (value is { } v) AddGl(glLines, line.CounterAccountId!.Value, item.InventoryAccountId!.Value, doc.PartnerId, v, line.Description, debitPartner: true);
                         break;
                     }
 
@@ -504,7 +613,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                 {
                     db.StockValuations.Add(new StockValuation { Id = Ids.New(), CompanyId = ctx.CompanyId, MovementId = pending[i].Id, Value = -issueValues[i], CostingRunId = run.Id, CreatedAt = clock.UtcNow });
                     if (issueValues[i] > 0)
-                        AddGl(glLines, pending[i].CounterAccountId!.Value, item.InventoryAccountId, pending[i].PartnerId, issueValues[i], $"Giá vốn xuất {item.Code}", debitPartner: true);
+                        AddGl(glLines, pending[i].CounterAccountId!.Value, item.InventoryAccountId!.Value, pending[i].PartnerId, issueValues[i], $"Giá vốn xuất {item.Code}", debitPartner: true);
                 }
                 var totalQty = opening.Sum(m => m.Quantity) + valued.Sum(m => m.Quantity);
                 var totalValue = opening.Sum(m => values[m.Id]) + valued.Sum(m => values[m.Id]) + adjBefore + adjInside;
@@ -626,7 +735,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         var values = await ActiveValuesAsync(moves.Select(m => m.Id).ToList());
         var adjs = await db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.AdjustmentDate <= asOf).ToListAsync();
         var rows = new List<InventoryReconcileRow>();
-        foreach (var accId in items.Values.Select(i => i.InventoryAccountId).Distinct())
+        foreach (var accId in items.Values.Where(i => i.InventoryAccountId != null).Select(i => i.InventoryAccountId!.Value).Distinct())
         {
             var acc = await db.Accounts.AsNoTracking().FirstAsync(a => a.Id == accId);
             var accMoves = moves.Where(m => items[m.ItemId].InventoryAccountId == accId).ToList();
@@ -655,7 +764,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         var local = db.StockMovements.Local.Where(m => m.WarehouseId == warehouseId && m.ItemId == itemId).Select(m => (DateOnly?)m.MovementDate).Max();
         if ((last is { } l && l > date) || (local is { } lc && lc > date))
             throw new DomainException(ErrorCodes.StockBackdated,
-                $"Kho đã có nghiệp vụ của vật tư này sau ngày {date}; không ghi sổ lùi ngày để không làm sai giá xuất đã tính.");
+                $"Kho đã có nghiệp vụ của vật tư này sau ngày {date.Vn()}; không ghi sổ lùi ngày để không làm sai giá xuất đã tính.");
         await GuardCostedAsync(companyId, warehouseId, date);
         return method;
     }
@@ -663,7 +772,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     private async Task GuardCostedAsync(Guid companyId, Guid warehouseId, DateOnly date)
     {
         if (await db.CostingRuns.AnyAsync(r => r.CompanyId == companyId && r.WarehouseId == warehouseId && r.Status == CostingRunStatus.Active && r.PeriodEnd >= date))
-            throw new DomainException(ErrorCodes.PeriodCosted, $"Kho đã tính giá bình quân cho kỳ chứa hoặc sau ngày {date}; hủy lần tính giá trước.");
+            throw new DomainException(ErrorCodes.PeriodCosted, $"Kho đã tính giá bình quân cho kỳ chứa hoặc sau ngày {date.Vn()}; hủy lần tính giá trước.");
     }
 
     private async Task<decimal?> IssueValueAsync(Guid companyId, Guid warehouseId, Guid itemId, decimal qty, CostingMethod method, int dp)
@@ -733,17 +842,9 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     private async Task RequireOpenPeriodAsync(Guid companyId, DateOnly date)
     {
         var p = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.CompanyId == companyId && x.StartDate <= date && x.EndDate >= date)
-                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date}.");
+                ?? throw new DomainException(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {date.Vn()}.");
         if (p.Status == PeriodStatus.Locked) throw new DomainException(ErrorCodes.PeriodLocked, $"Kỳ {p.StartDate:MM/yyyy} đã khóa sổ.");
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix)
-    {
-        var key = "STK-" + prefix;
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == key);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = key });
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"{prefix}{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix) => Numbering.NextAsync(db, companyId, fy, "STK-" + prefix);
 }
