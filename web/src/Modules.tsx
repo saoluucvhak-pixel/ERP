@@ -95,7 +95,7 @@ export const MODULES: AppModule[] = [
     catalogs: [CAT_SETUP],
   },
   {
-    key: 'ledger', label: 'Tổng hợp', icon: '📚', screens: ['vouchers', 'journal', 'ledger', 'tb', 'reports', 'periods'], title: 'NGHIỆP VỤ KẾ TOÁN TỔNG HỢP',
+    key: 'ledger', label: 'Tổng hợp', icon: '📚', screens: ['vouchers', 'journal', 'specialjournals', 'ledger', 'tb', 'reports', 'periods'], title: 'NGHIỆP VỤ KẾ TOÁN TỔNG HỢP',
     flow: [
       { label: 'Chứng từ kế toán', icon: '🗂️', screen: 'vouchers' }, { label: 'Sổ Nhật ký chung', icon: '📒', screen: 'journal' }, { label: 'Sổ chi tiết, sổ cái', icon: '📚', screen: 'ledger' },
       { label: 'Cân đối phát sinh', icon: '⚖️', screen: 'tb' }, { label: 'Khóa kỳ, kết chuyển', icon: '🔒', screen: 'periods' }, { label: 'Báo cáo tài chính', icon: '📊', screen: 'reports' },

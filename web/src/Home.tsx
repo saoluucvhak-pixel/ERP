@@ -20,6 +20,7 @@ const TILE: Record<string, { icon: string; color: string; desc: string }> = {
   cashcount: { icon: '🪙', color: '#1a7f37', desc: 'Đếm quỹ theo mệnh giá, chênh lệch, biên bản' },
   groups: { icon: '🗂️', color: '#5f6b7a', desc: 'Nhóm đối tượng, vật tư, tài sản, kho nhiều cấp; báo cáo theo nhóm' },
   paydiscount: { icon: '🏷️', color: '#9a6700', desc: 'Trả / thu tiền trong hạn hưởng chiết khấu' },
+  specialjournals: { icon: '📒', color: '#16263d', desc: 'Nhật ký bán hàng, mua hàng, thu tiền, chi tiền; xử lý bút toán trùng' },
   services: { icon: '🧾', color: '#9a6700', desc: 'Dịch vụ mua, bán: nghiệm thu rồi lập hóa đơn' },
   salesapproval: { icon: '✅', color: '#9a6700', desc: 'Duyệt trả hàng, giảm giá, xóa nợ khó đòi' },
   equity: { icon: '🏛️', color: '#16263d', desc: 'Chủ sở hữu, góp / rút vốn, chia cổ tức, thuế TNCN' },

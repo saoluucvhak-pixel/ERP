@@ -1173,4 +1173,35 @@ public class TradeTests
         Assert.Equal(2m, cand.Remaining);                                                                      // hóa đơn lập được theo số nghiệm thu đã xác nhận
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => prog.CloseTimesheetAsync(fx.H.Preparer, order.Id, 2, D(3, 31), 0, D(3, 31))));
     }
+
+    [Fact]
+    public async Task SpecialJournals_DuplicateEntries_CountedOnceInMainBook()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        h.Acc["ADV"] = (await s.Setup.CreateAccountAsync(h.Admin, "ADV", "Tạm ứng (thử)")).Id;
+        await s.Rules.SetRoleMappingAsync(h.Admin, "ADVANCE", "ADV");
+        async Task Post(string desc, params VoucherLineInput[] lines) { var d = D(3, 10); await h.PostedAsync(s, new VoucherInput(VoucherTypes.General, d, d, desc, lines)); }
+        // Rút tiền gửi nhập quỹ: vừa thu tiền vừa chi tiền → bút toán trùng.
+        await Post("Rút tiền gửi nhập quỹ", new(fx.A("CASH"), Side.Debit, 10_000_000), new(fx.A("BANK"), Side.Credit, 10_000_000));
+        // Hoàn ứng mua vật tư (INV là TK kho của vật tư DAM) kèm nộp lại tiền thừa → vừa mua hàng vừa thu tiền.
+        await Post("Hoàn ứng mua vật tư", new(fx.A("INV"), Side.Debit, 8_000_000), new(fx.A("CASH"), Side.Debit, 2_000_000), new(fx.A("ADV"), Side.Credit, 10_000_000));
+        await Post("Bán hàng", new(fx.A("AR"), Side.Debit, 5_000_000, h.Partner["KH01"]), new(fx.A("SALESREV"), Side.Credit, 5_000_000));
+        await Post("Thu tiền khách", new(fx.A("CASH"), Side.Debit, 3_000_000), new(fx.A("AR"), Side.Credit, 3_000_000, h.Partner["KH01"]));
+        await Post("Trích chi phí khác", new(fx.A("EXP"), Side.Debit, 1_000_000), new(fx.A("AP"), Side.Credit, 1_000_000, h.Partner["NCC01"]));
+
+        var r = await new SpecialJournalService(s.Db).ReportAsync(h.Auditor, D(3, 1), D(3, 31));
+        var b = r.Books.ToDictionary(x => x.Journal);
+        // Mỗi bút toán chỉ cộng một lần: rút tiền ở thu tiền, hoàn ứng ở mua hàng.
+        Assert.Equal((5_000_000m, 1, 0), (b[Hak.Domain.Ledger.SpecialJournal.Sales].Total, b[Hak.Domain.Ledger.SpecialJournal.Sales].Count, b[Hak.Domain.Ledger.SpecialJournal.Sales].DuplicateCount));
+        Assert.Equal((10_000_000m, 1, 0), (b[Hak.Domain.Ledger.SpecialJournal.Purchases].Total, b[Hak.Domain.Ledger.SpecialJournal.Purchases].Count, b[Hak.Domain.Ledger.SpecialJournal.Purchases].DuplicateCount));
+        Assert.Equal((13_000_000m, 2, 1), (b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Total, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].Count, b[Hak.Domain.Ledger.SpecialJournal.CashReceipts].DuplicateCount));   // rút tiền 10tr + thu khách 3tr; hoàn ứng hiện kèm dấu trùng
+        Assert.Equal((0m, 0, 1), (b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Total, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Count, b[Hak.Domain.Ledger.SpecialJournal.CashPayments].DuplicateCount));   // rút tiền hiện ở chi tiền nhưng trùng
+        Assert.Equal((1_000_000m, 1), (b[Hak.Domain.Ledger.SpecialJournal.General].Total, b[Hak.Domain.Ledger.SpecialJournal.General].Count));
+        var dup = b[Hak.Domain.Ledger.SpecialJournal.CashPayments].Entries.Single();
+        Assert.True(dup.Duplicate); Assert.Equal(Hak.Domain.Ledger.SpecialJournal.CashReceipts, dup.MainJournal);
+        // Đối chiếu: tổng Nhật ký = tổng các sổ sau khi loại bút toán trùng.
+        Assert.Equal(29_000_000m, r.JournalTotal);
+        Assert.Equal(r.JournalTotal, r.BooksTotal); Assert.True(r.Balanced); Assert.Equal(2, r.DuplicateEntries);
+    }
 }

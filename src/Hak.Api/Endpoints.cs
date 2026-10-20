@@ -211,6 +211,8 @@ public static class Endpoints
         });
         api.MapGet("/reports/general-journal", async (HttpContext http, DateOnly from, DateOnly to, LedgerQueryService q) =>
             Results.Ok(await q.GeneralJournalAsync(await http.SessionAsync(), from, to)));
+        api.MapGet("/reports/special-journals", async (HttpContext http, DateOnly from, DateOnly to, SpecialJournalService s) =>
+            Results.Ok(await s.ReportAsync(await http.SessionAsync(), from, to)));
 
         // ---- JSON exchange ----
         api.MapPost("/exchange/journal-vouchers", async (HttpContext http, bool commit, JournalVoucherPackageService svc) =>

@@ -92,6 +92,7 @@ builder.Services.AddScoped<Hak.Application.Advances.AdvanceService>();
 builder.Services.AddScoped<SalesApprovalService>();
 builder.Services.AddScoped<ServiceAcceptanceService>();
 builder.Services.AddScoped<ServiceReportService>();
+builder.Services.AddScoped<Hak.Application.Accounting.SpecialJournalService>();
 builder.Services.AddScoped<ContractServicePlanService>();
 builder.Services.AddScoped<ServiceProgressService>();
 builder.Services.AddScoped<PaymentDiscountService>();

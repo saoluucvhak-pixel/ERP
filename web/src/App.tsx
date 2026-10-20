@@ -21,6 +21,7 @@ import { AdvancesView, CashCountView } from './Advances'
 import { EquityView } from './Equity'
 import { SalesApprovalsView } from './SalesApprovals'
 import { ServiceAcceptancesView } from './ServiceAcceptances'
+import { SpecialJournalsView } from './SpecialJournals'
 import { PaymentDiscountView } from './PaymentDiscount'
 import { GroupsView } from './Groups'
 import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
@@ -66,6 +67,7 @@ const SCREENS = [
   { key: 'assets', label: 'Tài sản / CCDC', el: () => <AssetsView /> },
   { key: 'vouchers', label: 'Chứng từ kế toán', el: () => <VouchersView /> },
   { key: 'journal', label: 'Sổ Nhật ký chung', el: () => <GeneralJournalView /> },
+  { key: 'specialjournals', label: 'Sổ nhật ký đặc biệt', el: () => <SpecialJournalsView /> },
   { key: 'ledger', label: 'Sổ chi tiết / Sổ quỹ', el: () => <AccountLedgerView /> },
   { key: 'tb', label: 'Cân đối phát sinh', el: () => <TrialBalanceView /> },
   { key: 'reports', label: 'Báo cáo theo mẫu', el: () => <ReportEngineView /> },
@@ -101,6 +103,7 @@ const LAUNCHER = [
   { key: 'assets', group: 'Tài chính, thanh toán', label: 'Tài sản / CCDC' },
   { key: 'vouchers', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Chứng từ kế toán' },
   { key: 'journal', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ Nhật ký chung' },
+  { key: 'specialjournals', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ nhật ký đặc biệt' },
   { key: 'ledger', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Sổ chi tiết / Sổ quỹ' },
   { key: 'tb', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Cân đối phát sinh' },
   { key: 'reports', group: 'Kế toán tổng hợp (Nhật ký, sổ, báo cáo)', label: 'Báo cáo theo mẫu' },
