@@ -120,4 +120,40 @@ public class UserAdminTests
         Assert.Contains(Permissions.LoanManage, (await s.Auth.ResolveContextAsync(h.ApproverId, h.CompanyId)).Permissions);
         Assert.True(await s.Db.AuditLogs.AnyAsync(a => a.Action == "role.sync_defaults"));
     }
+
+    [Fact]
+    public async Task Admin_BuildsCustomRole_FromCatalogue_AndDefaultRolesStayReadOnly()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var catalog = await s.Setup.PermissionCatalogAsync(h.AdminId);
+        Assert.Contains(catalog, m => m.Permissions.Any(p => p.Code == Permissions.CashDocument));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Setup.PermissionCatalogAsync(h.ApproverId)));
+
+        await s.Setup.CreateRoleAsync(h.AdminId, "KT_QUY", "Kế toán quỹ", [Permissions.VoucherView, Permissions.CashDocument]);
+        Assert.Contains(await s.Setup.ListRolesAsync(h.AdminId), r => r.Code == "KT_QUY" && r.Permissions.Count == 2);
+        await s.Setup.GrantRoleAsync(h.AdminId, h.AuditorId, h.CompanyId, "KT_QUY");
+        var granted = (await s.Auth.ResolveContextAsync(h.AuditorId, h.CompanyId)).Permissions;
+        Assert.Contains(Permissions.CashDocument, granted);
+
+        await s.Setup.UpdateRoleAsync(h.AdminId, "KT_QUY", "Kế toán quỹ", [Permissions.VoucherView]);
+        Assert.DoesNotContain(Permissions.CashDocument, (await s.Auth.ResolveContextAsync(h.AuditorId, h.CompanyId)).Permissions);
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Setup.UpdateRoleAsync(h.AdminId, "GL_ACCOUNTANT", "x", [Permissions.VoucherView])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Setup.CreateRoleAsync(h.AdminId, "SAI", "x", ["khong.co"])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Setup.CreateRoleAsync(h.AdminId, "TRONG", "x", [])));
+        Assert.Equal(ErrorCodes.DuplicateCode, await CodeOf(() => s.Setup.CreateRoleAsync(h.AdminId, "ACCOUNTANT", "x", [Permissions.VoucherView])));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Setup.CreateRoleAsync(h.ApproverId, "KHAC", "x", [Permissions.VoucherView])));
+    }
+
+    [Fact]
+    public async Task DefaultCatalogue_HasAccountantRole_WithoutApprovalOrPeriodRights()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var role = (await s.Setup.ListRolesAsync(h.AdminId)).Single(r => r.Code == "ACCOUNTANT");
+        Assert.Contains(Permissions.VoucherCreate, role.Permissions);
+        Assert.DoesNotContain(Permissions.VoucherApprove, role.Permissions);
+        Assert.DoesNotContain(Permissions.PeriodLock, role.Permissions);
+    }
 }

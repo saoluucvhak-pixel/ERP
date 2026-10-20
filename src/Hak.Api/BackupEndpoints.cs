@@ -86,6 +86,11 @@ public static class BackupEndpoints
             Results.Ok(await s.ApproveAndPostImportedAsync(await http.SessionAsync())));
 
         admin.MapGet("/roles",async (HttpContext http, Hak.Application.Setup.SetupService s) => Results.Ok(await s.ListRolesAsync((await http.AuthAsync()).User.Id)));
+        admin.MapGet("/permission-catalog", async (HttpContext http, Hak.Application.Setup.SetupService s) => Results.Ok(await s.PermissionCatalogAsync((await http.AuthAsync()).User.Id)));
+        admin.MapPost("/roles", async (HttpContext http, RoleRequest r, Hak.Application.Setup.SetupService s) =>
+        { await s.CreateRoleAsync((await http.AuthAsync()).User.Id, r.Code, r.Name, r.Permissions); return Results.NoContent(); });
+        admin.MapPut("/roles/{code}", async (HttpContext http, string code, RoleRequest r, Hak.Application.Setup.SetupService s) =>
+        { await s.UpdateRoleAsync((await http.AuthAsync()).User.Id, code, r.Name, r.Permissions); return Results.NoContent(); });
         admin.MapPost("/users/{id:guid}/revoke", async (HttpContext http, Guid id, RevokeRequest r, Hak.Application.Setup.SetupService s) =>
         { await s.RevokeRoleAsync((await http.AuthAsync()).User.Id, id, r.CompanyId, r.RoleCode, r.Reason); return Results.NoContent(); });
         admin.MapPost("/users/{id:guid}/active", async (HttpContext http, Guid id, ActiveRequest r, Hak.Application.Setup.SetupService s) =>

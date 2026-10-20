@@ -3,6 +3,7 @@ import { get, post } from './api'
 import { ErrorBox, useAction } from './common'
 import { formatMoney } from './money'
 import { SmartFilter, useFilterState } from './SmartFilter'
+import { RolesEditor } from './Roles'
 
 interface Me { id: string; userName: string; fullName: string; isSystemAdmin: boolean }
 interface Grant { companyId: string; companyCode: string; roleCode: string; roleName: string }
@@ -205,6 +206,7 @@ function Users({ me, reload }: { me: Me; reload: number }) {
       <details><summary>Quyền của từng vai trò mặc định</summary>
         <table className="grid"><tbody>{roles.map(r => <tr key={r.code}><td>{r.name}</td><td style={{ whiteSpace: 'normal' }}>{r.permissions.join(', ')}</td></tr>)}</tbody></table>
       </details>
+      <RolesEditor />
     </section>
   )
 }

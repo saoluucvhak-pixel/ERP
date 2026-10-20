@@ -18,6 +18,7 @@ public sealed record BootstrapRequest(string UserName, string FullName, string P
 public sealed record CreateUserRequest(string UserName, string FullName, string Password, bool IsSystemAdmin = false);
 public sealed record GrantRequest(Guid UserId, Guid CompanyId, string RoleCode);
 public sealed record ApprovalPolicyRequest(bool RequireDistinctApprover);
+public sealed record RoleRequest(string Code, string Name, List<string> Permissions);
 public sealed record RegimeVersionRequest(string RegimeCode, string RegimeName, string VersionCode, DateOnly EffectiveFrom, DateOnly? EffectiveTo, List<LegalSourceInput> Sources);
 public sealed record VerifyRequest(string Note);
 public sealed record CompanyRequest(string Code, string Name, string? TaxCode, string FunctionalCurrency, Guid RegimeVersionId);
