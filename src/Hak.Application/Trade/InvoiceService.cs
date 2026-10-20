@@ -275,9 +275,9 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         var result = new List<UninvoicedLine>();
         foreach (var l in lines)
         {
-            var invoiced = await InvoicedQuantityAsync(l.Id, l.LineNo, null);
+            var invoiced = await InvoicedQuantityAsync(ctx.CompanyId, l.Id, l.LineNo, null);
             if (invoiced >= l.Quantity) continue;
-            var bdmt = await db.StockMeasurements.AsNoTracking().Where(m => m.DocumentId == l.Id && m.LineNo == l.LineNo && m.SupersededAt == null).Select(m => (decimal?)m.Bdmt).FirstOrDefaultAsync();
+            var bdmt = await db.StockMeasurements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.DocumentId == l.Id && m.LineNo == l.LineNo && m.SupersededAt == null).Select(m => (decimal?)m.Bdmt).FirstOrDefaultAsync();
             result.Add(new UninvoicedLine(l.Id, l.Number, l.PostingDate, l.LineNo, l.ItemId, l.ItemCode, l.Quantity, invoiced, bdmt, l.PartnerId));
         }
         return result.OrderBy(r => r.PostingDate).ThenBy(r => r.StockDocumentNumber).ToList();
@@ -314,9 +314,9 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             line.OrderLineNo = sl.OrderLineNo;
             if (sl.OrderId is { } so && (await db.TradeOrders.AsNoTracking().FirstAsync(o => o.Id == so)).PartnerId != inv.PartnerId)
                 throw new DomainException(ErrorCodes.OrderMismatch, $"Dòng {lineNo}: đối tượng hóa đơn khác đối tượng của đơn hàng gắn với phiếu {doc.Number}.");
-            line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(doc.Id, sl.LineNo, null);
+            line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(ctx.CompanyId, doc.Id, sl.LineNo, null);
             if (line.StockQuantity <= 0) throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {lineNo}: phiếu {doc.Number} dòng {sl.LineNo} đã lập hóa đơn đủ.");
-            await CheckRemainingAsync(doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null);
+            await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null);
 
             if (l.Basis == PricingBasis.Bdmt)
             {
@@ -324,7 +324,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 if (!item.TracksDryness) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: vật tư {item.Code} không theo dõi BDMT.");
                 if (line.StockQuantity != sl.Quantity)
                     throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: tính giá theo BDMT phải lập hóa đơn cho trọn dòng phiếu (BDMT đo cho cả dòng).");
-                line.BasisQuantity = await ActiveBdmtAsync(doc.Id, doc.Number, sl.LineNo);
+                line.BasisQuantity = await ActiveBdmtAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo);
             }
             else line.BasisQuantity = line.StockQuantity.Value;
         }
@@ -387,26 +387,26 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         if (inv.Kind == InvoiceKind.Sales && doc.Status != StockDocumentStatus.Posted || doc.Status is StockDocumentStatus.Reversed or StockDocumentStatus.Cancelled)
             throw new DomainException(ErrorCodes.InvalidStateTransition, $"Dòng {l.LineNo}: phiếu {doc.Number} ở trạng thái {doc.Status}.");
         var sl = doc.Lines.Single(x => x.LineNo == l.StockLineNo);
-        await CheckRemainingAsync(doc.Id, doc.Number, sl.LineNo, sl.Quantity, l.StockQuantity!.Value, inv.Id);
-        if (l.Basis == PricingBasis.Bdmt && await ActiveBdmtAsync(doc.Id, doc.Number, sl.LineNo) != l.BasisQuantity)
+        await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, l.StockQuantity!.Value, inv.Id);
+        if (l.Basis == PricingBasis.Bdmt && await ActiveBdmtAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo) != l.BasisQuantity)
             throw new DomainException(ErrorCodes.MeasurementPending,
                 $"Dòng {l.LineNo}: BDMT của phiếu {doc.Number} đã thay đổi so với lúc lập hóa đơn (kết quả đo/chứng thư mới); hủy hóa đơn nháp và lập lại.");
         _ = ctx;
     }
 
-    private async Task CheckRemainingAsync(Guid docId, string docNumber, int lineNo, decimal lineQty, decimal wanted, Guid? excludeInvoice)
+    private async Task CheckRemainingAsync(Guid companyId, Guid docId, string docNumber, int lineNo, decimal lineQty, decimal wanted, Guid? excludeInvoice)
     {
-        var used = await InvoicedQuantityAsync(docId, lineNo, excludeInvoice);
+        var used = await InvoicedQuantityAsync(companyId, docId, lineNo, excludeInvoice);
         if (used + wanted > lineQty)
             throw new DomainException(ErrorCodes.OverInvoiced, $"Phiếu {docNumber} dòng {lineNo}: đã lập hóa đơn {used}, thêm {wanted} vượt số lượng {lineQty}.");
     }
 
     /// <summary>Quantity of a stock line already on Draft or Posted invoices (cancelled/reversed invoices release it).</summary>
-    private async Task<decimal> InvoicedQuantityAsync(Guid docId, int lineNo, Guid? excludeInvoice)
+    private async Task<decimal> InvoicedQuantityAsync(Guid companyId, Guid docId, int lineNo, Guid? excludeInvoice)
     {
         var rows = await (from l in db.CommercialInvoiceLines
                           join i in db.CommercialInvoices on l.InvoiceId equals i.Id
-                          where l.StockDocumentId == docId && l.StockLineNo == lineNo
+                          where l.CompanyId == companyId && l.StockDocumentId == docId && l.StockLineNo == lineNo
                                 && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted) && i.Id != excludeInvoice
                           select l.StockQuantity).ToListAsync();
         var pending = db.CommercialInvoiceLines.Local.Where(l => l.StockDocumentId == docId && l.StockLineNo == lineNo && db.Entry(l).State == EntityState.Added && l.InvoiceId != excludeInvoice)
@@ -414,8 +414,8 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         return rows.Sum(x => x ?? 0) + pending;
     }
 
-    private async Task<decimal> ActiveBdmtAsync(Guid docId, string docNumber, int lineNo)
-        => await db.StockMeasurements.AsNoTracking().Where(m => m.DocumentId == docId && m.LineNo == lineNo && m.SupersededAt == null)
+    private async Task<decimal> ActiveBdmtAsync(Guid companyId, Guid docId, string docNumber, int lineNo)
+        => await db.StockMeasurements.AsNoTracking().Where(m => m.CompanyId == companyId && m.DocumentId == docId && m.LineNo == lineNo && m.SupersededAt == null)
                .Select(m => (decimal?)m.Bdmt).FirstOrDefaultAsync()
            ?? throw new DomainException(ErrorCodes.MeasurementPending, $"Phiếu {docNumber} dòng {lineNo} chưa có kết quả đo độ khô / chứng thư; chưa tính được BDMT để lập hóa đơn.");
 

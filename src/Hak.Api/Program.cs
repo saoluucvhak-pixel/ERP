@@ -117,8 +117,24 @@ builder.Services.AddSingleton(new Hak.Application.Backup.BackupOptions
 });
 builder.Services.AddScoped<Hak.Application.Backup.BackupService>();
 builder.Services.AddScoped<Hak.Application.Reports.ReportService>();
+// Giới hạn tần suất đăng nhập theo IP (chặn dò mật khẩu/tên đăng nhập hàng loạt; khóa theo tài khoản vẫn giữ nguyên). 0 = tắt.
+var loginLimit = builder.Configuration.GetValue("Hak:LoginRateLimitPerMinute", 30);
+if (loginLimit > 0)
+    builder.Services.AddRateLimiter(o =>
+    {
+        o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        o.AddPolicy("login", http => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "local",
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions { PermitLimit = loginLimit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    });
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new DecimalAsStringConverter()));
+
+// Khóa chủ mã hóa bí mật trong CSDL (khóa trao đổi): Hak:SecretKey (base64 32 byte, nên đặt bằng biến môi trường), hoặc tệp secret.key
+// cạnh thư mục dữ liệu. Phải sao lưu RIÊNG khỏi CSDL; mất khóa chủ thì phải cấp lại khóa trao đổi.
+if (runtime.Environment != "Test" || builder.Configuration["Hak:SecretKey"] is not null)
+    SecretProtector.Configure(SecretProtector.LoadOrCreateKey(builder.Configuration["Hak:SecretKey"],
+        builder.Configuration["Hak:SecretKeyFile"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "secret.key")));
 
 var app = builder.Build();
 
@@ -127,6 +143,8 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<HakDbContext>();
     HakDb.Migrate(db);
     await scope.ServiceProvider.GetRequiredService<SetupService>().EnsureReferenceDataAsync();
+    var upgraded = await SecretProtector.UpgradeStoredKeysAsync(db);
+    if (upgraded > 0) app.Logger.LogInformation("Đã mã hóa {Count} khóa trao đổi đang lưu dạng thường.", upgraded);
 
     // Local administrator recovery (docs/08 §8): Hak.Api.exe --reset-admin-password <user>; the password is typed twice, never echoed.
     var at = Array.IndexOf(args, "--reset-admin-password");
@@ -146,20 +164,24 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Header bảo mật cho mọi chế độ (API và giao diện đóng gói). HSTS chỉ gửi khi truy cập qua HTTPS (Production).
+if (runtime.IsProduction) app.UseHsts();
+app.Use(async (http, next) =>
+{
+    var h = http.Response.Headers;
+    h["X-Content-Type-Options"] = "nosniff";
+    h["X-Frame-Options"] = "DENY";
+    h["Referrer-Policy"] = "no-referrer";
+    h["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'";
+    await next();
+});
+if (loginLimit > 0) app.UseRateLimiter();
+
 // Packaged mode (docs/08): the API also serves the built web UI from wwwroot beside the executable (or Hak:WebRoot), same origin,
 // so the browser needs no proxy. Development keeps using the Vite dev server.
 var webRoot = builder.Configuration["Hak:WebRoot"] ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");
 if (File.Exists(Path.Combine(webRoot, "index.html")))
 {
-    app.Use(async (http, next) =>
-    {
-        var h = http.Response.Headers;
-        h["X-Content-Type-Options"] = "nosniff";
-        h["X-Frame-Options"] = "DENY";
-        h["Referrer-Policy"] = "no-referrer";
-        h["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'";
-        await next();
-    });
     var files = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.GetFullPath(webRoot));
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = files });
     app.UseStaticFiles(new StaticFileOptions { FileProvider = files });

@@ -136,7 +136,7 @@ public sealed partial class InvoiceService
                             : $"Dòng {n}: phải là phiếu nhập hàng trả lại (nháp) của cùng khách hàng.");
                     var rl = receipt.Lines.Single(x => x.LineNo == rln);
                     if (rl.ItemId != ol.ItemId) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: vật tư trả lại khác vật tư trên hóa đơn gốc.");
-                    if (await db.CommercialInvoiceLines.AnyAsync(x => x.StockDocumentId == receipt.Id && x.StockLineNo == rl.LineNo
+                    if (await db.CommercialInvoiceLines.AnyAsync(x => x.CompanyId == ctx.CompanyId && x.StockDocumentId == receipt.Id && x.StockLineNo == rl.LineNo
                             && db.CommercialInvoices.Any(i => i.Id == x.InvoiceId && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted))))
                         throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: phiếu {receipt.Number} đã gắn với hóa đơn khác.");
                     var returned = await ReturnedQuantityAsync(orig.Id, ol.LineNo, null);
@@ -150,7 +150,7 @@ public sealed partial class InvoiceService
                     // Goods returned to a supplier are not re-measured: their BDMT is the original line's BDMT pro rata [CẦN XÁC MINH].
                     line.BasisQuantity = ol.Basis != PricingBasis.Bdmt ? rl.Quantity
                         : purchase ? (rl.Quantity == ol.StockQuantity ? ol.BasisQuantity : MoneyMath.Round(ol.BasisQuantity * rl.Quantity / ol.StockQuantity!.Value, 3))
-                        : await ActiveBdmtAsync(receipt.Id, receipt.Number, rl.LineNo);
+                        : await ActiveBdmtAsync(ctx.CompanyId, receipt.Id, receipt.Number, rl.LineNo);
                     Price(line, rate, curDp, funcDp);
                 }
                 else
@@ -200,7 +200,7 @@ public sealed partial class InvoiceService
             if (inv.Purpose == InvoicePurpose.Return)
             {
                 var receipt = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstAsync(d => d.Id == l.StockDocumentId);
-                if (l.Basis == PricingBasis.Bdmt && await ActiveBdmtAsync(receipt.Id, receipt.Number, l.StockLineNo!.Value) != l.BasisQuantity)
+                if (l.Basis == PricingBasis.Bdmt && await ActiveBdmtAsync(ctx.CompanyId, receipt.Id, receipt.Number, l.StockLineNo!.Value) != l.BasisQuantity)
                     throw new DomainException(ErrorCodes.MeasurementPending, $"Dòng {l.LineNo}: BDMT của phiếu {receipt.Number} đã thay đổi; hủy và lập lại hóa đơn điều chỉnh.");
                 if (receipt.Status == StockDocumentStatus.Draft) await stock.PostDocumentAsync(ctx, receipt.Id);
                 gl.Add(new VoucherLineInput(Role("SALES_RETURNS"), Side.Debit, l.FunctionalAmount, Description: l.Description ?? "Hàng bán bị trả lại"));

@@ -158,6 +158,9 @@ function UncPrint({ orders, beneficiary, payer, partnerName, onDone }: { orders:
 }
 
 interface Candidate { journalLineId: string; voucherNumber: string; postingDate: string; amount: string; score: number }
+/** Dòng sao kê không có mã giao dịch được hệ thống gán mã "AUTO-…": hiển thị là chưa có mã. */
+const refText = (r: string) => (r.startsWith('AUTO-') ? '(không có mã)' : r)
+
 interface StatementOnly { id: string; transactionDate: string; amount: string; bankReference: string; description: string; status: string; candidates: Candidate[] }
 interface BookOnly { journalLineId: string; voucherNumber: string; postingDate: string; signedAmount: string; description: string | null }
 interface Report { bookBalance: string; statementBalance: string | null; statementOnly: StatementOnly[]; bookOnly: BookOnly[]; unexplainedDifference: string | null }
@@ -192,8 +195,8 @@ function Reconciliation() {
     const lines = csv.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map((l, i) => {
       const [transactionDate, amount, bankReference, ...desc] = l.split(';')
       const a = parseSigned(amount ?? '')
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate ?? '') || !a || !bankReference) throw new Error(`Dòng ${i + 1} sai định dạng: ngày;số tiền;mã GD;nội dung`)
-      return { transactionDate, amount: a, bankReference: bankReference.trim(), description: desc.join(';').trim() }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate ?? '') || !a) throw new Error(`Dòng ${i + 1} sai định dạng: ngày;số tiền;mã GD (có thể bỏ trống);nội dung`)
+      return { transactionDate, amount: a, bankReference: (bankReference ?? '').trim(), description: desc.join(';').trim() }
     })
     const opening = parseSigned(hdr.opening), closing = parseSigned(hdr.closing)
     if (!opening || !closing) { setError(new Error('Số dư đầu/cuối không hợp lệ.')); return }
@@ -216,7 +219,7 @@ function Reconciliation() {
         <button className="primary" onClick={load} disabled={busy || !bankAccountId}>Xem đối chiếu</button>
       </div>
       <details className="panel">
-        <summary>Nhập sao kê (CSV: <code>yyyy-mm-dd;số tiền (+ vào / − ra);mã GD;nội dung</code>)</summary>
+        <summary>Nhập sao kê (CSV: <code>yyyy-mm-dd;số tiền (+ vào / − ra);mã GD (bỏ trống nếu ngân hàng không có);nội dung</code>)</summary>
         <div className="form-row" style={{ marginTop: 8 }}>
           <label>Từ ngày<input type="date" value={hdr.fromDate} onChange={e => setHdr(h => ({ ...h, fromDate: e.target.value }))} /></label>
           <label>Đến ngày<input type="date" value={hdr.toDate} onChange={e => setHdr(h => ({ ...h, toDate: e.target.value }))} /></label>
@@ -238,7 +241,7 @@ function Reconciliation() {
             <table className="grid">
               <thead><tr><th>Ngày</th><th>Mã GD</th><th>Nội dung</th><th className="num">Số tiền</th><th>Trạng thái / ứng viên</th></tr></thead>
               <tbody>{report.statementOnly.map(l => (
-                <tr key={l.id}><td>{formatDate(l.transactionDate)}</td><td>{l.bankReference}</td><td>{l.description}</td><td className="num">{formatMoney(l.amount)}</td>
+                <tr key={l.id}><td>{formatDate(l.transactionDate)}</td><td>{refText(l.bankReference)}</td><td>{l.description}</td><td className="num">{formatMoney(l.amount)}</td>
                   <td>{l.candidates.length === 0 ? <span className="muted">Chưa có bút toán tương ứng </span> : l.candidates.map(c => (
                     <button key={c.journalLineId} onClick={() => run(async () => { await post('/bank-reconciliation/confirm', { statementLineId: l.id, journalLineId: c.journalLineId }); await load() })}>
                       Khớp {c.voucherNumber} ({formatDate(c.postingDate)}, điểm {c.score})</button>))}
@@ -270,7 +273,7 @@ function Reconciliation() {
             <table className="grid">
               <thead><tr><th>Ngày</th><th>Mã GD</th><th>Số CT</th><th className="num">Số tiền</th><th>Cách khớp</th><th /></tr></thead>
               <tbody>{matches.map(m => (
-                <tr key={m.id}><td>{formatDate(m.transactionDate)}</td><td>{m.bankReference}</td><td>{m.voucherNumber}</td><td className="num">{formatMoney(m.amount)}</td>
+                <tr key={m.id}><td>{formatDate(m.transactionDate)}</td><td>{refText(m.bankReference)}</td><td>{m.voucherNumber}</td><td className="num">{formatMoney(m.amount)}</td>
                   <td>{m.origin === 'Auto' ? `Tự động (điểm ${m.score})` : 'Thủ công'}</td>
                   <td><button className="danger" onClick={() => { const reason = prompt('Lý do hủy đối chiếu:'); if (reason) run(async () => { await post(`/bank-reconciliation/${m.id}/unmatch`, { reason }); await load() }) }}>Hủy khớp</button></td></tr>))}
               </tbody>

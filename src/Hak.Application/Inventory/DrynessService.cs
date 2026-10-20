@@ -79,7 +79,7 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
             var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId)
                        ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
             if (tracks && item.AltUnit != null) throw new DomainException(ErrorCodes.ValidationFailed, "Vật tư đã có đơn vị quy đổi cố định; xóa đơn vị đó trước khi chuyển sang theo dõi độ khô (BDMT).");
-            if (!tracks && await db.StockMeasurements.AnyAsync(m => m.ItemId == itemId))
+            if (!tracks && await db.StockMeasurements.AnyAsync(m => m.CompanyId == ctx.CompanyId && m.ItemId == itemId))
                 throw new DomainException(ErrorCodes.ValidationFailed, "Vật tư đã có kết quả đo độ khô; không tắt theo dõi BDMT được.");
             item.TracksDryness = tracks;
             await audit.AppendAsync(ctx.CompanyId, ctx, "item.tracks_dryness", "item", item.Id.ToString(), new { tracks });
@@ -299,7 +299,7 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
                           join l in db.StockDocumentLines on d.Id equals l.DocumentId
                           join i in db.Items on l.ItemId equals i.Id
                           where d.CompanyId == ctx.CompanyId && (d.Status == StockDocumentStatus.Posted || d.Status == StockDocumentStatus.Draft) && d.ReversesDocumentId == null && i.TracksDryness
-                                && !db.StockMeasurements.Any(m => m.DocumentId == d.Id && m.LineNo == l.LineNo && m.SupersededAt == null)
+                                && !db.StockMeasurements.Any(m => m.CompanyId == ctx.CompanyId && m.DocumentId == d.Id && m.LineNo == l.LineNo && m.SupersededAt == null)
                           orderby d.PostingDate, d.Number, l.LineNo
                           select new { DocId = d.Id, d.Number, d.Type, d.PostingDate, l.LineNo, ItemId = i.Id, ItemCode = i.Code, l.Quantity })
             .AsNoTracking().ToListAsync();

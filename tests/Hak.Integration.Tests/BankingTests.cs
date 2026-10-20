@@ -164,6 +164,30 @@ public class BankingTests
     }
 
     [Fact]
+    public async Task StatementLines_WithoutBankReference_GetStableAutoReference_AndAreNeverAutoMatchedByAmountAndDateAlone()
+    {
+        var (h, s) = await SetupAsync();
+        using var _h = h; using var _s = s;
+        await PostDocAsync(h, s, Receipt(h, 1_000_000, Mar10, main: "BANK"));
+        // Ngân hàng không xuất mã giao dịch: một khoản thu khớp số tiền + ngày với bút toán, và hai khoản phí giống hệt nhau trong cùng tệp.
+        var st = await s.BankRecon.ImportAsync(h.Approver, Statement(h, 0, "no-ref",
+            new(Mar10, 1_000_000, "", "KH01 chuyen tien"),
+            new(Mar10, -11_000, "", "Phi chuyen khoan"),
+            new(Mar10, -11_000, "  ", "Phi chuyen khoan")));
+        var refs = await s.Db.BankStatementLines.AsNoTracking().Where(l => l.StatementId == st.Id).Select(l => l.BankReference).ToListAsync();
+        Assert.Equal(3, refs.Distinct().Count());
+        Assert.All(refs, r => Assert.True(BankReconciliationService.IsAutoReference(r)));
+
+        // Quyết định 16/10/2026: chỉ cùng tiền + ngày (không có tham chiếu) thì không tự khớp, chỉ gợi ý chờ xác nhận.
+        var r = await s.BankRecon.AutoMatchAsync(h.Approver, st.Id);
+        Assert.Equal((0, 1, 2), (r.Matched, r.Pending, r.Unmatched));
+
+        // Cùng giao dịch xuất hiện lại ở sao kê chồng kỳ vẫn bị chặn nhập trùng.
+        Assert.Equal(ErrorCodes.StatementDuplicate, await CodeOf(() => s.BankRecon.ImportAsync(h.Approver,
+            Statement(h, 0, "overlap", new StatementLineInput(Mar10, 1_000_000, "", "KH01 chuyen tien")))));
+    }
+
+    [Fact]
     public async Task AmbiguousCandidates_GoToConfirmationQueue_AndReportExplainsDifferences()
     {
         var (h, s) = await SetupAsync();

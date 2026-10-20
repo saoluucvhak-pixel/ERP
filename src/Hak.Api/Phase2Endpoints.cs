@@ -86,6 +86,8 @@ public static class Phase2Endpoints
         });
         api.MapPost("/settlement/{id:guid}/void", async (HttpContext http, Guid id, ReasonRequest r, SettlementService s) =>
         { await s.VoidAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
+        api.MapGet("/reports/aging-all", async (HttpContext http, DateOnly asOf, SettlementService s) =>
+            Results.Ok(await s.AgingAllAsync(await http.SessionAsync(), asOf)));
         api.MapGet("/reports/aging", async (HttpContext http, Guid accountId, DateOnly asOf, SettlementService s) =>
             Results.Ok(await s.AgingAsync(await http.SessionAsync(), accountId, asOf)));
         api.MapGet("/reports/subledger-reconciliation", async (HttpContext http, DateOnly asOf, SettlementService s) =>

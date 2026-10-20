@@ -138,7 +138,7 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
                            select new { l.DocumentId, l.LineNo, l.OrderLineNo, l.Quantity, d.Status }).AsNoTracking().ToListAsync();
         var posted = stock.Where(s => s.Status == StockDocumentStatus.Posted).ToList();
         var docIds = posted.Select(p => p.DocumentId).Distinct().ToList();
-        var measures = await db.StockMeasurements.AsNoTracking().Where(m => docIds.Contains(m.DocumentId) && m.SupersededAt == null)
+        var measures = await db.StockMeasurements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && docIds.Contains(m.DocumentId) && m.SupersededAt == null)
             .Select(m => new { m.DocumentId, m.LineNo, m.Bdmt }).ToListAsync();
         var invLines = await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
                               where l.OrderId == orderId && i.Status == InvoiceStatus.Posted

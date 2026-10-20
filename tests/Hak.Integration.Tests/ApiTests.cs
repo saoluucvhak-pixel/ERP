@@ -50,6 +50,7 @@ public class ApiTests
         await using var f = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("Hak:Environment", "Test");
+            b.UseSetting("Hak:LoginRateLimitPerMinute", "0");   // test đăng nhập dồn dập từ một IP
             if (pg is null) b.UseSetting("Hak:DatabasePath", dbPath);
             else
             {

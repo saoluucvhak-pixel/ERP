@@ -28,14 +28,19 @@ public sealed class AuditService(HakDbContext db, IClock clock)
     public async Task<AuditLog> AppendAsync(Guid companyId, SessionContext? ctx, string action, string entityType,
         string? entityId, object? data = null, long? entityRowVersion = null, string result = "OK", Guid? userIdOverride = null)
     {
-        var last = await db.AuditLogs.Where(a => a.CompanyId == companyId)
-            .OrderByDescending(a => a.Seq).Select(a => new { a.Seq, a.Hash }).FirstOrDefaultAsync();
         var pending = db.ChangeTracker.Entries<AuditLog>()
             .Where(e => e.State == EntityState.Added && e.Entity.CompanyId == companyId)
             .Select(e => e.Entity).OrderByDescending(a => a.Seq).FirstOrDefault();
 
-        var (prevSeq, prevHash) = pending is not null ? (pending.Seq, pending.Hash)
-            : last is not null ? (last.Seq, last.Hash) : (0L, Genesis);
+        // Đã có bản ghi chờ lưu trong cùng giao dịch thì nối tiếp nó, không cần truy vấn CSDL lại (một lệnh ghi sổ gọi hàm này nhiều lần).
+        var (prevSeq, prevHash) = (0L, Genesis);
+        if (pending is not null) (prevSeq, prevHash) = (pending.Seq, pending.Hash);
+        else
+        {
+            var last = await db.AuditLogs.Where(a => a.CompanyId == companyId)
+                .OrderByDescending(a => a.Seq).Select(a => new { a.Seq, a.Hash }).FirstOrDefaultAsync();
+            if (last is not null) (prevSeq, prevHash) = (last.Seq, last.Hash);
+        }
 
         var log = new AuditLog
         {
