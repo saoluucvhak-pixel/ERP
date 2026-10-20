@@ -1973,6 +1973,15 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<int?>("PaymentDiscountDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("payment_discount_days");
+
+                    b.Property<decimal?>("PaymentDiscountPercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("payment_discount_percent");
+
                     b.Property<int?>("PaymentTermsDays")
                         .HasColumnType("integer")
                         .HasColumnName("payment_terms_days");
@@ -6873,6 +6882,15 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<Guid>("PartnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("partner_id");
+
+                    b.Property<int?>("PaymentDiscountDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("payment_discount_days");
+
+                    b.Property<decimal?>("PaymentDiscountPercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("payment_discount_percent");
 
                     b.Property<DateTime?>("PostedAt")
                         .HasColumnType("timestamp with time zone")

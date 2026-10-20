@@ -1939,6 +1939,14 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("name");
 
+                    b.Property<int?>("PaymentDiscountDays")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("payment_discount_days");
+
+                    b.Property<long?>("PaymentDiscountPercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("payment_discount_percent");
+
                     b.Property<int?>("PaymentTermsDays")
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_terms_days");
@@ -6753,6 +6761,14 @@ namespace Hak.Data.Migrations
                     b.Property<Guid>("PartnerId")
                         .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
+
+                    b.Property<int?>("PaymentDiscountDays")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("payment_discount_days");
+
+                    b.Property<long?>("PaymentDiscountPercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("payment_discount_percent");
 
                     b.Property<DateTime?>("PostedAt")
                         .HasColumnType("TEXT")

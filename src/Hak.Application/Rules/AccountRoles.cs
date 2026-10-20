@@ -32,6 +32,8 @@ public static class AccountRoles
         new("DIVIDEND_PIT_PAYABLE", "Vốn chủ sở hữu", "Thuế TNCN khấu trừ trên cổ tức phải nộp (khi có cổ đông cá nhân)", Optional: true),
         new("BAD_DEBT_PROVISION", "Bán hàng", "Dự phòng phải thu khó đòi — Nợ khi xóa nợ phần đã trích dự phòng", Optional: true),
         new("BAD_DEBT_EXPENSE", "Bán hàng", "Chi phí xóa nợ phải thu không có dự phòng — Nợ khi xóa nợ phần còn lại", Optional: true),
+        new("PAYMENT_DISCOUNT_INCOME", "Mua hàng", "Chiết khấu thanh toán được hưởng (doanh thu hoạt động tài chính) — Có khi trả tiền nhà cung cấp trong hạn chiết khấu", Optional: true),
+        new("PAYMENT_DISCOUNT_EXPENSE", "Bán hàng", "Chiết khấu thanh toán cho khách hàng (chi phí tài chính) — Nợ khi khách trả tiền trong hạn chiết khấu", Optional: true),
         new("BANK_FEE", "Ngân hàng", "Chi phí phí ngân hàng — chỉ dùng để GỢI Ý TK khi tạo chứng từ từ dòng sao kê", Optional: true),
         new("BANK_INTEREST_INCOME", "Ngân hàng", "Lãi tiền gửi — chỉ dùng để GỢI Ý TK khi tạo chứng từ từ dòng sao kê", Optional: true),
         new("FX_REVALUATION", "Ngoại tệ", "Chênh lệch tỷ giá do đánh giá lại cuối kỳ"),

@@ -24,3 +24,16 @@ public static class SalesApprovalEndpoints
         a.MapPost("/write-offs/{id:guid}/voucher", async (HttpContext http, Guid id, WriteOffVoucherRequest r, SalesApprovalService s) => { var v = await s.CreateWriteOffVoucherAsync(await http.SessionAsync(), id, r.Date); return Results.Ok(new { v.Id, v.Number }); });
     }
 }
+
+public sealed record PaymentDiscountVoucherRequest(Guid CashAccountId, DateOnly Date);
+
+public static class PaymentDiscountEndpoints
+{
+    public static void MapPaymentDiscountEndpoints(this WebApplication app)
+    {
+        var api = app.MapGroup("/api/payment-discounts");
+        api.MapGet("", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly asOf, PaymentDiscountService s) => Results.Ok(await s.CandidatesAsync(await http.SessionAsync(), kind, asOf)));
+        api.MapPost("/{invoiceId:guid}/voucher", async (HttpContext http, Guid invoiceId, PaymentDiscountVoucherRequest r, PaymentDiscountService s) =>
+        { var v = await s.CreateVoucherAsync(await http.SessionAsync(), invoiceId, r.CashAccountId, r.Date); return Results.Ok(new { v.Id, v.Number }); });
+    }
+}

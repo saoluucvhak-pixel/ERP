@@ -72,6 +72,9 @@ public sealed class BusinessPartner
     public decimal? CreditLimit { get; set; }
     /// <summary>Điều kiện thanh toán: số ngày từ ngày hóa đơn đến hạn thanh toán.</summary>
     public int? PaymentTermsDays { get; set; }
+    /// <summary>Điều khoản chiết khấu thanh toán mặc định của đối tượng (điền sẵn khi lập hóa đơn): P% nếu trả trong N ngày.</summary>
+    public decimal? PaymentDiscountPercent { get; set; }
+    public int? PaymentDiscountDays { get; set; }
     public PartnerRoles Roles { get; set; }
     public SupplierStatus SupplierStatus { get; set; } = SupplierStatus.Approved;
     public string? SupplierStatusReason { get; set; }

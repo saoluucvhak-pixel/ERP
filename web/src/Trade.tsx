@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog } from './common'
-import { formatDate, formatMoney, parseMoney, today } from './money'
+import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
@@ -19,7 +19,7 @@ export function TradeView() {
   const [kind, setKind] = useState<'Purchase' | 'Sales'>('Sales')
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [list, setList] = useState<Invoice[]>([])
-  const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '' })
+  const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '', discPct: '', discDays: '' })
   const [lines, setLines] = useState<LineDraft[]>([empty()])
   const [info, setInfo] = useState('')
   const [adjusting, setAdjusting] = useState<Invoice | null>(null)
@@ -47,6 +47,7 @@ export function TradeView() {
     const body = {
       kind, partnerId: head.partnerId, invoiceSeries: head.series, invoiceNo: head.no, invoiceDate: head.invoiceDate, postingDate: head.postingDate,
       dueDate: head.dueDate || null, currency: head.currency || null, exchangeRate: head.currency ? parseMoney(head.rate) : null, description: head.description,
+      paymentDiscountPercent: head.discPct.trim() ? parseRate(head.discPct) : null, paymentDiscountDays: head.discDays.trim() ? Number(head.discDays) : null,
       lines: lines.map((l, i) => {
         const price = parseMoney(l.price)
         if (!price) throw new Error(`Dòng ${i + 1}: đơn giá không hợp lệ.`)
@@ -82,6 +83,8 @@ export function TradeView() {
           <label>Ngày hóa đơn<input type="date" value={head.invoiceDate} onChange={e => setHead(h => ({ ...h, invoiceDate: e.target.value }))} /></label>
           <label>Ngày hạch toán<input type="date" value={head.postingDate} onChange={e => setHead(h => ({ ...h, postingDate: e.target.value }))} /></label>
           <label>Hạn thanh toán<input type="date" value={head.dueDate} onChange={e => setHead(h => ({ ...h, dueDate: e.target.value }))} /></label>
+          <label title="Chiết khấu thanh toán: giảm P% tiền hàng nếu trả đủ trong N ngày kể từ ngày hóa đơn. Để trống thì lấy theo điều khoản của đối tượng.">CK thanh toán %<input className="num" size={5} value={head.discPct} onChange={e => setHead(h => ({ ...h, discPct: e.target.value }))} placeholder="vd 2" /></label>
+          <label>trong (ngày)<input className="num" size={4} inputMode="numeric" value={head.discDays} onChange={e => setHead(h => ({ ...h, discDays: e.target.value.replace(/\D/g, '') }))} placeholder="vd 10" /></label>
           <label>Nguyên tệ<select value={head.currency} onChange={e => setHead(h => ({ ...h, currency: e.target.value }))}><option value="">VND</option><option>USD</option><option>EUR</option><option>CNY</option><option>JPY</option></select></label>
           {head.currency && <label>Tỷ giá<input className="num" value={head.rate} onChange={e => setHead(h => ({ ...h, rate: e.target.value }))} /></label>}
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>
