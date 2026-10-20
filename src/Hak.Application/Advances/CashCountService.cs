@@ -154,14 +154,5 @@ public sealed class CashCountService(HakDbContext db, AccountingEngine engine, L
     private async Task<CashCount> LoadAsync(SessionContext ctx, Guid id)
         => await db.CashCounts.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Biên bản kiểm kê quỹ không tồn tại.");
 
-    private async Task<string> NextNumberAsync(Guid companyId, DateOnly date)
-    {
-        var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-                 ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
-        const string prefix = "KKQ";
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == prefix);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = prefix });
-        seq.LastNumber++; seq.RowVersion++;
-        return $"{prefix}-{fy.Code}-{seq.LastNumber:D5}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, DateOnly date) => Numbering.NextAsync(db, companyId, date, "KKQ");
 }

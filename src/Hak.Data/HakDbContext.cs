@@ -121,6 +121,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<CapitalMovement> CapitalMovements => Set<CapitalMovement>();
     public DbSet<DividendResolution> DividendResolutions => Set<DividendResolution>();
     public DbSet<DividendLine> DividendLines => Set<DividendLine>();
+    public DbSet<NumberingRule> NumberingRules => Set<NumberingRule>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
     public DbSet<AdjustmentRequest> AdjustmentRequests => Set<AdjustmentRequest>();
     public DbSet<AdjustmentRequestLine> AdjustmentRequestLines => Set<AdjustmentRequestLine>();
@@ -691,6 +692,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.PeriodId }).IsUnique().HasFilter("status = 1");
             e.HasIndex(x => new { x.CompanyId, x.PeriodStart });
         });
+        b.Entity<NumberingRule>(e => e.HasIndex(x => new { x.CompanyId, x.Key }).IsUnique());
         b.Entity<FileAttachment>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.EntityType, x.EntityId });

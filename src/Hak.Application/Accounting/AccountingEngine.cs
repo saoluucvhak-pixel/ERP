@@ -524,16 +524,5 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
         });
 
     /// <summary>Allocates the next number inside the caller's transaction (SQLite writers are serialised by BEGIN IMMEDIATE).</summary>
-    private async Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string type)
-    {
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == type);
-        if (seq is null)
-        {
-            seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = type };
-            db.VoucherNumberSequences.Add(seq);
-        }
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"{type}{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string type) => Numbering.NextAsync(db, companyId, fy, type);
 }

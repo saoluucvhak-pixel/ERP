@@ -84,7 +84,7 @@ public sealed class SalesApprovalService(HakDbContext db, AccountingEngine engin
                     throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {l.OriginalLineNo}: số tiền giảm phải lớn hơn 0 và không vượt giá trị dòng {line.FunctionalAmount}.");
             }
             var r = new AdjustmentRequest { Id = Ids.New(), CompanyId = ctx.CompanyId, InvoiceId = inv.Id, Kind = input.Kind, Reason = input.Reason.Trim(), CreatedBy = ctx.UserId, CreatedAt = clock.UtcNow };
-            r.Number = await NextNumberAsync(ctx.CompanyId, DateOnly.FromDateTime(clock.UtcNow), input.Kind == AdjustmentKind.Return ? "DTH" : "DGG");
+            r.Number = await NextNumberAsync(ctx.CompanyId, DateOnly.FromDateTime(clock.UtcNow), input.Kind == AdjustmentKind.Return ? "YCTH" : "YCGG");
             foreach (var l in input.Lines)
                 r.Lines.Add(new AdjustmentRequestLine { Id = Ids.New(), RequestId = r.Id, OriginalLineNo = l.OriginalLineNo, Quantity = input.Kind == AdjustmentKind.Return ? l.Quantity : null, Amount = input.Kind == AdjustmentKind.Discount ? l.Amount : null, Note = l.Note });
             db.AdjustmentRequests.Add(r);
@@ -211,7 +211,7 @@ public sealed class SalesApprovalService(HakDbContext db, AccountingEngine engin
                 if (i.Amount > c.Open) throw new DomainException(ErrorCodes.SettlementExceedsOpen, $"Khoản {c.VoucherNumber}: xóa {i.Amount} vượt số còn mở {c.Open}.");
             }
             var w = new DebtWriteOff { Id = Ids.New(), CompanyId = ctx.CompanyId, PartnerId = input.PartnerId, Reason = input.Reason.Trim(), Basis = input.Basis.Trim(), CreatedBy = ctx.UserId, CreatedAt = clock.UtcNow };
-            w.Number = await NextNumberAsync(ctx.CompanyId, DateOnly.FromDateTime(clock.UtcNow), "XN");
+            w.Number = await NextNumberAsync(ctx.CompanyId, DateOnly.FromDateTime(clock.UtcNow), "XND");
             foreach (var i in input.Items) w.Items.Add(new DebtWriteOffItem { Id = Ids.New(), WriteOffId = w.Id, JournalLineId = i.JournalLineId, Amount = i.Amount, ProvisionUsed = i.ProvisionUsed });
             db.DebtWriteOffs.Add(w);
             await audit.AppendAsync(ctx.CompanyId, ctx, "debt_writeoff.request", "debt_writeoff", w.Id.ToString(), new { w.Number, partner = input.PartnerId, total = input.Items.Sum(i => i.Amount), w.Reason, w.Basis });
@@ -319,13 +319,5 @@ public sealed class SalesApprovalService(HakDbContext db, AccountingEngine engin
         return await db.Accounts.AsNoTracking().FirstAsync(a => a.Id == m.AccountId);
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, DateOnly date, string prefix)
-    {
-        var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-                 ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == prefix);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = prefix });
-        seq.LastNumber++; seq.RowVersion++;
-        return $"{prefix}-{fy.Code}-{seq.LastNumber:D5}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, DateOnly date, string prefix) => Numbering.NextAsync(db, companyId, date, prefix);
 }

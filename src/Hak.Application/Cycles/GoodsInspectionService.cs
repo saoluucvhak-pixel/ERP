@@ -100,13 +100,5 @@ public sealed class GoodsInspectionService(HakDbContext db, AuditService audit, 
         return (onlyPending ? rows.Where(r => r.Inspection is null) : rows).ToList();
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, FiscalYear fy)
-    {
-        const string key = "BBKN";
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == key);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = key });
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"{key}{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, FiscalYear fy) => Numbering.NextAsync(db, companyId, fy, "BBKN");
 }

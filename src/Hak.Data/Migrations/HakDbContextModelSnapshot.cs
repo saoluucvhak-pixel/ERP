@@ -4529,6 +4529,48 @@ namespace Hak.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Organization.NumberingRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Prefix")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prefix");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_by");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id")
+                        .HasName("pk_numbering_rules");
+
+                    b.HasIndex("CompanyId", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_numbering_rules_company_id_key");
+
+                    b.ToTable("numbering_rules");
+                });
+
             modelBuilder.Entity("Hak.Domain.Payroll.PayrollSheet", b =>
                 {
                     b.Property<Guid>("Id")

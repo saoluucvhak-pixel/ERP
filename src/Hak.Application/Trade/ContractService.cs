@@ -364,16 +364,7 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
         }).ToList();
     }
 
-    private async Task<string> NextCodeAsync(Guid companyId, InvoiceKind kind, DateOnly date)
-    {
-        var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-                 ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
-        var prefix = kind == InvoiceKind.Sales ? "CTR-SAL" : "CTR-PUR";
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == prefix);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = prefix });
-        seq.LastNumber++; seq.RowVersion++;
-        return $"{prefix}-{fy.Code}-{seq.LastNumber:D5}";
-    }
+    private Task<string> NextCodeAsync(Guid companyId, InvoiceKind kind, DateOnly date) => Numbering.NextAsync(db, companyId, date, kind == InvoiceKind.Sales ? "CTR-SAL" : "CTR-PUR");
 }
 
 /// <summary>Kiểm soát đơn kế thừa hợp đồng (giai đoạn 3–4): hợp đồng đang hiệu lực, chưa hết hạn, đúng đối tác và loại, vật tư có trong hợp đồng, không vượt số lượng / giá trị cam kết còn lại.</summary>

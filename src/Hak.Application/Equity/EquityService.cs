@@ -307,14 +307,5 @@ public sealed class EquityService(HakDbContext db, AccountingEngine engine, Audi
         return await db.Accounts.AsNoTracking().FirstAsync(a => a.Id == m.AccountId);
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, DateOnly date)
-    {
-        var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-                 ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
-        const string prefix = "CT";
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == prefix);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = prefix });
-        seq.LastNumber++; seq.RowVersion++;
-        return $"{prefix}-{fy.Code}-{seq.LastNumber:D4}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, DateOnly date) => Numbering.NextAsync(db, companyId, date, "CTC");
 }

@@ -464,15 +464,5 @@ public sealed class ProductionOrderService(HakDbContext db, AccountingEngine eng
         return await db.Currencies.Where(c => c.Code == company.FunctionalCurrency).Select(c => c.DecimalPlaces).FirstAsync();
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, DateOnly date)
-    {
-        var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-                 ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
-        const string key = "PROD-LSX";
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == key);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = key });
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"LSX{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, DateOnly date) => Numbering.NextAsync(db, companyId, date, "PROD-LSX");
 }

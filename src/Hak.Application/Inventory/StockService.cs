@@ -815,13 +815,5 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         if (p.Status == PeriodStatus.Locked) throw new DomainException(ErrorCodes.PeriodLocked, $"Kỳ {p.StartDate:MM/yyyy} đã khóa sổ.");
     }
 
-    private async Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix)
-    {
-        var key = "STK-" + prefix;
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == key);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = key });
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"{prefix}{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, FiscalYear fy, string prefix) => Numbering.NextAsync(db, companyId, fy, "STK-" + prefix);
 }

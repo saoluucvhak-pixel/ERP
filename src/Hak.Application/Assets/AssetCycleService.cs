@@ -273,17 +273,7 @@ public sealed class AssetCycleService(HakDbContext db, AuditService audit, ICloc
     private async Task<AssetRequest> LoadRequestAsync(SessionContext ctx, Guid id)
         => await db.AssetRequests.FirstOrDefaultAsync(r => r.Id == id && r.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Đề nghị mua sắm không tồn tại.");
 
-    private async Task<string> NextNumberAsync(Guid companyId, DateOnly date, string prefix)
-    {
-        var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == companyId && f.StartDate <= date && f.EndDate >= date)
-                 ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {date.Vn()}.");
-        var key = "AST-" + prefix;
-        var seq = await db.VoucherNumberSequences.FirstOrDefaultAsync(s => s.CompanyId == companyId && s.FiscalYearId == fy.Id && s.VoucherType == key);
-        if (seq is null) db.VoucherNumberSequences.Add(seq = new VoucherNumberSequence { Id = Ids.New(), CompanyId = companyId, FiscalYearId = fy.Id, VoucherType = key });
-        seq.LastNumber++;
-        seq.RowVersion++;
-        return $"{prefix}{fy.Code}-{seq.LastNumber:D6}";
-    }
+    private Task<string> NextNumberAsync(Guid companyId, DateOnly date, string prefix) => Numbering.NextAsync(db, companyId, date, "AST-" + prefix);
 
     private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }

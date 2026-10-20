@@ -41,7 +41,7 @@ public class AdvanceTests
         Assert.Equal(ErrorCodes.AmountNotPositive, await CodeOf(() => adv.CreateAsync(h.Preparer, new(emp, "Công tác", 0, new(2026, 3, 10), new(2026, 3, 20)))));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => adv.CreateAsync(h.Preparer, new(h.Partner["KH01"], "Công tác", 1, new(2026, 3, 10), new(2026, 3, 20)))));  // không phải nhân viên
         var a = await adv.CreateAsync(h.Preparer, new(emp, "Công tác Hà Nội", 10_000_000, new(2026, 3, 10), new(2026, 3, 20)));
-        Assert.Equal("TU-2026-00001", a.Number);
+        Assert.Equal("TU2026-000001", a.Number);
 
         // Chưa duyệt: chưa lập chứng từ chi; người lập không tự duyệt; duyệt xong mới lập.
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => adv.CreatePaymentVoucherAsync(h.Preparer, a.Id, h.Acc["CASH"], new(2026, 3, 11))));

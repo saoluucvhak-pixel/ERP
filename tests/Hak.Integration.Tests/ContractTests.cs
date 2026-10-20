@@ -28,7 +28,7 @@ public class ContractTests
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => contracts.CreateAsync(h.Preparer, input with { PartnerId = h.Partner["NCC01"] })));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => contracts.CreateAsync(h.Preparer, input with { ExpirationDate = new(2026, 2, 1) })));
         var c = await contracts.CreateAsync(h.Preparer, input);
-        Assert.Equal("CTR-SAL-2026-00001", c.Code);
+        Assert.Equal("HDKB2026-000001", c.Code);
         Assert.Equal(1_800_000_000m, c.TotalAmount);                       // 1000 × 2.000.000 × 90%
         Assert.Equal(1, (await contracts.CreateAsync(h.Preparer, input with { Kind = InvoiceKind.Sales, Name = "HĐ thứ hai" })).Version);
 
@@ -59,7 +59,7 @@ public class ContractTests
         // Phụ lục: đổi số lượng cam kết theo dòng + gia hạn; mã A01.
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => contracts.AmendAsync(h.Preparer, c.Id, new(2026, 4, 1), "Giảm", 0, null, [new(dam, -700)])));  // dưới số đã đặt
         var a = await contracts.AmendAsync(h.Preparer, c.Id, new(2026, 4, 1), "Tăng 200 tấn, gia hạn đến 30/9", 0, new(2026, 9, 30), [new(dam, 200)]);
-        Assert.Equal("CTR-SAL-2026-00001-A01", a.Code);
+        Assert.Equal("HDKB2026-000001-A01", a.Code);
         v = await contracts.GetAsync(h.Auditor, c.Id);
         Assert.Equal((1200m, 2_160_000_000m, new DateOnly(2026, 9, 30)), (v.Lines[0].CommittedQty, v.Header.TotalAmount, v.Header.ExpirationDate));
         await orders.CreateAsync(h.Preparer, Call(h, c.Id, new OrderLineInput(dam, 700, 1_800_000)));                  // trước đây bị chặn, nay đủ chỗ
@@ -96,7 +96,7 @@ public class ContractTests
         var orders = new OrderService(s.Db, s.Audit, h.Clock);
         h.Clock.UtcNow = new DateTime(2026, 3, 15, 8, 0, 0, DateTimeKind.Utc);
         var c = await contracts.CreateAsync(h.Preparer, new ContractInput(InvoiceKind.Purchase, "HĐ khung giá trị mua dăm", ContractCategory.Value, h.Partner["NCC01"], new(2026, 1, 1), new(2026, 12, 31), [], TotalAmount: 500_000_000));
-        Assert.Equal("CTR-PUR-2026-00001", c.Code);
+        Assert.Equal("HDKM2026-000001", c.Code);
         await contracts.SubmitAsync(h.Preparer, c.Id); await contracts.DecideAsync(h.Approver, c.Id, true, null);
         OrderInput Buy(decimal qty, decimal price) => new(InvoiceKind.Purchase, h.Partner["NCC01"], new(2026, 3, 15), "Mua theo HĐ khung", [new(dam, qty, price)], ContractId: c.Id);
         await orders.CreateAsync(h.Preparer, Buy(100, 3_000_000));                                                    // 300 triệu
