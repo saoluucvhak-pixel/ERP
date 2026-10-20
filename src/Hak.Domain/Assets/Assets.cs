@@ -6,7 +6,7 @@ namespace Hak.Domain.Assets;
 public enum AssetClass { FixedAsset = 1, Tool = 2 }
 
 /// <summary>
-/// Phương pháp khấu hao / phân bổ chọn theo từng thẻ (căn cứ pháp lý từng phương pháp: [CẦN XÁC MINH]).
+/// Phương pháp khấu hao / phân bổ chọn theo từng thẻ. Căn cứ và điều kiện áp dụng từng phương pháp: legal/KHAU-HAO/CAN-CU-KHAU-HAO.md (Thông tư 45/2013/TT-BTC Điều 9, Điều 13, đã sửa đổi).
 /// StraightLine: đường thẳng theo tháng, tháng đầu / cuối theo <see cref="ProrationPolicy"/>.
 /// TimeBased: theo số ngày thực tế từ ngày bắt đầu đến ngày kết thúc phân bổ (ví dụ bảo hiểm 15/03 đến 14/03 năm sau).
 /// UnitsOfProduction: theo sản lượng — số phân bổ lũy kế = nguyên giá × sản lượng thực tế lũy kế ÷ tổng sản lượng dự kiến; sản lượng nhập theo từng kỳ.
@@ -15,7 +15,7 @@ public enum AssetClass { FixedAsset = 1, Tool = 2 }
 public enum DepreciationMethod { StraightLine = 1, TimeBased = 2, UnitsOfProduction = 3, DecliningBalance = 4 }
 
 /// <summary>
-/// How the first and last month are counted. [CẦN XÁC MINH] which rule the company applies under the current regulation.
+/// How the first and last month are counted. Thông tư 45/2013 Điều 9 khoản 9: trích / thôi trích khấu hao TSCĐ từ ngày (theo số ngày của tháng) TSCĐ tăng / giảm → Daily; FullMonth là chính sách kế toán nội bộ (chênh lệch phải điều chỉnh khi tính thuế).
 /// FullMonth: the in-service month counts fully, the disposal month does not count.
 /// Daily: by days used (start day and the day before disposal inclusive) over the days in the month.
 /// </summary>
@@ -187,7 +187,7 @@ public static class DepreciationCalculator
         return MoneyMath.Round(scheduleBase * cumulativeUnits / totalUnits, decimals);
     }
 
-    /// <summary>Hệ số mặc định của số dư giảm dần theo thời gian sử dụng (tháng): ≤ 48 → 1,5; ≤ 72 → 2,0; còn lại 2,5. [CẦN XÁC MINH]</summary>
+    /// <summary>Hệ số mặc định của số dư giảm dần theo thời gian sử dụng (tháng): ≤ 48 → 1,5; ≤ 72 → 2,0; còn lại 2,5 (Thông tư 45/2013 Điều 13 khoản 2).</summary>
     public static decimal DefaultDecliningFactor(int months) => months <= 48 ? 1.5m : months <= 72 ? 2.0m : 2.5m;
 
     /// <summary>

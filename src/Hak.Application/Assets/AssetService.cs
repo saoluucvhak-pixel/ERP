@@ -50,7 +50,7 @@ public sealed record AssetCostCandidate(Guid JournalLineId, string VoucherNumber
 /// company-wide run per accounting period, in period order; each run books (cumulative target) − (already booked) per asset.
 /// Disposal books the last partial depreciation and removes cost and accumulated depreciation; the net book value goes to
 /// the account the user chooses (proceeds are invoiced separately). Every run and disposal can be reversed, latest first.
-/// Legal basis of methods and proration: [CẦN XÁC MINH].
+/// Căn cứ pháp lý của các phương pháp và cách tính tháng đầu / cuối: legal/KHAU-HAO/CAN-CU-KHAU-HAO.md.
 /// </summary>
 public sealed class AssetService(HakDbContext db, AccountingEngine engine, AuditService audit, IClock clock)
 {
