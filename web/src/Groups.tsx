@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, get, post, put } from './api'
-import { ErrorBox, ExportButton, Modal, useAction } from './common'
+import { AccountSelect, ErrorBox, ExportButton, Modal, useAction, useCatalog } from './common'
 import { formatMoney, today } from './money'
-import { DOMAIN_VI, useGroups, type GroupDomain, type GroupRow } from './groupLib'
+import { DOMAIN_VI, METHOD_CODE, METHOD_NUM, useGroups, type GroupDomain, type GroupRow } from './groupLib'
 
 interface Entity { id: string; code: string; name: string }
 interface Member { entityId: string; code: string; name: string; otherGroupIds: string[] }
@@ -36,11 +36,12 @@ function Tree({ domain }: { domain: GroupDomain }) {
   const [sel, setSel] = useState<GroupRow | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [entities, setEntities] = useState<Entity[]>([])
-  const [form, setForm] = useState<{ id: string | null; code: string; name: string; parentId: string; note: string; active: boolean; limit: string; days: string; vat: string } | null>(null)
+  const [form, setForm] = useState<{ id: string | null; code: string; name: string; parentId: string; note: string; active: boolean; limit: string; days: string; vat: string; aAsset: string; aAccum: string; aExp: string; aLife: string; aMethod: string } | null>(null)
   const [add, setAdd] = useState<string[] | null>(null)
   const [q, setQ] = useState('')
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
+  const { accounts } = useCatalog()
   useEffect(() => { entitiesOf(domain).then(setEntities).catch(() => setEntities([])) }, [domain])
   const loadMembers = useCallback(async (id: string | null) => setMembers(id ? await get<Member[]>(`/groups/by-id/${id}/members?includeDescendants=true`) : []), [])
   useEffect(() => { run(async () => { await loadMembers(sel?.id ?? null) }) }, [sel?.id, g.links, loadMembers, run])
@@ -52,8 +53,8 @@ function Tree({ domain }: { domain: GroupDomain }) {
     <>
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
-      <div className="toolbar"><button className="primary" onClick={() => setForm({ id: null, code: '', name: '', parentId: current?.id ?? '', note: '', active: true, limit: '', days: '', vat: '' })}>{current ? `Thêm nhóm con của ${current.code}` : 'Thêm nhóm gốc'}</button>
-        {current && <button onClick={() => setForm({ id: current.id, code: current.code, name: current.name, parentId: current.parentId ?? '', note: current.note ?? '', active: current.isActive, limit: current.defaultCreditLimit ?? '', days: current.defaultPaymentTermsDays?.toString() ?? '', vat: current.defaultVatRate ?? '' })}>Sửa nhóm {current.code}</button>}
+      <div className="toolbar"><button className="primary" onClick={() => setForm({ id: null, code: '', name: '', parentId: current?.id ?? '', note: '', active: true, limit: '', days: '', vat: '', aAsset: '', aAccum: '', aExp: '', aLife: '', aMethod: '' })}>{current ? `Thêm nhóm con của ${current.code}` : 'Thêm nhóm gốc'}</button>
+        {current && <button onClick={() => setForm({ id: current.id, code: current.code, name: current.name, parentId: current.parentId ?? '', note: current.note ?? '', active: current.isActive, limit: current.defaultCreditLimit ?? '', days: current.defaultPaymentTermsDays?.toString() ?? '', vat: current.defaultVatRate ?? '', aAsset: current.asset?.assetAccountId ?? '', aAccum: current.asset?.accumulatedAccountId ?? '', aExp: current.asset?.expenseAccountId ?? '', aLife: current.asset?.usefulLifeMonths?.toString() ?? '', aMethod: current.asset?.method ? METHOD_CODE[current.asset.method] : '' })}>Sửa nhóm {current.code}</button>}
         {current && <button disabled={busy || current.children > 0 || current.directMembers > 0} title="Chỉ xóa được nhóm không có nhóm con và thành viên" onClick={() => { if (confirm(`Xóa nhóm ${current.code}?`)) act('Đã xóa nhóm.', async () => { await api('DELETE', `/groups/by-id/${current.id}`); setSel(null) }) }}>Xóa</button>}
         {sel && <button onClick={() => setSel(null)}>Bỏ chọn</button>}</div>
       <div className="form-row" style={{ alignItems: 'flex-start' }}>
@@ -82,8 +83,8 @@ function Tree({ domain }: { domain: GroupDomain }) {
 
       {form && <Modal title={form.id ? `Sửa nhóm ${form.code}` : 'Thêm nhóm'} onClose={() => setForm(null)} busy={busy}
         footer={<><button onClick={() => setForm(null)}>Đóng</button><button className="primary" disabled={busy || !form.name.trim() || (!form.id && !form.code.trim())} onClick={() => run(async () => {
-          if (form.id) await put(`/groups/by-id/${form.id}`, { name: form.name, parentId: form.parentId || null, note: form.note || null, isActive: form.active, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null })
-          else await post('/groups', { domain, code: form.code, name: form.name, parentId: form.parentId || null, note: form.note || null, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null })
+          if (form.id) await put(`/groups/by-id/${form.id}`, { name: form.name, parentId: form.parentId || null, note: form.note || null, isActive: form.active, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null, asset: domain === 'Asset' ? { assetAccountId: form.aAsset || null, accumulatedAccountId: form.aAccum || null, expenseAccountId: form.aExp || null, usefulLifeMonths: form.aLife ? Number(form.aLife) : null, method: form.aMethod ? METHOD_NUM[form.aMethod] : null } : null })
+          else await post('/groups', { domain, code: form.code, name: form.name, parentId: form.parentId || null, note: form.note || null, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null, asset: domain === 'Asset' ? { assetAccountId: form.aAsset || null, accumulatedAccountId: form.aAccum || null, expenseAccountId: form.aExp || null, usefulLifeMonths: form.aLife ? Number(form.aLife) : null, method: form.aMethod ? METHOD_NUM[form.aMethod] : null } : null })
           setForm(null); setInfo('Đã lưu nhóm.'); await g.reload()
         })}>Lưu</button></>}>
         <div className="form-row">
@@ -98,6 +99,18 @@ function Tree({ domain }: { domain: GroupDomain }) {
             <label>Hạn thanh toán mặc định (ngày)<input inputMode="numeric" value={form.days} onChange={e => setForm({ ...form, days: e.target.value.replace(/\D/g, '') })} /></label>
           </div>
           <p className="muted">Chỉ dùng khi chính khách hàng chưa khai báo. Lấy từ nhóm chính của khách (chưa chọn nhóm chính thì nhóm sâu nhất, cùng cấp lấy giá trị chặt nhất); nhóm chưa khai thì kế thừa nhóm cha.</p>
+        </>}
+        {domain === 'Asset' && <>
+          <div className="form-row">
+            <label>TK tài sản mặc định<AccountSelect accounts={accounts} value={form.aAsset} onChange={v => setForm({ ...form, aAsset: v })} ariaLabel="TK tài sản mặc định" /></label>
+            <label>TK hao mòn mặc định<AccountSelect accounts={accounts} value={form.aAccum} onChange={v => setForm({ ...form, aAccum: v })} ariaLabel="TK hao mòn mặc định" /></label>
+            <label>TK chi phí mặc định<AccountSelect accounts={accounts} value={form.aExp} onChange={v => setForm({ ...form, aExp: v })} ariaLabel="TK chi phí mặc định" /></label>
+          </div>
+          <div className="form-row">
+            <label>Thời gian sử dụng mặc định (tháng)<input inputMode="numeric" value={form.aLife} onChange={e => setForm({ ...form, aLife: e.target.value.replace(/\D/g, '') })} /></label>
+            <label>Phương pháp mặc định<select value={form.aMethod} onChange={e => setForm({ ...form, aMethod: e.target.value })}><option value="">— không —</option><option value="StraightLine">Đường thẳng theo tháng</option><option value="TimeBased">Theo thời gian (số ngày)</option><option value="UnitsOfProduction">Theo sản lượng</option><option value="DecliningBalance">Số dư giảm dần</option></select></label>
+          </div>
+          <p className="muted">Điền sẵn khi lập thẻ tài sản mới có chọn nhóm này (nhóm chưa khai thì kế thừa nhóm cha). Thẻ lưu giá trị riêng và vẫn sửa được; đổi mặc định không đổi thẻ đã lập.</p>
         </>}
         {domain === 'Item' && <label>Thuế suất GTGT mặc định (%)<input inputMode="decimal" value={form.vat} onChange={e => setForm({ ...form, vat: e.target.value.replace(/[^0-9.]/g, '') })} /></label>}
         {form.id && <label className="check"><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Đang dùng</label>}

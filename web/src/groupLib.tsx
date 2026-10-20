@@ -3,7 +3,10 @@ import { get, put } from './api'
 import { ErrorBox, Modal, useAction } from './common'
 
 export type GroupDomain = 'Partner' | 'Item' | 'Asset' | 'Warehouse'
-export interface GroupRow { id: string; domain: GroupDomain; code: string; name: string; parentId: string | null; level: number; isActive: boolean; note: string | null; directMembers: number; allMembers: number; children: number; defaultCreditLimit?: string | null; defaultPaymentTermsDays?: number | null; defaultVatRate?: string | null }
+export interface GroupRow { id: string; domain: GroupDomain; code: string; name: string; parentId: string | null; level: number; isActive: boolean; note: string | null; directMembers: number; allMembers: number; children: number; defaultCreditLimit?: string | null; defaultPaymentTermsDays?: number | null; defaultVatRate?: string | null; asset?: AssetDefaults | null }
+export interface AssetDefaults { assetAccountId?: string | null; accumulatedAccountId?: string | null; expenseAccountId?: string | null; usefulLifeMonths?: number | null; method?: number | null }
+export const METHOD_CODE: Record<number, string> = { 1: 'StraightLine', 2: 'TimeBased', 3: 'UnitsOfProduction', 4: 'DecliningBalance' }
+export const METHOD_NUM: Record<string, number> = { StraightLine: 1, TimeBased: 2, UnitsOfProduction: 3, DecliningBalance: 4 }
 export interface GroupLink { entityId: string; groupId: string; isPrimary?: boolean }
 export const DOMAIN_VI: Record<GroupDomain, string> = { Partner: 'Đối tượng', Item: 'Vật tư, hàng hóa', Asset: 'Tài sản, CCDC', Warehouse: 'Kho' }
 
@@ -26,8 +29,17 @@ export function useGroups(domain: GroupDomain) {
   }, [tree])
   const groupsOf = useCallback((entityId: string) => links.filter(l => l.entityId === entityId).map(l => byId[l.groupId]).filter(Boolean), [links, byId])
   const inGroup = useCallback((entityId: string, groupId: string) => { const s = subtree(groupId); return links.some(l => l.entityId === entityId && s.has(l.groupId)) }, [links, subtree])
+  /** Mặc định tài sản của nhóm: giá trị của nhóm, thiếu thì kế thừa nhóm cha gần nhất có khai (từng chỉ tiêu riêng). */
+  const assetDefaults = useCallback((id: string): AssetDefaults => {
+    const out: AssetDefaults = {}
+    for (let cur: GroupRow | undefined = byId[id]; cur; cur = cur.parentId ? byId[cur.parentId] : undefined) {
+      const a = cur.asset; if (!a || !cur.isActive) continue
+      for (const k of ['assetAccountId', 'accumulatedAccountId', 'expenseAccountId', 'usefulLifeMonths', 'method'] as const) if (out[k] == null && a[k] != null) (out as Record<string, unknown>)[k] = a[k]
+    }
+    return out
+  }, [byId])
   const options = useMemo(() => tree.map(g => ({ value: g.id, label: `${'  '.repeat(g.level)}${g.code} – ${g.name}${g.isActive ? '' : ' (ngừng)'}` })), [tree])
-  return { tree, links, reload, byId, groupsOf, inGroup, options }
+  return { tree, links, reload, byId, groupsOf, inGroup, options, assetDefaults }
 }
 
 /** Nút "Nhóm" của một mục: hộp chọn các nhóm (nhiều nhóm, cây nhiều cấp). */

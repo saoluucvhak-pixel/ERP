@@ -120,4 +120,22 @@ public class GroupTests
         t = await GroupDefaults.PartnerTermsAsync(s.Db, h.Admin.CompanyId, p);
         Assert.Equal(30, t.PaymentTermsDays);
     }
+
+    [Fact]
+    public async Task AssetGroupDefaults_AreStoredAndValidated()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var svc = new GroupService(s.Db, s.Audit, h.Clock, new AssetService(s.Db, s.Engine, s.Audit, h.Clock), s.Stock);
+        var acc = s.Db.Accounts.First(a => a.CompanyId == h.Admin.CompanyId).Id;
+        var g = await svc.CreateAsync(h.Admin, new(GroupDomain.Asset, "MAY", "Máy móc", null, null, null, null, null, new AssetGroupDefaults(acc, acc, acc, 96, 1)));
+        var row = (await svc.TreeAsync(h.Auditor, GroupDomain.Asset)).Single();
+        Assert.Equal(96, row.Asset!.UsefulLifeMonths); Assert.Equal(acc, row.Asset.AssetAccountId); Assert.Equal(1, row.Asset.Method);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.CreateAsync(h.Admin, new(GroupDomain.Item, "VT", "Sai loại", null, null, null, null, null, new AssetGroupDefaults(acc)))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.UpdateAsync(h.Admin, g.Id, "Máy móc", null, null, true, null, null, null, new AssetGroupDefaults(null, null, null, 0, null))));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.UpdateAsync(h.Admin, g.Id, "Máy móc", null, null, true, null, null, null, new AssetGroupDefaults(null, null, null, null, 9))));
+        Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => svc.UpdateAsync(h.Admin, g.Id, "Máy móc", null, null, true, null, null, null, new AssetGroupDefaults(Guid.NewGuid()))));
+        await svc.UpdateAsync(h.Admin, g.Id, "Máy móc", null, null, true);      // bỏ mặc định
+        Assert.True((await svc.TreeAsync(h.Auditor, GroupDomain.Asset)).Single().Asset!.IsEmpty);
+    }
 }

@@ -24,6 +24,12 @@ public sealed class CatalogGroup
     public int? DefaultPaymentTermsDays { get; set; }
     /// <summary>Mặc định cho nhóm vật tư: thuế suất GTGT (%) khi vật tư chưa khai.</summary>
     public decimal? DefaultVatRate { get; set; }
+    /// <summary>Mặc định cho nhóm tài sản / CCDC (như Asset Class của SAP, Asset Category của ERPNext, Asset Model của Odoo): điền sẵn khi lập thẻ mới; thẻ vẫn lưu giá trị riêng và sửa được.</summary>
+    public Guid? DefaultAssetAccountId { get; set; }
+    public Guid? DefaultAccumulatedAccountId { get; set; }
+    public Guid? DefaultExpenseAccountId { get; set; }
+    public int? DefaultUsefulLifeMonths { get; set; }
+    public int? DefaultDepreciationMethod { get; set; }
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, useAction, useCatalog } from './common'
 import { QrLabelsButton } from './AssetQr'
-import { EntityGroupsButton, useGroups } from './groupLib'
+import { EntityGroupsButton, METHOD_CODE, useGroups } from './groupLib'
 import { AssetCyclePanels } from './AssetCycle'
 import { AssetJournal } from './AssetJournal'
 import { ExpenseAllocationReport, ExpenseSplitEditor } from './AssetExpenseSplit'
@@ -117,7 +117,7 @@ export function AssetsView() {
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
 
-      {creating && <NewAsset accounts={accounts} onDone={msg => { setCreating(false); if (msg) { setInfo(msg); load() } }} />}
+      {creating && <NewAsset accounts={accounts} groups={groups} onDone={msg => { setCreating(false); if (msg) { setInfo(msg); load() } }} />}
 
 
       {disposing && <Dispose row={disposing} accounts={accounts} busy={busy}
@@ -209,7 +209,8 @@ function Dispose({ row, accounts, busy, onSubmit, onCancel }: {
   )
 }
 
-function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog>['accounts']; onDone: (msg?: string) => void }) {
+function NewAsset({ accounts, groups, onDone }: { accounts: ReturnType<typeof useCatalog>['accounts']; groups: ReturnType<typeof useGroups>; onDone: (msg?: string) => void }) {
+  const [groupId, setGroupId] = useState('')
   const [f, setF] = useState({
     code: '', name: '', class: 'FixedAsset' as 'FixedAsset' | 'Tool', assetAccountId: '', accumulatedAccountId: '', expenseAccountId: '',
     proration: 'Daily', frequency: 'Monthly', method: 'StraightLine', scheduleEndDate: '', decliningFactor: '', totalUnits: '', unitName: '', residualValue: '0', usefulLifeMonths: '60', inServiceDate: today(), note: '',
@@ -230,7 +231,7 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
     const money = (s: string, label: string) => { const m = parseMoney(s); if (m == null) throw new Error(`${label} không hợp lệ.`); return m }
     const costSources = Object.entries(picked).map(([journalLineId, amount]) => ({ journalLineId, amount: money(amount, 'Số tiền gán') }))
     if (costSources.length === 0) throw new Error('Chọn ít nhất một bút toán hình thành nguyên giá.')
-    const a = await post<{ code: string }>('/assets', {
+    const a = await post<{ id: string; code: string }>('/assets', {
       code: f.code, name: f.name, class: f.class, assetAccountId: f.assetAccountId,
       accumulatedAccountId: f.class === 'FixedAsset' ? f.accumulatedAccountId || null : null, expenseAccountId: f.expenseAccountId,
       proration: f.proration, frequency: f.frequency, residualValue: money(f.residualValue, 'Giá trị thu hồi'), usefulLifeMonths: f.method === 'TimeBased' || f.method === 'UnitsOfProduction' ? (Number(f.usefulLifeMonths) || 1) : Number(f.usefulLifeMonths),
@@ -242,6 +243,9 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
       remainingLifeMonths: f.takenOver ? Number(f.remainingLifeMonths) : null,
       scheduleStartDate: f.takenOver ? f.scheduleStartDate : null,
     })
+    if (groupId) {
+      await put(`/groups/Asset/entity/${a.id}`, { groupIds: [groupId] }); await put(`/groups/Asset/entity/${a.id}/primary`, { groupId })
+    }
     onDone(`Đã lập thẻ ${a.code} (Nháp). Người khác bấm "Ghi tăng" để bắt đầu khấu hao.`)
   })
 
@@ -250,6 +254,13 @@ function NewAsset({ accounts, onDone }: { accounts: ReturnType<typeof useCatalog
       <h3>Thẻ tài sản mới</h3>
       <ErrorBox error={error} />
       <div className="form-grid">
+        <label>Nhóm tài sản (điền sẵn mặc định)<select aria-label="Nhóm tài sản" value={groupId} onChange={e => {
+          const id = e.target.value; setGroupId(id)
+          if (!id) return
+          const d = groups.assetDefaults(id)
+          setF(x => ({ ...x, assetAccountId: d.assetAccountId ?? x.assetAccountId, accumulatedAccountId: d.accumulatedAccountId ?? x.accumulatedAccountId, expenseAccountId: d.expenseAccountId ?? x.expenseAccountId,
+            usefulLifeMonths: d.usefulLifeMonths ? String(d.usefulLifeMonths) : x.usefulLifeMonths, method: d.method && (d.method !== 4 || x.class === 'FixedAsset') ? METHOD_CODE[d.method] : x.method }))
+        }}><option value="">— không chọn —</option>{groups.options.filter(o => groups.byId[o.value]?.isActive).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
         <label>Mã <input value={f.code} onChange={e => set('code', e.target.value)} /></label>
         <label>Tên <input value={f.name} onChange={e => set('name', e.target.value)} /></label>
         <label>Loại <select value={f.class} onChange={e => setF(x => ({ ...x, class: e.target.value as 'FixedAsset' | 'Tool', ...(e.target.value === 'Tool' ? { proration: 'FullMonth', ...(x.method === 'DecliningBalance' ? { method: 'StraightLine' } : {}) } : { proration: 'Daily' }) }))}><option value="FixedAsset">TSCĐ</option><option value="Tool">CCDC / chi phí trả trước</option></select></label>

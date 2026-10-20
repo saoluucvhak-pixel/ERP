@@ -2056,14 +2056,34 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<Guid?>("DefaultAccumulatedAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_accumulated_account_id");
+
+                    b.Property<Guid?>("DefaultAssetAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_asset_account_id");
+
                     b.Property<decimal?>("DefaultCreditLimit")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)")
                         .HasColumnName("default_credit_limit");
 
+                    b.Property<int?>("DefaultDepreciationMethod")
+                        .HasColumnType("integer")
+                        .HasColumnName("default_depreciation_method");
+
+                    b.Property<Guid?>("DefaultExpenseAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_expense_account_id");
+
                     b.Property<int?>("DefaultPaymentTermsDays")
                         .HasColumnType("integer")
                         .HasColumnName("default_payment_terms_days");
+
+                    b.Property<int?>("DefaultUsefulLifeMonths")
+                        .HasColumnType("integer")
+                        .HasColumnName("default_useful_life_months");
 
                     b.Property<decimal?>("DefaultVatRate")
                         .HasPrecision(18, 6)

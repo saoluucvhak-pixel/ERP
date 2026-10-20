@@ -2021,13 +2021,33 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_by");
 
+                    b.Property<Guid?>("DefaultAccumulatedAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("default_accumulated_account_id");
+
+                    b.Property<Guid?>("DefaultAssetAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("default_asset_account_id");
+
                     b.Property<long?>("DefaultCreditLimit")
                         .HasColumnType("INTEGER")
                         .HasColumnName("default_credit_limit");
 
+                    b.Property<int?>("DefaultDepreciationMethod")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_depreciation_method");
+
+                    b.Property<Guid?>("DefaultExpenseAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("default_expense_account_id");
+
                     b.Property<int?>("DefaultPaymentTermsDays")
                         .HasColumnType("INTEGER")
                         .HasColumnName("default_payment_terms_days");
+
+                    b.Property<int?>("DefaultUsefulLifeMonths")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_useful_life_months");
 
                     b.Property<long?>("DefaultVatRate")
                         .HasColumnType("INTEGER")
