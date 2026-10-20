@@ -10,8 +10,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
       - run: dotnet restore
       - run: dotnet build --no-restore -c Release
+      # Cảnh báo gói NuGet có lỗ hổng đã biết (kể cả gói gián tiếp); không làm hỏng CI, đọc trong log.
+      - run: dotnet list HakAccounting.slnx package --vulnerable --include-transitive
+        continue-on-error: true
       - run: dotnet test --no-build -c Release --logger trx --results-directory TestResults
       - uses: actions/upload-artifact@v4
         if: always()
@@ -50,6 +58,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high
+        continue-on-error: true
       - run: npm test
       - run: npm run build

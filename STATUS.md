@@ -1,6 +1,6 @@
 # STATUS — theo Definition of Done (master prompt §48)
 
-Cập nhật: 14/10/2026 (Giai đoạn 3 — Kho, tính giá xuất kho, MT/BDMT dăm gỗ, hóa đơn mua/bán). Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
+Cập nhật: 20/10/2026 (rà soát bảo mật/CI; phần chức năng còn ghi theo mốc 14/10/2026, Giai đoạn 3 — Kho, tính giá xuất kho, MT/BDMT dăm gỗ, hóa đơn mua/bán). Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
 
 Trạng thái: `NOT_STARTED` · `DESIGNED` · `IN_PROGRESS` (code + test, thiếu UI hoặc tài liệu) · `AWAITING_REAL_DATA_VALIDATION` (code + UI + test tự động đạt, chờ dữ liệu thực) · `DONE`
 
@@ -57,6 +57,7 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 
 ## Kết quả test gần nhất (chạy thật trên máy này, 14/10/2026)
 
+- **Số liệu test dưới đây là mốc cũ (14–16/10/2026), chưa chạy lại.** Nguồn đáng tin hiện tại là CI GitHub (job backend, backend-postgres, frontend) — lần chạy #171 trên nhánh PR #3 xanh cả ba. Rà soát 20/10 (siết AllowedHosts, header bảo mật mọi chế độ, HSTS Production, giới hạn đăng nhập 30 lần/phút/IP, cache + quét lỗ hổng + Dependabot trong CI) chưa build/test được cục bộ (máy rà soát không có .NET SDK) — cần xem CI xanh.
 - `dotnet test`: **256/256 đạt** (84 unit + 172 integration, gồm test API qua HTTP và test ghi sổ đồng thời). PostgreSQL: 143/143 tích hợp đạt (trước khi thêm test cộng dồn).
 - `dotnet test tests\Hak.Integration.Tests` với `HAK_TEST_PG` (PostgreSQL 18.6, 127.0.0.1:5433, 15/10/2026): **123/123 đạt** sau khi thêm TSCĐ, ngoại tệ, công nợ ngoại tệ (13 phút 44 giây; mỗi test một DB `hak_test_*` tạo/xóa, sau khi chạy không còn DB nào sót).
 - `npm --prefix web test`: **12/12 đạt** (thêm CRC32 / zip / xlsx; đọc xlsx store+deflate, CSV) (định dạng, phân tích tiền và tỷ giá, cộng tiền chính xác, ngày theo giờ máy).

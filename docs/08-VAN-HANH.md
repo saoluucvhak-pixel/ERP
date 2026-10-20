@@ -42,7 +42,11 @@ Gói **chưa ký số** — Windows SmartScreen có thể cảnh báo. Ký mã b
 | `Hak:DatabasePath` | Đường dẫn tệp SQLite | `%LOCALAPPDATA%\HAK\<môi trường>\hak.db` |
 | `ConnectionStrings:Hak` | Chuỗi kết nối PostgreSQL — **chỉ đặt bằng biến môi trường `ConnectionStrings__Hak`**, không ghi vào tệp trong kho mã | — |
 | `Hak:BackupPath` | Thư mục bản sao lưu (SQLite) | `%LOCALAPPDATA%\HAK\<môi trường>\backups` |
+| `AllowedHosts` | Tên máy được phép trong header Host, ngăn cách bằng `;` | `localhost;127.0.0.1;[::1]` (nếu cho máy khác truy cập API/giao diện, thêm tên máy: `AllowedHosts=localhost;may-chu`) |
+| `Hak:LoginRateLimitPerMinute` | Số lần gọi đăng nhập / tạo quản trị đầu tiên tối đa mỗi phút trên một IP (quá thì trả 429); `0` = tắt | `30` |
 | `--urls` | Địa chỉ API | Nên giữ `http://127.0.0.1:<cổng>` (chỉ máy này truy cập) |
+
+Mọi phản hồi kèm header bảo mật (CSP, X-Frame-Options, nosniff, Referrer-Policy); ở Production có thêm HSTS khi truy cập qua HTTPS.
 
 Production + PostgreSQL: chương trình **từ chối khởi động** nếu `SslMode=Disable`.
 

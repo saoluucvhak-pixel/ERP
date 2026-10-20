@@ -67,8 +67,8 @@ public static class Endpoints
 
         // ---- authentication & administration ----
         api.MapPost("/setup/bootstrap", async (BootstrapRequest r, SetupService s) =>
-            Results.Ok(new { (await s.BootstrapAdminAsync(r.UserName, r.FullName, r.Password)).Id }));
-        api.MapPost("/auth/login", async (LoginRequest r, AuthService a) => Results.Ok(await a.LoginAsync(r.UserName, r.Password, r.Device)));
+            Results.Ok(new { (await s.BootstrapAdminAsync(r.UserName, r.FullName, r.Password)).Id })).RequireRateLimiting("login");
+        api.MapPost("/auth/login", async (LoginRequest r, AuthService a) => Results.Ok(await a.LoginAsync(r.UserName, r.Password, r.Device))).RequireRateLimiting("login");
         api.MapPost("/auth/logout", async (HttpContext http, AuthService a) => { var (_, s) = await http.AuthAsync(); await a.LogoutAsync(s.Id); return Results.NoContent(); });
         api.MapGet("/me/companies", async (HttpContext http, HakDbContext db) =>
         {
