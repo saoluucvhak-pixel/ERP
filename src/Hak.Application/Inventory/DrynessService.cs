@@ -57,6 +57,20 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
         });
     }
 
+    /// <summary>Chọn cách tính BDMT tạm cho phiếu xuất chưa có chứng thư: bình quân độ khô của kho xuất lúc xuất, hoặc độ khô công bố theo ngày (không có số ngày đó thì lùi về bình quân kho).</summary>
+    public async Task SetIssueBasisAsync(SessionContext ctx, Guid itemId, IssueDrynessBasis basis)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        await db.InTransactionAsync(async () =>
+        {
+            var item = await db.Items.FirstOrDefaultAsync(i => i.Id == itemId && i.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Vật tư không tồn tại.");
+            if (!item.TracksDryness) throw new DomainException(ErrorCodes.ValidationFailed, $"Vật tư {item.Code} không theo dõi độ khô/BDMT.");
+            item.IssueDrynessBasis = basis;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "item.issue_dryness_basis", "item", item.Id.ToString(), new { basis });
+            await db.SaveChangesAsync();
+        });
+    }
+
     public async Task SetItemTracksDrynessAsync(SessionContext ctx, Guid itemId, bool tracks)
     {
         ctx.Require(Permissions.CatalogManage);
@@ -200,7 +214,8 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
         var bdmt = await BdmtByMovementAsync(ctx.CompanyId, all);
         var rateRows = await db.DrynessDailyRates.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && ids.Contains(r.ItemId)).OrderBy(r => r.Date).ToListAsync();
         var rates = rateRows.GroupBy(r => r.ItemId).ToDictionary(g => g.Key, g => g.Select(r => (r.Date, r.DrynessPercent)).ToList());
-        var estimate = EstimateAtTime(all, bdmt, rates);
+        var dailyForIssue = tracked.Values.Where(i => i.IssueDrynessBasis == IssueDrynessBasis.DailyRate).Select(i => i.Id).ToHashSet();
+        var estimate = EstimateAtTime(all, bdmt, rates, dailyForIssue);
         var moves = warehouseId is null ? all : all.Where(m => m.WarehouseId == warehouseId).ToList();
         var whs = await db.Warehouses.AsNoTracking().Where(w => w.CompanyId == ctx.CompanyId).ToDictionaryAsync(w => w.Id);
 
@@ -230,7 +245,7 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
     /// Số dư BDMT của kho dùng số đo (nếu có) cộng số tạm tính trước đó; dòng nhập chưa đo không đoán (kho nhận của chuyển kho lấy đúng BDMT kho xuất đã tính).
     /// </summary>
     private static Dictionary<Guid, decimal> EstimateAtTime(IReadOnlyList<StockMovement> ordered, IReadOnlyDictionary<Guid, decimal> measured,
-        IReadOnlyDictionary<Guid, List<(DateOnly Date, decimal Percent)>> rates)
+        IReadOnlyDictionary<Guid, List<(DateOnly Date, decimal Percent)>> rates, IReadOnlySet<Guid> dailyForIssue)
     {
         var balance = new Dictionary<(Guid Warehouse, Guid Item), (decimal Mt, decimal Bd)>();
         var carried = new Dictionary<(Guid Document, int Line), decimal>();
@@ -241,6 +256,11 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
             var (mt, bd) = balance.GetValueOrDefault(key);
             decimal? signed = null;                                   // BDMT có dấu của dòng này
             if (measured.TryGetValue(m.Id, out var meas)) signed = meas;
+            else if (m.Quantity < 0 && dailyForIssue.Contains(m.ItemId) && RateOn(rates, m.ItemId, m.MovementDate) is { } dr)
+            {   // vật tư chọn tính xuất theo độ khô công bố trong ngày xuất (như tỷ giá)
+                var amount = Math.Round(-m.Quantity * dr / 100m, MoneyMath.StorageScale, MidpointRounding.AwayFromZero);
+                signed = -amount; estimate[m.Id] = signed.Value; carried[(m.DocumentId, m.LineNo)] = amount;
+            }
             else if (m.Quantity < 0)
             {
                 if (mt > 0 && bd > 0)

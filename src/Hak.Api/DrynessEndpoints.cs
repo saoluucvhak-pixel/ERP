@@ -7,6 +7,7 @@ namespace Hak.Api;
 
 public sealed record DrynessMethodRequest(string Code, string Description, int DrynessDecimals, int BdmtDecimals, DateOnly EffectiveFrom, string ApprovalNote);
 public sealed record DailyRateRequest(Guid ItemId, DateOnly Date, decimal DrynessPercent, string? Note);
+public sealed record IssueBasisRequest(Hak.Domain.Inventory.IssueDrynessBasis Basis);
 public sealed record TracksDrynessRequest(bool Tracks);
 public sealed record SupersedeMeasurementRequest(MeasurementInput Measurement, string Reason);
 
@@ -24,6 +25,7 @@ public static class DrynessEndpoints
             Results.Ok(new { (await s.CreateMethodAsync(await http.SessionAsync(), r.Code, r.Description, r.DrynessDecimals, r.BdmtDecimals, r.EffectiveFrom, r.ApprovalNote)).Id }));
         api.MapPost("/items/{id:guid}/tracks-dryness", async (HttpContext http, Guid id, TracksDrynessRequest r, DrynessService s) =>
         { await s.SetItemTracksDrynessAsync(await http.SessionAsync(), id, r.Tracks); return Results.NoContent(); });
+        api.MapPost("/items/{id:guid}/issue-dryness-basis", async (HttpContext http, Guid id, IssueBasisRequest r, DrynessService s) => { await s.SetIssueBasisAsync(await http.SessionAsync(), id, r.Basis); return Results.NoContent(); });
         api.MapPost("/measurements", async (HttpContext http, MeasurementInput r, DrynessService s) =>
         {
             var m = await s.RecordAsync(await http.SessionAsync(), r);

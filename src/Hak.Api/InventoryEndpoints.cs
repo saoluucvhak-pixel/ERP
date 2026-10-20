@@ -46,7 +46,7 @@ public static class InventoryEndpoints
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
             return Results.Ok(await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).OrderBy(i => i.Code)
-                .Select(i => new { i.Id, i.Code, i.Name, i.Unit, i.InventoryAccountId, i.IsActive, i.TracksDryness, i.RequiresQc, i.AltUnit, i.AltFactor, i.SalePrice, i.DefaultVatRate, i.MinStock, i.ReorderQty }).ToListAsync());
+                .Select(i => new { i.Id, i.Code, i.Name, i.Unit, i.InventoryAccountId, i.IsActive, i.TracksDryness, i.RequiresQc, i.IssueDrynessBasis, i.AltUnit, i.AltFactor, i.SalePrice, i.DefaultVatRate, i.MinStock, i.ReorderQty }).ToListAsync());
         });
         api.MapPut("/items/{id:guid}/commercial", async (HttpContext http, Guid id, ItemCommercialRequest r, StockService s) =>
         { await s.UpdateItemCommercialAsync(await http.SessionAsync(), id, r.SalePrice, r.DefaultVatRate, r.MinStock, r.ReorderQty); return Results.NoContent(); });

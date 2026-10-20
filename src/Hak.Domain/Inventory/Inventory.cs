@@ -24,6 +24,8 @@ public sealed class Item
     public bool TracksDryness { get; set; }
     /// <summary>Hàng phải qua kiểm tra chất lượng (biên bản kiểm nghiệm đạt toàn bộ số lượng) trước khi ghi sổ phiếu nhập từ nhà cung cấp / khách trả lại.</summary>
     public bool RequiresQc { get; set; }
+    /// <summary>Cách tính BDMT tạm cho phiếu xuất / chuyển kho chưa có chứng thư (vật tư theo dõi độ khô): bình quân độ khô của kho xuất lúc xuất (mặc định) hoặc độ khô công bố theo ngày.</summary>
+    public IssueDrynessBasis IssueDrynessBasis { get; set; } = IssueDrynessBasis.WarehouseAverage;
     /// <summary>
     /// Đơn vị tính quy đổi cố định (ví dụ 1 tấn = 1000 kg, 1 thùng = 12 chai): sổ kho chỉ giữ số lượng theo đơn vị chính, số theo đơn vị quy đổi suy ra bằng
     /// <see cref="AltFactor"/>. Vật tư theo dõi độ khô (dăm gỗ) không dùng hệ số cố định: đơn vị quy đổi của nó là BDMT với hệ số theo độ khô đo tại từng thời điểm.
@@ -66,6 +68,8 @@ public sealed class CostingPolicy
 }
 
 public enum StockDocumentType { Receipt = 1, Issue = 2, Transfer = 3 }
+
+public enum IssueDrynessBasis { WarehouseAverage = 1, DailyRate = 2 }
 
 public enum StockDocumentStatus { Draft = 1, Posted = 4, Reversed = 5, Cancelled = 9 }
 

@@ -3214,6 +3214,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<int>("IssueDrynessBasis")
+                        .HasColumnType("integer")
+                        .HasColumnName("issue_dryness_basis");
+
                     b.Property<decimal?>("MinStock")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)")

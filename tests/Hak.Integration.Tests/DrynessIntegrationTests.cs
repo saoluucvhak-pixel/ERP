@@ -102,6 +102,21 @@ public class DrynessIntegrationTests
     }
 
     [Fact]
+    public async Task IssueBasis_WarehouseAverageByDefault_OrDailyRateWhenChosen()
+    {
+        using var fx = await SetupAsync();
+        var r1 = await fx.Receive(D(3, 1), 100, 150_000_000);
+        await fx.Measure(r1, 50m, EvidenceType.InternalReport, "PĐ-1");                       // kho: 100 MT / 50 BDMT → bình quân 50%
+        await fx.S.Dryness.SetDailyRateAsync(fx.H.Preparer, fx.Dam, D(3, 9), 40m, null);
+        await fx.Ship(D(3, 10), 20);
+        var avg = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal(10m, avg.EstimatedOutBdmt);                                              // 20 × 50%: bình quân độ khô kho xuất
+        await fx.S.Dryness.SetIssueBasisAsync(fx.H.Admin, fx.Dam, IssueDrynessBasis.DailyRate);
+        var daily = (await fx.S.Dryness.SummaryAsync(fx.H.Auditor, D(3, 1), D(3, 31)))[0];
+        Assert.Equal(8m, daily.EstimatedOutBdmt);                                             // 20 × 40%: độ khô công bố ngày xuất
+    }
+
+    [Fact]
     public async Task ReceiptAndShipment_ProduceMtAndBdmtBalances()
     {
         using var fx = await SetupAsync();

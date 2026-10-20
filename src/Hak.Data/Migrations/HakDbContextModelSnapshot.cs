@@ -3164,6 +3164,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("is_active");
 
+                    b.Property<int>("IssueDrynessBasis")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("issue_dryness_basis");
+
                     b.Property<long?>("MinStock")
                         .HasColumnType("INTEGER")
                         .HasColumnName("min_stock");
