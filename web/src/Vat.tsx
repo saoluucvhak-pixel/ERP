@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError, get, post, session } from './api'
+import { ApiError, get, post, session, type Period } from './api'
 import { ErrorBox, ExportButton, useAction, FlowStrip } from './common'
 import { eInvoiceFromXml, type EInvoiceJson } from './einvoicexml'
 import { formatDate, formatMoney, parseMoney, today } from './money'
@@ -13,14 +13,15 @@ const firstOfMonth = () => today().slice(0, 8) + '01'
 
 /** Thuế GTGT: đối chiếu 3 nguồn HĐĐT – sổ – tờ khai, bảng kê từ sổ, nhập dữ liệu HĐĐT, ghi nhận số đã kê khai. Không lập tờ khai chính thức. */
 export function VatView() {
-  const [tab, setTab] = useState<'rec' | 'listing' | 'import' | 'decl'>('rec')
-  const tabs = { rec: 'Đối chiếu 3 nguồn', listing: 'Bảng kê từ sổ', import: 'Nhập dữ liệu HĐĐT', decl: 'Số đã kê khai' } as const
+  const [tab, setTab] = useState<'rec' | 'offset' | 'listing' | 'import' | 'decl'>('rec')
+  const tabs = { rec: 'Đối chiếu 3 nguồn', offset: 'Khấu trừ thuế cuối kỳ', listing: 'Bảng kê từ sổ', import: 'Nhập dữ liệu HĐĐT', decl: 'Số đã kê khai' } as const
   return (
     <>
       <div className="toolbar"><h2>Thuế GTGT</h2>
         {(Object.keys(tabs) as (keyof typeof tabs)[]).map(k => <button key={k} className={tab === k ? 'primary' : ''} onClick={() => setTab(k)}>{tabs[k]}</button>)}
       </div>
       {tab === 'rec' && <Reconciliation />}
+      {tab === 'offset' && <Offset />}
       {tab === 'listing' && <Listing />}
       {tab === 'import' && <ImportEInvoices />}
       {tab === 'decl' && <Declarations />}
@@ -208,5 +209,57 @@ function Declarations() {
           <td>{d.status !== 'Filed' && <button onClick={() => { const ref = prompt('Mã giao dịch / số tham chiếu nộp tờ khai:'); if (ref) run(async () => { await post(`/vat/declarations/${d.id}/filed`, { filingReference: ref, filedDate: today() }); await load() }) }}>Đánh dấu đã nộp</button>}</td></tr>)}</tbody>
       </table>
     </>
+  )
+}
+
+interface OffsetPreview { periodStart: string; periodEnd: string; inputBalance: string; outputBalance: string; offsetAmount: string; netPayable: string; carryForward: string
+  lines: { accountId: string; accountCode: string; side: string; amount: string }[]; note: string }
+
+/** Khấu trừ thuế GTGT cuối kỳ: Nợ thuế đầu ra / Có thuế đầu vào, số tiền = phần nhỏ hơn của hai số dư lũy kế. Chỉ tạo chứng từ NHÁP. */
+function Offset() {
+  const [periods, setPeriods] = useState<Period[]>([])
+  const [periodId, setPeriodId] = useState('')
+  const [data, setData] = useState<OffsetPreview | null>(null)
+  const [info, setInfo] = useState('')
+  const { busy, error, run } = useAction()
+  useEffect(() => { run(async () => { const list = await get<Period[]>('/periods'); setPeriods(list); const open = list.filter(p => p.status === 'Open'); if (open.length) setPeriodId(open[0].id) }) }, [run])
+  const view = () => run(async () => { setInfo(''); setData(await get<OffsetPreview>(`/vat/offset?periodId=${periodId}`)) })
+  const make = () => run(async () => {
+    const v = await post<{ number: string }>('/vat/offset', { periodId })
+    setInfo(`Đã tạo chứng từ nháp ${v.number}. Vào Tổng hợp → Chứng từ để gửi duyệt và ghi sổ.`)
+  })
+  const sorted = [...periods].sort((a, b) => (a.startDate < b.startDate ? 1 : -1))
+  return (
+    <section className="panel">
+      <h3>Khấu trừ thuế GTGT cuối kỳ</h3>
+      <p className="muted">Số thuế được khấu trừ = phần nhỏ hơn giữa số dư thuế GTGT đầu vào và đầu ra (lũy kế đến hết kỳ, gồm thuế đầu vào chuyển từ kỳ trước).
+        Hạch toán: Nợ thuế GTGT đầu ra / Có thuế GTGT đầu vào. Chứng từ tạo ra là bản nháp, cần gửi duyệt và ghi sổ như mọi chứng từ; mỗi kỳ chỉ một chứng từ.</p>
+      <ErrorBox error={error} />
+      {info && !error && <div className="msg ok">{info}</div>}
+      <div className="form-row">
+        <label>Kỳ kế toán <select value={periodId} onChange={e => { setPeriodId(e.target.value); setData(null) }}>
+          {sorted.map(p => <option key={p.id} value={p.id}>{formatDate(p.startDate).slice(3)}{p.status === 'Locked' ? ' (đã khóa)' : ''}</option>)}</select></label>
+        <button disabled={busy || !periodId} onClick={view}>Xem trước</button>
+        <button className="primary" disabled={busy || !data || data.offsetAmount === '0'} onClick={make}>Tạo chứng từ khấu trừ</button>
+      </div>
+      {data && (
+        <>
+          <table className="grid" style={{ maxWidth: 560 }}><tbody>
+            <tr><td>Thuế GTGT đầu vào được khấu trừ (số dư)</td><td className="num">{formatMoney(data.inputBalance)}</td></tr>
+            <tr><td>Thuế GTGT đầu ra (số dư)</td><td className="num">{formatMoney(data.outputBalance)}</td></tr>
+            <tr><td><b>Số khấu trừ kỳ này</b></td><td className="num"><b>{formatMoney(data.offsetAmount)}</b></td></tr>
+            <tr><td>Thuế GTGT còn phải nộp</td><td className="num">{formatMoney(data.netPayable)}</td></tr>
+            <tr><td>Thuế đầu vào còn được khấu trừ chuyển kỳ sau</td><td className="num">{formatMoney(data.carryForward)}</td></tr>
+          </tbody></table>
+          {data.lines.length > 0 && (
+            <table className="grid" style={{ maxWidth: 560, marginTop: 10 }}>
+              <thead><tr><th>Tài khoản</th><th>Nợ / Có</th><th className="num">Số tiền</th></tr></thead>
+              <tbody>{data.lines.map((l, i) => <tr key={i}><td>{l.accountCode}</td><td>{l.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(l.amount)}</td></tr>)}</tbody>
+            </table>
+          )}
+          <p className="muted">{data.note}</p>
+        </>
+      )}
+    </section>
   )
 }
