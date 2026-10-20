@@ -2032,6 +2032,96 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("business_partners");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Catalog.CatalogGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("Domain")
+                        .HasColumnType("integer")
+                        .HasColumnName("domain");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_catalog_groups");
+
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("ix_catalog_groups_parent_id");
+
+                    b.HasIndex("CompanyId", "Domain", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_catalog_groups_company_id_domain_code");
+
+                    b.ToTable("catalog_groups");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Catalog.CatalogGroupMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_catalog_group_members");
+
+                    b.HasIndex("CompanyId", "EntityId")
+                        .HasDatabaseName("ix_catalog_group_members_company_id_entity_id");
+
+                    b.HasIndex("GroupId", "EntityId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_catalog_group_members_group_id_entity_id");
+
+                    b.ToTable("catalog_group_members");
+                });
+
             modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8361,6 +8451,25 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_business_partners_companies_company_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Catalog.CatalogGroup", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.CatalogGroup", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_catalog_groups_catalog_groups_parent_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Catalog.CatalogGroupMember", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.CatalogGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_catalog_group_members_catalog_groups_group_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspection", b =>

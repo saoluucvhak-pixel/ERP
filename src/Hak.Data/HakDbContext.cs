@@ -121,6 +121,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<CapitalMovement> CapitalMovements => Set<CapitalMovement>();
     public DbSet<DividendResolution> DividendResolutions => Set<DividendResolution>();
     public DbSet<DividendLine> DividendLines => Set<DividendLine>();
+    public DbSet<CatalogGroup> CatalogGroups => Set<CatalogGroup>();
+    public DbSet<CatalogGroupMember> CatalogGroupMembers => Set<CatalogGroupMember>();
     public DbSet<NumberingRule> NumberingRules => Set<NumberingRule>();
     public DbSet<FileAttachment> FileAttachments => Set<FileAttachment>();
     public DbSet<AdjustmentRequest> AdjustmentRequests => Set<AdjustmentRequest>();
@@ -691,6 +693,17 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         {
             e.HasIndex(x => new { x.CompanyId, x.PeriodId }).IsUnique().HasFilter("status = 1");
             e.HasIndex(x => new { x.CompanyId, x.PeriodStart });
+        });
+        b.Entity<CatalogGroup>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Domain, x.Code }).IsUnique();
+            e.HasOne<CatalogGroup>().WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<CatalogGroupMember>(e =>
+        {
+            e.HasIndex(x => new { x.GroupId, x.EntityId }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.EntityId });
+            e.HasOne<CatalogGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<NumberingRule>(e => e.HasIndex(x => new { x.CompanyId, x.Key }).IsUnique());
         b.Entity<FileAttachment>(e =>
