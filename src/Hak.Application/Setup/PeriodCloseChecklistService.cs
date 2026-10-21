@@ -1,0 +1,103 @@
+using Hak.Application.Assets;
+using Hak.Application.Inventory;
+using Hak.Application.Loans;
+using Hak.Application.Security;
+using Hak.Application.Settlement;
+using Hak.Application.Trade;
+using Hak.Data;
+using Hak.Domain.Banking;
+using Hak.Domain.Common;
+using Hak.Domain.Inventory;
+using Hak.Domain.Organization;
+using Hak.Domain.Security;
+using Hak.Domain.Trade;
+using Hak.Domain.Vouchers;
+using Microsoft.EntityFrameworkCore;
+
+namespace Hak.Application.Setup;
+
+/// <param name="Severity">Blocking: sai lệch phải xử lý trước khi khóa kỳ. Confirm: còn việc dở, người khóa kỳ phải biết rõ. CarryOver: số chuyển kỳ hợp lệ (không buộc bằng 0). Ok: đạt.</param>
+public sealed record CloseCheckItem(string Code, string Severity, string Title, int Count, decimal? Amount, string Detail, string Screen);
+
+public sealed record PeriodCloseChecklist(Guid PeriodId, int PeriodNo, DateOnly From, DateOnly To, string Status, bool CanLock, IReadOnlyList<CloseCheckItem> Items);
+
+/// <summary>
+/// Bảng kiểm đóng kỳ (Đợt 5): đối chiếu kho–sổ cái, công nợ–sổ cái, tài sản–sổ cái, vay–sổ cái, xuất kho chờ tính giá, chứng từ chưa xử lý, sao kê chưa khớp. Phân biệt rõ
+/// LỖI CHẶN (sai lệch số liệu) với việc cần xác nhận và khoản CHUYỂN KỲ HỢP LỆ — hàng về chưa có hóa đơn (GRNI), hàng giao chưa lập hóa đơn, tiền đang chuyển: không buộc bằng 0.
+/// Chỉ đọc. Khóa kỳ theo bảng kiểm (<see cref="LockCheckedAsync"/>) từ chối khi còn lỗi chặn; lệnh khóa cũ giữ nguyên để không đổi hành vi của người đang dùng.
+/// </summary>
+public sealed class PeriodCloseChecklistService(HakDbContext db, StockService stock, SettlementService settlement, AssetService assets, LoanService loans, InvoiceService invoices, SetupService setup)
+{
+    public async Task<PeriodCloseChecklist> ForPeriodAsync(SessionContext ctx, Guid periodId)
+    {
+        ctx.Require(Permissions.ReportView);
+        var p = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.Id == periodId && x.CompanyId == ctx.CompanyId)
+                ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại trong công ty.");
+        var (from, to) = (p.StartDate, p.EndDate);
+        var items = new List<CloseCheckItem>();
+        void Add(string code, string severity, string title, int count, decimal? amount, string detail, string screen) => items.Add(new(code, severity, title, count, amount, detail, screen));
+        static string Sev(bool bad, string severity) => bad ? severity : "Ok";
+
+        // ---- chứng từ chưa xử lý
+        var pending = await db.Vouchers.CountAsync(v => v.CompanyId == ctx.CompanyId && v.PostingDate >= from && v.PostingDate <= to && (v.Status == VoucherStatus.Submitted || v.Status == VoucherStatus.Approved));
+        Add("VOUCHERS_PENDING", Sev(pending > 0, "Blocking"), "Chứng từ đã gửi duyệt hoặc đã duyệt nhưng chưa ghi sổ", pending, null, pending > 0 ? "Duyệt và ghi sổ, hoặc từ chối trước khi khóa kỳ." : "", "vouchers");
+        var drafts = await db.Vouchers.CountAsync(v => v.CompanyId == ctx.CompanyId && v.PostingDate >= from && v.PostingDate <= to && v.Status == VoucherStatus.Draft);
+        Add("VOUCHERS_DRAFT", Sev(drafts > 0, "Confirm"), "Chứng từ nháp trong kỳ", drafts, null, drafts > 0 ? "Sau khi khóa kỳ không ghi sổ được vào kỳ này; ghi sổ hoặc hủy nháp." : "", "vouchers");
+        var stockDrafts = await db.StockDocuments.CountAsync(d => d.CompanyId == ctx.CompanyId && d.PostingDate >= from && d.PostingDate <= to && d.Status == StockDocumentStatus.Draft);
+        Add("STOCK_DRAFT", Sev(stockDrafts > 0, "Confirm"), "Phiếu kho nháp trong kỳ", stockDrafts, null, stockDrafts > 0 ? "Phiếu nháp chưa tác động kho và sổ cái." : "", "stock");
+        var invoiceDrafts = await db.CommercialInvoices.CountAsync(i => i.CompanyId == ctx.CompanyId && i.PostingDate >= from && i.PostingDate <= to && i.Status == InvoiceStatus.Draft);
+        Add("INVOICE_DRAFT", Sev(invoiceDrafts > 0, "Confirm"), "Hóa đơn nháp trong kỳ", invoiceDrafts, null, invoiceDrafts > 0 ? "Hóa đơn nháp chưa vào công nợ, thuế và sổ cái." : "", "trade");
+
+        // ---- kho – sổ cái, định giá chờ
+        var inventory = await stock.ReconcileAsync(ctx, to);
+        var invDiff = inventory.Where(r => r.Difference != 0).ToList();
+        Add("INVENTORY_GL", Sev(invDiff.Count > 0, "Blocking"), "Giá trị kho khớp sổ cái", invDiff.Count, invDiff.Sum(r => Math.Abs(r.Difference)),
+            string.Join("; ", invDiff.Select(r => $"TK {r.AccountCode}: kho {r.StockValue} ≠ sổ {r.LedgerBalance}")), "stock");
+        var pendingIssue = inventory.Sum(r => r.PendingIssueQty);
+        Add("COSTING_PENDING", Sev(pendingIssue > 0, "Blocking"), "Xuất kho chờ tính giá (bình quân cuối tháng)", pendingIssue > 0 ? 1 : 0, pendingIssue, pendingIssue > 0 ? $"Còn {pendingIssue} chưa có giá vốn; tính giá kỳ trước khi khóa." : "", "stock");
+
+        // ---- công nợ, tài sản, vay – sổ cái
+        var sub = await settlement.ReconcileAsync(ctx, to);
+        Add("SUBLEDGER_GL", Sev(!sub.IsReconciled, "Blocking"), "Sổ chi tiết công nợ khớp sổ cái", sub.Rows.Count, null,
+            string.Join("; ", sub.Rows.Take(5).Select(r => $"TK {r.AccountCode}: {r.Issue ?? $"lệch {r.Difference}"}")), "arap");
+        var assetRows = (await assets.ReconcileAsync(ctx, to)).Where(r => r.Difference != 0).ToList();
+        Add("ASSET_GL", Sev(assetRows.Count > 0, "Blocking"), "Thẻ tài sản / CCDC khớp sổ cái", assetRows.Count, assetRows.Sum(r => Math.Abs(r.Difference)),
+            string.Join("; ", assetRows.Select(r => $"TK {r.AccountCode} ({r.Kind}): thẻ {r.RegisterBalance} ≠ sổ {r.LedgerBalance}")), "assets");
+        var loanRows = (await loans.ReconcileAsync(ctx, to)).Where(r => r.Difference != 0).ToList();
+        Add("LOAN_GL", Sev(loanRows.Count > 0, "Blocking"), "Sổ vay khớp sổ cái", loanRows.Count, loanRows.Sum(r => Math.Abs(r.Difference)),
+            string.Join("; ", loanRows.Select(r => $"TK {r.AccountCode} / {r.LenderCode}: sổ vay {r.RegisterBalance} ≠ sổ cái {r.LedgerBalance}")), "loans");
+
+        // ---- sao kê ngân hàng
+        var unmatched = await (from l in db.BankStatementLines join st in db.BankStatements on l.StatementId equals st.Id
+                               where st.CompanyId == ctx.CompanyId && l.TransactionDate >= from && l.TransactionDate <= to && l.Status != StatementLineStatus.Matched select l.Id).CountAsync();
+        Add("BANK_UNMATCHED", Sev(unmatched > 0, "Confirm"), "Dòng sao kê chưa khớp sổ", unmatched, null, unmatched > 0 ? "Đối chiếu ngân hàng là bước riêng; còn dòng chưa khớp (kể cả phí, lãi chờ xử lý)." : "", "bank");
+
+        // ---- chuyển kỳ hợp lệ: không buộc bằng 0
+        var grniAccount = (await db.AccountRoleMappings.AsNoTracking().FirstOrDefaultAsync(m => m.CompanyId == ctx.CompanyId && m.RoleCode == "GRNI"))?.AccountId;
+        if (grniAccount is { } gid)
+        {
+            var grni = -(await db.JournalLines.Where(l => l.CompanyId == ctx.CompanyId && l.AccountId == gid && l.PostingDate <= to)
+                .GroupBy(l => l.Side).Select(g => new { g.Key, T = g.Sum(x => x.Amount) }).ToListAsync()).Sum(x => (int)x.Key * x.T);
+            Add("GRNI_CARRYOVER", grni != 0 ? "CarryOver" : "Ok", "Hàng về chưa có hóa đơn (GRNI)", grni != 0 ? 1 : 0, grni, grni != 0 ? "Chuyển kỳ hợp lệ: chờ hóa đơn của nhà cung cấp. Không buộc bằng 0." : "", "procurement");
+        }
+        var undelivered = (await invoices.UninvoicedAsync(ctx, InvoiceKind.Sales, to)).Count;
+        Add("DELIVERED_NOT_INVOICED", undelivered > 0 ? "CarryOver" : "Ok", "Hàng đã giao chưa lập hóa đơn", undelivered, null, undelivered > 0 ? "Chuyển kỳ hợp lệ nếu đúng điều khoản; theo dõi để lập hóa đơn." : "", "trade");
+        var inTransit = await db.PaymentOrders.AsNoTracking().Where(o => o.CompanyId == ctx.CompanyId && (o.Status == PaymentOrderStatus.SentToBank || o.Status == PaymentOrderStatus.ExecutedByBank)).ToListAsync();
+        Add("PAYMENTS_IN_TRANSIT", inTransit.Count > 0 ? "CarryOver" : "Ok", "Lệnh chi đã gửi ngân hàng, chưa ghi sổ", inTransit.Count, inTransit.Sum(o => o.Amount),
+            inTransit.Count > 0 ? "Tiền đang đi: chuyển kỳ hợp lệ." : "", "bank");
+
+        var blocking = items.Count(i => i.Severity == "Blocking");
+        return new PeriodCloseChecklist(p.Id, p.PeriodNo, from, to, p.Status.ToString(), blocking == 0 && p.Status == PeriodStatus.Open, items);
+    }
+
+    /// <summary>Khóa kỳ chỉ khi bảng kiểm không còn lỗi chặn; các mục cần xác nhận và chuyển kỳ không cản trở nhưng nằm trong nhật ký khóa kỳ của lệnh khóa.</summary>
+    public async Task LockCheckedAsync(SessionContext ctx, Guid periodId)
+    {
+        ctx.Require(Permissions.PeriodLock);
+        var list = await ForPeriodAsync(ctx, periodId);
+        var blocking = list.Items.Where(i => i.Severity == "Blocking").ToList();
+        if (blocking.Count > 0)
+            throw new DomainException(ErrorCodes.PeriodHasPending, $"Bảng kiểm đóng kỳ còn {blocking.Count} lỗi chặn: {string.Join("; ", blocking.Select(b => b.Title))}.");
+        await setup.LockPeriodAsync(ctx, periodId);
+    }
+}

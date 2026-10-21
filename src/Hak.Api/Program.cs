@@ -69,6 +69,7 @@ builder.Services.AddScoped<PaymentAcceptanceService>();
 builder.Services.AddScoped<PurchaseVarianceService>();
 builder.Services.AddScoped<PurchaseReceivingService>();
 builder.Services.AddScoped<OrderFlowService>();
+builder.Services.AddScoped<Hak.Application.Setup.PeriodCloseChecklistService>();
 builder.Services.AddScoped<SalesOrderCheckService>();
 builder.Services.AddScoped<ReorderService>();
 builder.Services.AddScoped<SupplierService>();

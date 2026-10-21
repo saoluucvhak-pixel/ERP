@@ -1798,4 +1798,41 @@ public class TradeTests
         Assert.DoesNotContain(await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales), w => w.OrderId == order.Id);
         Assert.Equal("Closed", State(await flow.FlowAsync(h.Auditor, order.Id), "Approval"));
     }
+
+    // ------------------------------------------------------------------ Đợt 5: bảng kiểm đóng kỳ
+
+    [Fact]
+    public async Task CloseChecklist_SeparatesBlockingFromLegitimateCarryOver_AndCheckedLockRefusesBlocking()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var check = new Hak.Application.Setup.PeriodCloseChecklistService(s.Db, s.Stock, s.Settlement, s.Assets, s.Loans, fx.Inv, s.Setup);
+        var march = await s.Db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.PeriodNo == 3);
+        string Sev(Hak.Application.Setup.PeriodCloseChecklist c, string code) => c.Items.Single(i => i.Code == code).Severity;
+
+        // Goods received but not yet invoiced: GRNI stays on the books and is a legitimate carry-over, not an error.
+        await DraftReceiptAsync(fx, 10, D(3, 2), fx.Add);
+        var receipt = await PostedReceiptAsync(fx, 20, 1_000_000, D(3, 3), fx.Add);
+        var clean = await check.ForPeriodAsync(h.Auditor, march.Id);
+        Assert.Equal(("Ok", "CarryOver", "Confirm", "Ok"), (Sev(clean, "INVENTORY_GL"), Sev(clean, "GRNI_CARRYOVER"), Sev(clean, "STOCK_DRAFT"), Sev(clean, "SUBLEDGER_GL")));
+        Assert.True(clean.CanLock);
+        Assert.Equal(1_000_000m, clean.Items.Single(i => i.Code == "GRNI_CARRYOVER").Amount);
+
+        // An approved-but-unposted voucher is a blocking error: the checked lock refuses, the checklist says why.
+        var v = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000));
+        await s.Engine.SubmitAsync(h.Preparer, v.Id);
+        await s.Engine.ApproveAsync(h.Approver, v.Id);
+        var blocked = await check.ForPeriodAsync(h.Auditor, march.Id);
+        Assert.Equal(("Blocking", false), (Sev(blocked, "VOUCHERS_PENDING"), blocked.CanLock));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => check.LockCheckedAsync(h.Auditor, march.Id)));
+        Assert.Equal(ErrorCodes.PeriodHasPending, await CodeOf(() => check.LockCheckedAsync(h.Approver, march.Id)));
+        Assert.Equal(Hak.Domain.Organization.PeriodStatus.Open, (await s.Db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == march.Id)).Status);
+
+        // Once it is posted the carry-over items do not stop the lock.
+        await s.Engine.PostAsync(h.Approver, v.Id);
+        await check.LockCheckedAsync(h.Approver, march.Id);
+        Assert.Equal(Hak.Domain.Organization.PeriodStatus.Locked, (await s.Db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == march.Id)).Status);
+        Assert.Equal("Locked", (await check.ForPeriodAsync(h.Auditor, march.Id)).Status);
+    }
 }
