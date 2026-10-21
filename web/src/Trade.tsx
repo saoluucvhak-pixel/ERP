@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
+import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
 import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
@@ -17,7 +17,7 @@ const empty = (): LineDraft => ({ candidate: '', basis: 'Bdmt', price: '', vat: 
 /** Hóa đơn mua / bán. Dăm gỗ: đơn giá theo BDMT (lấy từ kết quả đo / chứng thư của dòng phiếu kho); giá vốn vẫn tính theo MT. */
 export function TradeView() {
   const { accounts, partners } = useCatalog()
-  const [kind, setKind] = useState<'Purchase' | 'Sales'>('Sales')
+  const [kind, setKind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Sales')
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [list, setList] = useState<Invoice[]>([])
   const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '', discPct: '', discDays: '' })

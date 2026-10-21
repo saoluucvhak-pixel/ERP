@@ -1,7 +1,7 @@
 import { AcceptancePlanPanel } from './ContractServicePlan'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
-import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
+import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, overlaps, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
@@ -30,7 +30,7 @@ const PAY_VI = { PENDING: 'Chưa đến hạn', PARTIAL: 'Đã trả một phầ
 /** Quản lý hợp đồng mua bán (tệp phân tích quản lý hợp đồng): dự thảo → duyệt → hiệu lực → đơn kế thừa trừ lùi → phụ lục → thanh lý; mốc thanh toán; báo cáo, cảnh báo. */
 export function ContractsView() {
   const { partners } = useCatalog()
-  const [kind, setKind] = useState<Kind>('Sales')
+  const [kind, setKind] = useState<Kind>(() => navStore.kind ?? 'Sales')
   const [rows, setRows] = useState<Row[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [variance, setVariance] = useState<Variance[]>([])

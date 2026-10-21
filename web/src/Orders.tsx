@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip } from './common'
+import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
@@ -21,7 +21,7 @@ const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Confirmed: 'Đã xá
 export function OrdersView() {
   const { partners } = useCatalog()
   const [items, setItems] = useState<Item[]>([])
-  const [kind, setKind] = useState<'Sales' | 'Purchase'>('Sales')
+  const [kind, setKind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')
   const [list, setList] = useState<Order[]>([])
   const [head, setHead] = useState({ partnerId: '', contractNo: '', orderDate: today(), description: '', tolerance: '0' })
   const [lines, setLines] = useState<LineDraft[]>([{ itemId: '', qty: '', basis: 'Bdmt', price: '', vat: '' }])
