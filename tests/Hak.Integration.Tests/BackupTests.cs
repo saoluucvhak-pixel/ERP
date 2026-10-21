@@ -1,3 +1,4 @@
+using Hak.Application.Attachments;
 using Hak.Application.Backup;
 using Hak.Data;
 using Hak.Domain.Common;
@@ -76,5 +77,42 @@ public class BackupTests
         Assert.Contains(await s.Db.AuditLogs.Where(a => a.CompanyId == Guid.Empty).Select(a => a.Action).ToListAsync(), a => a == "backup.restore");
         Assert.Null(await s.Audit.VerifyChainAsync(Guid.Empty));
         Assert.DoesNotContain(Pass, string.Join("|", await s.Db.AuditLogs.Select(a => a.DataJson ?? "").ToListAsync()));
+    }
+
+    [Fact]
+    public async Task Backup_IncludesAttachments_RestoresThem_AndDetectsTampering_AndReadsLegacyBackups()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        if (h.IsPostgres) return;
+        var dir = Path.Combine(TestHost.Root, $"backups-{Guid.NewGuid():N}");
+        var store = new AttachmentStore(Path.Combine(TestHost.Root, $"att-{Guid.NewGuid():N}"));
+        var photo = new byte[] { 0xFF, 0xD8, 0xFF, 1, 2, 3, 4, 5 };
+        await store.WriteAsync("2026/10/a.jpg", photo);
+        await store.WriteAsync("2026/10/b.jpg", [0xFF, 0xD8, 0xFF, 9]);
+        var svc = new BackupService(s.Db, s.Audit, h.Clock, new BackupOptions { Directory = dir, Iterations = 1_000 }, store);
+
+        var backup = await svc.CreateAsync(h.AdminId, Pass);
+        var restored = await svc.VerifyAsync(h.AdminId, backup.FileName, Pass, restore: true);
+        Assert.True(restored.IsValid);
+        Assert.Equal(2, restored.AttachmentCount);
+        Assert.NotNull(restored.RestoredAttachmentsPath);
+        Assert.Equal(photo, await File.ReadAllBytesAsync(Path.Combine(restored.RestoredAttachmentsPath!, "2026", "10", "a.jpg")));
+        SqliteConnection.ClearAllPools();
+
+        // Legacy backup (plain SQLite file inside the envelope) is still verifiable.
+        var legacyDb = Path.Combine(dir, "legacy.db");
+        await using (var src = new SqliteConnection(s.Db.Database.GetConnectionString()))
+        await using (var dst = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = legacyDb, Pooling = false }.ToString()))
+        {
+            await src.OpenAsync(); await dst.OpenAsync(); src.BackupDatabase(dst);
+        }
+        SqliteConnection.ClearAllPools();
+        await using (var input = File.OpenRead(legacyDb))
+        await using (var output = File.Create(Path.Combine(dir, "hak-backup-legacy.hakbk")))
+            BackupFile.Encrypt(input, output, Pass, "SQLite", "", h.Clock.UtcNow, 1_000);
+        var legacy = await svc.VerifyAsync(h.AdminId, "hak-backup-legacy.hakbk", Pass);
+        Assert.True(legacy.IsValid);
+        Assert.Equal(0, legacy.AttachmentCount);
     }
 }
