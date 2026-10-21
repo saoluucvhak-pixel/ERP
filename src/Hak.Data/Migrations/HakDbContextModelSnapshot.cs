@@ -3725,6 +3725,89 @@ namespace Hak.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Inventory.StockReservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CloseReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("close_reason");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_by");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<long>("ConsumedQuantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("consumed_quantity");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("item_id");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("OrderLineNo")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("order_line_no");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("warehouse_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_reservations");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_stock_reservations_item_id");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("ix_stock_reservations_order_id");
+
+                    b.HasIndex("WarehouseId")
+                        .HasDatabaseName("ix_stock_reservations_warehouse_id");
+
+                    b.HasIndex("CompanyId", "OrderId", "OrderLineNo")
+                        .HasDatabaseName("ix_stock_reservations_company_id_order_id_order_line_no");
+
+                    b.HasIndex("CompanyId", "ItemId", "WarehouseId", "Status")
+                        .HasDatabaseName("ix_stock_reservations_company_id_item_id_warehouse_id_status");
+
+                    b.ToTable("stock_reservations", t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_reservations_quantity", "quantity > 0 AND consumed_quantity >= 0 AND consumed_quantity <= quantity");
+                        });
+                });
+
             modelBuilder.Entity("Hak.Domain.Inventory.StockValuation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8907,6 +8990,30 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_stock_movements_warehouses_warehouse_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Inventory.StockReservation", b =>
+                {
+                    b.HasOne("Hak.Domain.Inventory.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_reservations_items_item_id");
+
+                    b.HasOne("Hak.Domain.Trade.TradeOrder", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_reservations_trade_orders_order_id");
+
+                    b.HasOne("Hak.Domain.Inventory.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_reservations_warehouses_warehouse_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Inventory.StockValuation", b =>

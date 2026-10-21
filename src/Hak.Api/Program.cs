@@ -85,6 +85,7 @@ builder.Services.AddScoped<BankReconciliationService>();
 builder.Services.AddScoped<StatementVoucherService>();
 builder.Services.AddScoped<StockService>();
 builder.Services.AddScoped<DrynessService>();
+builder.Services.AddScoped<ReservationService>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<ContractService>();

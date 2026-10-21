@@ -1552,4 +1552,69 @@ public class TradeTests
         Assert.Equal(20_000_000m, withDryness.OrderValue);
         Assert.Null(withDryness.EstimateNote);
     }
+
+    // ------------------------------------------------------------------ Đợt 2: giữ hàng
+
+    [Fact]
+    public async Task Reservation_TwoOrdersOf70_OnStockOf100_SecondGetsWhatIsLeftAndTheRestWaits_WithoutJournalOrStockMovement()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 2), fx.Add);
+        var orders = Orders(fx);
+        async Task<TradeOrder> NewOrder(decimal qty) => await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH02"], D(3, 5), "Bán phụ gia", [new OrderLineInput(fx.Add, qty, 100_000)]));
+        var journals = await JournalsAsync(fx);
+        var movements = await s.Db.StockMovements.CountAsync();
+
+        var a = await orders.ConfirmAsync(h.Approver, (await NewOrder(70)).Id);
+        var b = await orders.ConfirmAsync(h.Approver, (await NewOrder(70)).Id);
+        var listed = await s.Reservations.ListAsync(h.Approver);
+        Assert.Equal(70m, listed.Single(r => r.OrderId == a.Id).Quantity);
+        Assert.Equal(30m, listed.Single(r => r.OrderId == b.Id).Quantity);          // only what was left; 40 waits
+        var av = await s.Reservations.AvailabilityAsync(h.Approver, fx.Add);
+        Assert.Equal((100m, 100m, 0m), (av.OnHand, av.Reserved, av.Available));
+        Assert.Equal(journals, await JournalsAsync(fx));                              // reserving books nothing and moves no stock
+        Assert.Equal(movements, await s.Db.StockMovements.CountAsync());
+
+        // A third order sees the stock as taken.
+        var c = await NewOrder(10);
+        var check = await new Hak.Application.Cycles.SalesOrderCheckService(s.Db, s.Settlement, h.Clock, s.Dryness).CheckAsync(h.Approver, c.Id);
+        Assert.Equal((100m, 100m, 10m), (check.Lines[0].OnHand, check.Lines[0].ReservedByOthers, check.Lines[0].Shortfall));
+
+        // Releasing A frees 70; topping B up reserves the 40 that was waiting, and nothing is left waiting.
+        await s.Reservations.ReleaseAsync(h.Preparer, listed.Single(r => r.OrderId == a.Id).Id, "Khách hoãn nhận");
+        var top = await s.Reservations.ReserveAsync(h.Preparer, b.Id);
+        var line = Assert.Single(top.Lines);
+        Assert.Equal((30m, 40m, 0m), (line.AlreadyReserved, line.NewlyReserved, line.Waiting));
+        Assert.False(top.AnyWaiting);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Reservations.ReleaseAsync(h.Preparer, listed.Single(r => r.OrderId == b.Id).Id, " ")));
+    }
+
+    [Fact]
+    public async Task Reservation_IsConsumedByDeliveryAgainstTheOrder_AndReleasedWhenTheOrderIsCancelledOrClosed()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 2), fx.Add);
+        var orders = Orders(fx);
+        async Task<TradeOrder> Confirmed(decimal qty) => await orders.ConfirmAsync(h.Approver, (await orders.CreateAsync(h.Preparer,
+            new OrderInput(InvoiceKind.Sales, h.Partner["KH02"], D(3, 5), "Bán phụ gia", [new OrderLineInput(fx.Add, qty, 100_000)]))).Id);
+        var a = await Confirmed(40);
+        var issue = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 6), D(3, 6), "Giao 25",
+            [new StockLineInput(fx.Add, 25, CounterAccountId: fx.A("COGS"), OrderId: a.Id, OrderLineNo: 1)], PartnerId: h.Partner["KH02"]));
+        await s.Stock.PostDocumentAsync(h.Approver, issue.Id);
+        var left = Assert.Single(await s.Reservations.ListAsync(h.Approver, a.Id));
+        Assert.Equal((40m, 25m, 15m), (left.Quantity, left.Consumed, left.Remaining));       // the delivered part no longer holds stock
+        var av = await s.Reservations.AvailabilityAsync(h.Approver, fx.Add);
+        Assert.Equal((75m, 15m, 60m), (av.OnHand, av.Reserved, av.Available));
+
+        await orders.CloseAsync(h.Preparer, a.Id, "Khách nhận đủ phần cần");
+        Assert.Empty(await s.Reservations.ListAsync(h.Approver, a.Id));                       // closing releases what is left
+        Assert.Equal("Released", Assert.Single(await s.Reservations.ListAsync(h.Approver, a.Id, activeOnly: false)).Status);
+
+        var b = await Confirmed(30);
+        Assert.Equal(30m, (await s.Reservations.AvailabilityAsync(h.Approver, fx.Add)).Reserved);
+        await orders.CancelAsync(h.Preparer, b.Id, "Khách hủy");
+        Assert.Equal(0m, (await s.Reservations.AvailabilityAsync(h.Approver, fx.Add)).Reserved);
+    }
 }

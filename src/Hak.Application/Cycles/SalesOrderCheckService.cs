@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Application.Cycles;
 
-public sealed record SalesOrderStockLine(int LineNo, Guid ItemId, string ItemCode, string ItemName, string Unit, decimal Ordered, decimal OnHand, decimal Shortfall);
+public sealed record SalesOrderStockLine(int LineNo, Guid ItemId, string ItemCode, string ItemName, string Unit, decimal Ordered, decimal OnHand, decimal Shortfall, decimal ReservedByOthers = 0);
 
 /// <summary>
 /// Kết quả "kiểm tra tín dụng và tồn kho" khi nhận đơn đặt hàng (tệp phân tích ERP, mục V.1.2.1): so hạn mức tín dụng của khách với
@@ -80,10 +80,15 @@ public sealed class SalesOrderCheckService(HakDbContext db, SettlementService se
         var items = await db.Items.AsNoTracking().Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id);
         var moves = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && itemIds.Contains(m.ItemId)).Select(m => new { m.ItemId, m.Quantity }).ToListAsync();
         var onHand = moves.GroupBy(m => m.ItemId).ToDictionary(g => g.Key, g => g.Sum(m => m.Quantity));
+        // Hàng đang giữ cho các đơn khác không còn khả dụng cho đơn này (phần giữ của chính đơn không bị trừ).
+        var heldByOthers = (await db.StockReservations.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && itemIds.Contains(r.ItemId) && r.Status == ReservationStatus.Active && r.OrderId != order.Id).ToListAsync())
+            .GroupBy(r => r.ItemId).ToDictionary(g => g.Key, g => g.Sum(r => r.Remaining));
         var lines = order.Lines.OrderBy(l => l.LineNo).Select(l =>
         {
             var have = onHand.GetValueOrDefault(l.ItemId);
-            return new SalesOrderStockLine(l.LineNo, l.ItemId, items[l.ItemId].Code, items[l.ItemId].Name, items[l.ItemId].Unit, l.Quantity, have, items[l.ItemId].IsService ? 0 : Math.Max(0, l.Quantity - have));
+            var others = heldByOthers.GetValueOrDefault(l.ItemId);
+            return new SalesOrderStockLine(l.LineNo, l.ItemId, items[l.ItemId].Code, items[l.ItemId].Name, items[l.ItemId].Unit, l.Quantity, have,
+                items[l.ItemId].IsService ? 0 : Math.Max(0, l.Quantity - Math.Max(0, have - others)), others);
         }).ToList();
 
         var after = balance + deliveredNotInvoiced + commitments + value;

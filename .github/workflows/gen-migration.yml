@@ -1,0 +1,37 @@
+name: gen-migration
+# Sinh migration EF (SQLite + PostgreSQL) bằng đúng công cụ dotnet-ef rồi đẩy lại lên chính nhánh đó.
+# Dùng khi máy phát triển không có .NET SDK: đẩy một commit có dòng "[gen-migration:Phase12Reservations]" trong nội dung.
+# Commit do GITHUB_TOKEN đẩy không tự kích hoạt CI; sau khi lấy commit đó về, đẩy thêm một commit thật để CI chạy.
+on:
+  push:
+    branches: [ccr-cac32296-dbzjjq]
+permissions:
+  contents: write
+jobs:
+  gen:
+    if: contains(github.event.head_commit.message, '[gen-migration:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Tên migration từ nội dung commit
+        id: name
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          NAME=$(printf '%s' "$MSG" | grep -o '\[gen-migration:[A-Za-z0-9_]*\]' | head -1 | sed 's/\[gen-migration://; s/\]//')
+          test -n "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+      # dotnet-ef 10.0.13 đã khai báo trong dotnet-tools.json ở thư mục gốc.
+      - run: dotnet tool restore
+      - run: dotnet restore
+      - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data --output-dir Migrations
+      - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data.Postgres --startup-project src/Hak.Data.Postgres --output-dir Migrations
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Hak.Data/Migrations src/Hak.Data.Postgres/Migrations
+          git commit -m "Migration ${{ steps.name.outputs.name }} (sinh bằng dotnet-ef trên GitHub Actions)"
+          git push

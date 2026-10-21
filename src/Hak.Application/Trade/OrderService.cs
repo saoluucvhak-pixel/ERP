@@ -96,7 +96,9 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
             RequireApprovedSupplier(await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == o.PartnerId));
         if (o.Kind != InvoiceKind.Sales) return;
         var check = await new SalesOrderCheckService(db, new SettlementService(db, audit, clock), clock, new Hak.Application.Inventory.DrynessService(db, audit, clock)).ComputeAsync(ctx, o);
-        if (!check.ExceedsCredit) return;
+        // Xác nhận thành công thì giữ hàng ngay (cùng transaction; lỗi tín dụng phía dưới hoàn tác cả phần giữ). Thiếu tồn: giữ phần có thể giữ, phần còn lại là phần chờ.
+        Task Reserve() => Hak.Application.Inventory.ReservationService.ReserveOrderAsync(db, audit, clock, ctx, o, null);
+        if (!check.ExceedsCredit) { await Reserve(); return; }
         var extra = check.DeliveredNotInvoiced + check.OpenCommitments > 0 ? $" + giao chưa hóa đơn {check.DeliveredNotInvoiced.Vn(0)} + cam kết chưa giao {check.OpenCommitments.Vn(0)}" : "";
         var detail = $"Số dư công nợ {check.CurrentBalance.Vn(0)}{extra} + đơn {check.OrderValue.Vn(0)} = {check.BalanceAfter.Vn(0)} vượt hạn mức tín dụng {check.CreditLimit.Vn(0)} của {check.PartnerName}.";
         if (string.IsNullOrWhiteSpace(creditOverrideReason))
@@ -104,6 +106,7 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         ctx.Require(Permissions.CreditOverride);
         await audit.AppendAsync(ctx.CompanyId, ctx, "order.credit_override", "order", o.Id.ToString(),
             new { o.Number, check.CreditLimit, check.CurrentBalance, check.OrderValue, check.BalanceAfter, reason = creditOverrideReason.Trim() });
+        await Reserve();
     });
 
     private static void RequireApprovedSupplier(BusinessPartner p)
@@ -114,7 +117,11 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
     }
 
     public Task<TradeOrder> CloseAsync(SessionContext ctx, Guid id, string reason)
-        => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "close", (o, _) => { o.Close(reason); return Task.CompletedTask; });
+        => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "close", async (o, _) =>
+        {
+            o.Close(reason);
+            await Hak.Application.Inventory.ReservationService.ReleaseOrderAsync(db, ctx.CompanyId, o.Id, ctx.UserId, clock.UtcNow, "Đóng đơn: " + reason);
+        });
 
     /// <summary>Cancelling is refused once goods moved or an invoice exists; close the order instead.</summary>
     public Task<TradeOrder> CancelAsync(SessionContext ctx, Guid id, string reason)
@@ -126,6 +133,7 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
                                  where l.OrderId == o.Id && i.Status != InvoiceStatus.Cancelled select l.Id).AnyAsync();
             if (used) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Đơn {o.Number} đã có phiếu kho/hóa đơn; dùng chức năng đóng đơn.");
             o.Cancel(reason);
+            await Hak.Application.Inventory.ReservationService.ReleaseOrderAsync(db, ctx.CompanyId, o.Id, ctx.UserId, clock.UtcNow, "Hủy đơn: " + reason);
         });
 
     public async Task<OrderFulfilment> FulfilmentAsync(SessionContext ctx, Guid orderId)

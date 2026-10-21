@@ -45,6 +45,7 @@ public sealed class Scope : IDisposable
         BankRecon = new BankReconciliationService(Db, Audit, clock);
         Stock = new StockService(Db, Engine, Audit, clock);
         Dryness = new DrynessService(Db, Audit, clock);
+        Reservations = new ReservationService(Db, Audit, clock);
         Assets = new AssetService(Db, Engine, Audit, clock);
         Fx = new Hak.Application.Fx.FxService(Db, Engine, Audit, clock);
         FxPayments = new Hak.Application.Fx.FxPaymentService(Db, Engine, Audit, clock);
@@ -71,6 +72,7 @@ public sealed class Scope : IDisposable
 
     public StockService Stock { get; }
     public DrynessService Dryness { get; }
+    public ReservationService Reservations { get; }
 
     public PaymentOrderService PaymentOrders { get; }
     public Hak.Application.Cycles.PaymentAcceptanceService PaymentAcceptances { get; }

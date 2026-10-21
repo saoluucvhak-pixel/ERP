@@ -338,6 +338,8 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                     case StockDocumentType.Issue:
                     {
                         var method = await GuardOrderAsync(ctx.CompanyId, doc.WarehouseId, item.Id, doc.PostingDate);
+                        if (line.OrderId is { } reservedOrder && line.OrderLineNo is { } reservedLine)
+                            await ReservationService.ConsumeAsync(db, ctx.CompanyId, reservedOrder, reservedLine, line.Quantity, ctx.UserId, clock.UtcNow);
                         var value = await IssueValueAsync(ctx.CompanyId, doc.WarehouseId, item.Id, line.Quantity, method, dp);
                         await AddMovementAsync(doc, line, doc.WarehouseId, -line.Quantity, value is null ? null : -value.Value, ++seq, line.CounterAccountId, doc.PartnerId);
                         if (value is { } v) AddGl(glLines, line.CounterAccountId!.Value, item.InventoryAccountId!.Value, doc.PartnerId, v, line.Description, debitPartner: true);
