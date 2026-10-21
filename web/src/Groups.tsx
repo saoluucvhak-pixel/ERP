@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, get, post, put } from './api'
 import { AccountSelect, ErrorBox, ExportButton, Modal, useAction, useCatalog } from './common'
-import { formatMoney, today } from './money'
+import { formatMoney, parseMoney, today } from './money'
 import { DOMAIN_VI, METHOD_CODE, METHOD_NUM, useGroups, type GroupDomain, type GroupRow } from './groupLib'
 
 interface Entity { id: string; code: string; name: string }
@@ -83,8 +83,10 @@ function Tree({ domain }: { domain: GroupDomain }) {
 
       {form && <Modal title={form.id ? `Sửa nhóm ${form.code}` : 'Thêm nhóm'} onClose={() => setForm(null)} busy={busy}
         footer={<><button onClick={() => setForm(null)}>Đóng</button><button className="primary" disabled={busy || !form.name.trim() || (!form.id && !form.code.trim())} onClick={() => run(async () => {
-          if (form.id) await put(`/groups/by-id/${form.id}`, { name: form.name, parentId: form.parentId || null, note: form.note || null, isActive: form.active, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null, asset: domain === 'Asset' ? { assetAccountId: form.aAsset || null, accumulatedAccountId: form.aAccum || null, expenseAccountId: form.aExp || null, usefulLifeMonths: form.aLife ? Number(form.aLife) : null, method: form.aMethod ? METHOD_NUM[form.aMethod] : null } : null })
-          else await post('/groups', { domain, code: form.code, name: form.name, parentId: form.parentId || null, note: form.note || null, defaultCreditLimit: form.limit || null, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null, asset: domain === 'Asset' ? { assetAccountId: form.aAsset || null, accumulatedAccountId: form.aAccum || null, expenseAccountId: form.aExp || null, usefulLifeMonths: form.aLife ? Number(form.aLife) : null, method: form.aMethod ? METHOD_NUM[form.aMethod] : null } : null })
+          const limit = form.limit.trim() ? parseMoney(form.limit) : null
+          if (form.limit.trim() && limit == null) throw new Error('Hạn mức tín dụng không hợp lệ.')
+          if (form.id) await put(`/groups/by-id/${form.id}`, { name: form.name, parentId: form.parentId || null, note: form.note || null, isActive: form.active, defaultCreditLimit: limit, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null, asset: domain === 'Asset' ? { assetAccountId: form.aAsset || null, accumulatedAccountId: form.aAccum || null, expenseAccountId: form.aExp || null, usefulLifeMonths: form.aLife ? Number(form.aLife) : null, method: form.aMethod ? METHOD_NUM[form.aMethod] : null } : null })
+          else await post('/groups', { domain, code: form.code, name: form.name, parentId: form.parentId || null, note: form.note || null, defaultCreditLimit: limit, defaultPaymentTermsDays: form.days ? Number(form.days) : null, defaultVatRate: form.vat || null, asset: domain === 'Asset' ? { assetAccountId: form.aAsset || null, accumulatedAccountId: form.aAccum || null, expenseAccountId: form.aExp || null, usefulLifeMonths: form.aLife ? Number(form.aLife) : null, method: form.aMethod ? METHOD_NUM[form.aMethod] : null } : null })
           setForm(null); setInfo('Đã lưu nhóm.'); await g.reload()
         })}>Lưu</button></>}>
         <div className="form-row">
@@ -95,7 +97,7 @@ function Tree({ domain }: { domain: GroupDomain }) {
         <label style={{ display: 'block' }}>Ghi chú<input style={{ width: '100%' }} value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></label>
         {domain === 'Partner' && <>
           <div className="form-row">
-            <label>Hạn mức tín dụng mặc định (VND)<input inputMode="decimal" value={form.limit} onChange={e => setForm({ ...form, limit: e.target.value.replace(/[^0-9.]/g, '') })} /></label>
+            <label>Hạn mức tín dụng mặc định (VND)<input inputMode="decimal" value={form.limit} onChange={e => setForm({ ...form, limit: e.target.value.replace(/[^0-9.,\s]/g, '') })} /></label>
             <label>Hạn thanh toán mặc định (ngày)<input inputMode="numeric" value={form.days} onChange={e => setForm({ ...form, days: e.target.value.replace(/\D/g, '') })} /></label>
           </div>
           <p className="muted">Chỉ dùng khi chính khách hàng chưa khai báo. Lấy từ nhóm chính của khách (chưa chọn nhóm chính thì nhóm sâu nhất, cùng cấp lấy giá trị chặt nhất); nhóm chưa khai thì kế thừa nhóm cha.</p>

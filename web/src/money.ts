@@ -13,27 +13,49 @@ export function formatMoney(value: string | null | undefined): string {
   return (neg ? '-' : '') + grouped + (trimmed ? ',' + trimmed : '')
 }
 
-/** Accepts "1.234.567,5", "1234567,5" or "1234567.5" and returns the canonical "1234567.5"; null if invalid. */
-export function parseMoney(input: string): string | null {
-  const s = input.trim().replace(/\s/g, '')
-  if (s === '') return null
-  let canonical: string
-  if (s.includes(',')) canonical = s.replace(/\./g, '').replace(',', '.')
-  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) canonical = s.replace(/\./g, '')
-  else canonical = s
-  if (!/^\d+(\.\d{1,4})?$/.test(canonical)) return null
-  return canonical.replace(/^0+(?=\d)/, '')
+/**
+ * Strict Vietnamese/canonical decimal parser. Accepted shapes only:
+ *  - "1.234.567,5" (dot = thousands in groups of exactly 3, comma = decimal)
+ *  - "1234567,5" / "1234567.5" (plain digits with one decimal separator)
+ *  - "1.234.567" (dot groups of 3 = thousands) and "12 000" (space groups of 3)
+ * Anything ambiguous or malformed ("1.2.3,45", "12.34,56", "1,234.56", "1,2,3") returns null.
+ */
+function parseDecimal(input: string, maxFrac: number): string | null {
+  const t = input.trim()
+  if (t === '') return null
+  let int: string
+  let frac = ''
+  let m: RegExpMatchArray | null
+  if (/\s/.test(t)) {
+    m = t.match(/^(\d{1,3}(?:\s\d{3})+)(?:[.,](\d+))?$/)
+    if (!m) return null
+    int = m[1].replace(/\s/g, '')
+    frac = m[2] ?? ''
+  } else if (t.includes(',')) {
+    m = t.match(/^(\d{1,3}(?:\.\d{3})+|\d+),(\d+)$/)
+    if (!m) return null
+    int = m[1].replace(/\./g, '')
+    frac = m[2]
+  } else if (/^\d{1,3}(?:\.\d{3})+$/.test(t)) {
+    int = t.replace(/\./g, '')
+  } else {
+    m = t.match(/^(\d+)(?:\.(\d+))?$/)
+    if (!m) return null
+    int = m[1]
+    frac = m[2] ?? ''
+  }
+  if (frac.length > maxFrac) return null
+  return int.replace(/^0+(?=\d)/, '') + (frac ? '.' + frac : '')
 }
 
-/** Exchange rate (functional units per foreign unit, up to 6 decimals), same separators as parseMoney; null if invalid. */
+/** Money amount (up to 4 decimals); returns the canonical "1234567.5" or null if invalid. */
+export function parseMoney(input: string): string | null {
+  return parseDecimal(input, 4)
+}
+
+/** Exchange rate (functional units per foreign unit, up to 6 decimals), same grammar as parseMoney; null if invalid. */
 export function parseRate(input: string): string | null {
-  const s = input.trim().replace(/\s/g, '')
-  let canonical: string
-  if (s.includes(',')) canonical = s.replace(/\./g, '').replace(',', '.')
-  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) canonical = s.replace(/\./g, '')
-  else canonical = s
-  if (!/^\d+(\.\d{1,6})?$/.test(canonical)) return null
-  return canonical.replace(/^0+(?=\d)/, '')
+  return parseDecimal(input, 6)
 }
 
 /** Exact decimal addition on strings (up to 4 fraction digits) using BigInt. */
