@@ -2160,6 +2160,71 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("catalog_group_members");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Common.IdempotencyRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .HasColumnType("text")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("method");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("path");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_hash");
+
+                    b.Property<string>("ResponseBody")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("response_body");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("scope");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_code");
+
+                    b.HasKey("Id")
+                        .HasName("pk_idempotency_records");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_idempotency_records_created_at");
+
+                    b.HasIndex("Scope", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_idempotency_records_scope_key");
+
+                    b.ToTable("idempotency_records");
+                });
+
             modelBuilder.Entity("Hak.Domain.Cycles.GoodsInspection", b =>
                 {
                     b.Property<Guid>("Id")
