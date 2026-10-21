@@ -29,7 +29,7 @@ public sealed record VatOffsetAccount(Guid AccountId, string Code, string Name);
 /// trò VAT_INPUT / VAT_OUTPUT và các tài khoản con của chúng (ví dụ 1331, 1332). Cách hạch toán là mặc định phổ biến; công ty dùng cách khác
 /// ([CẦN XÁC MINH căn cứ TT99]) thì tạo chứng từ tay hoặc bộ quy tắc kết chuyển riêng.
 /// </summary>
-public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine, AuditService audit)
+public sealed class VatOffsetService(HakDbContext db, AccountingEngine engine)
 {
     public const string SourceSystem = "HAK.VAT.OFFSET";
     public const string InputRole = "VAT_INPUT";

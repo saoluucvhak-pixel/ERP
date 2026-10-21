@@ -32,7 +32,7 @@ public static class DbExtensions
                 : await db.Database.BeginTransactionAsync();
             try
             {
-                if (postgres) await db.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_xact_lock({WriterLockKey})");
+                if (postgres) await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({WriterLockKey})");
                 var result = await work();
                 await tx.CommitAsync();
                 return result;

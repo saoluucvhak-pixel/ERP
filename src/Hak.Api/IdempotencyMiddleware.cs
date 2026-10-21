@@ -94,6 +94,16 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
         await buffer.CopyToAsync(original);
     }
 
+    /// <summary>
+    /// Đường dẫn mang bí mật (mật khẩu, passphrase sao lưu, khóa ký trao đổi) không bao giờ được ghi vào bảng idempotency:
+    /// bảng này lưu băm của nội dung yêu cầu và nguyên văn phản hồi trong 7 ngày và đi theo bản sao lưu.
+    /// </summary>
+    public static bool ExcludedPath(string path)
+        => path.StartsWith("/api/auth/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/setup/", StringComparison.OrdinalIgnoreCase)
+           || path.StartsWith("/api/backups", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/admin/backups", StringComparison.OrdinalIgnoreCase)
+           || path.StartsWith("/api/admin/users", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/me/", StringComparison.OrdinalIgnoreCase)
+           || path.StartsWith("/api/exchange/keys", StringComparison.OrdinalIgnoreCase);
+
     private static bool Applies(HttpContext http, out string? key)
     {
         key = http.Request.Headers[HeaderName].FirstOrDefault();
@@ -102,7 +112,7 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
         if (m != "POST" && m != "PUT" && m != "DELETE") return false;
         var path = http.Request.Path.Value ?? "";
         if (!path.StartsWith("/api/", StringComparison.Ordinal)) return false;
-        if (path.StartsWith("/api/auth/", StringComparison.Ordinal) || path.StartsWith("/api/setup/", StringComparison.Ordinal) || path.StartsWith("/api/backups", StringComparison.Ordinal)) return false;
+        if (ExcludedPath(path)) return false;
         return http.Request.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true || http.Request.ContentLength is null or 0;
     }
 

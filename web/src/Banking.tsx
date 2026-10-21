@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, ExportButton, FlowStrip, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
-import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
+import { addMoney, amountInWords, csvCell, formatDate, formatMoney, parseMoney, today } from './money'
 import type { PartnerBank } from './BankAccounts'
 
 interface PaymentOrder { id: string; number: string; bankAccountId: string; beneficiaryAccountNo: string | null; beneficiaryBank: string | null; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
@@ -47,7 +47,7 @@ function PaymentOrders() {
   const payer = (p: PaymentOrder) => cbanks.find(c => c.accountId === p.bankAccountId)
   const chosen = list.filter(p => picked.has(p.id))
   const csv = () => {
-    const q = (v: string) => `"${v.replace(/"/g, '""')}"`
+    const q = csvCell
     const body = ['STT;Số UNC;Tên người thụ hưởng;Số tài khoản;Ngân hàng;Số tiền;Nội dung'].concat(chosen.map((p, i) => [i + 1, p.number, q(beneficiary(p)), `'${p.beneficiaryAccountNo ?? ''}`, q(p.beneficiaryBank ?? ''), p.amount.replace('.', ','), q(p.description)].join(';')))
     const url = URL.createObjectURL(new Blob(['\ufeff' + body.join('\r\n')], { type: 'text/csv;charset=utf-8' }))
     const a = document.createElement('a'); a.href = url; a.download = `Chuyen_tien_${today()}.csv`; a.click(); URL.revokeObjectURL(url)

@@ -114,6 +114,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             if (fy.Id != v.FiscalYearId)
                 throw new DomainException(ErrorCodes.ValidationFailed, "Không được chuyển chứng từ sang năm tài chính khác (số chứng từ theo năm).");
 
+            // Người sửa nội dung nháp trở thành người lập: nếu không, người lập thật có thể bị người khác sửa rồi tự gửi và duyệt qua mặt kiểm soát hai người.
+            var preparerChanged = v.CreatedBy != ctx.UserId;
+            if (preparerChanged) v.CreatedBy = ctx.UserId;
             db.VoucherLines.RemoveRange(v.Lines);
             v.VoucherDate = input.VoucherDate;
             v.PostingDate = input.PostingDate;
@@ -124,7 +127,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             v.RowVersion++;
             AddHistory(v, VoucherStatus.Draft, "update", ctx.UserId);
             await audit.AppendAsync(ctx.CompanyId, ctx, "voucher.update", "voucher", v.Id.ToString(),
-                new { v.Number, debit = v.TotalDebit, credit = v.TotalCredit }, v.RowVersion);
+                new { v.Number, debit = v.TotalDebit, credit = v.TotalCredit, preparerChanged }, v.RowVersion);
             await db.SaveChangesAsync();
             return v;
         });
@@ -222,6 +225,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             var original = await LoadVoucherAsync(ctx, voucherId);
             if (original.Status != VoucherStatus.Posted)
                 throw new DomainException(ErrorCodes.InvalidStateTransition, $"Chỉ đảo được chứng từ đã ghi sổ (hiện tại: {original.Status}).");
+            if (original.ReversesVoucherId is not null || original.VoucherType == VoucherTypes.Reversal)
+                throw new DomainException(ErrorCodes.InvalidStateTransition,
+                    $"Chứng từ {original.Number} là bút toán đảo; không đảo lại một bút toán đảo (sổ cái và phân hệ sẽ lệch nhau). Muốn ghi lại nghiệp vụ thì lập chứng từ mới.");
             if (!allowModuleOwned && original.SourceSystem is { } src && VoucherTypes.ModuleOwnedSources.Contains(src))
                 throw new DomainException(ErrorCodes.InvalidStateTransition,
                     $"Chứng từ {original.Number} do phân hệ nghiệp vụ ({src}) sinh ra; đảo bằng chức năng của phân hệ đó (đảo phiếu kho, hủy lần tính giá, hủy khấu hao, hủy ghi giảm…) để sổ chi tiết và sổ cái luôn khớp.");

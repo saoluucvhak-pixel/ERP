@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { CashDocsView } from './CashDocs'
@@ -244,6 +244,8 @@ function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; t
     ? src.lines.map(l => ({ accountId: l.accountId, side: l.side, amount: formatMoney(l.amount), partnerId: l.partnerId ?? '', description: l.description ?? '', cashFlowCode: l.cashFlowCode ?? '' }))
     : [emptyLine('D'), emptyLine('C')])
   const { busy, error, setError, run } = useAction()
+  const busyRef = useRef(false)
+  busyRef.current = busy   // phím tắt Ctrl+S đọc cờ này (hàm xử lý phím giữ bản save cũ), tránh gửi hai lần
 
   const parsed = lines.map(l => parseMoney(l.amount))
   const totalD = useMemo(() => addMoney(lines.map((l, i) => (l.side === 'D' ? parsed[i] ?? '0' : '0'))), [lines, parsed])
@@ -268,9 +270,10 @@ function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; t
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); save() }
+      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (!busyRef.current) save() }
       if (e.key === 'Insert') { e.preventDefault(); setLines(ls => [...ls, emptyLine(ls.at(-1)?.side === 'D' ? 'C' : 'D')]) }
-      if (e.key === 'Escape') onDone()
+      // Esc chỉ đóng form khi không đang ở ô nhập / danh sách thả xuống (Esc ở đó dùng để đóng danh sách, không để bỏ dữ liệu).
+      if (e.key === 'Escape' && !(e.target instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName))) onDone()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

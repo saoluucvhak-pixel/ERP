@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addMoney, amountInWords, formatMoney, parseMoney, parseRate, today, formatDate, formatDateTime, formatMonth } from './money.ts'
+import { addMoney, amountInWords, csvCell, daysBefore, formatMoney, optionalRate, parseMoney, parseRate, today, formatDate, formatDateTime, formatMonth } from './money.ts'
 
 test('formatMoney groups with dots and uses comma decimals, never via Number', () => {
   assert.equal(formatMoney('1234567'), '1.234.567')
@@ -86,4 +86,31 @@ test('parseMoney round-trips formatMoney and handles edge values', () => {
   assert.equal(parseMoney('0'), '0')
   assert.equal(parseMoney('1 234 567,5'), '1234567.5')
   assert.equal(parseMoney('0,5'), '0.5')
+})
+
+test('optionalRate: để trống là không có, nhập sai thì báo lỗi chứ không lặng lẽ thành thuế 0', () => {
+  assert.equal(optionalRate(''), null)
+  assert.equal(optionalRate('   '), null)
+  assert.equal(optionalRate('10'), '10')
+  assert.equal(optionalRate('8,5'), '8.5')
+  assert.throws(() => optionalRate('10%'), /không hợp lệ/)
+  assert.throws(() => optionalRate('abc', 'Dung sai'), /Dung sai/)
+})
+
+test('daysBefore: ngày hợp lệ lùi đúng, ô ngày bị xóa thì null (không ném lỗi làm trắng màn hình)', () => {
+  assert.equal(daysBefore('2026-10-21', 60), '2026-08-22')
+  assert.equal(daysBefore('2026-03-01', 1), '2026-02-28')
+  assert.equal(daysBefore('2024-03-01', 1), '2024-02-29')
+  assert.equal(daysBefore('', 60), null)
+  assert.equal(daysBefore('21/10/2026', 60), null)
+})
+
+test('csvCell: vô hiệu hóa ô bắt đầu bằng ký tự công thức và thoát dấu ngoặc kép', () => {
+  assert.equal(csvCell('Nguyễn Văn A'), '"Nguyễn Văn A"')
+  assert.equal(csvCell('=HYPERLINK("http://x","a")'), '"\'=HYPERLINK(""http://x"",""a"")"')
+  assert.equal(csvCell('+1'), '"\'+1"')
+  assert.equal(csvCell('-2'), '"\'-2"')
+  assert.equal(csvCell('@SUM(A1)'), '"\'@SUM(A1)"')
+  assert.equal(csvCell('a=b'), '"a=b"')
+  assert.equal(csvCell('Chuyển "gấp"'), '"Chuyển ""gấp"""')
 })
