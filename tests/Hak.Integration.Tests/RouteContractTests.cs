@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -67,5 +69,49 @@ public partial class RouteContractTests
             }
         Assert.True(checkedCalls > 150, $"Chỉ đối chiếu được {checkedCalls} lời gọi: biểu thức quét có thể đã hỏng.");
         Assert.True(missing.Count == 0, "Giao diện gọi đường dẫn không có route:\n" + string.Join("\n", missing));
+    }
+
+    /// <summary>
+    /// Quét mọi route /api khi CHƯA đăng nhập: chỉ vài route được phép ẩn danh; mọi route khác phải bị chặn trước khi chạm nghiệp vụ
+    /// (401, hoặc 400/415 khi yêu cầu rỗng không qua nổi bước đọc tham số). Route mới quên kiểm tra phiên sẽ làm test này hỏng.
+    /// </summary>
+    [Fact]
+    public async Task EveryApiRoute_RefusesAnonymousCallers_ExceptTheFewPublicOnes()
+    {
+        Directory.CreateDirectory(TestHost.Root);
+        var dbPath = Path.Combine(TestHost.Root, $"anon-{Guid.NewGuid():N}.db");
+        await using var f = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Hak:Environment", "Test");
+            b.UseSetting("Hak:DatabasePath", dbPath);
+            b.UseSetting("Hak:LoginRateLimitPerMinute", "0");
+        });
+        var client = f.CreateClient();
+        string[] publicRoutes = ["/api/health", "/api/setup/status", "/api/setup/bootstrap", "/api/auth/login"];
+        var routes = f.Services.GetServices<EndpointDataSource>().SelectMany(d => d.Endpoints).OfType<RouteEndpoint>()
+            .Where(e => (e.RoutePattern.RawText ?? "").StartsWith("/api/", StringComparison.Ordinal) || e.RoutePattern.RawText == "/api").ToList();
+        Assert.True(routes.Count > 300);
+
+        var leaks = new List<string>();
+        var probed = 0;
+        foreach (var e in routes)
+        {
+            var raw = e.RoutePattern.RawText!;
+            if (publicRoutes.Contains(raw, StringComparer.OrdinalIgnoreCase)) continue;
+            var path = Regex.Replace(raw, @"\{[^}:]+:guid\??\}", Guid.NewGuid().ToString());
+            path = Regex.Replace(path, @"\{[^}]+\}", "1");
+            foreach (var method in e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? ["GET"])
+            {
+                if (method == "OPTIONS" || method == "HEAD") continue;
+                using var req = new HttpRequestMessage(new HttpMethod(method), path);
+                if (method is "POST" or "PUT" or "PATCH") req.Content = JsonContent.Create(new { });
+                using var res = await client.SendAsync(req);
+                probed++;
+                if (res.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.BadRequest or HttpStatusCode.UnsupportedMediaType))
+                    leaks.Add($"{method} {raw} → {(int)res.StatusCode}");
+            }
+        }
+        Assert.True(probed > 300, $"Chỉ thử được {probed} route.");
+        Assert.True(leaks.Count == 0, "Route trả lời người chưa đăng nhập:\n" + string.Join("\n", leaks));
     }
 }
