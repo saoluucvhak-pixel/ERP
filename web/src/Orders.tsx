@@ -23,6 +23,7 @@ export function OrdersView() {
   const [items, setItems] = useState<Item[]>([])
   const [kind, setKind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')
   const [list, setList] = useState<Order[]>([])
+  const [total, setTotal] = useState(0)
   const [head, setHead] = useState({ partnerId: '', contractNo: '', orderDate: today(), description: '', tolerance: '0' })
   const [lines, setLines] = useState<LineDraft[]>([{ itemId: '', qty: '', basis: 'Bdmt', price: '', vat: '' }])
   const [detail, setDetail] = useState<Fulfil | null>(null)
@@ -34,7 +35,14 @@ export function OrdersView() {
   const { busy, error, setError, run } = useAction()
   useEffect(() => { get<ContractRef[]>(`/contracts?kind=${kind}`).then(c => setContracts(c.filter(x => x.status === 'Active' && !x.expired))).catch(() => setContracts([])); setContractId(''); setContractLines([]) }, [kind])
   useEffect(() => { get<Item[]>('/items').then(setItems).catch(() => setItems([])) }, [])
-  const load = useCallback(() => run(async () => setList(await get<Order[]>(`/orders?kind=${kind}`))), [run, kind])
+  const load = useCallback(() => run(async () => {
+    const pg = await get<{ items: Order[]; total: number }>(`/orders?kind=${kind}&page=1&pageSize=100`)
+    setList(pg.items); setTotal(pg.total)
+  }), [run, kind])
+  const loadMore = async () => {
+    const pg = await get<{ items: Order[]; total: number }>(`/orders?kind=${kind}&page=${Math.floor(list.length / 100) + 1}&pageSize=100`)
+    setList(l => [...l, ...pg.items]); setTotal(pg.total)
+  }
   useEffect(() => { load() }, [load])
   const upd = (i: number, p: Partial<LineDraft>) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
   const act = (fn: () => Promise<unknown>, msg: string) => run(async () => { await fn(); setInfo(msg); await load() })
@@ -161,6 +169,7 @@ export function OrdersView() {
                 {(o.status === 'Draft' || o.status === 'Confirmed') && <button className="danger" onClick={() => { const r = prompt('Lý do hủy đơn:'); if (r) act(() => post(`/orders/${o.id}/cancel`, { reason: r }), `Đã hủy ${o.number}.`) }}>Hủy</button>}
               </td></tr>))}
             {shownList.length === 0 && <tr><td colSpan={7} className="muted">{list.length === 0 ? 'Chưa có đơn hàng.' : 'Không có đơn khớp bộ lọc.'}</td></tr>}
+            {list.length < total && <tr><td colSpan={7} className="muted">Đang hiển thị {list.length}/{total}. <button onClick={() => run(loadMore)}>Tải thêm</button></td></tr>}
           </tbody>
         </table>
       </div>
