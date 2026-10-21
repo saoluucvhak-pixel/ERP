@@ -126,7 +126,7 @@ public class ApiTests
         }
         object Voucher(string description, string amount) => new
         {
-            voucherType = "GJ", voucherDate = "2026-03-02", postingDate = "2026-03-02", description,
+            voucherType = "GJ", voucherDate = "2026-04-02", postingDate = "2026-04-02", description,   // April: the March counts asserted below stay as they were
             lines = new object[] { new { accountId = cash, side = "D", amount }, new { accountId = rev, side = "C", amount } },
         };
         var totalBefore = (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!;
