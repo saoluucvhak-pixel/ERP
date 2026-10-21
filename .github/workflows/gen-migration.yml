@@ -24,7 +24,9 @@ jobs:
           NAME=$(printf '%s' "$MSG" | grep -o '\[gen-migration:[A-Za-z0-9_]*\]' | head -1 | sed 's/\[gen-migration://; s/\]//')
           test -n "$NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
-      - run: dotnet tool install --global dotnet-ef --version 10.*
+      - run: |
+          dotnet tool install --global dotnet-ef --version 10.*
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
       - run: dotnet restore
       - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data --output-dir Migrations
       - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data.Postgres --startup-project src/Hak.Data.Postgres --output-dir Migrations
