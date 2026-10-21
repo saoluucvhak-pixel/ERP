@@ -11,7 +11,7 @@ public class ConcurrencyTests
     private static VoucherInput Move(TestHost h, DateOnly d, string debit, string credit, decimal amount, string text)
         => new(VoucherTypes.General, d, d, text, [new VoucherLineInput(h.Acc[debit], Side.Debit, amount), new VoucherLineInput(h.Acc[credit], Side.Credit, amount)]);
 
-    private static async Task<(int Ok, List<Exception> Failed)> RaceAsync(params Func<Task>[] actions)
+    internal static async Task<(int Ok, List<Exception> Failed)> RaceAsync(params Func<Task>[] actions)
     {
         var start = new TaskCompletionSource();
         var tasks = actions.Select(a => Task.Run(async () => { await start.Task; try { await a(); return (Exception?)null; } catch (Exception ex) { return ex; } })).ToList();
