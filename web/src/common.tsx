@@ -48,7 +48,7 @@ export function ExportButton({ fileName, sheet, columns, rows, disabled, title, 
 
 /** Cross-screen jump (e.g. trial balance row → account ledger): App registers `go`, the target screen consumes `ledger` once on mount. */
 /** kind: hướng bán/mua của phân hệ đang mở (Bán hàng → 'Sales', Mua hàng → 'Purchase'); các màn dùng chung (hợp đồng, đơn hàng, hóa đơn, nghiệm thu, chiết khấu) lấy làm giá trị ban đầu. */
-export const navStore: { go?: (screen: string) => void; kind?: 'Sales' | 'Purchase'; ledger?: { accountId: string; from: string; to: string }; receipt?: { partnerId: string; settleJournalLineId: string; amount: string } } = {}
+export const navStore: { go?: (screen: string) => void; setupTab?: string; kind?: 'Sales' | 'Purchase'; ledger?: { accountId: string; from: string; to: string }; receipt?: { partnerId: string; settleJournalLineId: string; amount: string } } = {}
 
 export function useCompanyName() {
   const [name, setName] = useState('')
