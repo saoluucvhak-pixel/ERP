@@ -4,6 +4,7 @@ import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } f
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
+import { OrderFlowPanel, OrderWorklist } from './OrderFlow'
 
 export interface Order { id: string; number: string; kind: string; partnerId: string; contractNo: string | null; orderDate: string; description: string; overDeliveryTolerancePercent: string; status: string; statusReason: string | null; lines: { lineNo: number; itemId: string; quantity: string; basis: string; unitPrice: string; vatRate: string | null }[] }
 interface Item { id: string; code: string; name: string; unit: string; tracksDryness: boolean }
@@ -27,6 +28,7 @@ export function OrdersView() {
   const [head, setHead] = useState({ partnerId: '', contractNo: '', orderDate: today(), description: '', tolerance: '0' })
   const [lines, setLines] = useState<LineDraft[]>([{ itemId: '', qty: '', basis: 'Bdmt', price: '', vat: '' }])
   const [detail, setDetail] = useState<Fulfil | null>(null)
+  const [flowId, setFlowId] = useState<string | null>(null)
   const [info, setInfo] = useState('')
   const [contracts, setContracts] = useState<ContractRef[]>([])
   const [f, pf, cf] = useFilterState('orders')
@@ -115,6 +117,8 @@ export function OrdersView() {
         </table>
         <button style={{ marginTop: 8 }} onClick={() => setLines(ls => [...ls, { itemId: '', qty: '', basis: 'Bdmt', price: '', vat: '' }])}>+ Thêm dòng</button>
       </div>
+      {flowId && <OrderFlowPanel orderId={flowId} onClose={() => setFlowId(null)} />}
+      {!flowId && <OrderWorklist kind={kind} onOpen={setFlowId} />}
       {detail && (
         <div className="panel">
           <div className="toolbar"><strong>Tiến độ đơn {detail.number}</strong><button onClick={() => setDetail(null)}>Đóng</button></div>
@@ -163,6 +167,7 @@ export function OrdersView() {
             <tr key={o.id}><td>{o.number}</td><td>{formatDate(o.orderDate)}</td><td>{partners.find(p => p.id === o.partnerId)?.code}</td><td>{o.contractNo}</td><td>{o.description}</td>
               <td><span className="badge">{STATUS_VI[o.status] ?? o.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => setFlowId(o.id)}>Hồ sơ</button>
                 <button onClick={() => run(async () => setDetail(await get<Fulfil>(`/orders/${o.id}/fulfilment`)))}>Tiến độ</button>
                 {o.status === 'Draft' && <button className="primary" onClick={() => confirm(o)}>{o.kind === 'Sales' ? 'Kiểm tra & xác nhận' : 'Xác nhận'}</button>}
                 {o.status === 'Confirmed' && <button onClick={() => { const r = prompt('Lý do đóng đơn:'); if (r) act(() => post(`/orders/${o.id}/close`, { reason: r }), `Đã đóng ${o.number}.`) }}>Đóng đơn</button>}
