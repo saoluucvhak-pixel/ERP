@@ -97,7 +97,7 @@ public sealed class SalesOrderCheckService(HakDbContext db, SettlementService se
     {
         if (dryness is null) return [];
         var rows = await dryness.SummaryCoreAsync(companyId, new DateOnly(today.Year, 1, 1), today);
-        return rows.GroupBy(r => r.ItemId).Select(g => (Item: g.Key, Mt: g.Sum(r => r.ClosingMt), Bdmt: g.Sum(r => r.ClosingBdmt + r.EstimatedClosingBdmt)))
+        return rows.GroupBy(r => r.ItemId).Select(g => (Item: g.Key, Mt: g.Sum(r => r.ClosingMt), Bdmt: g.Sum(r => r.EstimatedClosingBdmt)))   // đã gồm phần BDMT đo được + phần tạm tính
             .Where(x => x.Mt > 0 && x.Bdmt > 0).ToDictionary(x => x.Item, x => Math.Min(100m, x.Bdmt * 100m / x.Mt));
     }
 
