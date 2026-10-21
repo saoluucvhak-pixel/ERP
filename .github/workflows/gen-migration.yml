@@ -24,11 +24,8 @@ jobs:
           NAME=$(printf '%s' "$MSG" | grep -o '\[gen-migration:[A-Za-z0-9_]*\]' | head -1 | sed 's/\[gen-migration://; s/\]//')
           test -n "$NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
-      # Công cụ cục bộ (manifest tạm, không commit) để `dotnet ef` luôn tìm thấy đúng phiên bản.
-      - run: |
-          dotnet new tool-manifest
-          dotnet tool install dotnet-ef --version 10.0.13
-          dotnet tool list
+      # dotnet-ef 10.0.13 đã khai báo trong dotnet-tools.json ở thư mục gốc.
+      - run: dotnet tool restore
       - run: dotnet restore
       - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data --output-dir Migrations
       - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data.Postgres --startup-project src/Hak.Data.Postgres --output-dir Migrations
