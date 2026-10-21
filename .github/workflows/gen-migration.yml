@@ -1,29 +1,36 @@
 name: gen-migration
-# Sinh migration EF (SQLite + PostgreSQL) bằng đúng công cụ dotnet-ef rồi đẩy lên chính nhánh đang chạy.
-# Dùng khi máy phát triển không có .NET SDK. Commit do GITHUB_TOKEN đẩy sẽ không tự kích hoạt CI; đẩy thêm một commit thật sau đó để CI chạy.
+# Sinh migration EF (SQLite + PostgreSQL) bằng đúng công cụ dotnet-ef rồi đẩy lại lên chính nhánh đó.
+# Dùng khi máy phát triển không có .NET SDK: đẩy một commit có dòng "[gen-migration:Phase12Reservations]" trong nội dung.
+# Commit do GITHUB_TOKEN đẩy không tự kích hoạt CI; sau khi lấy commit đó về, đẩy thêm một commit thật để CI chạy.
 on:
-  workflow_dispatch:
-    inputs:
-      name:
-        description: Tên migration (ví dụ Phase12Reservations)
-        required: true
+  push:
+    branches: [ccr-cac32296-dbzjjq]
 permissions:
   contents: write
 jobs:
   gen:
+    if: contains(github.event.head_commit.message, '[gen-migration:')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Tên migration từ nội dung commit
+        id: name
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          NAME=$(printf '%s' "$MSG" | grep -o '\[gen-migration:[A-Za-z0-9_]*\]' | head -1 | sed 's/\[gen-migration://; s/\]//')
+          test -n "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
       - run: dotnet tool install --global dotnet-ef --version 10.*
       - run: dotnet restore
-      - run: dotnet ef migrations add "${{ inputs.name }}" --project src/Hak.Data --output-dir Migrations
-      - run: dotnet ef migrations add "${{ inputs.name }}" --project src/Hak.Data.Postgres --startup-project src/Hak.Data.Postgres --output-dir Migrations
+      - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data --output-dir Migrations
+      - run: dotnet ef migrations add "${{ steps.name.outputs.name }}" --project src/Hak.Data.Postgres --startup-project src/Hak.Data.Postgres --output-dir Migrations
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/Hak.Data/Migrations src/Hak.Data.Postgres/Migrations
-          git commit -m "Migration ${{ inputs.name }} (sinh bằng dotnet-ef trên GitHub Actions)"
+          git commit -m "Migration ${{ steps.name.outputs.name }} (sinh bằng dotnet-ef trên GitHub Actions)"
           git push
