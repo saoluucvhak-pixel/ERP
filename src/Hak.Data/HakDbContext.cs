@@ -80,6 +80,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<StockValueAdjustment> StockValueAdjustments => Set<StockValueAdjustment>();
     public DbSet<DrynessMethod> DrynessMethods => Set<DrynessMethod>();
     public DbSet<DrynessDailyRate> DrynessDailyRates => Set<DrynessDailyRate>();
+    public DbSet<StockReservation> StockReservations => Set<StockReservation>();
     public DbSet<StockMeasurement> StockMeasurements => Set<StockMeasurement>();
     public DbSet<CommercialInvoice> CommercialInvoices => Set<CommercialInvoice>();
     public DbSet<CommercialInvoiceLine> CommercialInvoiceLines => Set<CommercialInvoiceLine>();
@@ -407,6 +408,16 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.ItemId, x.Date }).IsUnique();
             e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("ck_dryness_daily_rates_percent", $"dryness_percent > 0 AND dryness_percent <= {Bound(100)}"));
+        });
+        b.Entity<StockReservation>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.ItemId, x.WarehouseId, x.Status });
+            e.HasIndex(x => new { x.CompanyId, x.OrderId, x.OrderLineNo });
+            e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Warehouse>().WithMany().HasForeignKey(x => x.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<TradeOrder>().WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
+            e.Ignore(x => x.Remaining);
+            e.ToTable(t => t.HasCheckConstraint("ck_stock_reservations_quantity", "quantity > 0 AND consumed_quantity >= 0 AND consumed_quantity <= quantity"));
         });
         b.Entity<StockMeasurement>(e =>
         {
@@ -973,6 +984,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<StockValuation>().Property(x => x.Value).HasConversion(money);
         b.Entity<StockValueAdjustment>().Property(x => x.Value).HasConversion(money);
         b.Entity<DrynessDailyRate>().Property(x => x.DrynessPercent).HasConversion(money);
+        b.Entity<StockReservation>().Property(x => x.Quantity).HasConversion(money);
+        b.Entity<StockReservation>().Property(x => x.ConsumedQuantity).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.MeasuredMt).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.DrynessPercent).HasConversion(money);
         b.Entity<StockMeasurement>().Property(x => x.Bdmt).HasConversion(money);

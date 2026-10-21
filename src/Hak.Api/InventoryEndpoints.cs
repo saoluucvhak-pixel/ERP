@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Hak.Api;
 
 public sealed record WarehouseRequest(string Code, string Name);
+public sealed record ReserveRequest(Guid? WarehouseId);
 public sealed record ItemCommercialRequest(decimal? SalePrice, decimal? DefaultVatRate, decimal? MinStock, decimal? ReorderQty);
 public sealed record ItemAltUnitRequest(string? AltUnit, decimal? AltFactor);
 public sealed record ServiceItemRequest(string Code, string Name, string Unit, string? RevenueAccountCode, string? ExpenseAccountCode);
@@ -58,6 +59,12 @@ public static class InventoryEndpoints
             Results.Ok(new { (await s.CreateServiceItemAsync(await http.SessionAsync(), r.Code, r.Name, r.Unit, r.RevenueAccountCode, r.ExpenseAccountCode)).Id }));
         api.MapPost("/items", async (HttpContext http, ItemRequest r, StockService s) =>
             Results.Ok(new { (await s.CreateItemAsync(await http.SessionAsync(), r.Code, r.Name, r.Unit, r.InventoryAccountCode)).Id }));
+
+        // Giữ hàng theo kho cho đơn bán (Đợt 2): giữ không sinh bút toán và không trừ tồn thực.
+        api.MapGet("/reservations", async (HttpContext http, Guid? orderId, bool? activeOnly, ReservationService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), orderId, activeOnly ?? true)));
+        api.MapPost("/orders/{id:guid}/reserve", async (HttpContext http, Guid id, ReserveRequest? r, ReservationService s) => Results.Ok(await s.ReserveAsync(await http.SessionAsync(), id, r?.WarehouseId)));
+        api.MapPost("/reservations/{id:guid}/release", async (HttpContext http, Guid id, ReasonRequest r, ReservationService s) => { await s.ReleaseAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
+        api.MapGet("/stock/availability", async (HttpContext http, Guid itemId, Guid? warehouseId, ReservationService s) => Results.Ok(await s.AvailabilityAsync(await http.SessionAsync(), itemId, warehouseId)));
 
         api.MapGet("/stock-documents", async (HttpContext http, HakDbContext db, DateOnly? from, DateOnly? to) =>
         {
