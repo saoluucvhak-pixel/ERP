@@ -20,8 +20,8 @@ export function TrialBalanceView() {
     <>
       <div className="toolbar">
         <h2>Bảng cân đối số phát sinh</h2>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<input type="date" value={from} onChange={e => { setFrom(e.target.value); setData(null) }} /></label>
+        <label>Đến ngày<input type="date" value={to} onChange={e => { setTo(e.target.value); setData(null) }} /></label>
         <label><input type="checkbox" checked={rollup} onChange={e => setRollup(e.target.checked)} /> Cộng dồn TK tổng hợp</label>
         <button className="primary" onClick={load} disabled={busy}>Xem</button>
         <ExportButton fileName={`BCDPS_${from}_${to}`} sheet="BCĐPS" title="Bảng cân đối số phát sinh" subtitle={`Từ ngày ${from.split('-').reverse().join('/')} đến ngày ${to.split('-').reverse().join('/')}`} disabled={!data}
@@ -79,8 +79,8 @@ export function AccountLedgerView() {
         <h2>Sổ chi tiết tài khoản / Sổ quỹ</h2>
         <label>Tài khoản<AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} /></label>
         <label>Đối tượng<PartnerSelect partners={partners} value={partnerId} onChange={setPartnerId} /></label>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<input type="date" value={from} onChange={e => { setFrom(e.target.value); setData(null) }} /></label>
+        <label>Đến ngày<input type="date" value={to} onChange={e => { setTo(e.target.value); setData(null) }} /></label>
         <button className="primary" onClick={load} disabled={busy || !accountId}>Xem</button>
         <ExportButton fileName={`So_chi_tiet_${data?.accountCode ?? ''}_${from}_${to}`} sheet={`Sổ TK ${data?.accountCode ?? ''}`} title={`Sổ chi tiết tài khoản ${data?.accountCode ?? ''}`}
           subtitle={`${data?.accountName ?? ''} · từ ${from.split('-').reverse().join('/')} đến ${to.split('-').reverse().join('/')}`} disabled={!data}
@@ -297,8 +297,8 @@ export function GeneralJournalView() {
     <>
       <div className="toolbar">
         <h2>Sổ Nhật ký chung</h2>
-        <label>Từ ngày<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
-        <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+        <label>Từ ngày<input type="date" value={from} onChange={e => { setFrom(e.target.value); setRows(null) }} /></label>
+        <label>Đến ngày<input type="date" value={to} onChange={e => { setTo(e.target.value); setRows(null) }} /></label>
         <button className="primary" disabled={busy} onClick={() => run(async () => setRows(await get<JournalRow[]>(`/reports/general-journal?from=${from}&to=${to}`)))}>Xem</button>
         <ExportButton fileName={`So_nhat_ky_chung_${from}_${to}`} sheet="Nhật ký chung" title="Sổ Nhật ký chung" subtitle={`Từ ngày ${from.split('-').reverse().join('/')} đến ngày ${to.split('-').reverse().join('/')}`} disabled={!rows}
           columns={[{ header: 'Ngày' }, { header: 'Số CT' }, { header: 'Loại' }, { header: 'Diễn giải', width: 40 }, { header: 'TK' }, { header: 'Đối tượng' },

@@ -143,7 +143,7 @@ export function TradeView() {
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
-                {i.status === 'Draft' && <button className="primary" onClick={() => act(async () => {
+                {i.status === 'Draft' && <button className="primary" disabled={busy} onClick={() => act(async () => {
                   // Purchase invoices against receipts already posted at another value: show the split and require confirmation.
                   const diffs = await get<{ lineNo: number; receiptNumber: string; difference: string; inventoryPart: string; cogsPart: string; quantityInStock: string; receiptQuantity: string }[]>(`/invoices/${i.id}/price-differences`)
                   if (diffs.length > 0) {

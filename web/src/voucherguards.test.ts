@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canCopyVoucher, canEditAsCashDoc, isModuleGenerated } from './voucherguards.ts'
+import { canCopyVoucher, canEditAsCashDoc, canEditJournalVoucher, isModuleGenerated } from './voucherguards.ts'
 
 const line = (foreignCurrency: string | null = null) => ({ lineNo: 1, accountId: 'a', side: 'D' as const, amount: '1', partnerId: null, description: null, foreignCurrency })
 
@@ -24,4 +24,12 @@ test('module-generated vouchers are recalculated in their module, never hand-edi
   assert.equal(isModuleGenerated({ sourceSystem: 'HAK.IMPORT' }), false)
   for (const s of ['HAK.CLOSING', 'HAK.ADVANCE', 'HAK.EQUITY', 'HAK.INVOICE', 'HAK.VAT.OFFSET']) assert.equal(isModuleGenerated({ sourceSystem: s }), true, s)
   assert.equal(isModuleGenerated({ sourceSystem: 'BANK_IMPORT' }), false)
+})
+
+test('the plain journal form refuses drafts it would silently strip (foreign currency, due date, settlement links)', () => {
+  const l = (extra: object) => ({ lineNo: 1, accountId: 'a', side: 'D' as const, amount: '1', partnerId: null, description: null, ...extra })
+  assert.equal(canEditJournalVoucher({ lines: [l({})] }), true)
+  assert.equal(canEditJournalVoucher({ lines: [l({ foreignCurrency: 'USD' })] }), false)
+  assert.equal(canEditJournalVoucher({ lines: [l({ dueDate: '2026-12-31' })] }), false)
+  assert.equal(canEditJournalVoucher({ lines: [l({ settleJournalLineId: 'x' })] }), false)
 })

@@ -21,3 +21,11 @@ export function isModuleGenerated(v: Pick<Voucher, 'sourceSystem'>): boolean {
   const s = v.sourceSystem
   return !!s && s.startsWith('HAK.') && s !== 'HAK.IMPORT'
 }
+
+/**
+ * Form chứng từ tổng hợp chỉ giữ tài khoản, bên, số tiền, đối tượng, diễn giải, mã luồng tiền. Nháp có nguyên tệ, hạn thanh toán hoặc dòng tất toán công nợ
+ * mà sửa ở đây thì các trường đó bị mất — chặn nút Sửa (giống canCopyVoucher).
+ */
+export function canEditJournalVoucher(v: Pick<Voucher, 'lines'>): boolean {
+  return !v.lines.some(l => !!l.foreignCurrency || !!l.dueDate || !!l.settleJournalLineId)
+}

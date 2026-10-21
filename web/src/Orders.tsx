@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
 import { formatDate, formatMoney, optionalRate, parseMoney, today } from './money'
@@ -37,8 +37,11 @@ export function OrdersView() {
   const { busy, error, setError, run } = useAction()
   useEffect(() => { get<ContractRef[]>(`/contracts?kind=${kind}`).then(c => setContracts(c.filter(x => x.status === 'Active' && !x.expired))).catch(() => setContracts([])); setContractId(''); setContractLines([]) }, [kind])
   useEffect(() => { get<Item[]>('/items').then(setItems).catch(() => setItems([])) }, [])
+  const loadSeq = useRef(0)
   const load = useCallback(() => run(async () => {
+    const mine = ++loadSeq.current
     const pg = await get<{ items: Order[]; total: number }>(`/orders?kind=${kind}&page=1&pageSize=100`)
+    if (mine !== loadSeq.current) return   // đã đổi sang loại đơn khác / tải lại: bỏ phản hồi cũ
     setList(pg.items); setTotal(pg.total)
   }), [run, kind])
   const loadMore = async () => {
