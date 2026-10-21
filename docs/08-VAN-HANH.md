@@ -37,7 +37,7 @@ Gói **chưa ký số** — Windows SmartScreen có thể cảnh báo. Ký mã b
 
 | Khóa | Giá trị | Mặc định |
 |---|---|---|
-| `Hak:Environment` | `Development` / `Test` / `Production` | `Development` |
+| `Hak:Environment` | `Development` / `Test` / `Production` | `Production` (máy phát triển phải ghi rõ `--Hak:Environment=Development`) |
 | `Hak:Provider` | `Sqlite` / `PostgreSQL` | `Sqlite` |
 | `Hak:DatabasePath` | Đường dẫn tệp SQLite | `%LOCALAPPDATA%\HAK\<môi trường>\hak.db` |
 | `ConnectionStrings:Hak` | Chuỗi kết nối PostgreSQL — **chỉ đặt bằng biến môi trường `ConnectionStrings__Hak`**, không ghi vào tệp trong kho mã | — |

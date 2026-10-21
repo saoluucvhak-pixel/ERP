@@ -17,7 +17,10 @@ using Hak.Domain.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var runtime = new HakRuntimeOptions { Environment = builder.Configuration["Hak:Environment"] ?? "Development" };
+// Không khai báo Hak:Environment = mặc định của HakRuntimeOptions (Production, an toàn khi quên cấu hình): chạy HAK.exe trực tiếp trên dữ liệu
+// thật vẫn chặn ghi sổ khi chế độ kế toán chưa xác minh. Development / Test phải bật tường minh (--Hak:Environment=Development, launchSettings, test host).
+var runtime = new HakRuntimeOptions();
+if (builder.Configuration["Hak:Environment"] is { Length: > 0 } configuredEnvironment) runtime.Environment = configuredEnvironment;
 
 // Storage (docs/02 ADR-04): Sqlite = one machine (default); PostgreSQL = LAN server mode. The PostgreSQL connection string comes
 // from ConnectionStrings:Hak (environment variable ConnectionStrings__Hak or a protected settings file), never from the repository.

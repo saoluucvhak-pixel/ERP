@@ -18,7 +18,7 @@ public static class HakDb
         }.ToString();
         return new DbContextOptionsBuilder<HakDbContext>()
             .UseSqlite(cs)
-            .AddInterceptors([new LedgerImmutabilityInterceptor(), .. extraInterceptors])
+            .AddInterceptors([new LedgerImmutabilityInterceptor(), new UnicodeLowerInterceptor(), .. extraInterceptors])
             .Options;
     }
 

@@ -162,7 +162,7 @@ public class ApiTests
         for (var i = 1; i <= 2; i++)
             await Json(await lap.PostAsJsonAsync("/api/vouchers", new
             {
-                voucherType = "GJ", voucherDate = $"2026-03-0{i + 1}", postingDate = $"2026-03-0{i + 1}", description = $"Chi phí văn phòng {i}",
+                voucherType = "GJ", voucherDate = $"2026-03-0{i + 1}", postingDate = $"2026-03-0{i + 1}", description = $"Chi phí VĂN PHÒNG {i}",
                 lines = new object[] { new { accountId = rev, side = "D", amount = "10" }, new { accountId = cash, side = "C", amount = "10" } },
             }));
         var page = await Json(await ktt.GetAsync("/api/vouchers?from=2026-03-01&to=2026-03-31&take=2"));
@@ -171,6 +171,9 @@ public class ApiTests
         Assert.Single(second["items"]!.AsArray());
         var found = await Json(await ktt.GetAsync("/api/vouchers?text=" + Uri.EscapeDataString("văn phòng 2")));
         Assert.Equal(1, (int)found["total"]!);
+        // Search is case-insensitive for Vietnamese capitals (non-ASCII) in the stored text too, on SQLite as on PostgreSQL.
+        var upper = await Json(await ktt.GetAsync("/api/vouchers?text=" + Uri.EscapeDataString("chi phí Văn Phòng 2")));
+        Assert.Equal(1, (int)upper["total"]!);
         Assert.Equal(1, (int)(await Json(await ktt.GetAsync("/api/vouchers?status=Posted")))["total"]!);
     }
 }

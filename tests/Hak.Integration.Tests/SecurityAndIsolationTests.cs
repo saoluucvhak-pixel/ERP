@@ -99,6 +99,14 @@ public class SecurityAndIsolationTests
     }
 
     [Fact]
+    public void RuntimeEnvironment_DefaultsToProduction_WhenNotConfigured()
+    {
+        // Program.cs keeps this default when Hak:Environment is missing: a forgotten setting must fail closed (posting needs a verified regime).
+        Assert.True(new Hak.Application.Common.HakRuntimeOptions().IsProduction);
+        Assert.False(new Hak.Application.Common.HakRuntimeOptions { Environment = "Development" }.IsProduction);
+    }
+
+    [Fact]
     public async Task Login_Session_AndRevocation()
     {
         using var h = await TestHost.CreateAsync();
