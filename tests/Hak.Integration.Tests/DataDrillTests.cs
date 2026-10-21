@@ -100,6 +100,17 @@ public class DataDrillTests
         Assert.Equal(expectedVouchers, posted.Done);
 
         var before = await Totals(s.Db);
+
+        // Đối chiếu độc lập: cộng thẳng từ các tệp CSV (không qua phần mềm) rồi so với sổ cái theo từng tài khoản.
+        var expected = new Dictionary<string, (decimal Debit, decimal Credit)>();
+        void Add(string code, decimal d, decimal c) { expected.TryGetValue(code, out var x); expected[code] = (x.Debit + d, x.Credit + c); }
+        decimal Num(string t) => string.IsNullOrWhiteSpace(t) ? 0m : decimal.Parse(t, System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var r in Csv("so-du-dau.csv", 5)) Add(r.Cells[0].Trim().ToUpperInvariant(), Num(r.Cells[2]), Num(r.Cells[3]));
+        foreach (var file in new[] { "chung-tu-2025.csv", "chung-tu-2026.csv" })
+            foreach (var r in Csv(file, 12)) Add(r.Cells[4].Trim().ToUpperInvariant(), Num(r.Cells[6]), Num(r.Cells[7]));
+        var ledger = await Totals(s.Db);
+        Assert.Equal(expected.Keys.OrderBy(k => k), ledger.Keys.OrderBy(k => k));
+        foreach (var (code, v) in expected) Assert.True(v == ledger[code], $"TK {code}: CSV Nợ {v.Debit} Có {v.Credit}, sổ cái Nợ {ledger[code].Debit} Có {ledger[code].Credit}");
         Assert.NotEmpty(before);
         Assert.Equal(before.Sum(x => x.Value.Debit), before.Sum(x => x.Value.Credit));
 
