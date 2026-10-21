@@ -83,6 +83,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<DrynessMethod> DrynessMethods => Set<DrynessMethod>();
     public DbSet<DrynessDailyRate> DrynessDailyRates => Set<DrynessDailyRate>();
     public DbSet<StockReservation> StockReservations => Set<StockReservation>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
     public DbSet<StockMeasurement> StockMeasurements => Set<StockMeasurement>();
     public DbSet<CommercialInvoice> CommercialInvoices => Set<CommercialInvoice>();
     public DbSet<CommercialInvoiceLine> CommercialInvoiceLines => Set<CommercialInvoiceLine>();
@@ -410,6 +411,14 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => new { x.CompanyId, x.ItemId, x.Date }).IsUnique();
             e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("ck_dryness_daily_rates_percent", $"dryness_percent > 0 AND dryness_percent <= {Bound(100)}"));
+        });
+        b.Entity<IdempotencyRecord>(e =>
+        {
+            e.HasIndex(x => new { x.Scope, x.Key }).IsUnique();
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.Scope).HasMaxLength(64);
+            e.Property(x => x.Key).HasMaxLength(100);
+            e.Property(x => x.RequestHash).HasMaxLength(64);
         });
         b.Entity<StockReservation>(e =>
         {

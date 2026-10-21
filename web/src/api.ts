@@ -46,8 +46,55 @@ function parse(text: string, status: number): any {
   catch { throw new ApiError(status, 'HTTP_' + status, `Máy chủ trả lời không đúng định dạng (mã ${status}).`) }
 }
 
-export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+/** Khóa chống ghi trùng. crypto.randomUUID chỉ có ở ngữ cảnh bảo mật (https/localhost); truy cập qua http trong LAN phải dùng getRandomValues. */
+export function newIdempotencyKey(): string {
+  const c = globalThis.crypto
+  if (c?.randomUUID) return c.randomUUID()
+  const b = new Uint8Array(16)
+  if (c?.getRandomValues) c.getRandomValues(b); else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256)
+  return Array.from(b, x => x.toString(16).padStart(2, '0')).join('')
+}
+
+export const UNCERTAIN_CODE = 'KET_QUA_CHUA_XAC_DINH'
+interface PendingWrite { method: string; path: string; body: unknown; key: string }
+let pendingWrite: PendingWrite | null = null
+export const hasPendingWrite = () => pendingWrite !== null
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+/**
+ * Thao tác ghi (POST/PUT/DELETE) mang một Idempotency-Key: mất kết nối giữa chừng thì tự gửi lại tối đa 2 lần với CÙNG khóa (máy chủ trả phản hồi cũ nếu lần trước đã ghi,
+ * không ghi hai lần). Vẫn không nối được thì báo "kết quả chưa xác định" và giữ yêu cầu để người dùng bấm thử lại an toàn; không bao giờ đoán là đã ghi hay chưa.
+ */
+export async function api<T = unknown>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+  const mutating = method === 'POST' || method === 'PUT' || method === 'DELETE'
+  const key = mutating ? (idempotencyKey ?? newIdempotencyKey()) : undefined
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const result = await apiOnce<T>(method, path, body, key)
+      if (pendingWrite && pendingWrite.key === key) pendingWrite = null
+      return result
+    } catch (e) {
+      if (!(mutating && e instanceof ApiError && e.status === 0)) throw e
+      if (attempt >= 2) {
+        pendingWrite = { method, path, body, key: key! }
+        throw new ApiError(0, UNCERTAIN_CODE, 'Mất kết nối khi đang ghi: thao tác CÓ THỂ đã được lưu. Bấm "Thử lại an toàn" (không ghi trùng) hoặc mở lại danh sách để kiểm tra trước khi nhập lại.')
+      }
+      await sleep(1000 * (attempt + 1))
+    }
+  }
+}
+
+/** Gửi lại thao tác ghi chưa xác định với đúng khóa cũ. Trả về true nếu máy chủ xác nhận (ghi mới hoặc nhận lại phản hồi cũ). */
+export async function retryPendingWrite(): Promise<boolean> {
+  const p = pendingWrite
+  if (!p) return false
+  await api(p.method, p.path, p.body, p.key)
+  return true
+}
+
+async function apiOnce<T = unknown>(method: string, path: string, body?: unknown, key?: string): Promise<T> {
   const headers: Record<string, string> = { 'X-Device': 'web' }
+  if (key) headers['Idempotency-Key'] = key
   if (token) headers.Authorization = `Bearer ${token}`
   if (companyId) headers['X-Company-Id'] = companyId
   if (body !== undefined) headers['Content-Type'] = 'application/json'

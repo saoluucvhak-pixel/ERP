@@ -117,6 +117,34 @@ public class ApiTests
         Assert.Equal("12345678901", (string)v["totalDebit"]!);
         var id = (string)v["id"]!;
 
+        // Idempotency-Key: a repeated write returns the first response and writes once; another body under the same key is refused; failures are not remembered.
+        async Task<HttpResponseMessage> Keyed(string key, object payload)
+        {
+            var msg = new HttpRequestMessage(HttpMethod.Post, "/api/vouchers") { Content = JsonContent.Create(payload) };
+            msg.Headers.Add("Idempotency-Key", key);
+            return await lap.SendAsync(msg);
+        }
+        object Voucher(string description, string amount) => new
+        {
+            voucherType = "GJ", voucherDate = "2026-04-02", postingDate = "2026-04-02", description,   // April: the March counts asserted below stay as they were
+            lines = new object[] { new { accountId = cash, side = "D", amount }, new { accountId = rev, side = "C", amount } },
+        };
+        var totalBefore = (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!;
+        var keyedFirst = await Keyed("key-aaaa-0001", Voucher("Ghi một lần", "1000"));
+        var keyedFirstBody = await keyedFirst.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, keyedFirst.StatusCode);
+        var keyedRetry = await Keyed("key-aaaa-0001", Voucher("Ghi một lần", "1000"));          // lost response → client retries with the same key
+        Assert.Equal(keyedFirstBody, await keyedRetry.Content.ReadAsStringAsync());
+        Assert.True(keyedRetry.Headers.Contains("Idempotent-Replay"));
+        Assert.Equal(totalBefore + 1, (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!);
+        var keyedReused = await Keyed("key-aaaa-0001", Voucher("Nội dung khác", "2000"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, keyedReused.StatusCode);
+        Assert.Equal("IDEMPOTENCY_KEY_REUSED", (string)JsonNode.Parse(await keyedReused.Content.ReadAsStringAsync())!["code"]!);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Keyed("key-bbbb-0002", Voucher("Sai số tiền", "abc"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Keyed("key-bbbb-0002", Voucher("Sai số tiền", "abc"))).StatusCode);   // errors are not stored: retried for real
+        Assert.Equal(HttpStatusCode.BadRequest, (await Keyed("short", Voucher("Khóa ngắn", "1000"))).StatusCode);
+        Assert.Equal(totalBefore + 1, (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!);
+
         await Json(await lap.PostAsync($"/api/vouchers/{id}/submit", null));
         Assert.Equal(HttpStatusCode.Forbidden, (await lap.PostAsync($"/api/vouchers/{id}/approve", null)).StatusCode);
         await Json(await ktt.PostAsync($"/api/vouchers/{id}/approve", null));

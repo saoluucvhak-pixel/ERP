@@ -198,6 +198,7 @@ if (File.Exists(Path.Combine(webRoot, "index.html")))
 }
 
 app.UseMiddleware<DomainExceptionMiddleware>();
+app.UseMiddleware<IdempotencyMiddleware>();   // trong DomainExceptionMiddleware: lỗi nghiệp vụ hoàn tác giao dịch rồi mới thành mã HTTP
 app.MapHakEndpoints();
 app.MapPhase2Endpoints();
 app.MapBankingEndpoints();
