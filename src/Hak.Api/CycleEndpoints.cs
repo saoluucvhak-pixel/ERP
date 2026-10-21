@@ -6,6 +6,7 @@ using Hak.Domain.Cycles;
 namespace Hak.Api;
 
 public sealed record AcceptPaymentRequest(string? Note, bool AcknowledgeMismatch = false);
+public sealed record MatchPolicyRequest(Hak.Domain.Cycles.MatchPolicyScope Scope, Guid? PartnerId, decimal PricePercent, decimal PriceAbsolute, decimal QuantityPercent, DateOnly EffectiveFrom, string? Note);
 public sealed record SupplierStatusRequest(SupplierStatus Status, string? Reason);
 public sealed record SupplierPolicyRequest(bool Require);
 public sealed record ReorderOrderRequest(Guid PartnerId, IReadOnlyList<ReorderOrderLine> Lines, DateOnly? ExpectedDate);
@@ -28,6 +29,14 @@ public static class CycleEndpoints
         // Cung ứng: hàng chờ thanh toán theo ngày đáo hạn và bước "chấp nhận thanh toán".
         api.MapGet("/procurement/payable-queue", async (HttpContext http, DateOnly asOf, PaymentAcceptanceService s) =>
             Results.Ok(await s.PayableQueueAsync(await http.SessionAsync(), asOf)));
+        // Đợt 3: duyệt sai lệch đối chiếu (quyền riêng), chính sách dung sai có phiên bản, theo dõi nhận hàng của đơn mua.
+        api.MapPost("/procurement/invoices/{id:guid}/approve-variance", async (HttpContext http, Guid id, ReasonRequest r, PurchaseVarianceService s) => Results.Ok(await s.ApproveAsync(await http.SessionAsync(), id, r.Reason)));
+        api.MapGet("/procurement/invoices/{id:guid}/variance", async (HttpContext http, Guid id, PurchaseVarianceService s) => Results.Ok(await s.CurrentAsync(await http.SessionAsync(), id)));
+        api.MapPost("/procurement/variance/{id:guid}/revoke", async (HttpContext http, Guid id, ReasonRequest r, PurchaseVarianceService s) => { await s.RevokeAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
+        api.MapGet("/procurement/match-policies", async (HttpContext http, PurchaseVarianceService s) => Results.Ok(await s.ListPoliciesAsync(await http.SessionAsync())));
+        api.MapPost("/procurement/match-policies", async (HttpContext http, MatchPolicyRequest r, PurchaseVarianceService s) =>
+            Results.Ok(await s.SetPolicyAsync(await http.SessionAsync(), new MatchPolicyInput(r.Scope, r.PartnerId, r.PricePercent, r.PriceAbsolute, r.QuantityPercent, r.EffectiveFrom, r.Note))));
+        api.MapGet("/procurement/orders/{id:guid}/receiving", async (HttpContext http, Guid id, PurchaseReceivingService s) => Results.Ok(await s.ForOrderAsync(await http.SessionAsync(), id)));
         api.MapPost("/procurement/invoices/{id:guid}/accept-payment", async (HttpContext http, Guid id, AcceptPaymentRequest r, PaymentAcceptanceService s) =>
             Results.Ok(Dto(await s.AcceptAsync(await http.SessionAsync(), id, r.Note, r.AcknowledgeMismatch))));
         api.MapPost("/procurement/acceptances/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, PaymentAcceptanceService s) =>

@@ -2337,6 +2337,147 @@ namespace Hak.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Cycles.PurchaseMatchPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effective_from");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
+
+                    b.Property<Guid?>("PartnerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_id");
+
+                    b.Property<long>("PriceAbsolute")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("price_absolute");
+
+                    b.Property<long>("PricePercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("price_percent");
+
+                    b.Property<long>("QuantityPercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("quantity_percent");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("scope");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_purchase_match_policies");
+
+                    b.HasIndex("PartnerId")
+                        .HasDatabaseName("ix_purchase_match_policies_partner_id");
+
+                    b.HasIndex("CompanyId", "Scope", "PartnerId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_purchase_match_policies_company_id_scope_partner_id_version");
+
+                    b.ToTable("purchase_match_policies", t =>
+                        {
+                            t.HasCheckConstraint("ck_purchase_match_policies_tolerance", "price_percent >= 0 AND price_absolute >= 0 AND quantity_percent >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.PurchaseVarianceApproval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ApprovedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid>("ApprovedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_by");
+
+                    b.Property<string>("CloseReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("close_reason");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_at");
+
+                    b.Property<Guid?>("ClosedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("closed_by");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<int?>("PolicyVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("policy_version");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("snapshot_hash");
+
+                    b.Property<string>("SnapshotText")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("snapshot_text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_purchase_variance_approvals");
+
+                    b.HasIndex("InvoiceId")
+                        .HasDatabaseName("ix_purchase_variance_approvals_invoice_id");
+
+                    b.HasIndex("CompanyId", "InvoiceId", "Status")
+                        .HasDatabaseName("ix_purchase_variance_approvals_company_id_invoice_id_status");
+
+                    b.ToTable("purchase_variance_approvals");
+                });
+
             modelBuilder.Entity("Hak.Domain.Cycles.SalesDelivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8770,6 +8911,25 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_payment_acceptances_business_partners_partner_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.PurchaseMatchPolicy", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_purchase_match_policies_business_partners_partner_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Cycles.PurchaseVarianceApproval", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_purchase_variance_approvals_commercial_invoices_invoice_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Cycles.SalesDelivery", b =>

@@ -798,8 +798,14 @@ public class TradeTests
 
         // Acceptance is refused; acknowledging needs a reason, is audited, and then goes through.
         Assert.Equal(ErrorCodes.PaymentMatchFailed, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "ok")));
-        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "  ", acknowledgeMismatch: true)));
-        var acc = await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "Đã thỏa thuận với NCC trả 10 kg ẩm bằng giảm giá kỳ sau", acknowledgeMismatch: true);
+        // Approving a variance is its own permission (payment.variance), not part of accepting payment; it needs a reason and is bound to the data it was approved on.
+        var variance = new Hak.Application.Cycles.PurchaseVarianceService(s.Db, s.Audit, h.Clock);
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "Thỏa thuận", acknowledgeMismatch: true)));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => variance.ApproveAsync(h.Preparer, inv.Id, "Thỏa thuận")));
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => variance.ApproveAsync(h.Approver, inv.Id, "  ")));
+        var approval = await variance.ApproveAsync(h.Approver, inv.Id, "Đã thỏa thuận với NCC trả 10 kg ẩm bằng giảm giá kỳ sau");
+        Assert.True(approval.StillValid);
+        var acc = await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, "Chấp nhận theo chốt duyệt sai lệch");
         Assert.Equal(Hak.Domain.Cycles.PaymentAcceptanceStatus.Pending, acc.Status);
         Assert.Contains(s.Db.AuditLogs.AsNoTracking().Where(a => a.Action == "payment_acceptance.accept").Select(a => a.DataJson).ToList(), j => j!.Contains("mismatchAcknowledged\":true") || j.Contains("\"mismatchAcknowledged\":true"));
 
@@ -1616,5 +1622,117 @@ public class TradeTests
         Assert.Equal(30m, (await s.Reservations.AvailabilityAsync(h.Approver, fx.Add)).Reserved);
         await orders.CancelAsync(h.Preparer, b.Id, "Khách hủy");
         Assert.Equal(0m, (await s.Reservations.AvailabilityAsync(h.Approver, fx.Add)).Reserved);
+    }
+
+    // ------------------------------------------------------------------ Đợt 3: đối chiếu lũy kế, dung sai, duyệt sai lệch
+
+    private async Task<(TradeOrder Order, StockDocument Receipt)> ConfirmedPurchaseWithReceiptAsync(Fx fx, decimal orderQty, decimal receiptQty, decimal price = 50_000)
+    {
+        var (h, s) = (fx.H, fx.S);
+        var orders = Orders(fx);
+        var order = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Purchase, h.Partner["NCC01"], D(3, 1), "Mua phụ gia", [new OrderLineInput(fx.Add, orderQty, price)]));
+        await orders.ConfirmAsync(h.Approver, order.Id);
+        var receipt = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 2), D(3, 2), "Nhập theo đơn",
+            [new StockLineInput(fx.Add, receiptQty, 0, fx.A("GRNI"), OrderId: order.Id, OrderLineNo: 1)], PartnerId: h.Partner["NCC01"]));
+        return (order, receipt);
+    }
+
+    [Fact]
+    public async Task PurchaseMatch_IsCumulativeAcrossInvoices_OnTheSameReceiptLine()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var inspections = new Hak.Application.Cycles.GoodsInspectionService(s.Db, s.Audit, h.Clock);
+        var match = new Hak.Application.Cycles.PurchaseMatchService(s.Db);
+        var (_, receipt) = await ConfirmedPurchaseWithReceiptAsync(fx, 100, 100);
+        await inspections.CreateAsync(h.Preparer, new(receipt.Id, D(3, 2), "Ban kiểm nghiệm", null, [new(1, 90)]));      // 90 of 100 accepted
+
+        var first = await fx.Inv.CreateAsync(h.Preparer, Purchase(fx, "0000500", new InvoiceLineInput(50_000, receipt.Id, 1, 50, VatRate: 10)));
+        Assert.True((await match.MatchAsync(h.Auditor, first.Id)).Matched);                                                // 50 ≤ 90 on its own
+        var second = await fx.Inv.CreateAsync(h.Preparer, Purchase(fx, "0000501", new InvoiceLineInput(50_000, receipt.Id, 1, 50, VatRate: 10)));
+        var m2 = await match.MatchAsync(h.Auditor, second.Id);                                                             // 50 + 50 = 100 > 90 accepted
+        var flag = Assert.Single(m2.Flags, f => f.Blocking);
+        Assert.Equal("OVER_ACCEPTED", flag.Code);
+        Assert.Equal(100m, m2.Lines[0].CumulativeInvoicedOnReceipt);
+        Assert.False((await match.MatchAsync(h.Auditor, first.Id)).Matched);                                               // the earlier invoice now sees the total too
+    }
+
+    [Fact]
+    public async Task PurchaseMatch_PriceTolerance_PolicyIsVersioned_PartnerBeatsCompany_AndChangesTheSnapshot()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var match = new Hak.Application.Cycles.PurchaseMatchService(s.Db);
+        var variance = new Hak.Application.Cycles.PurchaseVarianceService(s.Db, s.Audit, h.Clock);
+        var (_, receipt) = await ConfirmedPurchaseWithReceiptAsync(fx, 100, 100, price: 50_000);
+        var inv = await fx.Inv.CreateAsync(h.Preparer, Purchase(fx, "0000510", new InvoiceLineInput(50_500, receipt.Id, 1, VatRate: 10)));   // +1% over the order price
+        await fx.Inv.PostAsync(h.Approver, inv.Id);
+
+        var strict = await match.MatchAsync(h.Auditor, inv.Id);
+        Assert.Contains(strict.Flags, f => f.Code == "PRICE_DIFF" && f.Blocking);
+        Assert.Null(strict.PolicyVersion);
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => variance.SetPolicyAsync(h.Auditor, new(Hak.Domain.Cycles.MatchPolicyScope.Company, null, 2, 0, 0, D(1, 1)))));
+        var v1 = await variance.SetPolicyAsync(h.Admin, new(Hak.Domain.Cycles.MatchPolicyScope.Company, null, 2, 0, 0, D(1, 1), "Dung sai 2%"));
+        Assert.Equal(1, v1.Version);
+        var within = await match.MatchAsync(h.Auditor, inv.Id);
+        Assert.True(within.Matched);
+        Assert.Contains(within.Flags, f => f.Code == "PRICE_WITHIN_TOLERANCE" && !f.Blocking);
+        Assert.NotEqual(strict.SnapshotHash, within.SnapshotHash);
+
+        // A stricter partner policy (new version for that supplier) wins over the company's.
+        await variance.SetPolicyAsync(h.Admin, new(Hak.Domain.Cycles.MatchPolicyScope.Partner, h.Partner["NCC01"], 0.5m, 0, 0, D(1, 1)));
+        Assert.False((await match.MatchAsync(h.Auditor, inv.Id)).Matched);
+        var v2 = await variance.SetPolicyAsync(h.Admin, new(Hak.Domain.Cycles.MatchPolicyScope.Company, null, 3, 0, 0, D(1, 1)));
+        Assert.Equal(2, v2.Version);
+        Assert.Equal(1, (await variance.ListPoliciesAsync(h.Auditor)).Count(p => p.Scope == "Company" && p.IsActive));
+    }
+
+    [Fact]
+    public async Task VarianceApproval_IsBoundToTheSourceData_AndSourceChangesRequireApprovalAgain()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var inspections = new Hak.Application.Cycles.GoodsInspectionService(s.Db, s.Audit, h.Clock);
+        var variance = new Hak.Application.Cycles.PurchaseVarianceService(s.Db, s.Audit, h.Clock);
+        var (_, receipt) = await ConfirmedPurchaseWithReceiptAsync(fx, 100, 100);
+        var inv = await fx.Inv.CreateAsync(h.Preparer, Purchase(fx, "0000520", new InvoiceLineInput(50_000, receipt.Id, 1, VatRate: 10)));
+        await fx.Inv.PostAsync(h.Approver, inv.Id);
+        var bb = await inspections.CreateAsync(h.Preparer, new(receipt.Id, D(3, 2), "Ban kiểm nghiệm", null, [new(1, 90)]));
+
+        Assert.Equal(ErrorCodes.PaymentMatchFailed, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null)));
+        var approval = await variance.ApproveAsync(h.Approver, inv.Id, "NCC giảm giá kỳ sau");
+        Assert.Equal(approval.Id, (await variance.CurrentAsync(h.Auditor, inv.Id))!.Id);
+        var queue = Assert.Single(await new Hak.Application.Cycles.PaymentAcceptanceService(s.Db, s.PaymentOrders, s.Settlement, s.Audit, h.Clock).PayableQueueAsync(h.Auditor, D(3, 31)));
+        Assert.True(queue.VarianceApproved);
+
+        // The source changes (a different inspection result): the approval no longer matches and acceptance is refused again.
+        await inspections.CancelAsync(h.Preparer, bb.Id, "Kiểm nghiệm lại");
+        await inspections.CreateAsync(h.Preparer, new(receipt.Id, D(3, 3), "Ban kiểm nghiệm 2", null, [new(1, 80)]));
+        Assert.False((await variance.CurrentAsync(h.Auditor, inv.Id))!.StillValid);
+        Assert.Equal(ErrorCodes.PaymentMatchFailed, await CodeOf(() => s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null)));
+        await variance.ApproveAsync(h.Approver, inv.Id, "Duyệt lại theo kết quả kiểm nghiệm mới");
+        Assert.Equal(Hak.Domain.Cycles.VarianceApprovalStatus.Superseded.ToString(), (await s.Db.PurchaseVarianceApprovals.AsNoTracking().SingleAsync(a => a.Id == approval.Id)).Status.ToString());
+        await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null);
+    }
+
+    [Fact]
+    public async Task OrderReceiving_KeepsWhatActuallyArrived_EvenWhenPartIsRejectedOrWaitsForQc()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var inspections = new Hak.Application.Cycles.GoodsInspectionService(s.Db, s.Audit, h.Clock);
+        var receiving = new Hak.Application.Cycles.PurchaseReceivingService(s.Db);
+        var (order, receipt) = await ConfirmedPurchaseWithReceiptAsync(fx, 100, 60);
+
+        var before = Assert.Single((await receiving.ForOrderAsync(h.Auditor, order.Id)).Lines);
+        Assert.Equal((100m, 60m, 60m, 0m, 0m, 40m), (before.Ordered, before.Arrived, before.Accepted, before.Rejected, before.PendingQc, before.NotYetArrived));
+        await inspections.CreateAsync(h.Preparer, new(receipt.Id, D(3, 2), "Ban kiểm nghiệm", "5 kg hỏng", [new(1, 55)]));
+        var after = Assert.Single((await receiving.ForOrderAsync(h.Auditor, order.Id)).Lines);
+        Assert.Equal((60m, 55m, 5m, 0m), (after.Arrived, after.Accepted, after.Rejected, after.PostedToStock));   // the 5 rejected still count as arrived
     }
 }

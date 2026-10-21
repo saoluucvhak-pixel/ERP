@@ -60,6 +60,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<ClosingStep> ClosingSteps => Set<ClosingStep>();
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<PaymentAcceptance> PaymentAcceptances => Set<PaymentAcceptance>();
+    public DbSet<PurchaseMatchPolicy> PurchaseMatchPolicies => Set<PurchaseMatchPolicy>();
+    public DbSet<PurchaseVarianceApproval> PurchaseVarianceApprovals => Set<PurchaseVarianceApproval>();
     public DbSet<GoodsInspection> GoodsInspections => Set<GoodsInspection>();
     public DbSet<GoodsInspectionLine> GoodsInspectionLines => Set<GoodsInspectionLine>();
     public DbSet<SalesDispatchOrder> SalesDispatchOrders => Set<SalesDispatchOrder>();
@@ -538,6 +540,17 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("ck_sales_delivery_lines_qty", "quantity > 0"));
         });
+        b.Entity<PurchaseMatchPolicy>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Scope, x.PartnerId, x.Version }).IsUnique();
+            e.HasOne<BusinessPartner>().WithMany().HasForeignKey(x => x.PartnerId).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("ck_purchase_match_policies_tolerance", "price_percent >= 0 AND price_absolute >= 0 AND quantity_percent >= 0"));
+        });
+        b.Entity<PurchaseVarianceApproval>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.InvoiceId, x.Status });
+            e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<PaymentAcceptance>(e =>
         {
             // One active acceptance per invoice is enforced by the service inside the single-writer transaction.
@@ -950,6 +963,9 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<SettlementAllocation>().Property(x => x.ForeignAmount).HasConversion(moneyNullable);
         b.Entity<PaymentOrder>().Property(x => x.Amount).HasConversion(money);
         b.Entity<PaymentAcceptance>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<PurchaseMatchPolicy>().Property(x => x.PricePercent).HasConversion(money);
+        b.Entity<PurchaseMatchPolicy>().Property(x => x.PriceAbsolute).HasConversion(money);
+        b.Entity<PurchaseMatchPolicy>().Property(x => x.QuantityPercent).HasConversion(money);
         b.Entity<GoodsInspectionLine>().Property(x => x.ReceivedQty).HasConversion(money);
         b.Entity<GoodsInspectionLine>().Property(x => x.AcceptedQty).HasConversion(money);
         b.Entity<SalesDispatchLine>().Property(x => x.Quantity).HasConversion(money);

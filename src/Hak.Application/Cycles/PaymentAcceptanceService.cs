@@ -18,7 +18,7 @@ namespace Hak.Application.Cycles;
 /// <summary>Một hóa đơn mua còn nợ trong hàng chờ thanh toán theo ngày đáo hạn (chu trình Cung ứng).</summary>
 public sealed record PayableQueueRow(Guid InvoiceId, string Number, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly? DueDate,
     Guid PartnerId, string PartnerCode, string PartnerName, decimal Total, decimal Open, bool HasReceiptLink, bool FromOrder,
-    Guid? AcceptanceId, string Stage, int MismatchCount = 0, IReadOnlyList<string>? MatchNotes = null);
+    Guid? AcceptanceId, string Stage, int MismatchCount = 0, IReadOnlyList<string>? MatchNotes = null, bool VarianceApproved = false);
 
 /// <summary>Một bàn giao trong hộp thư của chu trình thanh toán.</summary>
 public sealed record PaymentInboxRow(Guid AcceptanceId, Guid InvoiceId, string InvoiceNumber, string InvoiceSeries, string InvoiceNo, Guid PartnerId, string PartnerName,
@@ -32,6 +32,8 @@ public sealed record PaymentInboxRow(Guid AcceptanceId, Guid InvoiceId, string I
 /// </summary>
 public sealed class PaymentAcceptanceService(HakDbContext db, PaymentOrderService orders, SettlementService settlement, AuditService audit, IClock clock)
 {
+    private PurchaseVarianceService Variance => new(db, audit, clock);
+
     public const string BankRole = "BANK_PAYMENT_DEFAULT";
 
     // Stage codes shown to users; "Paid" is derived from the payable line, never stored.
@@ -64,6 +66,8 @@ public sealed class PaymentAcceptanceService(HakDbContext db, PaymentOrderServic
         var partners = await db.BusinessPartners.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToDictionaryAsync(p => p.Id);
         var orderStatus = await OrderStatusesAsync(accept.Values.Select(a => a.PaymentOrderId).OfType<Guid>().ToList());
         var matcher = new PurchaseMatchService(db);
+        var approvedHashes = (await db.PurchaseVarianceApprovals.AsNoTracking().Where(x => x.CompanyId == ctx.CompanyId && x.Status == VarianceApprovalStatus.Active)
+            .Select(x => new { x.InvoiceId, x.SnapshotHash }).ToListAsync()).Select(x => (x.InvoiceId, x.SnapshotHash)).ToHashSet();
 
         var rows = new List<PayableQueueRow>();
         foreach (var inv in invoices)
@@ -75,7 +79,7 @@ public sealed class PaymentAcceptanceService(HakDbContext db, PaymentOrderServic
             rows.Add(new PayableQueueRow(inv.Id, inv.Number, inv.InvoiceSeries, inv.InvoiceNo, inv.InvoiceDate, inv.DueDate, inv.PartnerId, p.Code, p.Name,
                 item.Amount, item.Open, inv.Lines.Any(l => l.StockDocumentId != null), inv.Lines.Any(l => l.OrderId != null),
                 acc?.Id, acc is null ? Stages.NotAccepted : StageOf(acc, acc.PaymentOrderId is { } o ? orderStatus.GetValueOrDefault(o) : null, item.Open),
-                match.BlockingCount, match.Flags.Select(f => f.Message).ToList()));
+                match.BlockingCount, match.Flags.Select(f => f.Message).ToList(), match.BlockingCount > 0 && approvedHashes.Contains((inv.Id, match.SnapshotHash))));
         }
         return rows.OrderBy(r => r.DueDate ?? DateOnly.MaxValue).ThenBy(r => r.InvoiceDate).ThenBy(r => r.Number, StringComparer.Ordinal).ToList();
     }
@@ -126,11 +130,16 @@ public sealed class PaymentAcceptanceService(HakDbContext db, PaymentOrderServic
             // Đối chiếu nhiều bên trước khi chấp nhận (tệp mục V.2.2.3): lệch số lượng thực nhận đạt hoặc lệch đơn giá phải xử lý, hoặc xác nhận kèm lý do (ghi nhật ký).
             var match = await new PurchaseMatchService(db).MatchCoreAsync(ctx.CompanyId, inv.Id);
             var mismatchNote = match.Lines.SelectMany(l => l.Flags.Where(f => f.Blocking).Select(f => $"Dòng {l.LineNo}: {f.Message}")).ToList();
-            if (mismatchNote.Count > 0)
+            Guid? approvalId = null;
+            if (mismatchNote.Count > 0 && await PurchaseVarianceService.HasValidApprovalAsync(db, ctx.CompanyId, inv.Id, match.SnapshotHash))
+                approvalId = (await db.PurchaseVarianceApprovals.AsNoTracking().FirstAsync(x => x.CompanyId == ctx.CompanyId && x.InvoiceId == inv.Id && x.Status == VarianceApprovalStatus.Active && x.SnapshotHash == match.SnapshotHash)).Id;
+            else if (mismatchNote.Count > 0)
             {
                 if (!acknowledgeMismatch)
                     throw new DomainException(ErrorCodes.PaymentMatchFailed, $"Hóa đơn {inv.Number} lệch khi đối chiếu: {string.Join(" | ", mismatchNote)}. Xử lý chênh lệch (trả hàng, giảm giá, sửa hóa đơn) hoặc xác nhận chấp nhận kèm lý do.");
+                ctx.Require(Permissions.PaymentVariance);   // duyệt sai lệch là quyền riêng, không suy ra từ quyền chấp nhận thanh toán
                 if (string.IsNullOrWhiteSpace(note)) throw new DomainException(ErrorCodes.ReasonRequired, "Chấp nhận thanh toán hóa đơn đang lệch phải ghi lý do.");
+                approvalId = (await Variance.CreateAsync(ctx, inv, match, note.Trim())).Id;
             }
 
             var ap = await RoleAccountAsync(ctx.CompanyId, "AP_TRADE") ?? throw Unmapped("AP_TRADE");
@@ -149,7 +158,7 @@ public sealed class PaymentAcceptanceService(HakDbContext db, PaymentOrderServic
             };
             db.PaymentAcceptances.Add(acc);
             await audit.AppendAsync(ctx.CompanyId, ctx, "payment_acceptance.accept", "payment_acceptance", acc.Id.ToString(),
-                new { invoice = inv.Number, amount = acc.Amount, acc.DueDate, mismatchAcknowledged = mismatchNote.Count > 0, mismatch = mismatchNote }, acc.RowVersion);
+                new { invoice = inv.Number, amount = acc.Amount, acc.DueDate, mismatchAcknowledged = mismatchNote.Count > 0, mismatch = mismatchNote, varianceApproval = approvalId }, acc.RowVersion);
             await db.SaveChangesAsync();
 
             // Chu trình thanh toán tự nhận: tạo lệnh Nháp nếu đã có tài khoản ngân hàng mặc định và người chấp nhận có quyền lập lệnh.
@@ -192,6 +201,10 @@ public sealed class PaymentAcceptanceService(HakDbContext db, PaymentOrderServic
 
     private async Task<PaymentOrder> CreateOrderCoreAsync(SessionContext ctx, PaymentAcceptance acc, CommercialInvoice inv, Guid bankAccountId)
     {
+        // Dữ liệu nguồn (lượng nhận/đạt, hóa đơn khác, giá, chính sách) có thể đổi sau khi chấp nhận: còn sai lệch chặn thì phải có chốt duyệt trùng dữ liệu hiện tại.
+        var match = await new PurchaseMatchService(db).MatchCoreAsync(ctx.CompanyId, inv.Id);
+        if (match.BlockingCount > 0 && !await PurchaseVarianceService.HasValidApprovalAsync(db, ctx.CompanyId, inv.Id, match.SnapshotHash))
+            throw new DomainException(ErrorCodes.PaymentMatchFailed, $"Dữ liệu đối chiếu của hóa đơn {inv.Number} đã thay đổi sau lần duyệt: {string.Join(" | ", match.Lines.SelectMany(l => l.Flags.Where(f => f.Blocking).Select(f => $"Dòng {l.LineNo}: {f.Message}")))}. Cần người có quyền duyệt sai lệch duyệt lại trước khi lập lệnh chi.");
         var today = DateOnly.FromDateTime(clock.UtcNow);
         var requested = acc.DueDate is { } d && d > today ? d : today;
         var po = await orders.CreateAsync(ctx, new PaymentOrderInput(bankAccountId, acc.PartnerId, acc.Amount, requested,

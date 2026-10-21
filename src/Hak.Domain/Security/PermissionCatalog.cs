@@ -29,6 +29,7 @@ public static class PermissionCatalog
             new(Permissions.BankDocument, "Chứng từ ngân hàng"),
             new(Permissions.PaymentOrderApprove, "Duyệt lệnh chi"),
             new(Permissions.PaymentAccept, "Chấp nhận thanh toán"),
+            new(Permissions.PaymentVariance, "Duyệt sai lệch đối chiếu hóa đơn mua"),
             new(Permissions.BankReconcile, "Đối chiếu ngân hàng"),
         ]),
         new("trade", "Mua / Bán hàng & công nợ",
