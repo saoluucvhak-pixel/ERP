@@ -43,7 +43,7 @@ public class ConcurrencyTests
         Assert.Equal(1, ok);
         Assert.All(failed, f => Assert.IsType<DomainException>(f));
         using var check = h.NewScope();
-        Assert.Equal(30m, await check.Ledger.AccountBalanceAsync(h.Admin, h.Acc["CASH"], new(2026, 12, 31)));
+        Assert.Equal(30m, await check.Ledger.AccountBalanceAsync(h.Auditor, h.Acc["CASH"], new(2026, 12, 31)));
         Assert.Equal(2, await check.Db.JournalEntries.CountAsync());   // góp vốn + đúng một phiếu chi
     }
 
