@@ -12,10 +12,23 @@ public sealed record LoginResult(string Token, Guid SessionId, Guid UserId, Date
 
 public sealed class AuthService(HakDbContext db, AuditService audit, IClock clock, HakRuntimeOptions options)
 {
+    /// <summary>
+    /// One answer for every refused login (unknown user, wrong password, inactive, locked), so the response never tells a
+    /// guesser that a user name exists or that it is locked. The lock and its reason are in the audit log.
+    /// </summary>
+    public const string LoginDeniedMessage =
+        "Tên đăng nhập hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ tạm khóa tài khoản; cần mở ngay thì nhờ quản trị đặt lại mật khẩu.";
+
+    /// <summary>Hash of a random password per iteration count: verified when the user does not exist, so that path costs the same PBKDF2 time.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> DummyHashes = new();
+
     public async Task<LoginResult> LoginAsync(string userName, string password, string? device)
     {
         var norm = userName.Trim().ToLowerInvariant();
         var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == norm);
+        // Always run PBKDF2 (unknown, inactive and locked users too): response time must not reveal which case applied.
+        var passwordOk = PasswordHasher.Verify(password, user?.PasswordHash
+            ?? DummyHashes.GetOrAdd(options.PasswordIterations, n => PasswordHasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)), n)));
         if (user is { LockedUntil: { } until } && until > clock.UtcNow)
         {
             await db.InTransactionAsync(async () =>
@@ -24,9 +37,9 @@ public sealed class AuthService(HakDbContext db, AuditService audit, IClock cloc
                 await db.SaveChangesAsync();
             });
             // Same answer as a wrong password while locked, so the lock does not reveal whether the password was right.
-            throw new DomainException(ErrorCodes.Unauthenticated, $"Tài khoản tạm khóa do đăng nhập sai nhiều lần; thử lại sau {until.ToLocalTime():HH:mm} hoặc nhờ quản trị đặt lại mật khẩu.");
+            throw new DomainException(ErrorCodes.Unauthenticated, LoginDeniedMessage);
         }
-        if (user is null || !user.IsActive || !PasswordHasher.Verify(password, user.PasswordHash))
+        if (user is null || !user.IsActive || !passwordOk)
         {
             await db.InTransactionAsync(async () =>
             {
@@ -45,7 +58,7 @@ public sealed class AuthService(HakDbContext db, AuditService audit, IClock cloc
                 await audit.AppendAsync(Guid.Empty, null, "auth.login", "user", norm, new { device }, result: "DENIED");
                 await db.SaveChangesAsync();
             });
-            throw new DomainException(ErrorCodes.Unauthenticated, "Tên đăng nhập hoặc mật khẩu không đúng.");
+            throw new DomainException(ErrorCodes.Unauthenticated, LoginDeniedMessage);
         }
         if (user.FailedLoginCount != 0 || user.LockedUntil is not null)
         {

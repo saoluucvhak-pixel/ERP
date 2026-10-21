@@ -26,6 +26,28 @@ public class UserAdminTests
     }
 
     [Fact]
+    public async Task RefusedLogins_AllGiveTheSameMessage_SoUserNamesAndLocksAreNotRevealed()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        async Task<string> MessageOf(string user, string password) =>
+            (await Assert.ThrowsAsync<DomainException>(() => s.Auth.LoginAsync(user, password, "PC1"))).Message;
+
+        var unknown = await MessageOf("khong-ton-tai", "sai-mat-khau");
+        var wrong = await MessageOf("lap", "sai-mat-khau");
+        for (var i = 0; i < 4; i++) await MessageOf("lap", "sai-mat-khau");
+        var locked = await MessageOf("lap", TestHost.Password);   // right password while locked
+
+        var user = await s.Db.Users.SingleAsync(u => u.Id == h.ApproverId);
+        user.IsActive = false;
+        await s.Db.SaveChangesAsync();
+        var inactive = await MessageOf("duyet", TestHost.Password);
+
+        Assert.Equal(Hak.Application.Security.AuthService.LoginDeniedMessage, unknown);
+        Assert.All(new[] { wrong, locked, inactive }, m => Assert.Equal(unknown, m));
+    }
+
+    [Fact]
     public async Task Admin_RevokesRoles_LocksAccounts_ResetsPasswords_WithSafeguards()
     {
         using var h = await TestHost.CreateAsync();

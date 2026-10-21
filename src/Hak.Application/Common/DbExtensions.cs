@@ -87,8 +87,8 @@ public static class DbExtensions
 
 public sealed class HakRuntimeOptions
 {
-    /// <summary>Development | Test | Production (master prompt §4.5).</summary>
-    public string Environment { get; set; } = "Development";
+    /// <summary>Development | Test | Production (master prompt §4.5). Defaults to Production so a missing setting fails closed.</summary>
+    public string Environment { get; set; } = "Production";
     public bool IsProduction => string.Equals(Environment, "Production", StringComparison.OrdinalIgnoreCase);
     public TimeSpan SessionLifetime { get; set; } = TimeSpan.FromHours(10);
     /// <summary>Failed logins in a row before the account is locked for <see cref="LockoutDuration"/>.</summary>
