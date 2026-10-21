@@ -18,16 +18,16 @@ Trạng thái: **ĐÃ SỬA** (có test, chờ CI) · **CHỜ QUYẾT** (đổi 
 | UI-03 | P1 | Ctrl+S bỏ qua trạng thái bận (gửi 2 lần → 2 chứng từ nháp); Esc trong ô nhập/danh sách thả xuống đóng form, mất dữ liệu. | (hàm thuần: xem UPGRADE_PLAN) |
 | UI-05 | P2 | Xóa trống ô ngày ở Thu/Chi tiền → `toISOString` ném lỗi → trắng cả màn hình. | `money.test.ts` (`daysBefore`) |
 | UI-10 | P2 | Xuất CSV lệnh chi không vô hiệu hóa ô bắt đầu bằng `= + - @` (công thức Excel). | `money.test.ts` (`csvCell`) |
+| BIZ-01 | P1 | Đóng khế ước vay trước khi trích lãi → mất lãi các ngày cuối. Nay bắt buộc trích lãi đến kỳ chứa ngày trả gốc cuối (chị chốt 21/10). | `LoanTests` (USD, đóng khế ước) |
+| BIZ-02 | P1 | Đảo hóa đơn mua sau khi hàng đã xuất làm kẹt FIFO. Nay tính lại đơn giá khi đảo: phần còn trong kho gỡ khỏi tồn kho, phần đã xuất chuyển từ tồn kho sang giá vốn (chị chốt 21/10). | `TradeTests.ReversingAPurchaseInvoice_*` (2 test) |
+| ACC-02 | P2 | Nháp do phân hệ sinh ra sửa tay được → nay không sửa tay, chỉ hủy nháp và tính lại ở phân hệ (chị chốt 21/10). `HAK.IMPORT` và chứng từ tạo tay vẫn sửa được. | `AuditFixTests.ModuleGeneratedDraft_*`, `voucherguards.test.ts` |
+| ACC-03 | P2 | Kết chuyển cuối kỳ không tạo lại được sau khi đảo → nay tạo lại được (khóa nguồn hậu tố `#n`, không đổi CSDL). | `RulesCashClosingTests.Closing_CanBeGeneratedAgain*` |
 | OPS-10/12 | P3 | Hai tham số không dùng (CS9113), `ExecuteSqlRawAsync` nội suy (EF1002), tệp rỗng `src/Admin.tsx`. | build |
 
 ## Chờ chị quyết (đổi quy tắc hạch toán hoặc phân quyền)
 | Mã | Mức | Vấn đề | Đề xuất |
 |---|---|---|---|
-| BIZ-01 | P1 | Đóng khế ước vay trước khi trích lãi → mất lãi các ngày cuối kỳ (ví dụ 9 ngày × 1 tỷ × 10% = 2.465.753 đ). | Chặn đóng khi chưa trích lãi đến ngày trả gốc cuối. |
-| BIZ-02 | P1 | Đảo hóa đơn mua đã điều chỉnh giá trị tồn sau khi hàng đã xuất: điều chỉnh âm rơi vào lô đã xuất hết → FIFO báo lỗi vĩnh viễn cho vật tư–kho đó. | Chặn đảo, hoặc tách phần tồn / phần đã xuất (vào giá vốn). |
 | SEC-02 | P2 | `sensitive.view` và `data.export` khai báo nhưng không nơi nào kiểm → mọi người có `report.view` xem lương/thuế TNCN từng nhân viên. | Kiểm `sensitive.view` ở báo cáo lương (sẽ ẩn màn Lương với kế toán thường). |
-| ACC-02 | P2 | Nháp do phân hệ sinh (tạm ứng, vốn góp, lương…) sửa tay được → số phân hệ ≠ sổ cái. | Danh sách nguồn chỉ-đọc, sửa qua phân hệ. |
-| ACC-03 | P2 | Kết chuyển cuối kỳ không tạo lại được sau khi đảo CLS (`DuplicateSource`). | Cho phép tạo lại khi bản cũ đã đảo. |
 | ACC-04 | P2 | CLS nháp có thể cũ khi ghi sổ (có chứng từ chi phí ghi thêm sau khi tạo). | Tính lại khi duyệt/ghi sổ, lệch thì từ chối. |
 | ACC-05 | P2 | Duyệt/ghi sổ không bắt buộc `rowVersion` → duyệt nội dung chưa xem. | Bắt buộc `rowVersion` cho duyệt/ghi sổ (đổi API, ảnh hưởng giao diện). |
 | ACC-06 | P2 | Đảo chứng từ hủy phân bổ trong kỳ đã khóa → tuổi nợ kỳ đã khóa đổi. | Chặn hoặc tính theo ngày hủy. |
