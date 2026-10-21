@@ -7,16 +7,19 @@ using Hak.Application.Accounting;
 using Hak.Application.Audit;
 using Hak.Application.Backup;
 using Hak.Application.Common;
+using Hak.Application.Inventory;
 using Hak.Application.Security;
 using Hak.Application.Settlement;
 using Hak.Application.Setup;
 using Hak.Data;
 using Hak.Domain.Catalog;
 using Hak.Domain.Common;
+using Hak.Domain.Inventory;
 using Hak.Domain.Vouchers;
 
 var vouchers = IntArg("--vouchers", 20_000);
 var partnerCount = IntArg("--partners", 500);
+var stockMovements = IntArg("--stock", 0);   // số lần nhập (mỗi lần nhập kèm một lần xuất) trên MỖI kho đo; 0 = bỏ qua phần kho
 var postgres = args.Contains("--postgres");
 var keep = args.Contains("--keep");
 int IntArg(string name, int fallback) { var i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? int.Parse(args[i + 1]) : fallback; }
@@ -151,6 +154,64 @@ try
         times.Sort();
         results.Add((name, $"{times[1]:N0} ms ({info})"));
     }
+    // ---- kho: lịch sử phiếu dài dần; đo thời gian ghi sổ MỘT phiếu xuất khi kho đã có sẵn nhiều biến động ----
+    async Task StockBenchAsync()
+    {
+        using (var db = NewDb())
+            await new SetupService(db, new AuditService(db, clock), clock, options).CreateAccountAsync(admin, "INV", "Hàng tồn kho", "ASSETS");
+        foreach (var (label, method) in new[] { ("bình quân tức thời", CostingMethod.MovingAverage), ("FIFO", CostingMethod.Fifo) })
+        {
+            Guid wh, item;
+            using (var db = NewDb())
+            {
+                var stock = new StockService(db, new AccountingEngine(db, new AuditService(db, clock), clock, options), new AuditService(db, clock), clock);
+                wh = (await stock.CreateWarehouseAsync(admin, $"K{(int)method}", $"Kho đo {label}")).Id;
+                await stock.SetCostingPolicyAsync(admin, wh, method, new(2026, 1, 1), "Đo hiệu năng");
+                item = (await stock.CreateItemAsync(admin, $"V{(int)method}", $"Vật tư đo {label}", "tấn", "INV")).Id;
+            }
+            var issueMs = new List<double>();
+            var checkpoints = new List<string>();
+            var swStock = Stopwatch.StartNew();
+            for (var n = 0; n < stockMovements; n++)
+            {
+                var date = new DateOnly(2026, 1, 2).AddDays(n * 360 / stockMovements);
+                var value = rnd.Next(5, 20) * 100_000m;
+                await StockDocAsync(StockDocumentType.Receipt, wh, item, date, 10, value, acc["EQ"]);
+                var t0 = Stopwatch.GetTimestamp();
+                await StockDocAsync(StockDocumentType.Issue, wh, item, date, 7, null, acc["EXP"]);
+                issueMs.Add(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
+                if ((n + 1) % Math.Max(1, stockMovements / 4) == 0)
+                {
+                    var last = issueMs.TakeLast(Math.Min(20, issueMs.Count)).OrderBy(x => x).ToList();
+                    checkpoints.Add($"sau {(n + 1) * 2:N0} biến động: {last[last.Count / 2]:N0} ms");
+                }
+            }
+            results.Add(($"Kho {label}: ghi sổ + tạo 1 phiếu xuất theo độ dài lịch sử (trung vị 20 phiếu gần nhất)", string.Join("; ", checkpoints)));
+            results.Add(($"Kho {label}: tổng thời gian {stockMovements:N0} nhập + {stockMovements:N0} xuất", $"{swStock.Elapsed.TotalSeconds:N1} s"));
+        }
+        await Time("Nhập–xuất–tồn cả năm", async db => (await new StockService(db, new AccountingEngine(db, new AuditService(db, clock), clock, options), new AuditService(db, clock), clock)
+            .SummaryAsync(viewer, new(2026, 1, 1), new(2026, 12, 31))).Count + " dòng");
+        await Time("Đối chiếu sổ kho ↔ sổ cái", async db => (await new StockService(db, new AccountingEngine(db, new AuditService(db, clock), clock, options), new AuditService(db, clock), clock)
+            .ReconcileAsync(viewer, new(2026, 12, 31))).Count + " TK");
+        await Time("Tuổi nợ mọi TK công nợ", async db => (await new SettlementService(db, new AuditService(db, clock), clock).AgingAllAsync(viewer, new(2026, 12, 31))).Count + " TK");
+        await Time("Đối chiếu sổ chi tiết công nợ ↔ sổ cái", async db => (await new SettlementService(db, new AuditService(db, clock), clock).ReconcileAsync(viewer, new(2026, 12, 31))).Rows.Count + " dòng");
+
+        async Task StockDocAsync(StockDocumentType type, Guid whId, Guid itemId, DateOnly date, decimal qty, decimal? value, Guid counter)
+        {
+            StockDocument d;
+            using (var db = NewDb())
+            {
+                var stock = new StockService(db, new AccountingEngine(db, new AuditService(db, clock), clock, options), new AuditService(db, clock), clock);
+                d = await stock.CreateDocumentAsync(prep, new StockDocumentInput(type, whId, date, date, type == StockDocumentType.Receipt ? "Nhập" : "Xuất", [new StockLineInput(itemId, qty, value, counter)]));
+            }
+            using (var db = NewDb())
+            {
+                var stock = new StockService(db, new AccountingEngine(db, new AuditService(db, clock), clock, options), new AuditService(db, clock), clock);
+                await stock.PostDocumentAsync(appr, d.Id);
+            }
+        }
+    }
+
     var aPartner = partners[0];
     await Time("Bảng cân đối số phát sinh cả năm", async db => (await new LedgerQueryService(db).TrialBalanceAsync(viewer, new(2026, 1, 1), new(2026, 12, 31))).Rows.Count + " dòng");
     await Time("BCĐPS cả năm, cộng dồn TK cha", async db => (await new LedgerQueryService(db).TrialBalanceAsync(viewer, new(2026, 1, 1), new(2026, 12, 31), rollup: true)).Groups.Count + " nhóm");
@@ -160,6 +221,8 @@ try
     await Time("Khoản mở phải thu 1 đối tượng", async db => (await new SettlementService(db, new AuditService(db, clock), clock).OpenItemsAsync(viewer, acc["AR"], aPartner, new(2026, 12, 31))).Count + " khoản");
     await Time("Số dư TK tiền tại cuối năm", async db => (await new LedgerQueryService(db).AccountBalanceAsync(viewer, acc["CASH"], new(2026, 12, 31))).ToString("N0") + " đ");
     await Time("Kiểm tra chuỗi nhật ký kiểm toán", async db => (await new AuditService(db, clock).VerifyChainAsync(companyId)) is { } broken ? $"HỎNG tại {broken}" : "nguyên vẹn");
+
+    if (stockMovements > 0) await StockBenchAsync();
 
     if (!postgres)
     {
