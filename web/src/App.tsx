@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { get, post, session } from './api'
+import { get, post, session, setSessionExpiredHandler } from './api'
 import { AdminView } from './Admin'
 import { AssetsView } from './Assets'
 import { BankingView } from './Banking'
@@ -124,6 +124,9 @@ export default function App() {
   const [tab, setTab] = useState<string>('flow')
   const [work, setWork] = useState<Record<string, number>>({})
   const [mobile, setMobile] = useState(isMobileRoute())
+  const [expired, setExpired] = useState(false)
+  // A request refused as unauthenticated (session expired / revoked / server restarted) returns to the login screen instead of leaving empty lists.
+  useEffect(() => { setSessionExpiredHandler(() => { setExpired(true); setToken(null); setCompanies(null); setSystemAdmin(false) }); return () => setSessionExpiredHandler(null) }, [])
   useEffect(() => { const h = () => setMobile(isMobileRoute()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h) }, [])
 
   useEffect(() => {
@@ -155,7 +158,7 @@ export default function App() {
     try { await post('/auth/logout') } catch { /* already expired */ }
     session.setToken(null); session.setCompany(null); setCompanyId(null); setCompanies(null); setSystemAdmin(false); setToken(null)
   }
-  if (!token) return <Login onLogin={t => { session.setToken(t); setToken(t) }} />
+  if (!token) return <Login expired={expired} onLogin={t => { session.setToken(t); setToken(t); setExpired(false) }} />
   if (companies === null) return <div className="login"><div className="panel"><span className="muted">Đang tải…</span></div></div>
   if (systemAdmin) {
     // System administration needs no company: users, grants, backups (a fresh installation has no company role yet).
@@ -225,7 +228,7 @@ export default function App() {
   )
 }
 
-function Login({ onLogin }: { onLogin: (token: string) => void }) {
+function Login({ onLogin, expired = false }: { onLogin: (token: string) => void; expired?: boolean }) {
   const [userName, setUserName] = useState('')
   const [password, setPassword] = useState('')
   // null until the server says whether this is the first run — shows "đang kết nối" instead of a login form that may not apply.
@@ -263,6 +266,7 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
         {firstRun
           ? <span className="muted">Lần chạy đầu: cơ sở dữ liệu chưa có người dùng. Tạo <b>quản trị hệ thống</b> đầu tiên — người này tạo công ty, người dùng và phân quyền. Ghi nhớ mật khẩu và nên tạo thêm một quản trị dự phòng; nếu quên, đặt lại tại máy chủ bằng lệnh khôi phục (docs/08).</span>
           : <span className="muted">Đăng nhập — dữ liệu chỉ lưu trên máy chủ nội bộ</span>}
+        {expired && <div className="msg error" role="alert">Phiên đăng nhập đã hết hạn hoặc máy chủ đã khởi động lại. Đăng nhập lại để tiếp tục.</div>}
         <ErrorBox error={error} />
         {firstRun && <label>Họ tên<input value={fullName} onChange={e => setFullName(e.target.value)} /></label>}
         <label>Tên đăng nhập<input autoFocus value={userName} onChange={e => setUserName(e.target.value)} autoComplete="username" /></label>

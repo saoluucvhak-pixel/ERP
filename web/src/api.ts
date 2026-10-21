@@ -20,6 +20,10 @@ function sessionStorageSet(k: string, v: string | null) {
   try { if (v == null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v) } catch { /* private mode */ }
 }
 
+/** Registered by the app shell: called when a request that carried a token is refused as unauthenticated (session expired, revoked, server restarted). */
+let onExpired: (() => void) | null = null
+export const setSessionExpiredHandler = (h: (() => void) | null) => { onExpired = h }
+
 export const session = {
   get token() { return token },
   get companyId() { return companyId },
@@ -52,7 +56,8 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   const text = await res.text()
   const data = parse(text, res.status)
   if (!res.ok) {
-    if (res.status === 401) session.setToken(null)
+    if (res.status === 401 && token && (data?.code ?? '') === 'UNAUTHENTICATED') { session.setToken(null); onExpired?.() }
+    else if (res.status === 401 && !token) session.setToken(null)
     throw new ApiError(res.status, data?.code ?? 'HTTP_' + res.status, data?.message ?? res.statusText, data?.errors ?? [])
   }
   return data as T
