@@ -39,7 +39,7 @@ export function OverviewCards({ data, aging, vat }: { data: OverviewData | null;
   }
   return (
     <>
-      {noTemplate && <div className="msg error">Chưa nhập mẫu B02-DN nên chưa có doanh thu, chi phí, lợi nhuận. Nhập mẫu ở Tổng hợp → Báo cáo theo mẫu. {data.incomeTemplateVerified ? '' : ''}</div>}
+      {noTemplate && <div className="msg error">Chưa nhập mẫu B02-DN nên chưa có doanh thu, chi phí, lợi nhuận. Nhập mẫu ở Tổng hợp → Báo cáo theo mẫu (tệp mau-B02-DN.json). <button className="link" style={{ color: 'var(--accent)' }} onClick={() => navStore.go?.('reports')}>Mở Báo cáo theo mẫu</button></div>}
       {data.hasIncomeTemplate && !data.incomeTemplateVerified && <p className="muted">Doanh thu, chi phí, lợi nhuận lấy từ mẫu B02-DN chưa xác minh — chỉ để tham khảo.</p>}
       <div className="ov-grid">
         <Card title="Tình hình tài chính" grow={2} right={<span className="muted">Đvt: Triệu đồng</span>}>

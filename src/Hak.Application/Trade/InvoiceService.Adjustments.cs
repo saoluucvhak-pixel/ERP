@@ -29,16 +29,18 @@ public sealed partial class InvoiceService
     /// (Dr inventory / Cr the issue's counter account, i.e. cost of goods sold is reduced by exactly what was booked).
     /// Dryness-tracked goods are then measured on this receipt like any other receipt.
     /// </summary>
-    public async Task<StockDocument> CreateReturnReceiptAsync(SessionContext ctx, Guid originalInvoiceId, int originalLineNo, decimal quantity,
+    public Task<StockDocument> CreateReturnReceiptAsync(SessionContext ctx, Guid originalInvoiceId, int originalLineNo, decimal quantity,
         DateOnly date, Guid? warehouseId = null, string? description = null)
+        => db.InTransactionAsync(() => CreateReturnReceiptCoreAsync(ctx, originalInvoiceId, originalLineNo, quantity, date, warehouseId, description));
+
+    private async Task<StockDocument> CreateReturnReceiptCoreAsync(SessionContext ctx, Guid originalInvoiceId, int originalLineNo, decimal quantity,
+        DateOnly date, Guid? warehouseId, string? description)
     {
         ctx.Require(Permissions.InvoiceDocument);
         var (orig, line) = await OriginalLineAsync(ctx, originalInvoiceId, originalLineNo);
         if (line.StockDocumentId is not { } issueId) throw new DomainException(ErrorCodes.ValidationFailed, "Dòng hóa đơn gốc không gắn phiếu xuất; dùng điều chỉnh giảm giá thay vì trả hàng.");
         if (quantity <= 0) throw new DomainException(ErrorCodes.ValidationFailed, "Số lượng trả lại phải lớn hơn 0.");
-        var returned = await ReturnedQuantityAsync(orig.Id, originalLineNo, null);
-        if (returned + quantity > line.StockQuantity)
-            throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {originalLineNo}: đã trả {returned}, thêm {quantity} vượt số đã bán {line.StockQuantity}.");
+        await SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, orig.Id, originalLineNo, quantity, null, $"Dòng {originalLineNo}");
         await RequireAdjustmentApprovalAsync(ctx, orig.Id, originalLineNo, AdjustmentKind.Return, await SalesApprovalService.ReturnUsedAsync(db, orig.Id, originalLineNo) + quantity);
 
         var issue = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstAsync(d => d.Id == issueId);
@@ -60,23 +62,25 @@ public sealed partial class InvoiceService
     /// GRNI clearing account. The warehouse costing method values it when posted; the supplier's credit note then clears GRNI
     /// at that cost and the gap to the purchase price goes to COGS [CẦN XÁC MINH — chính sách chênh lệch khi trả hàng mua].
     /// </summary>
-    public async Task<StockDocument> CreatePurchaseReturnIssueAsync(SessionContext ctx, Guid originalInvoiceId, int originalLineNo, decimal quantity,
+    public Task<StockDocument> CreatePurchaseReturnIssueAsync(SessionContext ctx, Guid originalInvoiceId, int originalLineNo, decimal quantity,
         DateOnly date, string? description = null)
+        => db.InTransactionAsync(() => CreatePurchaseReturnIssueCoreAsync(ctx, originalInvoiceId, originalLineNo, quantity, date, description));
+
+    private async Task<StockDocument> CreatePurchaseReturnIssueCoreAsync(SessionContext ctx, Guid originalInvoiceId, int originalLineNo, decimal quantity,
+        DateOnly date, string? description)
     {
         ctx.Require(Permissions.InvoiceDocument);
         var (orig, line) = await OriginalLineAsync(ctx, originalInvoiceId, originalLineNo, InvoiceKind.Purchase);
         if (line.StockDocumentId is not { } receiptId) throw new DomainException(ErrorCodes.ValidationFailed, "Dòng hóa đơn gốc không gắn phiếu nhập; dùng điều chỉnh giảm giá thay vì trả hàng.");
         if (quantity <= 0) throw new DomainException(ErrorCodes.ValidationFailed, "Số lượng trả lại phải lớn hơn 0.");
-        var returned = await ReturnedQuantityAsync(orig.Id, originalLineNo, null);
-        if (returned + quantity > line.StockQuantity)
-            throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {originalLineNo}: đã trả {returned}, thêm {quantity} vượt số đã mua {line.StockQuantity}.");
+        await SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, orig.Id, originalLineNo, quantity, null, $"Dòng {originalLineNo}");
         var receipt = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstAsync(d => d.Id == receiptId);
         var receiptLine = receipt.Lines.Single(l => l.LineNo == line.StockLineNo);
         var grni = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.RoleCode == "GRNI").Select(m => (Guid?)m.AccountId).FirstOrDefaultAsync()
                    ?? throw new DomainException(ErrorCodes.RuleRoleUnmapped, "Chưa ánh xạ vai trò tài khoản GRNI.");
         return await stock.CreateDocumentAsync(ctx, new StockDocumentInput(StockDocumentType.Issue, receipt.WarehouseId, date, date,
             description ?? $"Xuất trả nhà cung cấp theo HĐ {orig.InvoiceSeries}/{orig.InvoiceNo}",
-            [new StockLineInput(receiptLine.ItemId, quantity, null, grni, $"Trả lại hàng nhập {receipt.Number}")], PartnerId: orig.PartnerId));
+            [new StockLineInput(receiptLine.ItemId, quantity, null, grni, $"Trả lại hàng nhập {receipt.Number}", SourceInvoiceId: orig.Id, SourceInvoiceLineNo: originalLineNo)], PartnerId: orig.PartnerId));
     }
 
     /// <summary>Step 2: the adjustment invoice (Return / Discount / Increase) referencing the original invoice lines.</summary>
@@ -139,9 +143,12 @@ public sealed partial class InvoiceService
                     if (await db.CommercialInvoiceLines.AnyAsync(x => x.CompanyId == ctx.CompanyId && x.StockDocumentId == receipt.Id && x.StockLineNo == rl.LineNo
                             && db.CommercialInvoices.Any(i => i.Id == x.InvoiceId && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted))))
                         throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: phiếu {receipt.Number} đã gắn với hóa đơn khác.");
-                    var returned = await ReturnedQuantityAsync(orig.Id, ol.LineNo, null);
-                    if (returned + rl.Quantity > ol.StockQuantity)
-                        throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: đã trả {returned}, thêm {rl.Quantity} vượt số trên hóa đơn gốc {ol.StockQuantity}.");
+                    if (inv.Lines.Any(x => x.StockDocumentId == receipt.Id && x.StockLineNo == rl.LineNo))
+                        throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: phiếu {receipt.Number} dòng {rl.LineNo} đã có ở dòng khác của hóa đơn này.");
+                    // Phiếu của chính hóa đơn này (đã có hoặc đang dựng) được tính một lần bằng số lượng trong bộ nhớ, không cộng lại từ cơ sở dữ liệu.
+                    var own = inv.Lines.Where(x => x.AdjustsLineNo == ol.LineNo).ToList();
+                    var skip = own.Where(x => x.StockDocumentId is not null && x.StockLineNo is not null).Select(x => (x.StockDocumentId!.Value, x.StockLineNo!.Value)).Append((receipt.Id, rl.LineNo)).ToList();
+                    await SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, orig.Id, ol.LineNo, own.Sum(x => x.StockQuantity ?? 0) + rl.Quantity, skip, $"Dòng {n}");
                     line.StockDocumentId = receipt.Id;
                     line.StockLineNo = rl.LineNo;
                     line.StockQuantity = rl.Quantity;
@@ -163,10 +170,13 @@ public sealed partial class InvoiceService
                     Price(line, rate, curDp, funcDp);
                     if (input.Purpose == InvoicePurpose.Discount)
                     {
-                        var already = await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Discount) + await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Return);
+                        // Các dòng cùng dòng gốc đang dựng trong hóa đơn này chưa nằm trong cơ sở dữ liệu nên phải cộng thêm.
+                        var pending = inv.Lines.Where(x => x.AdjustsLineNo == ol.LineNo).Sum(x => x.FunctionalAmount);
+                        var discounted = await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Discount);
+                        var already = discounted + await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Return) + pending;
                         if (already + line.FunctionalAmount > ol.FunctionalAmount)
                             throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: tổng giảm trừ {already + line.FunctionalAmount} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
-                        if (!purchase) await RequireAdjustmentApprovalAsync(ctx, orig.Id, ol.LineNo, AdjustmentKind.Discount, await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Discount) + line.FunctionalAmount);
+                        if (!purchase) await RequireAdjustmentApprovalAsync(ctx, orig.Id, ol.LineNo, AdjustmentKind.Discount, discounted + pending + line.FunctionalAmount);
                     }
                 }
                 inv.Lines.Add(line);
@@ -186,8 +196,9 @@ public sealed partial class InvoiceService
     /// </summary>
     private async Task<CommercialInvoice> PostAdjustmentCoreAsync(SessionContext ctx, CommercialInvoice inv)
     {
-        var orig = await db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == inv.AdjustsInvoiceId);
+        var orig = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == inv.AdjustsInvoiceId);
         if (orig.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn gốc {orig.Number} không còn hiệu lực.");
+        await RecheckAdjustmentLimitsAsync(ctx, inv, orig);
         var roles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId).ToDictionaryAsync(m => m.RoleCode, m => m.AccountId);
         Guid Role(string code) => roles.TryGetValue(code, out var id) ? id : throw new DomainException(ErrorCodes.RuleRoleUnmapped, $"Chưa ánh xạ vai trò tài khoản {code}.");
 
@@ -234,6 +245,35 @@ public sealed partial class InvoiceService
         await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.adjustment.post", "invoice", inv.Id.ToString(), new { inv.Number, inv.Purpose, voucher = v.Number, total }, inv.RowVersion);
         await db.SaveChangesAsync();
         return inv;
+    }
+
+    /// <summary>
+    /// Kiểm tra lại ngay trước khi ghi sổ (cùng transaction): tổng theo từng dòng hóa đơn gốc của hóa đơn này cộng với mọi chứng từ điều chỉnh khác còn hiệu lực
+    /// không được vượt số lượng / giá trị dòng gốc, và (hóa đơn bán) không vượt phạm vi đã duyệt. Dữ liệu nháp cũ hoặc chứng từ lập sau không lọt qua.
+    /// </summary>
+    private async Task RecheckAdjustmentLimitsAsync(SessionContext ctx, CommercialInvoice inv, CommercialInvoice orig)
+    {
+        foreach (var g in inv.Lines.GroupBy(l => l.AdjustsLineNo ?? 0))
+        {
+            var ol = orig.Lines.FirstOrDefault(x => x.LineNo == g.Key) ?? throw new DomainException(ErrorCodes.NotFound, $"Hóa đơn gốc không có dòng {g.Key}.");
+            if (inv.Purpose == InvoicePurpose.Return)
+            {
+                var keys = g.Where(x => x.StockDocumentId is not null && x.StockLineNo is not null).Select(x => (x.StockDocumentId!.Value, x.StockLineNo!.Value)).ToList();
+                var mine = g.Sum(x => x.StockQuantity ?? 0);
+                await SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, orig.Id, g.Key, mine, keys, $"Dòng gốc {g.Key}");
+                if (inv.Kind == InvoiceKind.Sales)
+                    await RequireAdjustmentApprovalAsync(ctx, orig.Id, g.Key, AdjustmentKind.Return, await SalesApprovalService.ReturnUsedAsync(db, orig.Id, g.Key, keys) + mine);
+            }
+            else if (inv.Purpose == InvoicePurpose.Discount)
+            {
+                var mine = g.Sum(x => x.FunctionalAmount);
+                var discounted = await AdjustedAmountAsync(orig.Id, g.Key, InvoicePurpose.Discount, inv.Id);
+                var others = discounted + await AdjustedAmountAsync(orig.Id, g.Key, InvoicePurpose.Return, inv.Id);
+                if (others + mine > ol.FunctionalAmount)
+                    throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng gốc {g.Key}: tổng giảm trừ {others + mine} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
+                if (inv.Kind == InvoiceKind.Sales) await RequireAdjustmentApprovalAsync(ctx, orig.Id, g.Key, AdjustmentKind.Discount, discounted + mine);
+            }
+        }
     }
 
     /// <summary>
@@ -305,16 +345,9 @@ public sealed partial class InvoiceService
         return (orig, orig.Lines.FirstOrDefault(l => l.LineNo == lineNo) ?? throw new DomainException(ErrorCodes.NotFound, $"Hóa đơn gốc không có dòng {lineNo}."));
     }
 
-    /// <summary>Stock quantity already returned against an original line (Draft or Posted return invoices).</summary>
-    private async Task<decimal> ReturnedQuantityAsync(Guid originalInvoiceId, int originalLineNo, Guid? exclude)
-        => (await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
-                   where i.AdjustsInvoiceId == originalInvoiceId && i.Purpose == InvoicePurpose.Return && l.AdjustsLineNo == originalLineNo
-                         && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted) && i.Id != exclude
-                   select l.StockQuantity).ToListAsync()).Sum(x => x ?? 0);
-
-    private async Task<decimal> AdjustedAmountAsync(Guid originalInvoiceId, int originalLineNo, InvoicePurpose purpose)
+    private async Task<decimal> AdjustedAmountAsync(Guid originalInvoiceId, int originalLineNo, InvoicePurpose purpose, Guid? exclude = null)
         => (await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
                    where i.AdjustsInvoiceId == originalInvoiceId && i.Purpose == purpose && l.AdjustsLineNo == originalLineNo
-                         && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted)
+                         && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted) && i.Id != exclude
                    select l.FunctionalAmount).ToListAsync()).Sum();
 }

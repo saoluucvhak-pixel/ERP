@@ -2,7 +2,7 @@ import { navStore } from './common'
 
 /** Một nút trên sơ đồ quy trình: bấm để mở tab (màn hình) tương ứng. */
 export interface FlowNode { label: string; icon: string; screen: string }
-export interface ModuleLink { label: string; screen: string }
+export interface ModuleLink { label: string; screen: string; /** Tab mở sẵn ở màn Thiết lập. */ tab?: string }
 export interface AppModule {
   key: string
   label: string
@@ -16,7 +16,7 @@ export interface AppModule {
 }
 
 const CAT_PARTNERS: ModuleLink = { label: 'Khách hàng, nhà cung cấp', screen: 'catalog' }
-const CAT_SETUP: ModuleLink = { label: 'Tùy chọn', screen: 'setup' }
+const CAT_SETUP: ModuleLink = { label: 'Tùy chọn', screen: 'setup', tab: 'auto' }
 
 /**
  * Cấu trúc phân hệ theo mẫu giao diện chị gửi: mỗi phân hệ một mục ở thanh bên; bên trong tab "Quy trình" vẽ các nghiệp vụ nối nhau theo thứ tự các khâu
@@ -32,7 +32,7 @@ export const MODULES: AppModule[] = [
       { label: 'Lệnh thanh toán ngân hàng', icon: '🏦', screen: 'bank' }, { label: 'Đối chiếu ngân hàng', icon: '✅', screen: 'bank' }, { label: 'Thu, chi ngoại tệ', icon: '💱', screen: 'fx' }, { label: 'Vay, lịch trả nợ', icon: '🏷️', screen: 'loans' },
     ],
     reports: [{ label: 'Sổ quỹ tiền mặt, sổ tiền gửi', screen: 'ledger' }, { label: 'Tuổi nợ tạm ứng, biên bản kiểm kê quỹ', screen: 'advances' }, { label: 'Dự báo dòng tiền (Tổng quan)', screen: 'home' }, { label: 'Bảng kê khế ước vay và lịch trả nợ', screen: 'loans' }, { label: 'Đối chiếu sao kê ngân hàng', screen: 'bank' }],
-    catalogs: [{ label: 'Tài khoản ngân hàng (công ty, đối tượng)', screen: 'setup' }, CAT_PARTNERS, CAT_SETUP],
+    catalogs: [{ label: 'Tài khoản ngân hàng (công ty, đối tượng)', screen: 'setup', tab: 'banks' }, CAT_PARTNERS, CAT_SETUP],
   },
   {
     key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'contracts', 'orders', 'services', 'trade', 'arap', 'paydiscount'], title: 'NGHIỆP VỤ MUA HÀNG',
@@ -41,7 +41,7 @@ export const MODULES: AppModule[] = [
       { label: 'Nghiệm thu dịch vụ', icon: '🧾', screen: 'services' }, { label: 'Hóa đơn mua', icon: '📄', screen: 'trade' }, { label: 'Chấp nhận thanh toán', icon: '✔️', screen: 'procurement' }, { label: 'Thanh toán', icon: '💸', screen: 'procurement' }, { label: 'Công nợ phải trả', icon: '🧮', screen: 'arap' },
     ],
     reports: [{ label: 'Tiến độ, lịch thanh toán, chênh lệch giá hợp đồng', screen: 'contracts' }, { label: 'Hàng chờ thanh toán theo ngày đáo hạn', screen: 'procurement' }, { label: 'Công nợ phải trả nhà cung cấp', screen: 'arap' }, { label: 'Xếp hạng nhà cung cấp', screen: 'procurement' }, { label: 'Sổ chi tiết công nợ', screen: 'ledger' }],
-    catalogs: [{ label: 'Nhà cung cấp', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup' }, CAT_SETUP],
+    catalogs: [{ label: 'Nhà cung cấp', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup', tab: 'stock' }, CAT_SETUP],
   },
   {
     key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'services', 'trade', 'arap', 'salesapproval', 'paydiscount'], title: 'NGHIỆP VỤ BÁN HÀNG',
@@ -50,7 +50,7 @@ export const MODULES: AppModule[] = [
       { label: 'Nghiệm thu dịch vụ', icon: '🧾', screen: 'services' }, { label: 'Hóa đơn bán', icon: '📄', screen: 'trade' }, { label: 'Trả hàng, giảm giá (duyệt)', icon: '↩️', screen: 'salesapproval' }, { label: 'Theo dõi phải thu', icon: '🧮', screen: 'arap' }, { label: 'Thu tiền', icon: '💵', screen: 'revenue' }, { label: 'Xóa nợ khó đòi (duyệt)', icon: '🧾', screen: 'salesapproval' },
     ],
     reports: [{ label: 'Tiến độ, lịch thanh toán, chênh lệch giá hợp đồng', screen: 'contracts' }, { label: 'Phân tích tiêu thụ, giá vốn, lãi gộp', screen: 'revenue' }, { label: 'Thu tiền bán hàng', screen: 'revenue' }, { label: 'Thông báo nợ quá hạn', screen: 'revenue' }, { label: 'Công nợ phải thu khách hàng', screen: 'arap' }],
-    catalogs: [{ label: 'Khách hàng', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup' }, CAT_SETUP],
+    catalogs: [{ label: 'Khách hàng', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup', tab: 'stock' }, CAT_SETUP],
   },
   {
     key: 'stock', label: 'Kho', icon: '📦', screens: ['stock'], title: 'NGHIỆP VỤ KHO',
@@ -59,7 +59,7 @@ export const MODULES: AppModule[] = [
       { label: 'Tính giá xuất kho', icon: '🧮', screen: 'stock' }, { label: 'Kiểm kê', icon: '✅', screen: 'stock' },
     ],
     reports: [{ label: 'Sổ chi tiết vật tư hàng hóa (thẻ kho)', screen: 'stock' }, { label: 'Tổng hợp tồn kho', screen: 'stock' }, { label: 'Đối chiếu kho và sổ cái', screen: 'stock' }],
-    catalogs: [{ label: 'Kho, vật tư', screen: 'setup' }, CAT_SETUP],
+    catalogs: [{ label: 'Kho, vật tư', screen: 'setup', tab: 'stock' }, CAT_SETUP],
   },
   {
     key: 'production', label: 'Sản xuất', icon: '🏭', screens: ['production'], title: 'NGHIỆP VỤ SẢN XUẤT',
@@ -68,7 +68,7 @@ export const MODULES: AppModule[] = [
       { label: 'Báo công', icon: '⏱️', screen: 'production' }, { label: 'Nhập thành phẩm, giá thành', icon: '📥', screen: 'production' },
     ],
     reports: [{ label: 'Bảng giá thành lệnh sản xuất', screen: 'production' }, { label: 'So sánh thực xuất với định mức', screen: 'production' }, { label: 'Giá thành cuối kỳ theo đối tượng', screen: 'production' }],
-    catalogs: [{ label: 'Định mức, tổ xưởng', screen: 'production' }, { label: 'Vật tư', screen: 'setup' }, CAT_SETUP],
+    catalogs: [{ label: 'Định mức, tổ xưởng', screen: 'production' }, { label: 'Vật tư', screen: 'setup', tab: 'stock' }, CAT_SETUP],
   },
   {
     key: 'assets', label: 'Tài sản, CCDC', icon: '🏗️', screens: ['assets'], title: 'NGHIỆP VỤ TÀI SẢN CỐ ĐỊNH, CÔNG CỤ DỤNG CỤ',
@@ -101,7 +101,7 @@ export const MODULES: AppModule[] = [
       { label: 'Cân đối phát sinh', icon: '⚖️', screen: 'tb' }, { label: 'Khóa kỳ, kết chuyển', icon: '🔒', screen: 'periods' }, { label: 'Báo cáo tài chính', icon: '📊', screen: 'reports' },
     ],
     reports: [{ label: 'Sổ Nhật ký chung', screen: 'journal' }, { label: 'Sổ chi tiết tài khoản, sổ quỹ', screen: 'ledger' }, { label: 'Bảng cân đối phát sinh', screen: 'tb' }, { label: 'Báo cáo theo mẫu (Bảng cân đối, kết quả kinh doanh, lưu chuyển tiền tệ)', screen: 'reports' }],
-    catalogs: [{ label: 'Hệ thống tài khoản', screen: 'setup' }, CAT_SETUP],
+    catalogs: [{ label: 'Hệ thống tài khoản', screen: 'setup', tab: 'accounts' }, CAT_SETUP],
   },
   {
     key: 'analysis', label: 'Phân tích tài chính', icon: '📈', screens: ['analysis', 'reports'], title: 'PHÂN TÍCH TÀI CHÍNH',
@@ -146,7 +146,7 @@ export function FlowTab({ module: m, labels, counts }: { module: AppModule; labe
           <ul>{m.reports.map(r => <li key={r.label}><button className="link" onClick={() => go(r.screen)}>{r.label}</button></li>)}</ul>
         </div>
       </div>
-      {m.catalogs.length > 0 && <div className="flow-catalogs">{m.catalogs.map(c => <button key={c.label} className="link" onClick={() => go(c.screen)}>{c.label}</button>)}</div>}
+      {m.catalogs.length > 0 && <div className="flow-catalogs">{m.catalogs.map(c => <button key={c.label} className="link" onClick={() => { navStore.setupTab = c.tab; go(c.screen) }}>{c.label}</button>)}</div>}
       {Object.keys(counts).length > 0 && <div className="flow-hints">{Object.entries(counts).map(([k, v]) => <span key={k} className="muted">{labels[k]}: <b>{v}</b> việc đang chờ</span>)}</div>}
     </div>
   )

@@ -20,6 +20,7 @@ export function TradeView() {
   const [kind, setKind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Sales')
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [list, setList] = useState<Invoice[]>([])
+  const [total, setTotal] = useState(0)
   const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '', discPct: '', discDays: '' })
   const [lines, setLines] = useState<LineDraft[]>([empty()])
   const [info, setInfo] = useState('')
@@ -27,7 +28,8 @@ export function TradeView() {
   const { busy, error, setError, run } = useAction()
 
   const load = useCallback(() => run(async () => {
-    setList(await get<Invoice[]>(`/invoices?kind=${kind}`))
+    const pg = await get<{ items: Invoice[]; total: number }>(`/invoices?kind=${kind}&page=1&pageSize=100`)
+    setList(pg.items); setTotal(pg.total)
     const un = await get<Uninvoiced[]>(`/reports/uninvoiced?kind=${kind}&asOf=${today()}`)
     const c: Candidate[] = un.map(u => ({
       key: `${u.stockDocumentId}:${u.lineNo}`, docId: u.stockDocumentId, lineNo: u.lineNo, bdmt: u.bdmt,
@@ -44,6 +46,10 @@ export function TradeView() {
       label: `Dịch vụ · ${s.orderNumber}/${s.orderLineNo} · ${s.itemCode} ${s.itemName} · nghiệm thu còn ${formatMoney(s.remaining)} ${s.unit}` })
     setCandidates(c)
   }), [run, kind])
+  const loadMore = async () => {
+    const pg = await get<{ items: Invoice[]; total: number }>(`/invoices?kind=${kind}&page=${Math.floor(list.length / 100) + 1}&pageSize=100`)
+    setList(l => [...l, ...pg.items]); setTotal(pg.total)
+  }
   useEffect(() => { load() }, [load])
 
   const upd = (i: number, p: Partial<LineDraft>) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
@@ -154,6 +160,7 @@ export function TradeView() {
                 }}>Đảo</button>}
               </td></tr>))}
             {list.length === 0 && <tr><td colSpan={9} className="muted">Chưa có hóa đơn.</td></tr>}
+            {list.length < total && <tr><td colSpan={9} className="muted">Đang hiển thị {list.length}/{total}. <button onClick={() => run(loadMore)}>Tải thêm</button></td></tr>}
           </tbody>
         </table>
       </div>

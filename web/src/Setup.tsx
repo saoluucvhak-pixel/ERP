@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Account } from './api'
-import { AccountSelect, ErrorBox, Modal, useAction } from './common'
+import { AccountSelect, ErrorBox, Modal, navStore, useAction } from './common'
 import { AutoPosting } from './AutoPosting'
 import { ImportData } from './ImportData'
 import { CompanyBanks } from './BankAccounts'
@@ -14,7 +14,7 @@ const TABS = { accounts: 'Hệ thống tài khoản', auto: 'Hạch toán tự �
 
 /** Thiết lập công ty: catalogue the modules depend on. Codes are the company's own (legal chart [CẦN XÁC MINH TT99]). */
 export function SetupView() {
-  const [tab, setTab] = useState<keyof typeof TABS>('accounts')
+  const [tab, setTab] = useState<keyof typeof TABS>(() => { const t = navStore.setupTab; navStore.setupTab = undefined; return t && t in TABS ? t as keyof typeof TABS : 'accounts' })
   return (
     <>
       <div className="toolbar"><h2>Thiết lập</h2>

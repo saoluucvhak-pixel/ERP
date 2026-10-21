@@ -221,6 +221,15 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                     if (counter.RequiresPartner && input.PartnerId is null)
                         throw new DomainException(ErrorCodes.PartnerRequired, $"Dòng {n}: tài khoản đối ứng {counter.Code} yêu cầu đối tượng.");
                 }
+                if ((l.SourceInvoiceId is null) != (l.SourceInvoiceLineNo is null))
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: liên kết hóa đơn gốc phải có cả hóa đơn và dòng hóa đơn.");
+                if (l.SourceInvoiceId is { } sid)
+                {
+                    // Hàng trả lại: nguồn hợp lệ và không vượt số lượng đã bán / đã mua, tính cả các dòng cùng nguồn đang tạo trong phiếu này (nháp cũng giữ chỗ).
+                    await Hak.Application.Trade.SalesApprovalService.ValidateReturnSourceAsync(db, ctx.CompanyId, input.Type, input.PartnerId, l.ItemId, sid, l.SourceInvoiceLineNo!.Value, $"Dòng {n}");
+                    var earlierReturn = input.Lines.Take(n - 1).Where(x => x.SourceInvoiceId == sid && x.SourceInvoiceLineNo == l.SourceInvoiceLineNo).Sum(x => x.Quantity);
+                    await Hak.Application.Trade.SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, sid, l.SourceInvoiceLineNo!.Value, l.Quantity + earlierReturn, null, $"Dòng {n}");
+                }
                 if ((l.OrderId is null) != (l.OrderLineNo is null))
                     throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: liên kết đơn hàng phải có cả đơn và dòng đơn.");
                 if (l.OrderId is { } oid)
@@ -305,6 +314,10 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                 if (order.Status != Domain.Trade.OrderStatus.Confirmed)
                     throw new DomainException(ErrorCodes.OrderMismatch, $"Đơn {order.Number} ở trạng thái {order.Status}; không ghi sổ phiếu theo đơn này.");
             }
+            // Giới hạn vật lý của hàng trả lại: tái kiểm tra ngay khi ghi sổ (phiếu nháp cũ, hai phiếu cùng dòng hóa đơn gốc, chứng từ lập sau).
+            var returnKeys = doc.Lines.Where(l => l.SourceInvoiceId is not null).Select(l => (doc.Id, l.LineNo)).ToList();
+            foreach (var g in doc.Lines.Where(l => l.SourceInvoiceId is not null && l.SourceInvoiceLineNo is not null).GroupBy(l => (l.SourceInvoiceId!.Value, l.SourceInvoiceLineNo!.Value)))
+                await Hak.Application.Trade.SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, g.Key.Item1, g.Key.Item2, g.Sum(l => l.Quantity), returnKeys, $"Phiếu {doc.Number}, dòng hóa đơn gốc {g.Key.Item2}");
             var dp = await DecimalsAsync(company);
             var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
             await RequireQualityCheckAsync(doc, items);

@@ -16,7 +16,10 @@ public sealed class DecimalAsStringConverter : JsonConverter<decimal>
     {
         if (reader.TokenType != JsonTokenType.String)
             throw new JsonException("Số tiền phải truyền dạng chuỗi thập phân, ví dụ \"1250000\".");
-        return decimal.Parse(reader.GetString()!, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+        // Đầu vào sai (chữ, rỗng, tràn decimal, dấu phân cách lạ) là lỗi của người gọi: JsonException → 400, không để FormatException/OverflowException thành 500.
+        return decimal.TryParse(reader.GetString(), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : throw new JsonException("Số tiền không hợp lệ: cần chuỗi thập phân dùng dấu chấm, ví dụ \"1250000.5\".");
     }
 
     /// <summary>

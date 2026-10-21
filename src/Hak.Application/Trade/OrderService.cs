@@ -95,9 +95,10 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         if (o.Kind == InvoiceKind.Purchase)
             RequireApprovedSupplier(await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == o.PartnerId));
         if (o.Kind != InvoiceKind.Sales) return;
-        var check = await new SalesOrderCheckService(db, new SettlementService(db, audit, clock), clock).ComputeAsync(ctx, o);
+        var check = await new SalesOrderCheckService(db, new SettlementService(db, audit, clock), clock, new Hak.Application.Inventory.DrynessService(db, audit, clock)).ComputeAsync(ctx, o);
         if (!check.ExceedsCredit) return;
-        var detail = $"Số dư công nợ {check.CurrentBalance.Vn(0)} + đơn {check.OrderValue.Vn(0)} = {check.BalanceAfter.Vn(0)} vượt hạn mức tín dụng {check.CreditLimit.Vn(0)} của {check.PartnerName}.";
+        var extra = check.DeliveredNotInvoiced + check.OpenCommitments > 0 ? $" + giao chưa hóa đơn {check.DeliveredNotInvoiced.Vn(0)} + cam kết chưa giao {check.OpenCommitments.Vn(0)}" : "";
+        var detail = $"Số dư công nợ {check.CurrentBalance.Vn(0)}{extra} + đơn {check.OrderValue.Vn(0)} = {check.BalanceAfter.Vn(0)} vượt hạn mức tín dụng {check.CreditLimit.Vn(0)} của {check.PartnerName}.";
         if (string.IsNullOrWhiteSpace(creditOverrideReason))
             throw new DomainException(ErrorCodes.CreditLimitExceeded, detail + " Cần người có thẩm quyền xác nhận kèm lý do, hoặc yêu cầu khách thanh toán nợ cũ.");
         ctx.Require(Permissions.CreditOverride);
