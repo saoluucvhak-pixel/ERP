@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, get, post, put } from './api'
 import { AccountSelect, ErrorBox, ExportButton, navStore, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
+import { PurchaseControlPanel } from './PurchaseControl'
 import { addMoney, formatDate, formatMoney, parseMoney, today } from './money'
 
 interface QueueRow { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; dueDate: string | null; partnerId: string; partnerCode: string; partnerName: string
@@ -234,6 +235,8 @@ export function ProcurementView() {
             {inbox.length === 0 && <tr><td colSpan={7} className="muted">Hộp thư trống.</td></tr>}</tbody>
         </table>
       </div>
+
+      <PurchaseControlPanel />
     </>
   )
 }

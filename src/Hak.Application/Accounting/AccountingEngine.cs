@@ -142,7 +142,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
     public Task<Voucher> SubmitAsync(SessionContext ctx, Guid id, long? expectedRowVersion = null)
         => TransitionAsync(ctx, id, expectedRowVersion, Permissions.VoucherSubmit, "submit", async (v, company) =>
         {
-            await ThrowIfInvalidAsync(v, company);
+            // Imported (migrated) vouchers are submitted in bulk while their receipts are still drafts, so the running-balance check
+            // would see an empty fund; it is enforced at approve and post, which run in date order.
+            await ThrowIfInvalidAsync(v, company, deferNegativeBalance: v.SourceSystem == Setup.CatalogImportService.ImportSource);
             v.Submit(ctx.UserId);
         });
 
@@ -373,9 +375,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
         });
     }
 
-    private async Task ThrowIfInvalidAsync(Voucher v, Company company)
+    private async Task ThrowIfInvalidAsync(Voucher v, Company company, bool deferNegativeBalance = false)
     {
-        var errors = (await CollectErrorsAsync(v, company)).Where(e => !ErrorCodes.IsWarning(e.Code)).ToList();
+        var errors = (await CollectErrorsAsync(v, company)).Where(e => !ErrorCodes.IsWarning(e.Code) && !(deferNegativeBalance && e.Code == ErrorCodes.NegativeBalance)).ToList();
         if (errors.Count > 0)
             throw new DomainException(errors[0].Code, string.Join("; ", errors.Select(e => e.LineNo is null ? e.Message : $"Dòng {e.LineNo}: {e.Message}")), errors);
     }
