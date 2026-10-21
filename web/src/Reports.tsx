@@ -160,6 +160,7 @@ export function ReceivablesView() {
   const [recon, setRecon] = useState<{ isReconciled: boolean; rows: unknown[] } | null>(null)
   const [allocs, setAllocs] = useState<AllocationRow[]>([])
   const [sel, setSel] = useState<string[]>([])
+  const [anchor, setAnchor] = useState('')   // khoản gốc để chia cho nhiều chứng từ
   const [allocAmount, setAllocAmount] = useState('')
   const [confirm, setConfirm] = useState<Ledger | null>(null)
   const [info, setInfo] = useState('')
@@ -170,9 +171,12 @@ export function ReceivablesView() {
     setRecon(await get(`/reports/subledger-reconciliation?asOf=${asOf}`))
     setItems(partnerId ? await get(`/settlement/open-items?accountId=${accountId}&partnerId=${partnerId}&asOf=${asOf}`) : [])
     setAllocs(partnerId ? await get(`/settlement/allocations?accountId=${accountId}&partnerId=${partnerId}`) : [])
-    setSel([])
+    setSel([]); setAnchor('')
   })
   const picked = items.filter(i => sel.includes(i.journalLineId))
+  const anchorItem = items.find(i => i.journalLineId === anchor)
+  const splitTargets = anchorItem ? picked.filter(i => i.side !== anchorItem.side && !i.foreignCurrency) : []
+  const splitNeed = addMoney(splitTargets.map(t => t.open))
   const pd = picked.find(i => i.side === 'Debit'), pc = picked.find(i => i.side === 'Credit')
   const canMatch = picked.length === 2 && !!pd && !!pc && !pd.foreignCurrency && !pc.foreignCurrency
   // Largest amount both items can still take (decimal strings; never floats).
@@ -182,6 +186,12 @@ export function ReceivablesView() {
     if (!amount) throw new Error('Số tiền phân bổ không hợp lệ.')
     await post('/settlement/allocate', { lineA: pd!.journalLineId, lineB: pc!.journalLineId, amount, date: asOf })
     setInfo('Đã phân bổ.'); await load()
+  })
+  // Chia một khoản (phiếu thu / khoản có chưa phân bổ) cho nhiều chứng từ trong một giao dịch: lấp theo hạn cũ nhất trước đến hết số còn của khoản gốc.
+  const split = () => run(async () => {
+    const targets = [...splitTargets].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.postingDate.localeCompare(b.postingDate)).map(t => ({ lineId: t.journalLineId }))
+    const res = await post<{ amount: string }[]>('/settlement/allocate-many', { anchorLineId: anchor, targets, date: asOf })
+    setInfo(`Đã phân bổ ${res.length} chứng từ, tổng ${formatMoney(addMoney(res.map(r => r.amount)))}.`); await load()
   })
   const voidAlloc = (a: AllocationRow) => {
     const reason = prompt(`Lý do hủy phân bổ ${a.debitVoucherNumber} ↔ ${a.creditVoucherNumber} (${formatMoney(a.amount)}):`)
@@ -234,13 +244,23 @@ export function ReceivablesView() {
             <span className="muted">Chọn 1 khoản Nợ và 1 khoản Có để ghép tay</span>
             <label>Số tiền (để trống = tối đa {formatMoney(maxMatch)})<input className="num" value={allocAmount} onChange={e => setAllocAmount(e.target.value)} disabled={!canMatch} /></label>
             <button className="primary" disabled={busy || !canMatch} onClick={match}>Ghép</button>
+            <span className="muted">| Hoặc chia một khoản cho nhiều chứng từ: chọn "Gốc" ở một dòng rồi tích các dòng đối ứng</span>
+            <button disabled={busy || !anchorItem || anchorItem.foreignCurrency != null || splitTargets.length === 0} onClick={split}
+              title={anchorItem ? `Khoản gốc còn ${formatMoney(anchorItem.open)}; các chứng từ chọn cần ${formatMoney(splitNeed)}` : ''}>
+              Chia khoản gốc cho {splitTargets.length} chứng từ{anchorItem ? ` (còn ${formatMoney(anchorItem.open)})` : ''}</button>
+            {anchor && <button className="link" onClick={() => { setAnchor(''); setSel([]) }}>Bỏ khoản gốc</button>}
             {picked.some(i => i.foreignCurrency) && <span className="muted">Khoản ngoại tệ ghép qua màn Ngoại tệ.</span>}
           </div>
           <table className="grid">
-            <thead><tr><th /><th>Ngày</th><th>Hạn</th><th>Số CT</th><th>Loại</th><th>Chiều</th><th className="num">Số tiền</th><th className="num">Đã phân bổ</th><th className="num">Còn lại</th></tr></thead>
+            <thead><tr><th /><th>Gốc</th><th>Ngày</th><th>Hạn</th><th>Số CT</th><th>Loại</th><th>Chiều</th><th className="num">Số tiền</th><th className="num">Đã phân bổ</th><th className="num">Còn lại</th></tr></thead>
             <tbody>{items.map(o => (
               <tr key={o.journalLineId}><td><input type="checkbox" aria-label={`Chọn ${o.voucherNumber}`} checked={sel.includes(o.journalLineId)}
-                onChange={e => setSel(s => e.target.checked ? [...s.filter(id => items.find(i => i.journalLineId === id)?.side !== o.side), o.journalLineId] : s.filter(id => id !== o.journalLineId))} /></td>
+                disabled={!!anchorItem && (o.side === anchorItem.side || o.journalLineId === anchor)}
+                onChange={e => setSel(s => e.target.checked
+                  ? (anchorItem ? [...s, o.journalLineId] : [...s.filter(id => items.find(i => i.journalLineId === id)?.side !== o.side), o.journalLineId])
+                  : s.filter(id => id !== o.journalLineId))} /></td>
+                <td><input type="radio" name="anchor" aria-label={`Chọn ${o.voucherNumber} làm khoản gốc`} checked={anchor === o.journalLineId} disabled={!!o.foreignCurrency}
+                  onChange={() => { setAnchor(o.journalLineId); setSel([]) }} /></td>
                 <td>{formatDate(o.postingDate)}</td><td>{formatDate(o.dueDate)}</td><td>{o.voucherNumber}</td><td>{TYPE_VI[o.voucherType] ?? o.voucherType}</td>
                 <td>{o.side === 'Debit' ? 'Nợ' : 'Có'}</td><td className="num">{formatMoney(o.amount)}</td><td className="num">{formatMoney(o.allocated)}</td><td className="num">{formatMoney(o.open)}</td></tr>))}
             </tbody>

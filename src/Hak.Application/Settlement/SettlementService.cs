@@ -80,6 +80,52 @@ public sealed class SettlementService(HakDbContext db, AuditService audit, ICloc
         });
     }
 
+    /// <summary>
+    /// Chia MỘT khoản (ví dụ phiếu thu, hoặc khoản có chưa phân bổ) cho NHIỀU chứng từ đối ứng trong một giao dịch: toàn bộ thành công hoặc không phân bổ gì.
+    /// Mỗi mục có số tiền riêng; bỏ trống thì lấp theo thứ tự cho tới hết số còn lại của khoản gốc hoặc của chứng từ. Chỉ khoản VND (khoản ngoại tệ đi qua màn Ngoại tệ).
+    /// Chỉ ghi phân bổ: không tạo dòng tiền hay bút toán mới.
+    /// </summary>
+    public async Task<IReadOnlyList<SettlementAllocation>> AllocateManyAsync(SessionContext ctx, Guid anchorLineId, IReadOnlyList<(Guid LineId, decimal? Amount)> targets, DateOnly? date = null)
+    {
+        ctx.Require(Permissions.SettlementManage);
+        if (targets.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Chưa chọn chứng từ để phân bổ.");
+        if (targets.Select(t => t.LineId).Distinct().Count() != targets.Count) throw new DomainException(ErrorCodes.ValidationFailed, "Một chứng từ chỉ được chọn một lần.");
+        if (targets.Any(t => t.Amount is <= 0)) throw new DomainException(ErrorCodes.ValidationFailed, "Số tiền phân bổ phải lớn hơn 0.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var anchor = await FindLineAsync(ctx.CompanyId, anchorLineId);
+            if (anchor.ForeignCurrency is not null) throw new DomainException(ErrorCodes.ValidationFailed, "Khoản ngoại tệ phân bổ qua màn Ngoại tệ.");
+            var open = (await OpenItemsCoreAsync(ctx.CompanyId, anchor.AccountId, anchor.PartnerId ?? throw new DomainException(ErrorCodes.PartnerRequired, "Khoản gốc phải có đối tượng."),
+                DateOnly.MaxValue)).ToDictionary(i => i.JournalLineId);
+            var anchorOpen = open.TryGetValue(anchor.Id, out var ao) ? ao.Open : 0;
+            var created = new List<SettlementAllocation>();
+            var remaining = anchorOpen;
+            foreach (var (lineId, requested) in targets)
+            {
+                if (remaining <= 0) break;
+                var line = await FindLineAsync(ctx.CompanyId, lineId);
+                if (line.Side == anchor.Side) throw new DomainException(ErrorCodes.ValidationFailed, "Chứng từ chọn phải ở bên đối ứng với khoản gốc.");
+                if (line.ForeignCurrency is not null) throw new DomainException(ErrorCodes.ValidationFailed, "Khoản ngoại tệ phân bổ qua màn Ngoại tệ.");
+                if (line.AccountId != anchor.AccountId || line.PartnerId != anchor.PartnerId) throw new DomainException(ErrorCodes.ValidationFailed, "Chứng từ phải cùng tài khoản công nợ và cùng đối tượng với khoản gốc.");
+                var lineOpen = open.TryGetValue(line.Id, out var lo) ? lo.Open : 0;
+                var amount = requested ?? Math.Min(remaining, lineOpen);
+                if (amount <= 0) continue;
+                if (amount > lineOpen || amount > remaining)
+                    throw new DomainException(ErrorCodes.SettlementExceedsOpen, $"Phân bổ {amount} vượt số còn lại (chứng từ {lineOpen}, khoản gốc {remaining}).");
+                var (debit, credit) = anchor.Side == Side.Debit ? (anchor, line) : (line, anchor);
+                var effective = date ?? Max(anchor.PostingDate, line.PostingDate);
+                await RequireOpenPeriodAsync(ctx.CompanyId, effective);
+                created.Add(await AllocateCoreAsync(ctx.CompanyId, debit, credit, amount, effective, SettlementOrigins.Manual, null, ctx.UserId));
+                remaining -= amount;
+            }
+            if (created.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Không có khoản nào còn mở để phân bổ.");
+            await audit.AppendAsync(ctx.CompanyId, ctx, "settlement.allocate_many", "settlement_allocation", anchor.Id.ToString(),
+                new { anchor = anchor.Id, date, count = created.Count, total = created.Sum(x => x.Amount), lines = created.Select(x => new { x.Id, x.Amount }) });
+            await db.SaveChangesAsync();
+            return (IReadOnlyList<SettlementAllocation>)created;
+        });
+    }
+
     public async Task VoidAsync(SessionContext ctx, Guid allocationId, string reason)
     {
         ctx.Require(Permissions.SettlementManage);

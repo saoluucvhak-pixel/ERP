@@ -166,4 +166,37 @@ public class SettlementTests
         Assert.Equal([200m, 0m, 100m, 0m], r.Buckets.ToArray());
         Assert.Equal(700m, r.OpenObligations);
     }
+
+    [Fact]
+    public async Task AllocateMany_SplitsOneReceiptAcrossInvoices_Atomically_WithoutNewMoneyOrJournal()
+    {
+        var (h, s) = await SetupAsync();
+        using var _h = h; using var _s = s;
+        await h.PostedAsync(s, Invoice(h, 1_000_000, new(2026, 2, 10)));
+        await h.PostedAsync(s, Invoice(h, 2_000_000, new(2026, 3, 1)));
+        await h.PostedAsync(s, Invoice(h, 3_000_000, new(2026, 3, 5)));
+        await PostDocAsync(h, s, Receipt(h, 4_500_000, Mar10));                    // one receipt, not tied to any invoice
+        var open = await s.Settlement.OpenItemsAsync(h.Auditor, h.Acc["AR"], h.Partner["KH01"], Mar31);
+        var receipt = Assert.Single(open, o => o.Side == Side.Credit);
+        var invoices = open.Where(o => o.Side == Side.Debit).OrderBy(o => o.PostingDate).ToList();
+        var journals = await s.Db.JournalEntries.CountAsync();
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Settlement.AllocateManyAsync(h.Auditor, receipt.JournalLineId, [(invoices[0].JournalLineId, null)])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Settlement.AllocateManyAsync(h.Approver, receipt.JournalLineId, [])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Settlement.AllocateManyAsync(h.Approver, receipt.JournalLineId,
+            [(invoices[0].JournalLineId, null), (invoices[0].JournalLineId, null)])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Settlement.AllocateManyAsync(h.Approver, invoices[0].JournalLineId, [(invoices[1].JournalLineId, null)])));   // same side
+        // The second explicit amount exceeds what that invoice has open: nothing at all is allocated.
+        Assert.Equal(ErrorCodes.SettlementExceedsOpen, await CodeOf(() => s.Settlement.AllocateManyAsync(h.Approver, receipt.JournalLineId,
+            [(invoices[0].JournalLineId, 1_000_000m), (invoices[1].JournalLineId, 2_500_000m)])));
+        Assert.Empty(await s.Settlement.AllocationsAsync(h.Auditor, h.Acc["AR"], h.Partner["KH01"]));
+
+        var created = await s.Settlement.AllocateManyAsync(h.Approver, receipt.JournalLineId, invoices.Select(i => (i.JournalLineId, (decimal?)null)).ToList());
+        Assert.Equal([1_000_000m, 2_000_000m, 1_500_000m], created.Select(a => a.Amount).ToArray());   // oldest first until the receipt is used up
+        var after = await s.Settlement.OpenItemsAsync(h.Auditor, h.Acc["AR"], h.Partner["KH01"], Mar31);
+        Assert.Equal((1_500_000m, 1), (Assert.Single(after).Open, after.Count));                         // only the last invoice remains open, 1.5m
+        Assert.Equal(journals, await s.Db.JournalEntries.CountAsync());                                   // allocating books nothing
+        Assert.Contains(s.Db.AuditLogs.AsNoTracking().Select(a => a.Action).ToList(), a => a == "settlement.allocate_many");
+        Assert.True((await s.Settlement.ReconcileAsync(h.Auditor, Mar31)).IsReconciled);
+    }
 }
