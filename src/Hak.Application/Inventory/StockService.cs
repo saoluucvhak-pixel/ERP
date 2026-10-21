@@ -725,7 +725,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         var q = db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.MovementDate <= to);
         if (warehouseId is not null) q = q.Where(m => m.WarehouseId == warehouseId);
         var moves = await q.ToListAsync();
-        var values = await ActiveValuesAsync(moves.Select(m => m.Id).ToList());
+        var values = await ActiveValuesAsync(q, moves.Select(m => m.Id).ToHashSet());
         var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
         var whs = await db.Warehouses.AsNoTracking().Where(w => w.CompanyId == ctx.CompanyId).ToDictionaryAsync(w => w.Id);
         var adjQ = db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.AdjustmentDate <= to);
@@ -788,8 +788,9 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     {
         ctx.Require(Permissions.ReportView);
         var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
-        var moves = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.MovementDate <= asOf).ToListAsync();
-        var values = await ActiveValuesAsync(moves.Select(m => m.Id).ToList());
+        var movesQ = db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.MovementDate <= asOf);
+        var moves = await movesQ.ToListAsync();
+        var values = await ActiveValuesAsync(movesQ, moves.Select(m => m.Id).ToHashSet());
         var adjs = await db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.AdjustmentDate <= asOf).ToListAsync();
         var rows = new List<InventoryReconcileRow>();
         foreach (var accId in items.Values.Where(i => i.InventoryAccountId != null).Select(i => i.InventoryAccountId!.Value).Distinct())
@@ -834,11 +835,11 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
 
     private async Task<decimal?> IssueValueAsync(Guid companyId, Guid warehouseId, Guid itemId, decimal qty, CostingMethod method, int dp)
     {
-        var stored = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == companyId && m.WarehouseId == warehouseId && m.ItemId == itemId)
-            .OrderBy(m => m.Sequence).ToListAsync();
+        var scope = db.StockMovements.AsNoTracking().Where(m => m.CompanyId == companyId && m.WarehouseId == warehouseId && m.ItemId == itemId);
+        var stored = await scope.OrderBy(m => m.Sequence).ToListAsync();
         var history = stored.Concat(db.StockMovements.Local.Where(m => m.WarehouseId == warehouseId && m.ItemId == itemId && db.Entry(m).State == EntityState.Added))
             .OrderBy(m => m.Sequence).ToList();
-        var values = await ActiveValuesAsync(history.Select(m => m.Id).ToList());
+        var values = await ActiveValuesAsync(scope, history.Select(m => m.Id).ToHashSet());
 
         if (method == CostingMethod.MonthlyAverage)
         {
@@ -872,13 +873,32 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         foreach (var chunk in movementIds.Chunk(500))
             foreach (var v in await db.StockValuations.AsNoTracking().Where(v => chunk.Contains(v.MovementId) && v.VoidedAt == null).ToListAsync())
                 result[v.MovementId] = v.Value;
+        MergePendingValuations(result, movementIds);
+        return result;
+    }
+
+    /// <summary>
+    /// Same result as <see cref="ActiveValuesAsync(IReadOnlyCollection{Guid})"/> for the movements selected by <paramref name="scope"/>, but in ONE joined query
+    /// instead of one query per 500 ids (đo 21/10/2026: lịch sử 100.000 biến động = 200 truy vấn mỗi dòng xuất).
+    /// </summary>
+    private async Task<Dictionary<Guid, decimal>> ActiveValuesAsync(IQueryable<StockMovement> scope, IReadOnlyCollection<Guid> movementIds)
+    {
+        var rows = await (from v in db.StockValuations.AsNoTracking() join m in scope on v.MovementId equals m.Id where v.VoidedAt == null select new { v.MovementId, v.Value }).ToListAsync();
+        var result = new Dictionary<Guid, decimal>(rows.Count);
+        foreach (var r in rows) result[r.MovementId] = r.Value;
+        MergePendingValuations(result, movementIds);
+        return result;
+    }
+
+    private void MergePendingValuations(Dictionary<Guid, decimal> result, IReadOnlyCollection<Guid> movementIds)
+    {
+        var wanted = movementIds as ISet<Guid> ?? movementIds.ToHashSet();
         foreach (var e in db.ChangeTracker.Entries<StockValuation>())
         {
-            if (!movementIds.Contains(e.Entity.MovementId)) continue;
+            if (!wanted.Contains(e.Entity.MovementId)) continue;
             if (e.Entity.VoidedAt is null) result[e.Entity.MovementId] = e.Entity.Value;
             else result.Remove(e.Entity.MovementId);
         }
-        return result;
     }
 
     /// <summary>Adds one Dr/Cr pair; the partner goes on whichever side's account requires it.</summary>
