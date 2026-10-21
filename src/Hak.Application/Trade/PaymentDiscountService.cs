@@ -55,11 +55,49 @@ public sealed class PaymentDiscountService(HakDbContext db, AccountingEngine eng
     }
 
     /// <summary>P% × tiền hàng chưa thuế × (số còn mở ÷ số phải thu / phải trả ban đầu của hóa đơn), làm tròn theo tiền hạch toán.</summary>
-    private static decimal Discount(CommercialInvoice i, OpenItem o)
+    private static decimal Discount(CommercialInvoice i, OpenItem o) => ComputeDiscount(i, o.Amount, o.Open);
+
+    /// <summary>Công thức chiết khấu dùng chung cho lúc lập chứng từ và lúc kiểm tra lại: <paramref name="itemAmount"/> = số phải thu / phải trả ban đầu, <paramref name="open"/> = số thanh toán.</summary>
+    internal static decimal ComputeDiscount(CommercialInvoice i, decimal itemAmount, decimal open)
     {
         var goods = i.Lines.Sum(l => l.FunctionalAmount);
-        var raw = goods * i.PaymentDiscountPercent!.Value / 100m * (o.Amount == 0 ? 0 : o.Open / o.Amount);
-        return Math.Min(MoneyMath.Round(raw, 0), o.Open);
+        var raw = goods * i.PaymentDiscountPercent!.Value / 100m * (itemAmount == 0 ? 0 : open / itemAmount);
+        return Math.Min(MoneyMath.Round(raw, 0), open);
+    }
+
+    /// <summary>
+    /// Kiểm tra lại điều kiện NGUỒN của chứng từ chiết khấu mỗi khi gửi duyệt / duyệt / ghi sổ (AccountingEngine gọi trong lúc kiểm tra chứng từ): hóa đơn còn hiệu lực,
+    /// ngày hạch toán trong hạn hưởng chiết khấu (tính từ ngày hóa đơn), khoản công nợ đúng hóa đơn, số chiết khấu và số tiền thực trả/thu đúng công thức.
+    /// Chứng từ nháp bị sửa số/ngày hoặc nguồn đổi sau khi lập thì không qua được.
+    /// </summary>
+    internal static async Task CheckVoucherAsync(HakDbContext db, Voucher v, List<ValidationError> errors)
+    {
+        void Fail(string message) => errors.Add(new(ErrorCodes.ValidationFailed, message));
+        if (!Guid.TryParse(v.SourceId, out var invoiceId)) { Fail("Chứng từ chiết khấu thanh toán thiếu hóa đơn nguồn."); return; }
+        var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == v.CompanyId);
+        if (inv is null || inv.Status != InvoiceStatus.Posted || inv.Purpose != InvoicePurpose.Normal || inv.PaymentDiscountPercent is null || inv.PaymentDiscountDays is null)
+        { Fail("Hóa đơn nguồn của chứng từ chiết khấu thanh toán không còn hiệu lực (đã hủy/đảo, chưa ghi sổ hoặc không có điều khoản chiết khấu); hủy chứng từ này."); return; }
+        var deadline = inv.InvoiceDate.AddDays(inv.PaymentDiscountDays.Value);
+        if (v.PostingDate > deadline)
+            Fail($"Ngày hạch toán {v.PostingDate.Vn()} quá hạn hưởng chiết khấu thanh toán ({deadline.Vn()}, tính từ ngày hóa đơn {inv.Number}); hủy chứng từ này và thanh toán như bình thường.");
+        if (v.PostingDate < inv.PostingDate) Fail("Ngày thanh toán không được trước ngày ghi sổ hóa đơn.");
+
+        var settle = v.Lines.Where(l => l.SettleJournalLineId is not null).ToList();
+        if (settle.Count != 1) { Fail("Chứng từ chiết khấu thanh toán phải có đúng một dòng bù trừ công nợ của hóa đơn."); return; }
+        var s = settle[0];
+        var target = await db.JournalLines.AsNoTracking().FirstOrDefaultAsync(j => j.Id == s.SettleJournalLineId && j.CompanyId == v.CompanyId);
+        var targetVoucher = target is null ? (Guid?)null : await db.JournalEntries.AsNoTracking().Where(e => e.Id == target.JournalEntryId).Select(e => (Guid?)e.VoucherId).FirstOrDefaultAsync();
+        if (target is null || targetVoucher != inv.VoucherId || target.PartnerId != inv.PartnerId || s.PartnerId != inv.PartnerId)
+        { Fail("Dòng bù trừ công nợ không thuộc hóa đơn nguồn."); return; }
+
+        var expected = ComputeDiscount(inv, target.Amount, s.Amount);
+        var role = inv.Kind == InvoiceKind.Purchase ? "PAYMENT_DISCOUNT_INCOME" : "PAYMENT_DISCOUNT_EXPENSE";
+        var map = await db.AccountRoleMappings.AsNoTracking().FirstOrDefaultAsync(m => m.CompanyId == v.CompanyId && m.RoleCode == role);
+        var discountLines = v.Lines.Where(l => map is not null && l.AccountId == map.AccountId && l.SettleJournalLineId is null && l.PartnerId is null).ToList();
+        var discount = discountLines.Sum(l => l.Amount);
+        if (discount != expected) Fail($"Số chiết khấu {discount} không khớp công thức ({expected}) theo điều khoản {inv.PaymentDiscountPercent}% của hóa đơn {inv.Number}.");
+        var cash = v.Lines.Where(l => l != s && !discountLines.Contains(l)).Sum(l => l.Amount);
+        if (cash != s.Amount - expected) Fail($"Số tiền thực trả/thu {cash} không khớp (phải bằng số công nợ {s.Amount} trừ chiết khấu {expected}).");
     }
 
     public async Task<Voucher> CreateVoucherAsync(SessionContext ctx, Guid invoiceId, Guid cashAccountId, DateOnly date)

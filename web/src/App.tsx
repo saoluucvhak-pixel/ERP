@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { get, post, session } from './api'
 import { AdminView } from './Admin'
 import { AssetsView } from './Assets'
@@ -133,10 +133,15 @@ export default function App() {
     get<{ isSystemAdmin: boolean }>('/me').then(m => setIsSystemAdmin(m.isSystemAdmin)).catch(() => setIsSystemAdmin(false))
   }, [token])
 
+  // Màn dùng chung giữa Mua hàng và Bán hàng (hợp đồng, đơn hàng, hóa đơn…): ở lại phân hệ đang mở nếu phân hệ đó có màn này,
+  // không nhảy sang phân hệ đầu tiên chứa nó (trước đây "Hợp đồng bán" luôn nhảy vào Mua hàng).
+  const moduleKeyRef = useRef(moduleKey)
+  moduleKeyRef.current = moduleKey
   useEffect(() => {
     navStore.go = key => {
       if (key === 'home' || key === 'cycles') { setModuleKey(key); setTab('flow'); return }
-      const m = moduleOfScreen(key)
+      const current = MODULES.find(x => x.key === moduleKeyRef.current)
+      const m = current?.screens.includes(key) ? current : moduleOfScreen(key)
       if (m) { setModuleKey(m.key); setTab(key) }
     }
   }, [])
@@ -189,6 +194,7 @@ export default function App() {
   }
   if (mobile) return <MobileMaintenance company={`${company.code} – ${company.name}`} onFull={() => { window.location.hash = '' }} onLogout={logout} />
   const module = MODULES.find(m => m.key === moduleKey) ?? MODULES[0]
+  navStore.kind = module.key === 'purchase' ? 'Purchase' : module.key === 'sales' ? 'Sales' : undefined   // đọc khi màn dùng chung được dựng
   const moduleCount = (m: (typeof MODULES)[number]) => m.screens.reduce((n, k) => n + (work[k] ?? 0), 0)
   const screenEl = (key: string) => SCREENS.find(s => s.key === key)?.el()
   const openModule = (key: string) => { setModuleKey(key); setTab('flow') }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, ExportButton, FlowStrip, Modal, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, ExportButton, FlowStrip, Modal, useAction, useCatalog, navStore } from './common'
 import { addMoney, formatDate, formatMoney, today } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
@@ -11,7 +11,7 @@ interface Cand { invoiceId: string; invoiceNumber: string; invoiceSeries: string
 /** Chiết khấu thanh toán: hóa đơn còn trong hạn hưởng, số chiết khấu và số tiền thực trả / thực thu; lập chứng từ nháp thanh toán có chiết khấu. */
 export function PaymentDiscountView() {
   const { accounts } = useCatalog()
-  const [kind, setKind] = useState<'Purchase' | 'Sales'>('Purchase')
+  const [kind, setKind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Purchase')
   const [asOf, setAsOf] = useState(today())
   const [rows, setRows] = useState<Cand[]>([])
   const [f, pf, cf] = useFilterState('paydiscount')

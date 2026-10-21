@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, ExportButton, FlowStrip, Modal, useAction } from './common'
+import { ErrorBox, ExportButton, FlowStrip, Modal, useAction, navStore } from './common'
 import { formatDate, formatMoney, monthStart, parseMoney, today } from './money'
 import type { Order } from './Orders'
 import { ServiceProgress } from './ServiceProgress'
@@ -17,7 +17,7 @@ interface Cand { orderId: string; orderNumber: string; orderLineNo: number; item
 
 /** Nghiệm thu dịch vụ (khâu thay cho giao / nhận hàng của dịch vụ: vận chuyển thuê, tư vấn…): lập biên bản theo dòng đơn hàng, người khác xác nhận, hóa đơn chỉ lập trong phạm vi đã nghiệm thu. */
 export function ServiceAcceptancesView() {
-  const [kind, setKind] = useState<'Sales' | 'Purchase'>('Sales')
+  const [kind, setKind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')
   const [rows, setRows] = useState<Row[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [items, setItems] = useState<Item[]>([])
