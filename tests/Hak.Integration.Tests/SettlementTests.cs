@@ -28,6 +28,35 @@ public class SettlementTests
         ]);
 
     [Fact]
+    public async Task TwoReceiptsForTheSameInvoice_PostedAtTheSameTime_NeverSettleMoreThanTheInvoice()
+    {
+        var (h, s) = await SetupAsync();
+        using var _h = h; using var _s = s;
+        var inv = await h.PostedAsync(s, Invoice(h, 10_000_000, new(2026, 3, 1), due: new(2026, 3, 15)));
+        var invLine = LineOf(s, inv.Id, h.Acc["AR"]);
+
+        // Hai phiếu thu 6 triệu cho hóa đơn 10 triệu: mỗi phiếu riêng lẻ đều hợp lệ, cả hai thì vượt.
+        var ids = new List<Guid>();
+        for (var i = 0; i < 2; i++)
+        {
+            var v = await s.Documents.CreateAsync(h.Preparer, Receipt(h, 6_000_000, Mar10, invLine));
+            await s.Engine.SubmitAsync(h.Preparer, v.Id);
+            await s.Engine.ApproveAsync(h.Approver, v.Id);
+            ids.Add(v.Id);
+        }
+        using var s1 = h.NewScope();
+        using var s2 = h.NewScope();
+        var (ok, failed) = await ConcurrencyTests.RaceAsync(() => s1.Engine.PostAsync(h.Approver, ids[0]), () => s2.Engine.PostAsync(h.Approver, ids[1]));
+
+        Assert.Equal(1, ok);
+        Assert.All(failed, f => Assert.IsType<DomainException>(f));
+        using var check = h.NewScope();
+        var open = await check.Settlement.OpenItemsAsync(h.Auditor, h.Acc["AR"], h.Partner["KH01"], Mar31);
+        Assert.Equal(4_000_000m, Assert.Single(open).Open);              // đúng một phiếu 6 triệu đã phân bổ
+        Assert.True((await check.Settlement.ReconcileAsync(h.Auditor, Mar31)).IsReconciled);
+    }
+
+    [Fact]
     public async Task PartialPayment_ThenOverpaymentRefused_ThenRemainderPlusAdvance()
     {
         var (h, s) = await SetupAsync();

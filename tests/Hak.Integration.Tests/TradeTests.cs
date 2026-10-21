@@ -1597,6 +1597,34 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task Reservation_TwoUsersConfirmingOrdersAtTheSameTime_NeverReserveMoreThanTheStock()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 2), fx.Add);
+        var orders = Orders(fx);
+        var ids = new List<Guid>();
+        for (var i = 0; i < 2; i++)
+            ids.Add((await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH02"], D(3, 5), "Bán phụ gia", [new OrderLineInput(fx.Add, 70, 100_000)]))).Id);
+
+        using var s1 = h.NewScope();
+        using var s2 = h.NewScope();
+        var (ok, failed) = await ConcurrencyTests.RaceAsync(
+            () => new OrderService(s1.Db, s1.Audit, h.Clock).ConfirmAsync(h.Approver, ids[0]),
+            () => new OrderService(s2.Db, s2.Audit, h.Clock).ConfirmAsync(h.Approver, ids[1]));
+        Assert.True(ok >= 1, string.Join("; ", failed.Select(f => f.Message)));
+        Assert.All(failed, f => Assert.IsType<DomainException>(f));
+
+        using var check = h.NewScope();
+        var reserved = (await check.Reservations.ListAsync(h.Approver)).Sum(r => r.Remaining);
+        var av = await check.Reservations.AvailabilityAsync(h.Approver, fx.Add);
+        Assert.Equal(100m, av.OnHand);
+        Assert.True(reserved <= 100m, $"Giữ {reserved} trên tồn 100.");
+        Assert.Equal(reserved, av.Reserved);
+        if (ok == 2) Assert.Equal(100m, reserved);                       // 70 + phần còn lại 30, phần thiếu chờ
+    }
+
+    [Fact]
     public async Task Reservation_IsConsumedByDeliveryAgainstTheOrder_AndReleasedWhenTheOrderIsCancelledOrClosed()
     {
         using var fx = await SetupAsync();
