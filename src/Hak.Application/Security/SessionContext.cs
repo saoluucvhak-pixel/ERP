@@ -39,7 +39,7 @@ public static class RoleCatalog
             ["CHIEF_ACCOUNTANT"] = ("Kế toán trưởng", [.. Viewer, Permissions.VoucherCreate, Permissions.VoucherEditDraft, Permissions.VoucherSubmit,
                 Permissions.VoucherApprove, Permissions.VoucherPost, Permissions.VoucherReverse, Permissions.PeriodLock, Permissions.PeriodReopen,
                 Permissions.CatalogManage, Permissions.DataExport, Permissions.DataImport, Permissions.SensitiveView, Permissions.AuditView,
-                Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.PaymentOrderApprove, Permissions.BankReconcile, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage, Permissions.PaymentAccept, Permissions.CreditOverride, Permissions.ProductionManage]),
+                Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.PaymentOrderApprove, Permissions.PaymentVariance, Permissions.BankReconcile, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage, Permissions.PaymentAccept, Permissions.CreditOverride, Permissions.ProductionManage]),
             ["GL_ACCOUNTANT"] = ("Kế toán tổng hợp", [.. Viewer, Permissions.VoucherCreate, Permissions.VoucherEditDraft, Permissions.VoucherSubmit,
                 Permissions.VoucherPost, Permissions.CatalogManage, Permissions.DataExport, Permissions.DataImport,
                 Permissions.SettlementManage, Permissions.CashDocument, Permissions.BankDocument, Permissions.BankReconcile, Permissions.StockDocument, Permissions.InvoiceDocument, Permissions.AssetManage, Permissions.LoanManage, Permissions.PaymentAccept, Permissions.ProductionManage]),

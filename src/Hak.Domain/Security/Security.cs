@@ -97,6 +97,8 @@ public static class Permissions
     public const string PaymentOrderApprove = "payment_order.approve";
     /// <summary>Chấp nhận thanh toán hóa đơn mua (bàn giao Cung ứng → Thanh toán). Không phát sinh bút toán.</summary>
     public const string PaymentAccept = "payment.accept";
+    /// <summary>Duyệt sai lệch đối chiếu hóa đơn mua (lượng, giá, kiểm nghiệm) — tách khỏi quyền chấp nhận thanh toán.</summary>
+    public const string PaymentVariance = "payment.variance";
     /// <summary>Chấp thuận xác nhận đơn bán vượt hạn mức tín dụng của khách hàng (người có thẩm quyền, kèm lý do).</summary>
     public const string CreditOverride = "credit.override";
     public const string BankReconcile = "bank.reconcile";
