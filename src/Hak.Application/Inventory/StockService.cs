@@ -535,21 +535,32 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     /// attributable to stock STILL on hand comes off the stock ledger; the part already carried out by issued goods stays in those
     /// issues and is returned as a <see cref="RepriceShift"/> so the caller moves it from inventory to COGS in the ledger.
     /// </summary>
-    internal async Task<IReadOnlyList<RepriceShift>> ReverseValueAdjustmentsAsync(SessionContext ctx, Guid sourceInvoiceId, DateOnly date, string reason)
+    internal async Task<IReadOnlyList<RepriceShift>> ReverseValueAdjustmentsAsync(SessionContext ctx, Guid sourceInvoiceId, DateOnly date, string reason, bool reprice = false)
     {
         var originals = await db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.SourceInvoiceId == sourceInvoiceId).ToListAsync();
         if (originals.Count == 0 || originals.Sum(a => a.Value) == 0) return [];
         await RequireOpenPeriodAsync(ctx.CompanyId, date);
         var seq = await MaxSequenceAsync(ctx.CompanyId);
+        var dp = reprice ? await DecimalsAsync(await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId)) : 0;
         var shifts = new List<RepriceShift>();
         foreach (var g in originals.GroupBy(a => (a.WarehouseId, a.ItemId, a.TargetMovementId)))
         {
             var booked = g.Sum(a => a.Value);
             if (booked == 0) continue;
             await GuardCostedAsync(ctx.CompanyId, g.Key.WarehouseId, date);
-            var mv = await db.StockMovements.AsNoTracking().SingleAsync(m => m.Id == g.Key.TargetMovementId);
-            var split = await PriceDifferenceSplitAsync(ctx.CompanyId, mv.DocumentId, mv.LineNo, booked);
-            var keep = split.InStockPart;                  // phần còn thuộc hàng tồn: gỡ khỏi lớp nhập
+            var keep = booked;                             // đảo thuần (giá thành sản xuất, v.v.): gỡ toàn bộ như đã ghi
+            if (reprice)
+            {
+                // Mỗi điều chỉnh đã được chia theo số lượng còn trong kho LÚC ghi sổ; nay chỉ phần thuộc số lượng còn trong kho BÂY GIỜ ở lại với hàng tồn.
+                var mv = await db.StockMovements.AsNoTracking().SingleAsync(m => m.Id == g.Key.TargetMovementId);
+                var now = await InStockQuantityAsync(ctx.CompanyId, mv, null);
+                keep = 0;
+                foreach (var a in g)
+                {
+                    var then = await InStockQuantityAsync(ctx.CompanyId, mv, a.Sequence);
+                    keep += then == 0 ? 0 : now >= then ? a.Value : MoneyMath.Round(a.Value * now / then, dp);
+                }
+            }
             if (keep != 0)
                 db.StockValueAdjustments.Add(new StockValueAdjustment
                 {
@@ -559,6 +570,22 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
             if (booked - keep != 0) shifts.Add(new RepriceShift(g.Key.ItemId, booked - keep));
         }
         return shifts;
+    }
+
+    /// <summary>
+    /// Quantity of a receipt line still in stock, counting only movements before <paramref name="beforeSequence"/> (null = all up to now):
+    /// FIFO uses the receipt's own remaining layer; average methods use min(receipt qty, quantity on hand) since the receipt merged into the pool.
+    /// </summary>
+    private async Task<decimal> InStockQuantityAsync(Guid companyId, StockMovement mv, long? beforeSequence)
+    {
+        var history = await db.StockMovements.AsNoTracking()
+            .Where(m => m.CompanyId == companyId && m.WarehouseId == mv.WarehouseId && m.ItemId == mv.ItemId && (beforeSequence == null || m.Sequence < beforeSequence))
+            .OrderBy(m => m.Sequence).ToListAsync();
+        if (await MethodForAsync(companyId, mv.WarehouseId, mv.MovementDate) != CostingMethod.Fifo)
+            return Math.Max(0, Math.Min(mv.Quantity, history.Sum(m => m.Quantity)));
+        var values = await ActiveValuesAsync(history.Select(m => m.Id).ToList());
+        return CostingCalculator.FifoRemaining(await CostedHistoryAsync(companyId, mv.WarehouseId, mv.ItemId, history, values), mv.Sequence,
+            await DecimalsAsync(await db.Companies.AsNoTracking().FirstAsync(c => c.Id == companyId)));
     }
 
     /// <summary>Highest sequence used by movements or value adjustments (they share one processing order per company).</summary>
