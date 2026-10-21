@@ -130,16 +130,16 @@ public class ApiTests
             lines = new object[] { new { accountId = cash, side = "D", amount }, new { accountId = rev, side = "C", amount } },
         };
         var totalBefore = (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!;
-        var first = await Keyed("key-aaaa-0001", Voucher("Ghi một lần", "1000"));
-        var firstBody = await first.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        var second = await Keyed("key-aaaa-0001", Voucher("Ghi một lần", "1000"));          // lost response → client retries with the same key
-        Assert.Equal(firstBody, await second.Content.ReadAsStringAsync());
-        Assert.True(second.Headers.Contains("Idempotent-Replay"));
+        var keyedFirst = await Keyed("key-aaaa-0001", Voucher("Ghi một lần", "1000"));
+        var keyedFirstBody = await keyedFirst.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, keyedFirst.StatusCode);
+        var keyedRetry = await Keyed("key-aaaa-0001", Voucher("Ghi một lần", "1000"));          // lost response → client retries with the same key
+        Assert.Equal(keyedFirstBody, await keyedRetry.Content.ReadAsStringAsync());
+        Assert.True(keyedRetry.Headers.Contains("Idempotent-Replay"));
         Assert.Equal(totalBefore + 1, (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!);
-        var reused = await Keyed("key-aaaa-0001", Voucher("Nội dung khác", "2000"));
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, reused.StatusCode);
-        Assert.Equal("IDEMPOTENCY_KEY_REUSED", (string)JsonNode.Parse(await reused.Content.ReadAsStringAsync())!["code"]!);
+        var keyedReused = await Keyed("key-aaaa-0001", Voucher("Nội dung khác", "2000"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, keyedReused.StatusCode);
+        Assert.Equal("IDEMPOTENCY_KEY_REUSED", (string)JsonNode.Parse(await keyedReused.Content.ReadAsStringAsync())!["code"]!);
         Assert.Equal(HttpStatusCode.BadRequest, (await Keyed("key-bbbb-0002", Voucher("Sai số tiền", "abc"))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await Keyed("key-bbbb-0002", Voucher("Sai số tiền", "abc"))).StatusCode);   // errors are not stored: retried for real
         Assert.Equal(HttpStatusCode.BadRequest, (await Keyed("short", Voucher("Khóa ngắn", "1000"))).StatusCode);
