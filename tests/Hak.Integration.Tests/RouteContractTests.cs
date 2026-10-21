@@ -56,13 +56,16 @@ public partial class RouteContractTests
         Assert.True(routes.Count > 300, $"Chỉ đọc được {routes.Count} route.");
 
         var missing = new SortedSet<string>(StringComparer.Ordinal);
+        var checkedCalls = 0;
         foreach (var file in Directory.EnumerateFiles(WebSrc(), "*.ts*").Where(x => !x.EndsWith(".test.ts")))
             foreach (Match m in CallPattern().Matches(File.ReadAllText(file)))
             {
                 var call = Segments(m.Groups[2].Value);
                 if (call.Length == 0 || call[0].Contains("${")) continue;      // đường dẫn dựng hoàn toàn bằng biểu thức: không kiểm được tĩnh
+                checkedCalls++;
                 if (!routes.Any(r => Matches(r, call))) missing.Add($"{Path.GetFileName(file)}: /api{m.Groups[2].Value}");
             }
+        Assert.True(checkedCalls > 150, $"Chỉ đối chiếu được {checkedCalls} lời gọi: biểu thức quét có thể đã hỏng.");
         Assert.True(missing.Count == 0, "Giao diện gọi đường dẫn không có route:\n" + string.Join("\n", missing));
     }
 }
