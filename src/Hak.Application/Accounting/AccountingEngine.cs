@@ -97,6 +97,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             var v = await LoadVoucherAsync(ctx, voucherId);
             v.EnsureEditable();
             CheckRowVersion(v, expectedRowVersion);
+            // Chứng từ chiết khấu thanh toán tính từ hóa đơn nguồn: không sửa tay ngày / số tiền / tài khoản (sửa là phá hạn chiết khấu) — hủy nháp rồi tạo lại qua phân hệ.
+            if (v.SourceSystem == Hak.Application.Trade.PaymentDiscountService.Source)
+                throw new DomainException(ErrorCodes.ValidationFailed, "Chứng từ chiết khấu thanh toán do phân hệ Chiết khấu thanh toán sinh ra từ hóa đơn; muốn đổi ngày, số tiền hoặc tài khoản tiền thì hủy chứng từ nháp và tạo lại ở màn Chiết khấu thanh toán.");
             if (VoucherTypes.RuleDriven.Contains(v.VoucherType) != (meta is not null))
                 throw new DomainException(ErrorCodes.ValidationFailed, "Chứng từ nghiệp vụ (thu/chi) phải sửa qua màn hình chứng từ, không sửa định khoản trực tiếp.");
             if (meta is not null)
@@ -394,6 +397,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
 
         await CheckSettlementsAsync(v, accounts, errors);
         await CheckNegativeBalancesAsync(v, accounts, errors);
+        // Chứng từ do phân hệ chiết khấu thanh toán sinh ra: kiểm tra lại điều kiện nguồn (hạn, số tiền, hóa đơn) ở mọi bước gửi duyệt / duyệt / ghi sổ.
+        if (v.SourceSystem == Hak.Application.Trade.PaymentDiscountService.Source)
+            await Hak.Application.Trade.PaymentDiscountService.CheckVoucherAsync(db, v, errors);
         return errors;
     }
 

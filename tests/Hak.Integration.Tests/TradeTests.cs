@@ -1298,4 +1298,93 @@ public class TradeTests
         Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, Sale("C3", L(1)))));
         await fx.Inv.PostAsync(fx.H.Approver, ok.Id);
     }
+
+    // ---- Chiết khấu thanh toán: điều kiện nguồn (hạn) được kiểm tra lại ở mọi bước, không sửa tay chứng từ nháp ----
+
+    private static async Task<(PaymentDiscountService Pd, CommercialInvoice Inv)> DiscountSaleAsync(Fx fx)
+    {
+        var pd = new PaymentDiscountService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        await fx.S.Setup.UpdatePartnerCommercialAsync(fx.H.Admin, fx.H.Partner["KH01"], null, null, null, null, 30, 2m, 10);   // 2% nếu trả trong 10 ngày kể từ ngày hóa đơn
+        var (inv, _) = await PostedBdmtSaleAsync(fx);                                                                              // ngày HĐ 12/3 → hạn 22/3
+        fx.H.Acc["FINEXP"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "FINEXP", "Chi phí tài chính (thử)")).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "PAYMENT_DISCOUNT_EXPENSE", "FINEXP");
+        return (pd, inv);
+    }
+
+    private static VoucherInput SameVoucherOnDate(Voucher v, DateOnly date)
+        => new(VoucherTypes.General, date, date, v.Description,
+            v.Lines.Select(l => new VoucherLineInput(l.AccountId, l.Side, l.Amount, l.PartnerId, Description: l.Description, SettleJournalLineId: l.SettleJournalLineId)).ToList(),
+            SourceSystem: v.SourceSystem, SourceId: v.SourceId);
+
+    [Fact]
+    public async Task Audit_PaymentDiscount_PostingAfterDeadline_MustBeRejected()
+    {
+        using var fx = await SetupAsync();
+        var (pd, inv) = await DiscountSaleAsync(fx);
+        var v = await pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 20));      // trong hạn
+
+        // 1) Sửa ngày chứng từ nháp ra ngoài hạn: bị từ chối (chứng từ chiết khấu không sửa tay).
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Engine.UpdateDraftAsync(fx.H.Preparer, v.Id, v.RowVersion, SameVoucherOnDate(v, D(3, 25)))));
+
+        // 2) Dù ngày bị đổi ngoài đường dịch vụ (dữ liệu cũ / sửa trực tiếp), gửi duyệt và ghi sổ vẫn kiểm tra lại hạn nên bị chặn, không có journal.
+        var journalsBefore = await JournalCountAsync(fx);
+        var tracked = await fx.S.Db.Vouchers.SingleAsync(x => x.Id == v.Id);
+        tracked.PostingDate = D(3, 25); tracked.VoucherDate = D(3, 25);
+        await fx.S.Db.SaveChangesAsync();
+        fx.S.Db.ChangeTracker.Clear();
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Engine.SubmitAsync(fx.H.Preparer, v.Id)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => PostVoucherAsync(fx, v.Id)));
+        Assert.Equal(journalsBefore, await JournalCountAsync(fx));
+        Assert.Equal(VoucherStatus.Draft, (await fx.S.Db.Vouchers.AsNoTracking().SingleAsync(x => x.Id == v.Id)).Status);
+        Assert.Equal(143_856_000m, await fx.Bal("AR"));        // công nợ giữ nguyên, chưa thu
+    }
+
+    [Fact]
+    public async Task PaymentDiscount_LastDayAllowed_DayAfterRejected_CancelThenRecreate()
+    {
+        using var fx = await SetupAsync();
+        var (pd, inv) = await DiscountSaleAsync(fx);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 23))));   // 23/3 > hạn 22/3
+        var v = await pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 22));                                                  // đúng ngày cuối: hợp lệ
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 21))));  // một nguồn một chứng từ còn hiệu lực
+        await fx.S.Engine.CancelAsync(fx.H.Preparer, v.Id, "Chọn nhầm tài khoản tiền");
+        var again = await pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 21));                                              // hủy rồi tạo lại
+        await PostVoucherAsync(fx, again.Id);
+        Assert.Equal(0m, await fx.Bal("AR"));
+        Assert.Equal(2_664_000m, await fx.Bal("FINEXP"));
+    }
+
+    [Fact]
+    public async Task PaymentDiscount_AmountsEditedOutsideTheService_AreRejected()
+    {
+        using var fx = await SetupAsync();
+        var (pd, inv) = await DiscountSaleAsync(fx);
+        var v = await pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 20));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Engine.UpdateDraftAsync(fx.H.Preparer, v.Id, v.RowVersion,
+            SameVoucherOnDate(v, D(3, 20)) with { Lines = v.Lines.Select(l => new VoucherLineInput(l.AccountId, l.Side, l.Side == Side.Debit && l.AccountId == fx.A("FINEXP") ? l.Amount * 2 : l.Amount, l.PartnerId,
+                SettleJournalLineId: l.SettleJournalLineId)).ToList() })));
+
+        // Số chiết khấu bị nâng lên ngoài đường dịch vụ (và tiền thực thu giảm tương ứng để chứng từ vẫn cân): kiểm tra lại công thức nên bị chặn.
+        var disc = await fx.S.Db.VoucherLines.SingleAsync(l => l.VoucherId == v.Id && l.AccountId == fx.A("FINEXP"));
+        var cash = await fx.S.Db.VoucherLines.SingleAsync(l => l.VoucherId == v.Id && l.AccountId == fx.A("CASH"));
+        disc.Amount += 1_000_000; cash.Amount -= 1_000_000;
+        await fx.S.Db.SaveChangesAsync();
+        fx.S.Db.ChangeTracker.Clear();
+        var journalsBefore = await JournalCountAsync(fx);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => PostVoucherAsync(fx, v.Id)));
+        Assert.Equal(journalsBefore, await JournalCountAsync(fx));
+    }
+
+    [Fact]
+    public async Task PaymentDiscount_SourceInvoiceReversedAfterDraft_VoucherCannotBePosted()
+    {
+        using var fx = await SetupAsync();
+        var (pd, inv) = await DiscountSaleAsync(fx);
+        var v = await pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 20));
+        await fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 21), "Lập sai hóa đơn");
+        var journalsBefore = await JournalCountAsync(fx);
+        await Assert.ThrowsAsync<DomainException>(() => PostVoucherAsync(fx, v.Id));
+        Assert.Equal(journalsBefore, await JournalCountAsync(fx));
+        Assert.Equal(0m, await fx.Bal("CASH"));
+    }
 }
