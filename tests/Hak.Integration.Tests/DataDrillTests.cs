@@ -2,6 +2,7 @@ using Hak.Application.Backup;
 using Hak.Application.Setup;
 using Hak.Data;
 using Hak.Domain.Common;
+using Hak.Domain.Vouchers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
