@@ -1,3 +1,7 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text.Json;
+using Hak.Application.Attachments;
 using Hak.Application.Audit;
 using Hak.Application.Common;
 using Hak.Data;
@@ -21,10 +25,15 @@ public sealed record CompanyChainCheck(Guid CompanyId, string CompanyCode, int V
 
 /// <summary>Result of decrypting and checking a backup. RestoredPath is set only by a restore.</summary>
 public sealed record BackupVerification(string FileName, DateTime CreatedAt, string Integrity, bool SystemAuditChainOk, IReadOnlyList<CompanyChainCheck> Companies,
-    string? RestoredPath)
+    string? RestoredPath, int AttachmentCount = 0, IReadOnlyList<string>? AttachmentProblems = null, string? RestoredAttachmentsPath = null)
 {
-    public bool IsValid => Integrity == "ok" && SystemAuditChainOk && Companies.All(c => c.BrokenAuditSeq is null);
+    public bool IsValid => Integrity == "ok" && SystemAuditChainOk && Companies.All(c => c.BrokenAuditSeq is null) && (AttachmentProblems is null || AttachmentProblems.Count == 0);
 }
+
+/// <summary>Danh sách tệp đính kèm trong gói sao lưu (đường dẫn tương đối, kích thước, SHA-256).</summary>
+public sealed record BackupManifest(int Version, DateTime CreatedAt, string DatabaseSha256, IReadOnlyList<BackupManifestFile> Attachments);
+
+public sealed record BackupManifestFile(string Path, long Size, string Sha256);
 
 /// <summary>
 /// Sao lưu / khôi phục (SQLite, one-machine mode). A backup is an online snapshot of the whole database (all companies), so only
@@ -32,8 +41,12 @@ public sealed record BackupVerification(string FileName, DateTime CreatedAt, str
 /// to a new file, checked (SHA-256, PRAGMA integrity_check, every company's audit hash chain) and left beside the backups for
 /// the operator to switch Hak:DatabasePath to it. PostgreSQL (LAN) mode is backed up with pg_dump on the server [docs].
 /// </summary>
-public sealed class BackupService(HakDbContext db, AuditService audit, IClock clock, BackupOptions options)
+public sealed class BackupService(HakDbContext db, AuditService audit, IClock clock, BackupOptions options, AttachmentStore? attachments = null)
 {
+    private const string DbEntry = "hak.db";
+    private const string ManifestEntry = "manifest.json";
+    private const string AttachmentPrefix = "attachments/";
+
     public async Task<BackupInfo> CreateAsync(Guid userId, string passphrase, string? note = null)
     {
         await RequireSystemAdminAsync(userId);
@@ -44,6 +57,7 @@ public sealed class BackupService(HakDbContext db, AuditService audit, IClock cl
         var stamp = clock.UtcNow.ToString("yyyyMMdd-HHmmss");
         var snapshot = Path.Combine(options.Directory, $".snapshot-{Guid.NewGuid():N}.db");
         var fileName = $"hak-backup-{stamp}.hakbk";
+        var package = Path.Combine(options.Directory, $".package-{Guid.NewGuid():N}.zip");
         var target = Path.Combine(options.Directory, fileName);
         if (File.Exists(target)) throw new DomainException(ErrorCodes.DuplicateCode, "Đã có bản sao lưu cùng thời điểm; thử lại sau một giây.");
         try
@@ -56,10 +70,12 @@ public sealed class BackupService(HakDbContext db, AuditService audit, IClock cl
                 await dest.OpenAsync();
                 source.BackupDatabase(dest);
             }
+            // Gói sao lưu = cơ sở dữ liệu + ảnh/tệp đính kèm + manifest (bản cũ chỉ có cơ sở dữ liệu thô vẫn đọc được).
+            BuildPackage(snapshot, package);
             BackupHeader header;
-            await using (var input = File.OpenRead(snapshot))
+            await using (var input = File.OpenRead(package))
             await using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write))
-                header = BackupFile.Encrypt(input, output, passphrase, "SQLite", note?.Trim() ?? "", clock.UtcNow, options.Iterations);
+                header = BackupFile.Encrypt(input, output, passphrase, "SQLite+files", note?.Trim() ?? "", clock.UtcNow, options.Iterations);
             var info = new BackupInfo(fileName, new FileInfo(target).Length, header.CreatedAt, header.PlaintextLength, header.PlaintextSha256, header.Note);
             await LogAsync(userId, "backup.create", fileName, new { info.Size, info.DatabaseBytes, info.DatabaseSha256, note });
             return info;
@@ -69,7 +85,7 @@ public sealed class BackupService(HakDbContext db, AuditService audit, IClock cl
             TryDelete(target);
             throw;
         }
-        finally { TryDelete(snapshot); }
+        finally { TryDelete(snapshot); TryDelete(package); }
     }
 
     public async Task<IReadOnlyList<BackupInfo>> ListAsync(Guid userId)
@@ -95,14 +111,17 @@ public sealed class BackupService(HakDbContext db, AuditService audit, IClock cl
     {
         await RequireSystemAdminAsync(userId);
         var path = BackupPath(fileName);
+        var raw = Path.Combine(options.Directory, $".verify-{Guid.NewGuid():N}.bin");
         var work = Path.Combine(options.Directory, $".verify-{Guid.NewGuid():N}.db");
+        var stagedFiles = Path.Combine(options.Directory, $".verify-files-{Guid.NewGuid():N}");
         BackupVerification result;
         try
         {
             BackupHeader header;
             await using (var input = File.OpenRead(path))
-            await using (var output = new FileStream(work, FileMode.CreateNew, FileAccess.Write))
+            await using (var output = new FileStream(raw, FileMode.CreateNew, FileAccess.Write))
                 header = BackupFile.Decrypt(input, output, passphrase);
+            var (attachmentCount, problems) = Unpack(raw, work, stagedFiles);
 
             string integrity;
             await using (var c = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = work, Pooling = false, Mode = SqliteOpenMode.ReadOnly }.ToString()))
@@ -124,22 +143,100 @@ public sealed class BackupService(HakDbContext db, AuditService audit, IClock cl
             }
             SqliteConnection.ClearAllPools();
             string? restored = null;
-            var ok = integrity == "ok" && systemOk && companies.All(c => c.BrokenAuditSeq is null);
+            string? restoredFiles = null;
+            var ok = integrity == "ok" && systemOk && companies.All(c => c.BrokenAuditSeq is null) && problems.Count == 0;
             if (restore)
             {
                 if (!ok) throw new DomainException(ErrorCodes.BackupInvalid, "Bản sao lưu không vượt qua kiểm tra toàn vẹn; không khôi phục.");
                 restored = Path.Combine(options.Directory, $"restored-{clock.UtcNow:yyyyMMdd-HHmmss}-{Path.GetFileNameWithoutExtension(fileName)}.db");
                 File.Move(work, restored);
+                if (attachmentCount > 0)
+                {
+                    restoredFiles = Path.ChangeExtension(restored, null) + "-attachments";
+                    Directory.Move(stagedFiles, restoredFiles);
+                }
             }
-            result = new BackupVerification(fileName, header.CreatedAt, integrity, systemOk, companies, restored);
+            result = new BackupVerification(fileName, header.CreatedAt, integrity, systemOk, companies, restored, attachmentCount, problems, restoredFiles);
         }
         finally
         {
             SqliteConnection.ClearAllPools();
+            TryDelete(raw);
             TryDelete(work);
+            try { if (Directory.Exists(stagedFiles)) Directory.Delete(stagedFiles, true); } catch (IOException) { /* best effort */ }
         }
-        await LogAsync(userId, restore ? "backup.restore" : "backup.verify", fileName, new { result.IsValid, result.Integrity, result.RestoredPath });
+        await LogAsync(userId, restore ? "backup.restore" : "backup.verify", fileName, new { result.IsValid, result.Integrity, result.RestoredPath, result.AttachmentCount, result.RestoredAttachmentsPath });
         return result;
+    }
+
+    // ------------------------------------------------------------------ package
+
+    private void BuildPackage(string snapshot, string package)
+    {
+        var files = new List<BackupManifestFile>();
+        using (var fs = new FileStream(package, FileMode.CreateNew, FileAccess.ReadWrite))
+        using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
+        {
+            string dbHash;
+            using (var src = File.OpenRead(snapshot))
+            {
+                dbHash = Convert.ToHexString(SHA256.HashData(src)).ToLowerInvariant();
+                src.Position = 0;
+                using var entry = zip.CreateEntry(DbEntry, CompressionLevel.Optimal).Open();
+                src.CopyTo(entry);
+            }
+            if (attachments is not null && Directory.Exists(attachments.Root))
+                foreach (var file in Directory.EnumerateFiles(attachments.Root, "*", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.Ordinal))
+                {
+                    var rel = Path.GetRelativePath(attachments.Root, file).Replace('\\', '/');
+                    using var src = File.OpenRead(file);
+                    var hash = Convert.ToHexString(SHA256.HashData(src)).ToLowerInvariant();
+                    src.Position = 0;
+                    // Ảnh đã nén sẵn: không nén lại.
+                    using (var entry = zip.CreateEntry(AttachmentPrefix + rel, CompressionLevel.NoCompression).Open()) src.CopyTo(entry);
+                    files.Add(new BackupManifestFile(rel, src.Length, hash));
+                }
+            var manifest = new BackupManifest(1, clock.UtcNow, dbHash, files);
+            using var m = new StreamWriter(zip.CreateEntry(ManifestEntry).Open());
+            m.Write(JsonSerializer.Serialize(manifest));
+        }
+    }
+
+    /// <summary>Giải gói (hoặc nhận bản cũ là cơ sở dữ liệu thô) ra <paramref name="dbOut"/> và thư mục tệp; trả số tệp và các sai lệch so với manifest.</summary>
+    private static (int Count, List<string> Problems) Unpack(string raw, string dbOut, string filesDir)
+    {
+        var problems = new List<string>();
+        Span<byte> magic = stackalloc byte[4];
+        using (var probe = File.OpenRead(raw)) if (probe.Read(magic) < 4) throw new DomainException(ErrorCodes.BackupInvalid, "Bản sao lưu rỗng hoặc hỏng.");
+        if (!(magic[0] == 'P' && magic[1] == 'K'))
+        {
+            File.Move(raw, dbOut); // định dạng cũ: chỉ có cơ sở dữ liệu
+            return (0, problems);
+        }
+        using var zip = ZipFile.OpenRead(raw);
+        var dbEntry = zip.GetEntry(DbEntry) ?? throw new DomainException(ErrorCodes.BackupInvalid, "Gói sao lưu thiếu cơ sở dữ liệu.");
+        using (var o = new FileStream(dbOut, FileMode.CreateNew, FileAccess.Write)) dbEntry.Open().CopyTo(o);
+        var manifestEntry = zip.GetEntry(ManifestEntry) ?? throw new DomainException(ErrorCodes.BackupInvalid, "Gói sao lưu thiếu manifest.");
+        BackupManifest manifest;
+        using (var r = new StreamReader(manifestEntry.Open()))
+            manifest = JsonSerializer.Deserialize<BackupManifest>(r.ReadToEnd()) ?? throw new DomainException(ErrorCodes.BackupInvalid, "Manifest sao lưu hỏng.");
+        using (var o = File.OpenRead(dbOut))
+            if (!string.Equals(Convert.ToHexString(SHA256.HashData(o)), manifest.DatabaseSha256, StringComparison.OrdinalIgnoreCase))
+                problems.Add("Cơ sở dữ liệu không khớp mã băm trong manifest.");
+        var root = Path.GetFullPath(filesDir);
+        foreach (var f in manifest.Attachments)
+        {
+            var entry = zip.GetEntry(AttachmentPrefix + f.Path);
+            if (entry is null) { problems.Add($"Thiếu tệp đính kèm {f.Path}."); continue; }
+            var dest = Path.GetFullPath(Path.Combine(root, f.Path));
+            if (!dest.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)) { problems.Add($"Đường dẫn tệp không hợp lệ: {f.Path}."); continue; }
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            using (var o = new FileStream(dest, FileMode.Create, FileAccess.Write)) entry.Open().CopyTo(o);
+            using var check = File.OpenRead(dest);
+            if (check.Length != f.Size || !string.Equals(Convert.ToHexString(SHA256.HashData(check)), f.Sha256, StringComparison.OrdinalIgnoreCase))
+                problems.Add($"Tệp đính kèm {f.Path} không khớp mã băm.");
+        }
+        return (manifest.Attachments.Count, problems);
     }
 
     // ------------------------------------------------------------------ helpers
