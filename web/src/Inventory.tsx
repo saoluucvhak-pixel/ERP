@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ReservationsPanel } from './Reservations'
 import { toAlt, toMain } from './units'
 import { api, get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, FlowStrip } from './common'
@@ -25,12 +26,12 @@ function useStockCatalog() {
 }
 
 export function InventoryView() {
-  const [tab, setTab] = useState<'docs' | 'count' | 'summary' | 'card' | 'costing' | 'bdmt'>('docs')
+  const [tab, setTab] = useState<'docs' | 'count' | 'summary' | 'card' | 'costing' | 'bdmt' | 'reserve'>('docs')
   const [counts, setCounts] = useState<{ draft: number; posted: number; pending: number }>({ draft: 0, posted: 0, pending: 0 })
   useEffect(() => {
     Promise.all([get<StockDoc[]>('/stock-documents'), get<unknown[]>('/measurements/pending').catch(() => [])]).then(([d, p]) => setCounts({ draft: d.filter(x => x.status === 'Draft').length, posted: d.filter(x => x.status === 'Posted').length, pending: p.length })).catch(() => undefined)
   }, [tab])
-  const tabs = { docs: 'Phiếu kho', count: 'Kiểm kê', summary: 'Nhập – xuất – tồn', card: 'Thẻ kho', costing: 'Tính giá cuối tháng', bdmt: 'MT / BDMT' } as const
+  const tabs = { docs: 'Phiếu kho', count: 'Kiểm kê', summary: 'Nhập – xuất – tồn', card: 'Thẻ kho', costing: 'Tính giá cuối tháng', bdmt: 'MT / BDMT', reserve: 'Giữ hàng' } as const
   return (
     <>
       <div className="toolbar">
@@ -50,6 +51,7 @@ export function InventoryView() {
       {tab === 'card' && <StockCard />}
       {tab === 'costing' && <Costing />}
       {tab === 'bdmt' && <><Bdmt /><DailyRates /></>}
+      {tab === 'reserve' && <ReservationsPanel />}
     </>
   )
 }

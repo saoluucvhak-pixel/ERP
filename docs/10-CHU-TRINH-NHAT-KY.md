@@ -399,3 +399,11 @@ Lưu ý: nếu công ty chưa ánh xạ vai trò SALES_REVENUE / AP_TRADE / ADVA
 **Việc kế tiếp có người phụ trách và hạn** (`GET /cycles/order-worklist?kind=`, bảng "Việc cần làm theo đơn" ở màn Đơn hàng): xác nhận đơn → giao hoặc nhận hàng → lập hóa đơn → thu hoặc chi tiền → đóng đơn. Người phụ trách là người xác nhận đơn (chưa xác nhận thì người lập); chưa có chức năng giao việc cho người khác. Hạn: ngày dự kiến giao (đơn), hạn thanh toán sớm nhất của hóa đơn còn nợ. Đơn quá hạn xếp trước.
 
 **Chưa làm:** nhập số tiền riêng từng dòng khi chia khoản trên giao diện; giao việc cho người khác; hàng chờ theo từng loại (nhận chờ QC, đủ điều kiện chờ hóa đơn, lệch đối chiếu, đến hạn chi, tiền chưa phân bổ, hàng trả chờ điều chỉnh) trong một bảng chung; hiệu năng bảng việc cần làm khi có hàng nghìn đơn mở (hiện giới hạn 60 đơn mới nhất mỗi loại).
+
+## 9ah. Diễn tập dữ liệu mẫu và các màn hình còn thiếu của Đợt 2–3 (21/10/2026)
+
+**Diễn tập trọn vòng bằng dữ liệu mẫu chuyển từ FAST** (`tests/Hak.Integration.Tests/DataDrillTests.cs`, tệp mẫu ở `Fixtures/MauFast`): nhập hệ thống TK TT99 → đối tượng → số dư 01/01/2025 (ghi sổ trước) → chứng từ 2025 và 2026 → gửi duyệt, duyệt, ghi sổ hàng loạt → sao lưu mã hóa → kiểm tra → khôi phục sang tệp khác → so tổng Nợ/Có từng tài khoản, số chứng từ và số bút toán. Đạt trên SQLite; PostgreSQL chạy phần nhập và ghi sổ (sao lưu tệp chỉ có ở SQLite).
+Phát hiện thật: gửi duyệt hàng loạt chứng từ nhập từ hệ thống cũ bị chặn "TK 111 sẽ âm" vì các phiếu thu cùng đợt còn là nháp. Đã sửa: bước gửi duyệt của chứng từ nguồn `HAK.IMPORT` không kiểm số dư âm; duyệt và ghi sổ (theo thứ tự ngày) vẫn kiểm.
+
+**Màn hình mới:** Mua hàng → Thanh toán → khối "Kiểm soát đối chiếu" (`PurchaseControl.tsx`): chính sách dung sai có phiên bản, hóa đơn đang lệch + đối chiếu từng dòng + duyệt/thu hồi sai lệch (quyền `payment.variance`), theo dõi nhận hàng của đơn mua. Kho → tab "Giữ hàng" (`Reservations.tsx`): tồn vật lý / đang giữ / khả dụng / đang về theo vật tư, danh sách phần giữ và nhả giữ có lý do.
+Chưa có giao diện: chính sách theo nhóm vật tư; hàng chờ QC tách riêng trong tồn khả dụng.
