@@ -80,11 +80,14 @@ const SCREENS = [
 ] as const
 /** Màn hình "Việc cần làm" giữ nguyên: ô theo chu trình, mỗi ô một màn hình; bấm ô mở đúng tab trong phân hệ tương ứng. */
 const LAUNCHER = [
-  { key: 'orders', group: 'Chu trình doanh thu', label: 'Đơn hàng (bán, mua)' },
+  // Đơn và hóa đơn bán thuộc chu trình doanh thu, đơn và hóa đơn mua thuộc chu trình cung ứng: hai ô riêng, mỗi ô mở đúng phân hệ và đúng chiều.
+  { key: 'orders:Sales', screen: 'orders', kind: 'Sales', group: 'Chu trình doanh thu', label: 'Đơn bán hàng' },
+  { key: 'orders:Purchase', screen: 'orders', kind: 'Purchase', group: 'Chu trình cung ứng', label: 'Đơn mua hàng' },
   { key: 'revenue', group: 'Chu trình doanh thu', label: 'Bán hàng → Thu tiền' },
   { key: 'arap', group: 'Chu trình doanh thu', label: 'Công nợ phải thu / phải trả' },
   { key: 'procurement', group: 'Chu trình cung ứng', label: 'Mua hàng → Thanh toán' },
-  { key: 'trade', group: 'Chu trình cung ứng', label: 'Hóa đơn mua / bán' },
+  { key: 'trade:Sales', screen: 'trade', kind: 'Sales', group: 'Chu trình doanh thu', label: 'Hóa đơn bán hàng' },
+  { key: 'trade:Purchase', screen: 'trade', kind: 'Purchase', group: 'Chu trình cung ứng', label: 'Hóa đơn mua hàng' },
   { key: 'stock', group: 'Chu trình cung ứng', label: 'Kho (phiếu, kiểm kê, tồn)' },
   { key: 'production', group: 'Chu trình chuyển đổi', label: 'Sản xuất (lệnh, giá thành)' },
   { key: 'payroll', group: 'Nhân sự – tiền lương', label: 'Lương' },
@@ -141,10 +144,13 @@ export default function App() {
   const moduleKeyRef = useRef(moduleKey)
   moduleKeyRef.current = moduleKey
   useEffect(() => {
-    navStore.go = key => {
+    navStore.go = (key, kind) => {
       if (key === 'home' || key === 'cycles') { setModuleKey(key); setTab('flow'); return }
       const current = MODULES.find(x => x.key === moduleKeyRef.current)
-      const m = current?.screens.includes(key) ? current : moduleOfScreen(key)
+      // Có chỉ định chiều bán / mua thì vào đúng phân hệ Bán hàng / Mua hàng (màn dùng chung đọc chiều từ phân hệ đang mở).
+      const wanted = kind === 'Sales' ? 'sales' : kind === 'Purchase' ? 'purchase' : undefined
+      const byKind = wanted ? MODULES.find(x => x.key === wanted && x.screens.includes(key)) : undefined
+      const m = byKind ?? (current?.screens.includes(key) ? current : moduleOfScreen(key))
       if (m) { setModuleKey(m.key); setTab(key) }
     }
   }, [])

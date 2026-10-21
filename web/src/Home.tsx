@@ -3,7 +3,8 @@ import { get } from './api'
 import { navStore } from './common'
 
 interface WorkItem { screen: string; count: number; hint: string }
-export interface HomeScreen { key: string; group: string; label: string }
+/** `screen` và `kind`: ô riêng cho một chiều của màn dùng chung (đơn / hóa đơn bán và mua); không có thì mở màn mang khóa `key`. */
+export interface HomeScreen { key: string; group: string; label: string; screen?: string; kind?: 'Sales' | 'Purchase' }
 
 /** Biểu tượng và mô tả ngắn của từng phân hệ trên màn hình chính (kiểu ô ứng dụng). Phân hệ không có trong bảng vẫn hiện, chỉ không có biểu tượng riêng. */
 const TILE: Record<string, { icon: string; color: string; desc: string }> = {
@@ -12,6 +13,10 @@ const TILE: Record<string, { icon: string; color: string; desc: string }> = {
   arap: { icon: '🧾', color: '#9a6700', desc: 'Công nợ phải thu, phải trả, phân bổ, đối chiếu' },
   procurement: { icon: '🛒', color: '#7a3db8', desc: 'Cần đặt, nhận hàng, kiểm nghiệm, chấp nhận thanh toán' },
   trade: { icon: '📄', color: '#0b7a8a', desc: 'Hóa đơn mua, hóa đơn bán, hóa đơn điện tử' },
+  'orders:Sales': { icon: '📝', color: '#0b5cad', desc: 'Đơn bán hàng; kiểm tra tín dụng, giữ hàng theo kho' },
+  'orders:Purchase': { icon: '📝', color: '#7a4b0b', desc: 'Đơn mua hàng; theo dõi nhận hàng và kiểm nghiệm' },
+  'trade:Sales': { icon: '🧾', color: '#0b5cad', desc: 'Hóa đơn bán hàng, hóa đơn điều chỉnh' },
+  'trade:Purchase': { icon: '🧾', color: '#7a4b0b', desc: 'Hóa đơn mua hàng; đối chiếu nhiều bên' },
   stock: { icon: '📦', color: '#b4531a', desc: 'Phiếu nhập, xuất, chuyển kho, kiểm kê, giá xuất' },
   production: { icon: '🏭', color: '#6b4f3a', desc: 'Định mức, lệnh sản xuất, báo công, giá thành' },
   payroll: { icon: '👥', color: '#c23b6b', desc: 'Nhận bảng lương, hàng chờ trả lương' },
@@ -57,9 +62,10 @@ export function HomeLauncher({ screens }: { screens: readonly HomeScreen[] }) {
           <div className="app-group-title">{g}</div>
           <div className="app-grid">
             {screens.filter(s => s.group === g).map(s => {
-              const t = TILE[s.key]; const w = work[s.key]
+              const target = s.screen ?? s.key
+              const t = TILE[s.key] ?? TILE[target]; const w = s.kind ? undefined : work[target]
               return (
-                <button key={s.key} className="app-tile" onClick={() => navStore.go?.(s.key)} title={w?.hint}>
+                <button key={s.key} className="app-tile" onClick={() => navStore.go?.(target, s.kind)} title={w?.hint}>
                   <span className="app-icon" style={{ background: t?.color ?? '#5f6b7a' }} aria-hidden>{t?.icon ?? '▪'}</span>
                   <span className="app-body">
                     <span className="app-name">{s.label}</span>
