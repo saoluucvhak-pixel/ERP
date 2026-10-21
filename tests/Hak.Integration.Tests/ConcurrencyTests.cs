@@ -1,3 +1,4 @@
+using Hak.Application.Accounting;
 using Hak.Domain.Common;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
