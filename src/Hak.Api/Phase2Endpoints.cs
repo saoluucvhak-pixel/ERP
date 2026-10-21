@@ -16,6 +16,8 @@ public sealed record DocumentLineRequest(decimal Amount, Guid? CounterAccountId,
 public sealed record DocumentRequest(string DocumentType, string BusinessEvent, DateOnly VoucherDate, DateOnly PostingDate, string Description,
     Guid? PartnerId, Guid? MainAccountId, List<DocumentLineRequest> Lines, string? CounterpartyName = null, string? CounterpartyUnit = null);
 public sealed record AllocateRequest(Guid LineA, Guid LineB, decimal Amount, DateOnly? Date, decimal? ForeignAmount = null);
+public sealed record AllocateManyItem(Guid LineId, decimal? Amount);
+public sealed record AllocateManyRequest(Guid AnchorLineId, IReadOnlyList<AllocateManyItem> Targets, DateOnly? Date);
 public sealed record AutoAllocateRequest(Guid AccountId, Guid PartnerId, DateOnly Date);
 public sealed record ClosingRuleSetRequest(string Code, DateOnly EffectiveFrom, DateOnly? EffectiveTo, List<ClosingStepInput> Steps, string? Description);
 public sealed record PeriodRequest(Guid PeriodId);
@@ -78,6 +80,11 @@ public static class Phase2Endpoints
         {
             var a = await s.AllocateAsync(await http.SessionAsync(), r.LineA, r.LineB, r.Amount, r.Date, r.ForeignAmount);
             return Results.Ok(new { a.Id, a.Amount, a.ForeignAmount, a.AllocationDate });
+        });
+        api.MapPost("/settlement/allocate-many", async (HttpContext http, AllocateManyRequest r, SettlementService s) =>
+        {
+            var list = await s.AllocateManyAsync(await http.SessionAsync(), r.AnchorLineId, r.Targets.Select(t => (t.LineId, t.Amount)).ToList(), r.Date);
+            return Results.Ok(list.Select(a => new { a.Id, a.DebitLineId, a.CreditLineId, a.Amount, a.AllocationDate }));
         });
         api.MapPost("/settlement/auto", async (HttpContext http, AutoAllocateRequest r, SettlementService s) =>
         {
