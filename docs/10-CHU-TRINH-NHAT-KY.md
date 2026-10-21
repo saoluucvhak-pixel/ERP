@@ -389,3 +389,13 @@ Lưu ý: nếu công ty chưa ánh xạ vai trò SALES_REVENUE / AP_TRADE / ADVA
 **Giao diện** (`web/src/api.ts`): mất kết nối khi ghi thì tự gửi lại tối đa 2 lần với cùng khóa; vẫn không nối được thì báo "Kết quả chưa xác định" (mã `KET_QUA_CHUA_XAC_DINH`) kèm nút "Thử lại an toàn" gửi lại đúng khóa cũ. Không bao giờ đoán là đã ghi hay chưa.
 
 **Chưa làm của Đợt 4:** hồ sơ chu trình xuyên phân hệ (từ đơn xuống giao nhận, hóa đơn, bút toán, công nợ); trạng thái bốn trục (duyệt, thực hiện, hóa đơn, tiền) và hàng chờ có người phụ trách; màn phân bổ tiền và hủy phân bổ; thử với mạng chập chờn thật.
+
+## 9ag. Nâng cấp theo chu trình — Đợt 4 (tiếp): phân bổ một khoản cho nhiều chứng từ, hồ sơ chu trình và bốn trục (21/10/2026)
+
+**Chia một khoản cho nhiều chứng từ công nợ** (`SettlementService.AllocateManyAsync`, `POST /settlement/allocate-many`, màn Công nợ: chọn "Gốc" rồi tích các chứng từ đối ứng): một giao dịch, toàn bộ hoặc không gì cả; hạn cũ nhất trước đến hết số còn của khoản gốc; chỉ VND; chỉ ghi phân bổ (không bút toán, không dòng tiền); nhật ký `settlement.allocate_many`.
+
+**Hồ sơ chu trình của đơn** (`OrderFlowService`, `GET /orders/{id}/flow`, màn Đơn hàng → nút "Hồ sơ"): bốn trục độc lập — Duyệt (chờ xác nhận / đã xác nhận / đóng / hủy), Thực hiện (giao hoặc nhận: chưa / một phần / đủ; dịch vụ không qua kho), Hóa đơn (chưa / một phần / đủ), Tiền (chưa / một phần / đủ thu hoặc trả) — cộng danh sách chứng từ liên quan (phiếu kho, biên bản kiểm nghiệm, giữ hàng, hóa đơn và hóa đơn điều chỉnh, chứng từ kế toán, phiếu thu/chi hoặc bù trừ đã phân bổ) bấm đi tới được. Chỉ đọc từ dữ liệu sẵn có, không lưu trạng thái riêng nên không lệch sổ.
+
+**Việc kế tiếp có người phụ trách và hạn** (`GET /cycles/order-worklist?kind=`, bảng "Việc cần làm theo đơn" ở màn Đơn hàng): xác nhận đơn → giao hoặc nhận hàng → lập hóa đơn → thu hoặc chi tiền → đóng đơn. Người phụ trách là người xác nhận đơn (chưa xác nhận thì người lập); chưa có chức năng giao việc cho người khác. Hạn: ngày dự kiến giao (đơn), hạn thanh toán sớm nhất của hóa đơn còn nợ. Đơn quá hạn xếp trước.
+
+**Chưa làm:** nhập số tiền riêng từng dòng khi chia khoản trên giao diện; giao việc cho người khác; hàng chờ theo từng loại (nhận chờ QC, đủ điều kiện chờ hóa đơn, lệch đối chiếu, đến hạn chi, tiền chưa phân bổ, hàng trả chờ điều chỉnh) trong một bảng chung; hiệu năng bảng việc cần làm khi có hàng nghìn đơn mở (hiện giới hạn 60 đơn mới nhất mỗi loại).

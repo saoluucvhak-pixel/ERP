@@ -1735,4 +1735,67 @@ public class TradeTests
         var after = Assert.Single((await receiving.ForOrderAsync(h.Auditor, order.Id)).Lines);
         Assert.Equal((60m, 55m, 5m, 0m), (after.Arrived, after.Accepted, after.Rejected, after.PostedToStock));   // the 5 rejected still count as arrived
     }
+
+    // ------------------------------------------------------------------ Đợt 4: hồ sơ chu trình và bốn trục trạng thái
+
+    [Fact]
+    public async Task OrderFlow_FourAxes_NextActionAndLinkedDocuments_FollowTheOrderFromDraftToClosed()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        var flow = new Hak.Application.Cycles.OrderFlowService(s.Db, Orders(fx), h.Clock);
+        var orders = Orders(fx);
+        var order = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, 5), "Bán phụ gia", [new OrderLineInput(fx.Add, 10, 100_000)], ExpectedDate: D(3, 20)));
+        static string State(Hak.Application.Cycles.OrderFlow f, string axis) => f.Axes.Single(a => a.Axis == axis).State;
+
+        var f0 = await flow.FlowAsync(h.Auditor, order.Id);                                           // draft
+        Assert.Equal(("None", "None", "None", "None"), (State(f0, "Approval"), State(f0, "Fulfilment"), State(f0, "Invoicing"), State(f0, "Payment")));
+        Assert.Equal(("CONFIRM", h.PreparerId), (f0.Next!.Code, f0.Next.OwnerId));
+
+        await orders.ConfirmAsync(h.Approver, order.Id);
+        var f1 = await flow.FlowAsync(h.Auditor, order.Id);
+        Assert.Equal(("Full", "DELIVER", h.ApproverId, D(3, 20)), (State(f1, "Approval"), f1.Next!.Code, f1.Next.OwnerId, f1.Next.Due));
+
+        async Task<StockDocument> Deliver(decimal qty, int day)
+        {
+            var d = await s.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, day), D(3, day), "Giao hàng",
+                [new StockLineInput(fx.Add, qty, CounterAccountId: fx.A("COGS"), OrderId: order.Id, OrderLineNo: 1)], PartnerId: h.Partner["KH01"]));
+            return await s.Stock.PostDocumentAsync(h.Approver, d.Id);
+        }
+        var issue1 = await Deliver(4, 6);
+        var f2 = await flow.FlowAsync(h.Auditor, order.Id);                                           // delivered 4 of 10
+        Assert.Equal(("Partial", "DELIVER"), (State(f2, "Fulfilment"), f2.Next!.Code));
+        Assert.Contains(f2.Documents, d => d.Kind == "Phiếu xuất" && d.Id == issue1.Id);
+
+        var issue2 = await Deliver(6, 7);
+        var f3 = await flow.FlowAsync(h.Auditor, order.Id);                                           // delivered in full, nothing invoiced yet
+        Assert.Equal(("Full", "None", "INVOICE"), (State(f3, "Fulfilment"), State(f3, "Invoicing"), f3.Next!.Code));
+
+        var inv = await fx.Inv.CreateAsync(h.Preparer, new InvoiceInput(InvoiceKind.Sales, h.Partner["KH01"], "1C26T", "700", D(3, 8), D(3, 8), "Bán phụ gia",
+            [new InvoiceLineInput(100_000, issue1.Id, 1), new InvoiceLineInput(100_000, issue2.Id, 1)], DueDate: D(4, 8)));
+        await fx.Inv.PostAsync(h.Approver, inv.Id);
+        var f4 = await flow.FlowAsync(h.Auditor, order.Id);                                           // invoiced, not collected
+        Assert.Equal(("Full", "None", "COLLECT", D(4, 8)), (State(f4, "Invoicing"), State(f4, "Payment"), f4.Next!.Code, f4.Next.Due));
+        Assert.Contains(f4.Documents, d => d.Kind == "Hóa đơn" && d.Id == inv.Id);
+        Assert.Contains(f4.Documents, d => d.Kind == "Chứng từ kế toán" && d.Id == inv.VoucherId);
+
+        var line = Phase2Fixture.LineOf(s, inv.VoucherId!.Value, fx.A("AR"));
+        var receipt = await Phase2Fixture.PostDocAsync(h, s, Phase2Fixture.Receipt(h, 400_000, D(3, 12), line));
+        var f5 = await flow.FlowAsync(h.Auditor, order.Id);                                           // partly collected
+        Assert.Equal(("Partial", "COLLECT"), (State(f5, "Payment"), f5.Next!.Code));
+        Assert.Contains(f5.Documents, d => d.Kind == "Thanh toán / bù trừ" && d.Id == receipt.Id && d.Amount == 400_000m);
+
+        await Phase2Fixture.PostDocAsync(h, s, Phase2Fixture.Receipt(h, 600_000, D(3, 13), line));
+        var f6 = await flow.FlowAsync(h.Auditor, order.Id);
+        Assert.Equal(("Full", "CLOSE"), (State(f6, "Payment"), f6.Next!.Code));
+
+        // The worklist lists open orders with their next action; a finished-and-closed order drops out.
+        var work = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales);
+        Assert.Equal(("CLOSE", order.Number), (Assert.Single(work, w => w.OrderId == order.Id).ActionCode, order.Number));
+        await orders.CloseAsync(h.Preparer, order.Id, "Hoàn tất");
+        Assert.DoesNotContain(await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales), w => w.OrderId == order.Id);
+        Assert.Equal("Closed", State(await flow.FlowAsync(h.Auditor, order.Id), "Approval"));
+    }
 }
