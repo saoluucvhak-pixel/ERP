@@ -1490,4 +1490,66 @@ public class TradeTests
         Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreatePurchaseReturnIssueAsync(fx.H.Preparer, invoice.Id, 1, 60, D(3, 11))));
         await fx.Inv.CreatePurchaseReturnIssueAsync(fx.H.Preparer, invoice.Id, 1, 40, D(3, 11));
     }
+
+    // ------------------------------------------------------------------ Đợt 2: tín dụng theo cam kết
+
+    private static async Task<Hak.Application.Cycles.SalesOrderCheck> CheckAsync(Fx fx, Guid orderId)
+        => await new Hak.Application.Cycles.SalesOrderCheckService(fx.S.Db, fx.S.Settlement, fx.H.Clock, fx.S.Dryness).CheckAsync(fx.H.Approver, orderId);
+
+    [Fact]
+    public async Task Credit_TwoOrdersOf50_WithOpenBalance20_AreComparedAgainstTheLimitTogether_AndMovingStepsAreNotDoubleCounted()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await s.Setup.UpdatePartnerCommercialAsync(h.Admin, h.Partner["KH01"], "12 Lê Duẩn", "0236 111 222", "kh01@example.vn", 100_000_000, 30);
+        await h.PostedAsync(s, new Hak.Application.Accounting.VoucherInput(Hak.Domain.Vouchers.VoucherTypes.General, D(3, 1), D(3, 1), "Bán chịu",
+            [new(h.Acc["AR"], Hak.Domain.Vouchers.Side.Debit, 20_000_000, h.Partner["KH01"], DueDate: D(4, 30)), new(h.Acc["REV"], Hak.Domain.Vouchers.Side.Credit, 20_000_000)]));
+        await PostedReceiptAsync(fx, 100, 10_000_000, D(3, 2), fx.Add);
+
+        var orders = Orders(fx);
+        async Task<TradeOrder> NewOrder(string note) => await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, 5), note, [new OrderLineInput(fx.Add, 10, 5_000_000)]));
+        var a = await NewOrder("Đơn A");
+        var b = await NewOrder("Đơn B");
+        Assert.Equal(70_000_000m, (await CheckAsync(fx, a.Id)).BalanceAfter);           // 20 + 50
+        await orders.ConfirmAsync(h.Approver, a.Id);
+
+        var checkB = await CheckAsync(fx, b.Id);                                         // 20 + A's undelivered 50 + 50 = 120, not 70
+        Assert.Equal((20_000_000m, 0m, 50_000_000m, 50_000_000m, 120_000_000m, true),
+            (checkB.CurrentBalance, checkB.DeliveredNotInvoiced, checkB.OpenCommitments, checkB.OrderValue, checkB.BalanceAfter, checkB.ExceedsCredit));
+        Assert.Equal(ErrorCodes.CreditLimitExceeded, await CodeOf(() => orders.ConfirmAsync(h.Approver, b.Id)));
+
+        // Deliver 4 of A: the delivered part moves from "commitment" to "delivered, not invoiced"; the total stays 120.
+        var issue = await fx.S.Stock.CreateDocumentAsync(h.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 6), D(3, 6), "Giao A",
+            [new StockLineInput(fx.Add, 4, CounterAccountId: fx.A("COGS"), OrderId: a.Id, OrderLineNo: 1)], PartnerId: h.Partner["KH01"]));
+        await fx.S.Stock.PostDocumentAsync(h.Approver, issue.Id);
+        checkB = await CheckAsync(fx, b.Id);
+        Assert.Equal((0m, 20_000_000m, 30_000_000m, 120_000_000m), (checkB.CurrentBalance - 20_000_000m, checkB.DeliveredNotInvoiced, checkB.OpenCommitments, checkB.BalanceAfter));
+
+        // Invoicing it moves the 20 into the receivable: still 120.
+        var inv = await fx.Inv.CreateAsync(h.Preparer, new InvoiceInput(InvoiceKind.Sales, h.Partner["KH01"], "1C26T", "300", D(3, 7), D(3, 7), "Bán A đợt 1",
+            [new InvoiceLineInput(5_000_000, issue.Id, 1)], DueDate: D(4, 30)));
+        await fx.Inv.PostAsync(h.Approver, inv.Id);
+        checkB = await CheckAsync(fx, b.Id);
+        Assert.Equal((40_000_000m, 0m, 30_000_000m, 120_000_000m), (checkB.CurrentBalance, checkB.DeliveredNotInvoiced, checkB.OpenCommitments, checkB.BalanceAfter));
+    }
+
+    [Fact]
+    public async Task Credit_BdmtLine_UsesTheAverageDrynessOfStock_AndFallsBackToMtWithANote()
+    {
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await s.Setup.UpdatePartnerCommercialAsync(h.Admin, h.Partner["KH01"], "12 Lê Duẩn", "0236 111 222", "kh01@example.vn", 100_000_000, 30);
+        var orders = Orders(fx);
+        var order = await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, 5), "Bán dăm",
+            [new OrderLineInput(fx.Dam, 10, 4_000_000, PricingBasis.Bdmt)]));
+        var none = await CheckAsync(fx, order.Id);                                       // no stock, no dryness: MT × price as an upper bound
+        Assert.Equal(40_000_000m, none.OrderValue);
+        Assert.NotNull(none.EstimateNote);
+
+        var receipt = await PostedReceiptAsync(fx, 100, 150_000_000, D(3, 2), fx.Dam);
+        await fx.S.Dryness.RecordAsync(h.Preparer, new MeasurementInput(receipt.Id, 1, 50m, EvidenceType.InternalReport, "PĐ-1", D(3, 3)));
+        var withDryness = await CheckAsync(fx, order.Id);                                // 10 MT × 50% × 4,000,000
+        Assert.Equal(20_000_000m, withDryness.OrderValue);
+        Assert.Null(withDryness.EstimateNote);
+    }
 }

@@ -205,19 +205,25 @@ public sealed class DrynessService(HakDbContext db, AuditService audit, IClock c
     /// đúng BDMT đó sang kho nhận) và báo riêng ở các cột "tạm tính", để hai đơn vị MT / BDMT luôn theo dõi được. Phần nhập chưa đo chỉ được tạm tính khi đã khai báo độ khô theo ngày (đơn vị phụ như tỷ giá), nếu không thì không đoán. Khi có kết quả đo
     /// thì số đo thay số tạm tính. Không ghi sổ cái.
     /// </summary>
-    public async Task<IReadOnlyList<DrynessSummaryRow>> SummaryAsync(SessionContext ctx, DateOnly from, DateOnly to, Guid? warehouseId = null)
+    public Task<IReadOnlyList<DrynessSummaryRow>> SummaryAsync(SessionContext ctx, DateOnly from, DateOnly to, Guid? warehouseId = null)
     {
         ctx.Require(Permissions.ReportView);
-        var tracked = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId && i.TracksDryness).ToDictionaryAsync(i => i.Id);
+        return SummaryCoreAsync(ctx.CompanyId, from, to, warehouseId);
+    }
+
+    /// <summary>Phần tính của <see cref="SummaryAsync"/>, không kiểm quyền: dùng cho các bước nghiệp vụ cần độ khô bình quân thời điểm (ví dụ ước tính giá trị đơn để kiểm tra tín dụng).</summary>
+    internal async Task<IReadOnlyList<DrynessSummaryRow>> SummaryCoreAsync(Guid companyId, DateOnly from, DateOnly to, Guid? warehouseId = null)
+    {
+        var tracked = await db.Items.AsNoTracking().Where(i => i.CompanyId == companyId && i.TracksDryness).ToDictionaryAsync(i => i.Id);
         var ids = tracked.Keys.ToList();
-        var all = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && ids.Contains(m.ItemId) && m.MovementDate <= to).OrderBy(m => m.Sequence).ToListAsync();
-        var bdmt = await BdmtByMovementAsync(ctx.CompanyId, all);
-        var rateRows = await db.DrynessDailyRates.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && ids.Contains(r.ItemId)).OrderBy(r => r.Date).ToListAsync();
+        var all = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == companyId && ids.Contains(m.ItemId) && m.MovementDate <= to).OrderBy(m => m.Sequence).ToListAsync();
+        var bdmt = await BdmtByMovementAsync(companyId, all);
+        var rateRows = await db.DrynessDailyRates.AsNoTracking().Where(r => r.CompanyId == companyId && ids.Contains(r.ItemId)).OrderBy(r => r.Date).ToListAsync();
         var rates = rateRows.GroupBy(r => r.ItemId).ToDictionary(g => g.Key, g => g.Select(r => (r.Date, r.DrynessPercent)).ToList());
         var dailyForIssue = tracked.Values.Where(i => i.IssueDrynessBasis == IssueDrynessBasis.DailyRate).Select(i => i.Id).ToHashSet();
         var estimate = EstimateAtTime(all, bdmt, rates, dailyForIssue);
         var moves = warehouseId is null ? all : all.Where(m => m.WarehouseId == warehouseId).ToList();
-        var whs = await db.Warehouses.AsNoTracking().Where(w => w.CompanyId == ctx.CompanyId).ToDictionaryAsync(w => w.Id);
+        var whs = await db.Warehouses.AsNoTracking().Where(w => w.CompanyId == companyId).ToDictionaryAsync(w => w.Id);
 
         return moves.GroupBy(m => (m.WarehouseId, m.ItemId)).Select(g =>
         {
