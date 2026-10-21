@@ -381,3 +381,11 @@ Lưu ý: nếu công ty chưa ánh xạ vai trò SALES_REVENUE / AP_TRADE / ADVA
 **Theo dõi nhận hàng** (`PurchaseReceivingService`, `GET /procurement/orders/{id}/receiving`): đặt – thực đến – đạt – không đạt – chờ kiểm nghiệm – đã nhập kho – đã lập hóa đơn. Lượng thực đến lấy theo biên bản kiểm nghiệm nên không biến mất khi phần không đạt bị loại khỏi phiếu nhập. Chỉ là báo cáo đọc, không ghi sổ.
 
 **Chưa làm / chờ quyết định:** quyền sở hữu và cách hạch toán hàng không đạt hoặc đang chờ (chưa có quyết định của doanh nghiệp nên không đổi cách ghi sổ: phiếu nhập vẫn phải đạt đủ mới ghi sổ với vật tư bắt buộc kiểm tra); chính sách theo nhóm hàng; màn hình cho chính sách, duyệt sai lệch và theo dõi nhận hàng; test hai người đồng thời.
+
+## 9af. Nâng cấp theo chu trình — Đợt 4 (một phần): idempotency cho thao tác ghi (21/10/2026)
+
+**Idempotency-Key** (`IdempotencyMiddleware`, bảng `idempotency_records`, migration Phase14Idempotency): mọi thao tác ghi từ giao diện (POST/PUT/DELETE, nội dung JSON) mang một khóa. Yêu cầu chạy trong MỘT giao dịch cùng với việc lưu phản hồi nên "đã ghi" và "đã có bản ghi" luôn đi cùng nhau: mất phản hồi sau khi commit thì gửi lại cùng khóa nhận đúng phản hồi cũ (header `Idempotent-Replay: true`), không ghi lần hai. Lỗi (HTTP ≥ 400 hoặc ngoại lệ) hoàn tác và không lưu, gửi lại sẽ chạy lại thật. Cùng khóa khác nội dung → 422 `IDEMPOTENCY_KEY_REUSED`. Hai yêu cầu cùng khóa chạy cùng lúc: yêu cầu sau chờ khóa ghi rồi nhận phản hồi của yêu cầu trước. Phạm vi khóa theo phiên đăng nhập + công ty; bản ghi giữ 7 ngày. Không áp dụng cho `/api/auth`, `/api/setup`, `/api/backups` và nội dung không phải JSON (tải tệp).
+
+**Giao diện** (`web/src/api.ts`): mất kết nối khi ghi thì tự gửi lại tối đa 2 lần với cùng khóa; vẫn không nối được thì báo "Kết quả chưa xác định" (mã `KET_QUA_CHUA_XAC_DINH`) kèm nút "Thử lại an toàn" gửi lại đúng khóa cũ. Không bao giờ đoán là đã ghi hay chưa.
+
+**Chưa làm của Đợt 4:** hồ sơ chu trình xuyên phân hệ (từ đơn xuống giao nhận, hóa đơn, bút toán, công nợ); trạng thái bốn trục (duyệt, thực hiện, hóa đơn, tiền) và hàng chờ có người phụ trách; màn phân bổ tiền và hủy phân bổ; thử với mạng chập chờn thật.
