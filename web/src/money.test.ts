@@ -72,3 +72,18 @@ test('formatMonth và formatDateTime', () => {
   assert.match(formatDateTime('2026-10-19T08:05:00'), /^19\/10\/2026 08:05$/)
   assert.equal(formatDateTime('2026-10-19'), '19/10/2026')
 })
+
+test('parseMoney/parseRate reject ambiguous or malformed input', () => {
+  for (const bad of ['1.2.3,45', '12.34,56', '1,2,3', '1,234.56', '1..2', '1.234.56', '12 34', '.5', '5.', ',5', '1e3', '--1'])
+    assert.equal(parseMoney(bad), null, bad)
+  assert.equal(parseRate('1.2.3,45'), null)
+  assert.equal(parseRate(''), null)
+})
+
+test('parseMoney round-trips formatMoney and handles edge values', () => {
+  for (const v of ['0', '1', '999', '1000', '1234567.5', '123456789012345678.1234', '0.0001'])
+    assert.equal(parseMoney(formatMoney(v)), v, v)
+  assert.equal(parseMoney('0'), '0')
+  assert.equal(parseMoney('1 234 567,5'), '1234567.5')
+  assert.equal(parseMoney('0,5'), '0.5')
+})

@@ -63,10 +63,12 @@ export function CatalogView() {
             <td><button onClick={() => setBankOf(p)} title="Số tài khoản ngân hàng nhận tiền">Ngân hàng</button>{dirty && <button className="primary" disabled={busy} onClick={() => run(async () => {
               const limit = v.creditLimit.trim() ? parseMoney(v.creditLimit) : null
               if (v.creditLimit.trim() && limit == null) throw new Error('Hạn mức tín dụng không hợp lệ.')
+              const disc = v.discPct.trim() ? parseRate(v.discPct) : null
+              if (v.discPct.trim() && disc == null) throw new Error('Tỷ lệ chiết khấu thanh toán không hợp lệ.')
               const terms = v.terms.trim() ? Number.parseInt(v.terms, 10) : null
               if (v.terms.trim() && (terms == null || Number.isNaN(terms))) throw new Error('Hạn thanh toán phải là số ngày.')
               await put(`/partners/${p.id}`, { name: v.name, taxCode: v.taxCode || null, isActive: v.isActive })
-              await put(`/partners/${p.id}/commercial`, { address: v.address || null, phone: v.phone || null, email: v.email || null, creditLimit: limit, paymentTermsDays: terms, paymentDiscountPercent: v.discPct.trim() ? parseRate(v.discPct) : null, paymentDiscountDays: v.discDays.trim() ? Number(v.discDays) : null }); setEdit(s => { const c = { ...s }; delete c[p.id]; return c }); setInfo(`Đã cập nhật ${p.code}.`); await load()
+              await put(`/partners/${p.id}/commercial`, { address: v.address || null, phone: v.phone || null, email: v.email || null, creditLimit: limit, paymentTermsDays: terms, paymentDiscountPercent: disc, paymentDiscountDays: v.discDays.trim() ? Number(v.discDays) : null }); setEdit(s => { const c = { ...s }; delete c[p.id]; return c }); setInfo(`Đã cập nhật ${p.code}.`); await load()
             })}>Lưu</button>}</td></tr>
         })}</tbody>
       </table></div>

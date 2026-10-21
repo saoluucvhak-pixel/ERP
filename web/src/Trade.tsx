@@ -49,10 +49,14 @@ export function TradeView() {
   const upd = (i: number, p: Partial<LineDraft>) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
 
   const save = () => run(async () => {
+    const rate = head.currency ? parseRate(head.rate) : null
+    if (head.currency && rate == null) throw new Error('Tỷ giá không hợp lệ (tối đa 6 số lẻ).')
+    const discPct = head.discPct.trim() ? parseRate(head.discPct) : null
+    if (head.discPct.trim() && discPct == null) throw new Error('Tỷ lệ chiết khấu thanh toán không hợp lệ.')
     const body = {
       kind, partnerId: head.partnerId, invoiceSeries: head.series, invoiceNo: head.no, invoiceDate: head.invoiceDate, postingDate: head.postingDate,
-      dueDate: head.dueDate || null, currency: head.currency || null, exchangeRate: head.currency ? parseMoney(head.rate) : null, description: head.description,
-      paymentDiscountPercent: head.discPct.trim() ? parseRate(head.discPct) : null, paymentDiscountDays: head.discDays.trim() ? Number(head.discDays) : null,
+      dueDate: head.dueDate || null, currency: head.currency || null, exchangeRate: rate, description: head.description,
+      paymentDiscountPercent: discPct, paymentDiscountDays: head.discDays.trim() ? Number(head.discDays) : null,
       lines: lines.map((l, i) => {
         const price = parseMoney(l.price)
         if (!price) throw new Error(`Dòng ${i + 1}: đơn giá không hợp lệ.`)
