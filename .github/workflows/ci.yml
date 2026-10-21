@@ -2,9 +2,15 @@ name: ci
 on:
   push:
   pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -17,18 +23,21 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-
       - run: dotnet restore
       - run: dotnet build --no-restore -c Release
-      # Cảnh báo gói NuGet có lỗ hổng đã biết (kể cả gói gián tiếp); không làm hỏng CI, đọc trong log.
-      - run: dotnet list HakAccounting.slnx package --vulnerable --include-transitive
-        continue-on-error: true
+      # Gói NuGet có lỗ hổng đã biết (kể cả gói gián tiếp) làm hỏng CI: `dotnet list` luôn thoát 0 nên phải đọc kết quả.
+      - run: |
+          dotnet list HakAccounting.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+          if grep -qE '^\s+>\s' vulnerable.txt; then echo '::error::Có gói NuGet có lỗ hổng đã biết'; exit 1; fi
       - run: dotnet test --no-build -c Release --logger trx --results-directory TestResults
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
           path: TestResults
+          retention-days: 14
   # Cùng bộ test tích hợp nhưng chạy trên PostgreSQL (chế độ LAN); mỗi test tạo/xóa DB hak_test_<guid>.
   backend-postgres:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:18
@@ -50,6 +59,7 @@ jobs:
       - run: dotnet test tests/Hak.Integration.Tests -c Release
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: web
@@ -62,6 +72,5 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm audit --audit-level=high
-        continue-on-error: true
       - run: npm test
       - run: npm run build
