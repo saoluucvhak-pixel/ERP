@@ -78,6 +78,9 @@ public class DataDrillTests
         var open = await s.CatalogImport.ImportOpeningBalancesAsync(h.Preparer, new(2025, 1, 1), null, opening, commit: true);
         Assert.True(open.Committed, string.Join("; ", open.Issues.Select(i => $"d{i.Line} {i.Field}: {i.Message}")));
         Assert.Equal(open.TotalDebit, open.TotalCredit);
+        await s.Engine.SubmitAsync(h.Preparer, open.VoucherId!.Value);
+        await s.Engine.ApproveAsync(h.Approver, open.VoucherId!.Value);
+        await s.Engine.PostAsync(h.Approver, open.VoucherId!.Value);   // số dư đầu kỳ phải vào sổ trước, nếu không TK có chính sách chặn số dư âm sẽ từ chối
 
         var expectedVouchers = 0;
         foreach (var file in new[] { "chung-tu-2025.csv", "chung-tu-2026.csv" })
