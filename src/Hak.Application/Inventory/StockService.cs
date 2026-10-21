@@ -305,6 +305,10 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                 if (order.Status != Domain.Trade.OrderStatus.Confirmed)
                     throw new DomainException(ErrorCodes.OrderMismatch, $"Đơn {order.Number} ở trạng thái {order.Status}; không ghi sổ phiếu theo đơn này.");
             }
+            // Giới hạn vật lý của hàng trả lại: tái kiểm tra ngay khi ghi sổ (phiếu nháp cũ, hai phiếu cùng dòng hóa đơn gốc, chứng từ lập sau).
+            var returnKeys = doc.Lines.Where(l => l.SourceInvoiceId is not null).Select(l => (doc.Id, l.LineNo)).ToList();
+            foreach (var g in doc.Lines.Where(l => l.SourceInvoiceId is not null && l.SourceInvoiceLineNo is not null).GroupBy(l => (l.SourceInvoiceId!.Value, l.SourceInvoiceLineNo!.Value)))
+                await Hak.Application.Trade.SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, g.Key.Item1, g.Key.Item2, g.Sum(l => l.Quantity), returnKeys, $"Phiếu {doc.Number}, dòng hóa đơn gốc {g.Key.Item2}");
             var dp = await DecimalsAsync(company);
             var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
             await RequireQualityCheckAsync(doc, items);

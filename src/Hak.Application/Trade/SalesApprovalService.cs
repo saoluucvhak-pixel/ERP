@@ -152,18 +152,38 @@ public sealed class SalesApprovalService(HakDbContext db, AccountingEngine engin
     private Task<decimal> UsedQuantityAsync(Guid invoiceId, int lineNo) => ReturnUsedAsync(db, invoiceId, lineNo);
 
     /// <summary>
-    /// Số lượng đã nhận trả lại của một dòng hóa đơn bán gốc: lớn hơn của (tổng các phiếu nhập hàng trả lại còn hiệu lực gắn với dòng đó) và (tổng trên các hóa đơn trả hàng nháp / đã ghi sổ),
-    /// để vừa chặn lập nhiều phiếu nhập khi chưa có hóa đơn, vừa không bỏ sót hóa đơn gắn phiếu nhập lập tay.
+    /// Số lượng đã trả lại (nhập lại / xuất trả) của một dòng hóa đơn gốc: hợp của các dòng phiếu kho còn hiệu lực gắn với dòng đó (SourceInvoiceId) và các dòng hóa đơn trả hàng
+    /// nháp / đã ghi sổ, gộp theo (phiếu, dòng phiếu) để một nghiệp vụ có hai đại diện không bị cộng hai lần. <paramref name="exclude"/> loại các dòng phiếu đang được xét.
     /// </summary>
-    internal static async Task<decimal> ReturnUsedAsync(HakDbContext db, Guid invoiceId, int lineNo)
+    internal static async Task<decimal> ReturnUsedAsync(HakDbContext db, Guid invoiceId, int lineNo, IReadOnlyCollection<(Guid Document, int Line)>? exclude = null)
     {
-        var receipts = (await (from l in db.StockDocumentLines join d in db.StockDocuments on l.DocumentId equals d.Id
-                               where l.SourceInvoiceId == invoiceId && l.SourceInvoiceLineNo == lineNo && (d.Status == StockDocumentStatus.Draft || d.Status == StockDocumentStatus.Posted)
-                               select l.Quantity).ToListAsync()).Sum();
-        var invoiced = (await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
-                               where i.AdjustsInvoiceId == invoiceId && i.Purpose == InvoicePurpose.Return && l.AdjustsLineNo == lineNo && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted)
-                               select l.StockQuantity).ToListAsync()).Sum(x => x ?? 0);
-        return Math.Max(receipts, invoiced);
+        var receipts = await (from l in db.StockDocumentLines join d in db.StockDocuments on l.DocumentId equals d.Id
+                              where l.SourceInvoiceId == invoiceId && l.SourceInvoiceLineNo == lineNo && (d.Status == StockDocumentStatus.Draft || d.Status == StockDocumentStatus.Posted)
+                              select new { Doc = l.DocumentId, l.LineNo, l.Quantity }).ToListAsync();
+        var invoiced = await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
+                              where i.AdjustsInvoiceId == invoiceId && i.Purpose == InvoicePurpose.Return && l.AdjustsLineNo == lineNo && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted)
+                              select new { Doc = l.StockDocumentId, Line = l.StockLineNo, l.StockQuantity }).ToListAsync();
+        var byKey = new Dictionary<(Guid, int), decimal>();
+        foreach (var r in receipts) byKey[(r.Doc, r.LineNo)] = r.Quantity;
+        decimal loose = 0;
+        foreach (var i in invoiced)
+        {
+            if (i.Doc is { } d && i.Line is { } n) byKey.TryAdd((d, n), i.StockQuantity ?? 0);
+            else loose += i.StockQuantity ?? 0;
+        }
+        if (exclude is not null) foreach (var k in exclude) byKey.Remove(k);
+        return byKey.Values.Sum() + loose;
+    }
+
+    /// <summary>Giới hạn vật lý: lượng trả thêm không được làm tổng trả vượt số lượng đã bán / đã mua trên dòng hóa đơn gốc, bất kể có bật phê duyệt hay không.</summary>
+    internal static async Task EnsureReturnWithinSoldAsync(HakDbContext db, Guid companyId, Guid invoiceId, int lineNo, decimal addQuantity,
+        IReadOnlyCollection<(Guid Document, int Line)>? exclude, string who)
+    {
+        var sold = await db.CommercialInvoiceLines.AsNoTracking().Where(l => l.CompanyId == companyId && l.InvoiceId == invoiceId && l.LineNo == lineNo)
+            .Select(l => l.StockQuantity).FirstOrDefaultAsync() ?? 0;
+        var used = await ReturnUsedAsync(db, invoiceId, lineNo, exclude);
+        if (used + addQuantity > sold)
+            throw new DomainException(ErrorCodes.OverInvoiced, $"{who}: đã trả {used}, thêm {addQuantity} vượt số lượng trên dòng hóa đơn gốc {sold}.");
     }
 
     private async Task<decimal> UsedAmountAsync(Guid invoiceId, int lineNo)

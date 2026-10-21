@@ -97,6 +97,17 @@ public class ApiTests
             System.Text.Encoding.UTF8, "application/json"));
         Assert.Equal(HttpStatusCode.BadRequest, asNumber.StatusCode);
 
+        // Malformed decimal strings are the caller's mistake (400 with a stable body), never a 500, and create no voucher.
+        var before = (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!;
+        foreach (var bad in new[] { "\"abc\"", "\"\"", "null", "\"1,5\"", "\"1.2.3\"", "\"" + new string('9', 42) + "\"", "\"1e3\"", "\" 5\"", "true" })
+        {
+            var r = await lap.PostAsync("/api/vouchers", new StringContent(
+                $$"""{"voucherType":"GJ","voucherDate":"2026-03-01","postingDate":"2026-03-01","description":"x","lines":[{"accountId":"{{cash}}","side":"D","amount":{{bad}}},{"accountId":"{{rev}}","side":"C","amount":"1"}]}""",
+                System.Text.Encoding.UTF8, "application/json"));
+            Assert.True(r.StatusCode == HttpStatusCode.BadRequest, $"amount={bad}: {(int)r.StatusCode} {await r.Content.ReadAsStringAsync()}");
+        }
+        Assert.Equal(before, (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!);
+
         var v = await Json(await lap.PostAsJsonAsync("/api/vouchers", new
         {
             voucherType = "GJ", voucherDate = "2026-03-01", postingDate = "2026-03-01", description = "Bán lẻ thu tiền mặt",

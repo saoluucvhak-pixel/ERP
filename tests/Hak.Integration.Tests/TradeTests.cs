@@ -1387,4 +1387,86 @@ public class TradeTests
         Assert.Equal(journalsBefore, await JournalCountAsync(fx));
         Assert.Equal(0m, await fx.Bal("CASH"));
     }
+
+    // ------------------------------------------------------------------ giới hạn điều chỉnh / trả hàng (MAIN-01, MAIN-02)
+
+    private static AdjustmentInput DiscountOf(CommercialInvoice inv, string no, params decimal[] amounts)
+        => new(inv.Id, InvoicePurpose.Discount, "1C26T", no, D(3, 20), D(3, 20), "Giảm giá", amounts.Select(a => new AdjustmentLineInput(1, Amount: a)).ToList());
+
+    private static Task<int> JournalsAsync(Fx fx) => fx.S.Db.JournalEntries.CountAsync();
+
+    [Fact]
+    public async Task Discount_TwoLinesOnSameOriginalLine_AreSummed_AndNothingIsBooked()
+    {
+        using var fx = await SetupAsync();
+        var (inv, _) = await PostedBdmtSaleAsync(fx);                       // line value 133,200,000
+        var journals = await JournalsAsync(fx);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, DiscountOf(inv, "200", 79_920_000, 79_920_000))));
+        Assert.Equal(0, await fx.S.Db.CommercialInvoices.CountAsync(i => i.Purpose == InvoicePurpose.Discount));
+        Assert.Equal(journals, await JournalsAsync(fx));
+
+        var ok = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, DiscountOf(inv, "201", 53_280_000, 79_920_000));   // 40% + 60% = exactly the line
+        await fx.Inv.PostAsync(fx.H.Approver, ok.Id);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, DiscountOf(inv, "202", 1))));
+    }
+
+    [Fact]
+    public async Task Discount_AcrossInvoices_Accumulates_CancelReleases_AndPostingRechecksTheTotal()
+    {
+        using var fx = await SetupAsync();
+        var (inv, _) = await PostedBdmtSaleAsync(fx);
+        var first = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, DiscountOf(inv, "210", 79_920_000));
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, DiscountOf(inv, "211", 79_920_000))));
+        await fx.Inv.CancelAsync(fx.H.Preparer, first.Id, "Lập nhầm");
+        var second = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, DiscountOf(inv, "211", 79_920_000));          // cancelled draft no longer counts
+
+        // A draft edited outside the service past the limit is stopped when it is posted, with no half-written state.
+        await fx.S.Db.CommercialInvoiceLines.Where(l => l.InvoiceId == second.Id).ExecuteUpdateAsync(u => u.SetProperty(l => l.FunctionalAmount, 140_000_000m));
+        var journals = await JournalsAsync(fx);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, second.Id)));
+        fx.S.Db.ChangeTracker.Clear();
+        Assert.Equal(InvoiceStatus.Draft, (await fx.S.Db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == second.Id)).Status);
+        Assert.Equal(journals, await JournalsAsync(fx));
+    }
+
+    [Fact]
+    public async Task ReturnReceipts_WithoutCreditNotes_CannotExceedTheQuantitySold()
+    {
+        using var fx = await SetupAsync();
+        var (inv, _) = await PostedBdmtSaleAsync(fx);                       // 60 MT sold; approval policy is off
+        var r1 = await fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 40, D(3, 15));
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, r1.Id);           // posted, still no credit note
+        var movements = await fx.S.Db.StockMovements.CountAsync();
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 40, D(3, 16))));
+        Assert.Equal(movements, await fx.S.Db.StockMovements.CountAsync());
+        await fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 20, D(3, 16));                                   // 40 + 20 = 60 is fine
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 1, D(3, 17))));
+        Assert.Equal(0m, Assert.Single(await fx.S.Stock.ReconcileAsync(fx.H.Auditor, D(12, 31))).Difference);
+    }
+
+    [Fact]
+    public async Task ReturnReceipt_PostingRechecksTheLimit_ForDraftsCreatedOutsideTheGuard()
+    {
+        using var fx = await SetupAsync();
+        var (inv, issue) = await PostedBdmtSaleAsync(fx);
+        var line = issue.Lines[0];
+        async Task<StockDocument> RawDraft(decimal qty) => await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 15), D(3, 15), "Nhận trả",
+            [new StockLineInput(line.ItemId, qty, 1_000_000, line.CounterAccountId, "Trả", SourceInvoiceId: inv.Id, SourceInvoiceLineNo: 1)], PartnerId: inv.PartnerId));
+        var a = await RawDraft(40);
+        var b = await RawDraft(40);                                         // two drafts, each fine alone
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, a.Id);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, b.Id)));
+        fx.S.Db.ChangeTracker.Clear();
+        Assert.Equal(StockDocumentStatus.Draft, (await fx.S.Db.StockDocuments.AsNoTracking().FirstAsync(d => d.Id == b.Id)).Status);
+    }
+
+    [Fact]
+    public async Task PurchaseReturnIssues_CannotExceedTheQuantityBought_EvenBeforeACreditNote()
+    {
+        using var fx = await SetupAsync();
+        var invoice = await PostedPurchaseOfAdditiveAsync(fx);              // 100 kg bought
+        await fx.Inv.CreatePurchaseReturnIssueAsync(fx.H.Preparer, invoice.Id, 1, 60, D(3, 10));
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreatePurchaseReturnIssueAsync(fx.H.Preparer, invoice.Id, 1, 60, D(3, 11))));
+        await fx.Inv.CreatePurchaseReturnIssueAsync(fx.H.Preparer, invoice.Id, 1, 40, D(3, 11));
+    }
 }
