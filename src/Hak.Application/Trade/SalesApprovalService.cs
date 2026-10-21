@@ -175,6 +175,24 @@ public sealed class SalesApprovalService(HakDbContext db, AccountingEngine engin
         return byKey.Values.Sum() + loose;
     }
 
+    /// <summary>
+    /// Nguồn của phiếu kho hàng trả: hóa đơn gốc phải thuộc công ty, là hóa đơn thường đã ghi sổ, đúng chiều (bán → phiếu nhập lại, mua → phiếu xuất trả), cùng đối tượng,
+    /// có dòng đó và cùng vật tư. Chặn dữ liệu gửi thẳng qua API không đi qua luồng tạo phiếu trả hàng.
+    /// </summary>
+    internal static async Task ValidateReturnSourceAsync(HakDbContext db, Guid companyId, StockDocumentType type, Guid? partnerId, Guid itemId, Guid invoiceId, int lineNo, string who)
+    {
+        var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == companyId)
+                  ?? throw new DomainException(ErrorCodes.NotFound, $"{who}: hóa đơn gốc không tồn tại.");
+        if (inv.Purpose != InvoicePurpose.Normal || inv.Status != InvoiceStatus.Posted)
+            throw new DomainException(ErrorCodes.ValidationFailed, $"{who}: chỉ nhận trả / xuất trả cho hóa đơn thường đã ghi sổ.");
+        var expected = inv.Kind == InvoiceKind.Sales ? StockDocumentType.Receipt : StockDocumentType.Issue;
+        if (type != expected)
+            throw new DomainException(ErrorCodes.ValidationFailed, $"{who}: hóa đơn {(inv.Kind == InvoiceKind.Sales ? "bán" : "mua")} chỉ gắn với phiếu {(expected == StockDocumentType.Receipt ? "nhập hàng trả lại" : "xuất trả nhà cung cấp")}.");
+        if (partnerId != inv.PartnerId) throw new DomainException(ErrorCodes.ValidationFailed, $"{who}: đối tượng của phiếu khác đối tượng trên hóa đơn gốc.");
+        var line = inv.Lines.FirstOrDefault(l => l.LineNo == lineNo) ?? throw new DomainException(ErrorCodes.NotFound, $"{who}: hóa đơn gốc không có dòng {lineNo}.");
+        if (line.ItemId != itemId) throw new DomainException(ErrorCodes.ValidationFailed, $"{who}: vật tư khác vật tư trên dòng hóa đơn gốc.");
+    }
+
     /// <summary>Giới hạn vật lý: lượng trả thêm không được làm tổng trả vượt số lượng đã bán / đã mua trên dòng hóa đơn gốc, bất kể có bật phê duyệt hay không.</summary>
     internal static async Task EnsureReturnWithinSoldAsync(HakDbContext db, Guid companyId, Guid invoiceId, int lineNo, decimal addQuantity,
         IReadOnlyCollection<(Guid Document, int Line)>? exclude, string who)

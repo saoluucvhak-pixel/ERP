@@ -221,6 +221,15 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                     if (counter.RequiresPartner && input.PartnerId is null)
                         throw new DomainException(ErrorCodes.PartnerRequired, $"Dòng {n}: tài khoản đối ứng {counter.Code} yêu cầu đối tượng.");
                 }
+                if ((l.SourceInvoiceId is null) != (l.SourceInvoiceLineNo is null))
+                    throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: liên kết hóa đơn gốc phải có cả hóa đơn và dòng hóa đơn.");
+                if (l.SourceInvoiceId is { } sid)
+                {
+                    // Hàng trả lại: nguồn hợp lệ và không vượt số lượng đã bán / đã mua, tính cả các dòng cùng nguồn đang tạo trong phiếu này (nháp cũng giữ chỗ).
+                    await Hak.Application.Trade.SalesApprovalService.ValidateReturnSourceAsync(db, ctx.CompanyId, input.Type, input.PartnerId, l.ItemId, sid, l.SourceInvoiceLineNo!.Value, $"Dòng {n}");
+                    var earlierReturn = input.Lines.Take(n - 1).Where(x => x.SourceInvoiceId == sid && x.SourceInvoiceLineNo == l.SourceInvoiceLineNo).Sum(x => x.Quantity);
+                    await Hak.Application.Trade.SalesApprovalService.EnsureReturnWithinSoldAsync(db, ctx.CompanyId, sid, l.SourceInvoiceLineNo!.Value, l.Quantity + earlierReturn, null, $"Dòng {n}");
+                }
                 if ((l.OrderId is null) != (l.OrderLineNo is null))
                     throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: liên kết đơn hàng phải có cả đơn và dòng đơn.");
                 if (l.OrderId is { } oid)

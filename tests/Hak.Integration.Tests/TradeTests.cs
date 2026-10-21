@@ -1446,21 +1446,39 @@ public class TradeTests
     }
 
     [Fact]
-    public async Task ReturnReceipt_PostingRechecksTheLimit_ForDraftsCreatedOutsideTheGuard()
+    public async Task ReturnReceipt_DirectApiDrafts_AreValidatedAtCreation_AndRecheckedAtPosting()
     {
         using var fx = await SetupAsync();
-        var (inv, issue) = await PostedBdmtSaleAsync(fx);
+        var (inv, issue) = await PostedBdmtSaleAsync(fx);                   // 60 MT sold
         var line = issue.Lines[0];
-        async Task<StockDocument> RawDraft(decimal qty) => await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 15), D(3, 15), "Nhận trả",
-            [new StockLineInput(line.ItemId, qty, 1_000_000, line.CounterAccountId, "Trả", SourceInvoiceId: inv.Id, SourceInvoiceLineNo: 1)], PartnerId: inv.PartnerId));
-        var a = await RawDraft(40);
-        var b = await RawDraft(40);                                         // two drafts, each fine alone but 80 > 60 together
+        Task<StockDocument> Raw(decimal qty, Guid? partner = null, Guid? invoice = null, Guid? item = null, int lineNo = 1, StockDocumentType type = StockDocumentType.Receipt)
+            => fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(type, fx.Wh, D(3, 15), D(3, 15), "Nhận trả",
+                [new StockLineInput(item ?? line.ItemId, qty, type == StockDocumentType.Receipt ? 1_000_000 : null, line.CounterAccountId, "Trả", SourceInvoiceId: invoice ?? inv.Id, SourceInvoiceLineNo: lineNo)],
+                PartnerId: partner ?? inv.PartnerId));
+
+        // Source must be a real line of a posted sales invoice of the same customer, the same item, and the receipt direction.
+        Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => Raw(1, invoice: Guid.NewGuid())));
+        Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => Raw(1, lineNo: 9)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => Raw(1, partner: fx.H.Partner["NCC01"])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => Raw(1, item: fx.Add)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => Raw(1, type: StockDocumentType.Issue)));
+
+        // Drafts reserve the quantity: 40 + 40 > 60 is refused when the second is created, 40 + 20 is fine.
+        var a = await Raw(40);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => Raw(40)));
+        var b = await Raw(20);
+
+        // A draft edited outside the service is stopped again when it is posted.
+        await fx.S.Db.StockDocumentLines.Where(l => l.DocumentId == b.Id).ExecuteUpdateAsync(u => u.SetProperty(l => l.Quantity, 40m));
+        fx.S.Db.ChangeTracker.Clear();
         Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, a.Id)));
-        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, b.Id)));
         Assert.Equal(0, await fx.S.Db.StockMovements.CountAsync(m => m.DocumentId == a.Id || m.DocumentId == b.Id));
-        await fx.S.Stock.CancelDocumentAsync(fx.H.Preparer, b.Id, "Lập trùng");
-        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, a.Id);            // once the duplicate draft is gone the first posts
-        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 21, D(3, 18))));
+        await fx.S.Db.StockDocumentLines.Where(l => l.DocumentId == b.Id).ExecuteUpdateAsync(u => u.SetProperty(l => l.Quantity, 20m));
+        fx.S.Db.ChangeTracker.Clear();
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, a.Id);
+        await fx.S.Stock.CancelDocumentAsync(fx.H.Preparer, b.Id, "Không nhận nữa");   // cancelling releases the reservation
+        await Raw(20);
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => Raw(1)));
     }
 
     [Fact]
