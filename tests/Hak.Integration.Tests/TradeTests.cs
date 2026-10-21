@@ -1422,6 +1422,7 @@ public class TradeTests
 
         // A draft edited outside the service past the limit is stopped when it is posted, with no half-written state.
         await fx.S.Db.CommercialInvoiceLines.Where(l => l.InvoiceId == second.Id).ExecuteUpdateAsync(u => u.SetProperty(l => l.FunctionalAmount, 140_000_000m));
+        fx.S.Db.ChangeTracker.Clear();                                       // ExecuteUpdate bypasses tracking; a real request starts with a fresh context
         var journals = await JournalsAsync(fx);
         Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, second.Id)));
         fx.S.Db.ChangeTracker.Clear();
@@ -1453,11 +1454,13 @@ public class TradeTests
         async Task<StockDocument> RawDraft(decimal qty) => await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 15), D(3, 15), "Nhận trả",
             [new StockLineInput(line.ItemId, qty, 1_000_000, line.CounterAccountId, "Trả", SourceInvoiceId: inv.Id, SourceInvoiceLineNo: 1)], PartnerId: inv.PartnerId));
         var a = await RawDraft(40);
-        var b = await RawDraft(40);                                         // two drafts, each fine alone
-        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, a.Id);
+        var b = await RawDraft(40);                                         // two drafts, each fine alone but 80 > 60 together
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, a.Id)));
         Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, b.Id)));
-        fx.S.Db.ChangeTracker.Clear();
-        Assert.Equal(StockDocumentStatus.Draft, (await fx.S.Db.StockDocuments.AsNoTracking().FirstAsync(d => d.Id == b.Id)).Status);
+        Assert.Equal(0, await fx.S.Db.StockMovements.CountAsync(m => m.DocumentId == a.Id || m.DocumentId == b.Id));
+        await fx.S.Stock.CancelDocumentAsync(fx.H.Preparer, b.Id, "Lập trùng");
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, a.Id);            // once the duplicate draft is gone the first posts
+        Assert.Equal(ErrorCodes.OverInvoiced, await CodeOf(() => fx.Inv.CreateReturnReceiptAsync(fx.H.Preparer, inv.Id, 1, 21, D(3, 18))));
     }
 
     [Fact]
