@@ -201,6 +201,15 @@ public sealed class LoanService(HakDbContext db, AccountingEngine engine, AuditS
             var moves = await MovesAsync([loan.Id], DateOnly.MaxValue);
             var outstanding = moves.Where(m => m.LoanId == loan.Id).Sum(m => loan.Currency is null ? m.Amount : m.Foreign ?? 0);
             if (outstanding != 0) throw new DomainException(ErrorCodes.ValidationFailed, $"Khế ước còn dư nợ gốc {outstanding}; không tất toán được.");
+            // Bắt buộc trích lãi đến kỳ chứa ngày trả gốc cuối trước khi tất toán (chị chốt 21/10/2026): đóng sớm sẽ mất lãi các ngày cuối.
+            var lastMove = moves.Where(m => m.LoanId == loan.Id).Select(m => (DateOnly?)m.Date).Max();
+            if (lastMove is { } lastRepayment)
+            {
+                var accruedTo = await AccruedToAsync(loan.Id) ?? (await LastActiveRunAsync(ctx.CompanyId))?.PeriodEnd;
+                if (accruedTo is null || accruedTo < lastRepayment)
+                    throw new DomainException(ErrorCodes.InterestPending,
+                        $"Chưa trích lãi đến kỳ chứa ngày trả gốc cuối {lastRepayment:dd/MM/yyyy} (đã trích đến {(accruedTo is { } d ? d.ToString("dd/MM/yyyy") : "chưa trích")}); trích lãi kỳ đó rồi mới tất toán khế ước.");
+            }
             loan.Status = LoanStatus.Closed;
             loan.RowVersion++;
             await audit.AppendAsync(ctx.CompanyId, ctx, "loan.close", "loan", loan.Id.ToString(), null, loan.RowVersion);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { CashDocsView } from './CashDocs'
-import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES } from './voucherguards'
+import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES, isModuleGenerated } from './voucherguards'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 
@@ -97,7 +97,7 @@ export function VouchersView() {
             <strong>{v.number}</strong> <span className={`badge ${v.status}`}>{STATUS_VI[v.status]}</span>
             <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {formatDate(v.postingDate)} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
-            {v.status === 'Draft' && (!CASH_TYPES.includes(v.voucherType) || canEditAsCashDoc(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
+            {v.status === 'Draft' && !isModuleGenerated(v) && (!CASH_TYPES.includes(v.voucherType) || canEditAsCashDoc(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
             <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
               const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
               setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')

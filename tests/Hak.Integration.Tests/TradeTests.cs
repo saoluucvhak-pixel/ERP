@@ -439,6 +439,46 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task ReversingAPurchaseInvoice_AfterTheGoodsWereIssued_RepricesTheIssuedPartToCogs_AndKeepsTheStockLedgerUsable()
+    {
+        using var fx = await SetupAsync();
+        var r = await PostedReceiptAsync(fx, 10, 1_000_000, D(3, 1), fx.Add);
+        var inv = await fx.Inv.CreateAsync(fx.H.Preparer, Purchase(fx, "910", new InvoiceLineInput(110_000, r.Id, 1)));   // 1,100,000: +100,000 so với phiếu nhập
+        await fx.Inv.PostAsync(fx.H.Approver, inv.Id, acknowledgePriceDifferences: true);                                // toàn bộ còn trong kho → vào tồn kho
+        var issue = await PostedIssueAsync(fx, 10, D(3, 5), fx.Add);
+        Assert.Equal(1_100_000m, await IssueValue(fx, issue));                                                           // giá đã gồm 100,000 chênh lệch
+        Assert.Equal((0m, 1_100_000m), (await fx.Bal("INV"), await fx.Bal("COGS")));
+
+        // Đảo hóa đơn khi hàng đã xuất hết: tính lại đơn giá, 100,000 trả lại giá vốn (không âm tồn kho, không làm hỏng sổ kho).
+        await fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 10), "Nhà cung cấp lập sai giá");
+        Assert.Equal(0m, await fx.Bal("INV"));
+        Assert.Equal(1_000_000m, await fx.Bal("COGS"));
+        Assert.Equal(0m, Assert.Single(await fx.S.Stock.ReconcileAsync(fx.H.Auditor, D(12, 31))).Difference);
+
+        await PostedReceiptAsync(fx, 5, 600_000, D(3, 12), fx.Add);
+        Assert.Equal(600_000m, await IssueValue(fx, await PostedIssueAsync(fx, 5, D(3, 13), fx.Add)));
+        Assert.Equal(0m, Assert.Single(await fx.S.Stock.ReconcileAsync(fx.H.Auditor, D(12, 31))).Difference);
+    }
+
+    [Fact]
+    public async Task ReversingAPurchaseInvoice_WithPartOfTheGoodsStillInStock_SplitsTheRepricingByQuantity()
+    {
+        using var fx = await SetupAsync();
+        var r = await PostedReceiptAsync(fx, 10, 1_000_000, D(3, 1), fx.Add);
+        var inv = await fx.Inv.CreateAsync(fx.H.Preparer, Purchase(fx, "911", new InvoiceLineInput(110_000, r.Id, 1)));
+        await fx.Inv.PostAsync(fx.H.Approver, inv.Id, acknowledgePriceDifferences: true);
+        await PostedIssueAsync(fx, 4, D(3, 5), fx.Add);                                                                  // 4/10 đã xuất: 440,000 vào giá vốn
+        Assert.Equal((660_000m, 440_000m), (await fx.Bal("INV"), await fx.Bal("COGS")));
+
+        await fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 10), "Nhà cung cấp lập sai giá");
+        // Chênh lệch 100,000: 60,000 thuộc 6 kg còn trong kho (gỡ khỏi tồn kho), 40,000 thuộc 4 kg đã xuất (giảm giá vốn).
+        Assert.Equal((600_000m, 400_000m), (await fx.Bal("INV"), await fx.Bal("COGS")));
+        Assert.Equal(0m, Assert.Single(await fx.S.Stock.ReconcileAsync(fx.H.Auditor, D(12, 31))).Difference);
+        Assert.Equal(600_000m, await IssueValue(fx, await PostedIssueAsync(fx, 6, D(3, 12), fx.Add)));
+        Assert.Equal(0m, await fx.Bal("INV"));
+    }
+
+    [Fact]
     public async Task PriceDifference_Fifo_UsesTheReceiptsOwnRemainingLayer()
     {
         using var fx = await SetupAsync();

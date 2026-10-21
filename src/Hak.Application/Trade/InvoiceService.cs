@@ -226,16 +226,42 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             var inv = await db.CommercialInvoices.FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
             if (inv.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} chưa ghi sổ hoặc đã đảo.");
+            // Tính lại đơn giá khi đảo: phần giá trị hóa đơn đã nằm trong hàng xuất được chuyển từ tồn kho sang giá vốn TRƯỚC khi ghi bút toán đảo,
+            // để tài khoản tồn kho (có thể chặn số dư âm) không âm giữa chừng. Sổ kho: chỉ gỡ phần còn thuộc hàng tồn (adjustments bất biến, không xóa).
+            var shifts = await stock.ReverseValueAdjustmentsAsync(ctx, inv.Id, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}");
+            if (shifts.Count > 0) await PostRepriceShiftAsync(ctx, inv, shifts, reversalDate);
             await engine.ReverseCoreAsync(ctx, inv.VoucherId!.Value, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}: {reason}", allowModuleOwned: true);
-            // The voucher reversal takes the inventory part of price differences out of the ledger; take it out of the stock
-            // ledger too with an opposite value-only adjustment (adjustments are immutable, never deleted).
-            await stock.ReverseValueAdjustmentsAsync(ctx, inv.Id, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}");
             inv.Status = InvoiceStatus.Reversed;
             inv.RowVersion++;
             await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.reverse", "invoice", inv.Id.ToString(), new { inv.Number, reason }, inv.RowVersion);
             await db.SaveChangesAsync();
             return inv;
         });
+    }
+
+    /// <summary>
+    /// The mirror reversal credits inventory for the whole inventory part booked at posting. If some of that stock has since been issued
+    /// (its cost already went to COGS inside the issues), the over-credit on inventory is moved to COGS: Dr inventory / Cr COGS.
+    /// </summary>
+    private async Task PostRepriceShiftAsync(SessionContext ctx, CommercialInvoice inv, IReadOnlyList<StockService.RepriceShift> shifts, DateOnly date)
+    {
+        var cogs = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.RoleCode == "COGS").Select(m => (Guid?)m.AccountId).FirstOrDefaultAsync()
+                   ?? throw new DomainException(ErrorCodes.RuleRoleUnmapped, "Chưa ánh xạ vai trò tài khoản COGS.");
+        var itemIds = shifts.Select(x => x.ItemId).Distinct().ToList();
+        var accounts = await db.Items.AsNoTracking().Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId);
+        var lines = new List<VoucherLineInput>();
+        foreach (var g in shifts.GroupBy(x => x.ItemId))
+        {
+            var amount = g.Sum(x => x.Amount);
+            if (amount == 0) continue;
+            var inventory = accounts[g.Key] ?? throw new DomainException(ErrorCodes.ValidationFailed, "Vật tư chưa có tài khoản tồn kho.");
+            var text = $"Tính lại giá khi đảo HĐ {inv.InvoiceNo}: phần hàng đã xuất chuyển từ tồn kho sang giá vốn";
+            lines.Add(new VoucherLineInput(inventory, amount > 0 ? Side.Debit : Side.Credit, Math.Abs(amount), Description: text));
+            lines.Add(new VoucherLineInput(cogs, amount > 0 ? Side.Credit : Side.Debit, Math.Abs(amount), Description: text));
+        }
+        if (lines.Count == 0) return;
+        await engine.PostSystemVoucherAsync(ctx, new VoucherInput(VoucherTypes.General, date, date, $"Tính lại giá vốn khi đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}", lines,
+            SourceSystem: "HAK.INVOICE", SourceId: inv.Id + ":reprice"));
     }
 
     public async Task<CommercialInvoice> CancelAsync(SessionContext ctx, Guid invoiceId, string reason)

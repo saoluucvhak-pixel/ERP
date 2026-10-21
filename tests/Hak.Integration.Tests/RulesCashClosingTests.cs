@@ -208,6 +208,29 @@ public class RulesCashClosingTests
     }
 
     [Fact]
+    public async Task Closing_CanBeGeneratedAgainAfterTheClosingVoucherWasReversed()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var set = await s.Closing.CreateRuleSetAsync(h.Admin, "C", new(2026, 1, 1), null, [new ClosingStepInput("DT", "REV", "RESULT")]);
+        await s.Closing.ActivateRuleSetAsync(h.Admin, set.Id);
+        await h.PostedAsync(s, h.Sale(500));
+        var march = await s.Db.AccountingPeriods.SingleAsync(p => p.PeriodNo == 3);
+        var cls = await s.Closing.GenerateAsync(h.Preparer, march.Id);
+        await s.Engine.SubmitAsync(h.Preparer, cls.Id);
+        await s.Engine.ApproveAsync(h.Approver, cls.Id);
+        await s.Engine.PostAsync(h.Approver, cls.Id);
+        Assert.Equal(ErrorCodes.AlreadyClosed, await CodeOf(() => s.Closing.GenerateAsync(h.Preparer, march.Id)));
+
+        await s.Engine.ReverseAsync(h.Approver, cls.Id, new(2026, 3, 31), "Kết chuyển trước khi đủ chứng từ");
+        await h.PostedAsync(s, h.Sale(250));
+        var second = await s.Closing.GenerateAsync(h.Preparer, march.Id);   // bản cũ đã đảo: kỳ được kết chuyển lại
+        Assert.Equal(750m, second.TotalDebit);
+        Assert.EndsWith("#2", second.SourceId);
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => s.Closing.GenerateAsync(h.Preparer, march.Id)));   // vẫn chỉ một bản đang hiệu lực
+    }
+
+    [Fact]
     public async Task ListRuleSets_ShowsVersionsStepsAndStatus_NewestFirst()
     {
         using var h = await TestHost.CreateAsync();

@@ -70,4 +70,30 @@ public class AuditFixTests
         Assert.Equal(VoucherStatus.Posted, (await s.Db.Vouchers.AsNoTracking().SingleAsync(x => x.Id == rev.Id)).Status);
         Assert.Equal(0m, await s.Ledger.AccountBalanceAsync(h.Auditor, h.Acc["AR"], new(2026, 12, 31)));
     }
+
+    // ACC-02 (chị chốt 21/10/2026): chứng từ do phân hệ sinh ra chỉ tính lại ở phân hệ, không sửa tay.
+    [Theory]
+    [InlineData("HAK.ADVANCE")]
+    [InlineData("HAK.EQUITY")]
+    [InlineData("HAK.CLOSING")]
+    [InlineData("HAK.VAT.OFFSET")]
+    public async Task ModuleGeneratedDraft_CannotBeEditedByHand(string source)
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var v = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000) with { SourceSystem = source, SourceId = "audit-1" });
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => s.Engine.UpdateDraftAsync(h.Preparer, v.Id, v.RowVersion, h.Sale(9000))));
+        Assert.Equal(1000m, (await s.Db.Vouchers.AsNoTracking().Include(x => x.Lines).SingleAsync(x => x.Id == v.Id)).TotalDebit);
+    }
+
+    [Fact]
+    public async Task ImportedAndManualDrafts_StayEditable()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var imported = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000) with { SourceSystem = "HAK.IMPORT", SourceId = "audit-2" });
+        Assert.Equal(2000m, (await s.Engine.UpdateDraftAsync(h.Preparer, imported.Id, imported.RowVersion, h.Sale(2000))).TotalDebit);
+        var manual = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000));
+        Assert.Equal(3000m, (await s.Engine.UpdateDraftAsync(h.Preparer, manual.Id, manual.RowVersion, h.Sale(3000))).TotalDebit);
+    }
 }

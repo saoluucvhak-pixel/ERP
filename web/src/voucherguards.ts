@@ -15,3 +15,9 @@ export function canEditAsCashDoc(v: Pick<Voucher, 'voucherType' | 'businessEvent
 export function canCopyVoucher(v: Pick<Voucher, 'voucherType' | 'lines'>): boolean {
   return ['GJ', 'ADJ', 'ALC', 'OPB', 'CLS', 'FXR'].includes(v.voucherType) && !v.lines.some(l => l.foreignCurrency)
 }
+
+/** Chứng từ do phân hệ sinh ra (nguồn HAK.*, trừ dữ liệu nhập từ hệ thống cũ) chỉ tính lại ở phân hệ, không sửa tay — khớp quy tắc ở backend. */
+export function isModuleGenerated(v: Pick<Voucher, 'sourceSystem'>): boolean {
+  const s = v.sourceSystem
+  return !!s && s.startsWith('HAK.') && s !== 'HAK.IMPORT'
+}

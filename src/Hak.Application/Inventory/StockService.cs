@@ -526,24 +526,39 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         return split;
     }
 
-    /// <summary>Offsets every value-only adjustment booked by an invoice that is being reversed (inside the reversal transaction).</summary>
-    internal async Task ReverseValueAdjustmentsAsync(SessionContext ctx, Guid sourceInvoiceId, DateOnly date, string reason)
+    /// <summary>Phần giá trị của một hóa đơn bị đảo mà hàng đã xuất ra khỏi kho: kế toán chuyển từ tồn kho sang giá vốn.</summary>
+    public sealed record RepriceShift(Guid ItemId, decimal Amount);
+
+    /// <summary>
+    /// Offsets the value-only adjustments booked by an invoice that is being reversed (inside the reversal transaction), re-splitting
+    /// them with the same rule as posting (company decision 15/10/2026, "tính lại đơn giá" confirmed 21/10/2026): only the part
+    /// attributable to stock STILL on hand comes off the stock ledger; the part already carried out by issued goods stays in those
+    /// issues and is returned as a <see cref="RepriceShift"/> so the caller moves it from inventory to COGS in the ledger.
+    /// </summary>
+    internal async Task<IReadOnlyList<RepriceShift>> ReverseValueAdjustmentsAsync(SessionContext ctx, Guid sourceInvoiceId, DateOnly date, string reason)
     {
         var originals = await db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.SourceInvoiceId == sourceInvoiceId).ToListAsync();
-        if (originals.Count == 0 || originals.Sum(a => a.Value) == 0) return;
+        if (originals.Count == 0 || originals.Sum(a => a.Value) == 0) return [];
         await RequireOpenPeriodAsync(ctx.CompanyId, date);
         var seq = await MaxSequenceAsync(ctx.CompanyId);
+        var shifts = new List<RepriceShift>();
         foreach (var g in originals.GroupBy(a => (a.WarehouseId, a.ItemId, a.TargetMovementId)))
         {
-            var value = -g.Sum(a => a.Value);
-            if (value == 0) continue;
+            var booked = g.Sum(a => a.Value);
+            if (booked == 0) continue;
             await GuardCostedAsync(ctx.CompanyId, g.Key.WarehouseId, date);
-            db.StockValueAdjustments.Add(new StockValueAdjustment
-            {
-                Id = Ids.New(), CompanyId = ctx.CompanyId, WarehouseId = g.Key.WarehouseId, ItemId = g.Key.ItemId, TargetMovementId = g.Key.TargetMovementId,
-                Sequence = ++seq, AdjustmentDate = date, Value = value, SourceInvoiceId = sourceInvoiceId, Reason = reason, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId,
-            });
+            var mv = await db.StockMovements.AsNoTracking().SingleAsync(m => m.Id == g.Key.TargetMovementId);
+            var split = await PriceDifferenceSplitAsync(ctx.CompanyId, mv.DocumentId, mv.LineNo, booked);
+            var keep = split.InStockPart;                  // phần còn thuộc hàng tồn: gỡ khỏi lớp nhập
+            if (keep != 0)
+                db.StockValueAdjustments.Add(new StockValueAdjustment
+                {
+                    Id = Ids.New(), CompanyId = ctx.CompanyId, WarehouseId = g.Key.WarehouseId, ItemId = g.Key.ItemId, TargetMovementId = g.Key.TargetMovementId,
+                    Sequence = ++seq, AdjustmentDate = date, Value = -keep, SourceInvoiceId = sourceInvoiceId, Reason = reason, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId,
+                });
+            if (booked - keep != 0) shifts.Add(new RepriceShift(g.Key.ItemId, booked - keep));
         }
+        return shifts;
     }
 
     /// <summary>Highest sequence used by movements or value adjustments (they share one processing order per company).</summary>
