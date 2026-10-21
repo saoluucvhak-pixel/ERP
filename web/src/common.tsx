@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ApiError, get, session, type Account, type Partner } from './api'
+import { ApiError, UNCERTAIN_CODE, get, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
 
@@ -127,6 +127,16 @@ export function Modal({ title, onClose, children, footer, busy, onSubmit }: { ti
 
 export function ErrorBox({ error }: { error: unknown }) {
   if (!error) return null
+  if (error instanceof ApiError && error.code === UNCERTAIN_CODE)
+    return (
+      <div className="msg error" role="alert">
+        <strong>Kết quả chưa xác định</strong>: {error.message}
+        {hasPendingWrite() && <div style={{ marginTop: 6 }}><button onClick={async () => {
+          try { await retryPendingWrite(); alert('Máy chủ đã xác nhận thao tác (không ghi trùng). Trang sẽ tải lại để hiện dữ liệu mới.'); window.location.reload() }
+          catch (e) { alert(e instanceof Error ? e.message : String(e)) }
+        }}>Thử lại an toàn</button></div>}
+      </div>
+    )
   if (error instanceof ApiError)
     return (
       <div className="msg error" role="alert">
