@@ -155,6 +155,66 @@ internal static class ImmutabilityTriggers
 
     private static readonly string[] AssetNoDelete = ["long_term_assets", "depreciation_runs", "depreciation_entries"];
 
+    private const string AssetFrozenColumns = """
+        NEW.company_id IS DISTINCT FROM OLD.company_id OR NEW.code IS DISTINCT FROM OLD.code
+               OR NEW.class IS DISTINCT FROM OLD.class OR NEW.asset_account_id IS DISTINCT FROM OLD.asset_account_id
+               OR NEW.accumulated_account_id IS DISTINCT FROM OLD.accumulated_account_id OR NEW.expense_account_id IS DISTINCT FROM OLD.expense_account_id
+               OR NEW.method IS DISTINCT FROM OLD.method OR NEW.proration IS DISTINCT FROM OLD.proration
+               OR NEW.original_cost IS DISTINCT FROM OLD.original_cost OR NEW.residual_value IS DISTINCT FROM OLD.residual_value
+               OR NEW.useful_life_months IS DISTINCT FROM OLD.useful_life_months OR NEW.in_service_date IS DISTINCT FROM OLD.in_service_date
+               OR NEW.opening_accumulated IS DISTINCT FROM OLD.opening_accumulated OR NEW.remaining_life_months IS DISTINCT FROM OLD.remaining_life_months
+               OR NEW.schedule_start_date IS DISTINCT FROM OLD.schedule_start_date
+        """;
+
+    private const string EntryFrozenColumns = """
+        OLD.voided_at IS NOT NULL OR NEW.voided_at IS NULL OR NEW.amount IS DISTINCT FROM OLD.amount OR NEW.asset_id IS DISTINCT FROM OLD.asset_id
+             OR NEW.run_id IS DISTINCT FROM OLD.run_id OR NEW.is_disposal IS DISTINCT FROM OLD.is_disposal OR NEW.period_end IS DISTINCT FROM OLD.period_end
+        """;
+
+    private static string AssetFrozenFunction(string extra) => $"""
+        CREATE OR REPLACE FUNCTION hak_long_term_assets_frozen() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF OLD.status <> 1 AND ({AssetFrozenColumns}{extra}) THEN
+            RAISE EXCEPTION 'LEDGER_IMMUTABLE';
+          END IF;
+          RETURN NEW;
+        END $$;
+        """;
+
+    private static string EntryVoidOnceFunction(string extra) => $"""
+        CREATE OR REPLACE FUNCTION hak_depreciation_entries_void_once() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF {EntryFrozenColumns}{extra} THEN
+            RAISE EXCEPTION 'LEDGER_IMMUTABLE';
+          END IF;
+          RETURN NEW;
+        END $$;
+        """;
+
+    /// <summary>
+    /// Phase 15 (DB-08): thẻ tài sản đã ghi tăng khóa thêm các cột khấu hao thêm sau (declining_factor, schedule_end_date, total_units,
+    /// unit_name; allocation_frequency vẫn đổi được), số khấu hao khóa thêm company_id / period_start / created_at — khớp interceptor và SQLite.
+    /// Chỉ thay thân hàm; trigger giữ nguyên tên. Tách riêng vì Phase4Assets chạy trước khi các cột này tồn tại.
+    /// </summary>
+    public static IEnumerable<string> ParityStatements()
+    {
+        yield return AssetFrozenFunction("""
+
+                   OR NEW.declining_factor IS DISTINCT FROM OLD.declining_factor OR NEW.schedule_end_date IS DISTINCT FROM OLD.schedule_end_date
+                   OR NEW.total_units IS DISTINCT FROM OLD.total_units OR NEW.unit_name IS DISTINCT FROM OLD.unit_name
+            """);
+        yield return EntryVoidOnceFunction("""
+
+                 OR NEW.company_id IS DISTINCT FROM OLD.company_id OR NEW.period_start IS DISTINCT FROM OLD.period_start OR NEW.created_at IS DISTINCT FROM OLD.created_at
+            """);
+    }
+
+    public static IEnumerable<string> ParityDownStatements()
+    {
+        yield return AssetFrozenFunction("");
+        yield return EntryVoidOnceFunction("");
+    }
+
     public static IEnumerable<string> AssetDownStatements()
     {
         foreach (var t in AssetNoDelete) yield return $"DROP TRIGGER IF EXISTS trg_{t}_no_delete ON {t};";

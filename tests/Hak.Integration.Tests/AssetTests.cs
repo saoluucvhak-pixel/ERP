@@ -619,4 +619,71 @@ public class AssetTests
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
+
+    /// <summary>
+    /// DB-08, nâng cấp: một database đang dùng (ảnh đính kèm, khấu hao có chia chi phí) ở lược đồ của bản trước được nâng lên bản mới —
+    /// dữ liệu giữ nguyên, các lỗ hổng bất biến được đóng ở tầng database (sửa thẳng bằng SQL, bỏ qua phần mềm, bị chặn),
+    /// còn các thao tác hợp lệ (đổi kỳ ghi sổ, hủy lần chạy khấu hao) vẫn làm được.
+    /// </summary>
+    [Fact]
+    public async Task UpgradeFromPreviousVersion_KeepsData_AndClosesTheImmutabilityGaps()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        foreach (var code in new[] { "EXP_A", "EXP_B" }) h.Acc[code] = (await s.Setup.CreateAccountAsync(h.Admin, code, $"Chi phí bộ phận {code} (mã thử)")).Id;
+        var line = await BuyAsync(h, s, "FA", 120_000_000, new(2026, 1, 10));
+        var asset = await ActiveAsync(h, s, FixedAsset(h, "TS901", line, 120_000_000, new(2026, 1, 15)));
+        await s.Assets.SetExpenseSplitsAsync(h.Preparer, asset.Id, [new(h.Acc["EXP_A"], "Xưởng", 60), new(h.Acc["EXP_B"], "Văn phòng", 40)]);
+        await s.Assets.RunAsync(h.Approver, await PeriodAsync(h, s, 1));
+        var repairs = new AssetRepairService(s.Db, s.Stock, s.Audit, h.Clock);
+        var req = await repairs.RequestAsync(h.Preparer, asset.Id, MaintenancePriority.High, "Máy rung mạnh");
+        var root = Path.Combine(Path.GetTempPath(), "hak-att-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var photo = await new Hak.Application.Attachments.AttachmentService(s.Db, new Hak.Application.Attachments.AttachmentStore(root), s.Audit, h.Clock)
+                .AddAsync(h.Preparer, "maintenance_request", req.Id, "hien-truong.jpg", Jpeg(), "Vết nứt");
+            var split = await s.Db.DepreciationEntrySplits.AsNoTracking().FirstAsync();
+            var entry = await s.Db.DepreciationEntries.AsNoTracking().FirstAsync(e => e.AssetId == asset.Id);
+            async Task<(int, int, int, decimal, decimal)> Snapshot()
+            {
+                s.Db.ChangeTracker.Clear();
+                return (await s.Db.FileAttachments.CountAsync(), await s.Db.DepreciationEntrySplits.CountAsync(), await s.Db.DepreciationEntries.CountAsync(),
+                    (await s.Db.DepreciationEntrySplits.Select(x => x.Amount).ToListAsync()).Sum(), (await s.Db.DepreciationEntries.Select(x => x.Amount).ToListAsync()).Sum());
+            }
+            var before = await Snapshot();
+            Assert.Equal((1, 2), (before.Item1, before.Item2));
+
+            // Về lược đồ của bản trước (dữ liệu giữ nguyên) rồi nâng cấp như khi cài bản mới.
+            var migrator = Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>(s.Db);
+            var migrations = s.Db.Database.GetMigrations().ToList();
+            await migrator.MigrateAsync(migrations[^2]);
+            Assert.Equal(migrations[^2], (await s.Db.Database.GetAppliedMigrationsAsync()).Last());
+            if (!h.IsPostgres)   // bản cũ trên SQLite: lỗ hổng có thật (PostgreSQL đã chặn hai bảng này từ trước)
+                Assert.Equal(1, await s.Db.Database.ExecuteSqlAsync($"UPDATE depreciation_entry_splits SET amount = amount WHERE id = {split.Id}"));
+            Hak.Data.HakDb.Migrate(s.Db);
+            Assert.Empty(await s.Db.Database.GetPendingMigrationsAsync());
+            Assert.Equal(before, await Snapshot());
+
+            // Sửa / xóa thẳng bằng SQL (bỏ qua phần mềm) nay bị database từ chối.
+            async Task Blocked(FormattableString sql) =>
+                Assert.Contains("LEDGER_IMMUTABLE", (await Assert.ThrowsAnyAsync<Exception>(() => s.Db.Database.ExecuteSqlAsync(sql))).ToString());
+            await Blocked($"UPDATE file_attachments SET caption = 'sửa' WHERE id = {photo.Id}");
+            await Blocked($"DELETE FROM file_attachments WHERE id = {photo.Id}");
+            await Blocked($"UPDATE depreciation_entry_splits SET amount = amount + 1 WHERE id = {split.Id}");
+            await Blocked($"DELETE FROM depreciation_entry_splits WHERE id = {split.Id}");
+            await Blocked($"UPDATE long_term_assets SET unit_name = 'giờ máy' WHERE id = {asset.Id}");
+            await Blocked($"UPDATE long_term_assets SET total_units = 1000 WHERE id = {asset.Id}");
+            await Blocked($"UPDATE long_term_assets SET declining_factor = 2 WHERE id = {asset.Id}");
+            await Blocked($"UPDATE long_term_assets SET schedule_end_date = {new DateOnly(2030, 12, 31)} WHERE id = {asset.Id}");
+            await Blocked($"UPDATE depreciation_entries SET period_start = {new DateOnly(2025, 1, 1)} WHERE id = {entry.Id}");
+            Assert.Equal(before, await Snapshot());
+
+            // Thao tác hợp lệ vẫn chạy: đổi kỳ ghi sổ của thẻ đang dùng, hủy lần chạy (ghi voided_at một lần).
+            Assert.Equal(AllocationFrequency.Quarterly, (await s.Assets.SetFrequencyAsync(h.Preparer, asset.Id, AllocationFrequency.Quarterly)).AllocationFrequency);
+            await s.Assets.ReverseRunAsync(h.Approver, entry.RunId!.Value, "Chạy lại sau nâng cấp");
+            s.Db.ChangeTracker.Clear();
+            Assert.NotNull((await s.Db.DepreciationEntries.AsNoTracking().SingleAsync(e => e.Id == entry.Id)).VoidedAt);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
 }
