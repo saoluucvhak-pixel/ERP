@@ -164,7 +164,14 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
     public Task<Voucher> CancelAsync(SessionContext ctx, Guid id, string reason, long? expectedRowVersion = null)
     {
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ReasonRequired, "Phải ghi lý do hủy.");
-        return TransitionAsync(ctx, id, expectedRowVersion, Permissions.VoucherEditDraft, "cancel", (v, _) => { v.Cancel(); return Task.CompletedTask; }, reason);
+        return TransitionAsync(ctx, id, expectedRowVersion, Permissions.VoucherEditDraft, "cancel", (v, _) =>
+        {
+            // Đã gửi duyệt thì chứng từ đang nằm ở khâu duyệt: chỉ người lập (rút lại) hoặc người có quyền duyệt mới được hủy, không phải bất kỳ ai sửa được nháp.
+            if (v.Status == VoucherStatus.Submitted && v.CreatedBy != ctx.UserId && !ctx.Permissions.Contains(Permissions.VoucherApprove))
+                throw new DomainException(ErrorCodes.Forbidden, "Chứng từ đã gửi duyệt chỉ người lập hoặc người có quyền duyệt được hủy.");
+            v.Cancel();
+            return Task.CompletedTask;
+        }, reason);
     }
 
     /// <summary>

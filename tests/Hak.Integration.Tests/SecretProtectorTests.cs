@@ -47,4 +47,26 @@ public class SecretProtectorTests
         }
         finally { Directory.Delete(Path.GetDirectoryName(path)!, true); }
     }
+
+    [Fact]
+    public void Key_file_is_readable_only_by_its_owner()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "hak-sk-" + Guid.NewGuid().ToString("N"), "secret.key");
+        try
+        {
+            SecretProtector.LoadOrCreateKey(null, path);
+            if (OperatingSystem.IsWindows())
+            {
+                // ACL không thừa hưởng từ thư mục, và chỉ có đúng tài khoản đang chạy.
+                var security = new FileInfo(path).GetAccessControl();
+                Assert.True(security.AreAccessRulesProtected);
+                var who = new HashSet<string>();
+                foreach (System.Security.AccessControl.FileSystemAccessRule rule in security.GetAccessRules(true, true, typeof(System.Security.Principal.SecurityIdentifier)))
+                    who.Add(rule.IdentityReference.Value);
+                Assert.Equal([System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value], who);
+            }
+            else Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(path)!, true); }
+    }
 }

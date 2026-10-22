@@ -84,9 +84,35 @@ public static class HttpContextExtensions
 
     public static async Task<(Hak.Domain.Security.User User, Hak.Domain.Security.LoginSession Session)> AuthAsync(this HttpContext http)
     {
+        // Xác thực một lần mỗi request: RequireSessionMiddleware đã kiểm thì handler dùng lại kết quả, không truy vấn lần hai.
+        if (http.Items[AuthItem] is ValueTuple<Hak.Domain.Security.User, Hak.Domain.Security.LoginSession> cached) return cached;
         var header = http.Request.Headers.Authorization.ToString();
         if (!header.StartsWith("Bearer ", StringComparison.Ordinal))
             throw new DomainException(ErrorCodes.Unauthenticated, "Chưa đăng nhập.");
-        return await http.RequestServices.GetRequiredService<AuthService>().AuthenticateAsync(header["Bearer ".Length..]);
+        var result = await http.RequestServices.GetRequiredService<AuthService>().AuthenticateAsync(header["Bearer ".Length..]);
+        http.Items[AuthItem] = result;
+        return result;
+    }
+
+    private const string AuthItem = "hak.auth";
+}
+
+/// <summary>
+/// Mọi /api/* đều cần phiên đăng nhập hợp lệ, trừ danh sách trắng bên dưới, và được kiểm TRƯỚC khi gắn tham số và chạy handler.
+/// Handler vẫn kiểm quyền theo công ty như cũ; middleware này chỉ bảo đảm endpoint mới không thể vô tình mở cho người chưa đăng nhập
+/// (ApiTests.EveryApiEndpoint_RequiresASession duyệt mọi route để chứng minh).
+/// </summary>
+public sealed class RequireSessionMiddleware(RequestDelegate next)
+{
+    /// <summary>Endpoint không cần đăng nhập: kiểm tra sống, đăng nhập, khởi tạo quản trị lần đầu và trạng thái khởi tạo.</summary>
+    public static readonly IReadOnlySet<string> Anonymous = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { "/api/health", "/api/auth/login", "/api/setup/bootstrap", "/api/setup/status" };
+
+    public async Task InvokeAsync(HttpContext http)
+    {
+        var path = http.Request.Path;
+        if (path.StartsWithSegments("/api") && !Anonymous.Contains(path.Value!.TrimEnd('/')))
+            await http.AuthAsync();   // không hợp lệ → DomainException(UNAUTHENTICATED) → 401 qua DomainExceptionMiddleware
+        await next(http);
     }
 }

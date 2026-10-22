@@ -1,41 +1,47 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { get, post, session, setSessionExpiredHandler } from './api'
-import { AdminView } from './Admin'
-import { AssetsView } from './Assets'
-import { BankingView } from './Banking'
-import { CashDocsView } from './CashDocs'
-import { CatalogView } from './Catalog'
 import { DashboardView } from './Dashboard'
 import { HomeLauncher } from './Home'
 import { FlowTab, MODULES, moduleOfScreen } from './Modules'
-import { AnalysisView } from './Analysis'
-import { OpeningBalancesView } from './OpeningBalances'
 import { QuickAdd } from './QuickAdd'
 import { ErrorBox, navStore, useAction } from './common'
-import { FxView } from './Fx'
-import { InventoryView } from './Inventory'
-import { LoansView } from './Loans'
-import { OrdersView } from './Orders'
-import { ContractsView } from './Contracts'
-import { AdvancesView, CashCountView } from './Advances'
-import { EquityView } from './Equity'
-import { SalesApprovalsView } from './SalesApprovals'
-import { ServiceAcceptancesView } from './ServiceAcceptances'
-import { SpecialJournalsView } from './SpecialJournals'
-import { PaymentDiscountView } from './PaymentDiscount'
-import { GroupsView } from './Groups'
 import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
-import { PayrollView } from './Payroll'
-import { ProcurementView } from './Procurement'
-import { RevenueView } from './Revenue'
-import { SetupView } from './Setup'
-import { ProductionView } from './ProductionOrders'
-import { ReportEngineView } from './ReportEngine'
-import { PeriodsView } from './Periods'
-import { TradeView } from './Trade'
-import { VatView } from './Vat'
-import { AccountLedgerView, GeneralJournalView, ReceivablesView, TrialBalanceView } from './Reports'
-import { VouchersView } from './Vouchers'
+
+// Màn hình nghiệp vụ tải theo nhu cầu (mỗi màn một chunk): lần mở đầu chỉ tải khung, Tổng quan và màn đang mở.
+const AdminView = lazy(() => import('./Admin').then(m => ({ default: m.AdminView })))
+const AssetsView = lazy(() => import('./Assets').then(m => ({ default: m.AssetsView })))
+const BankingView = lazy(() => import('./Banking').then(m => ({ default: m.BankingView })))
+const CashDocsView = lazy(() => import('./CashDocs').then(m => ({ default: m.CashDocsView })))
+const CatalogView = lazy(() => import('./Catalog').then(m => ({ default: m.CatalogView })))
+const AnalysisView = lazy(() => import('./Analysis').then(m => ({ default: m.AnalysisView })))
+const OpeningBalancesView = lazy(() => import('./OpeningBalances').then(m => ({ default: m.OpeningBalancesView })))
+const FxView = lazy(() => import('./Fx').then(m => ({ default: m.FxView })))
+const InventoryView = lazy(() => import('./Inventory').then(m => ({ default: m.InventoryView })))
+const LoansView = lazy(() => import('./Loans').then(m => ({ default: m.LoansView })))
+const OrdersView = lazy(() => import('./Orders').then(m => ({ default: m.OrdersView })))
+const ContractsView = lazy(() => import('./Contracts').then(m => ({ default: m.ContractsView })))
+const AdvancesView = lazy(() => import('./Advances').then(m => ({ default: m.AdvancesView })))
+const CashCountView = lazy(() => import('./Advances').then(m => ({ default: m.CashCountView })))
+const EquityView = lazy(() => import('./Equity').then(m => ({ default: m.EquityView })))
+const SalesApprovalsView = lazy(() => import('./SalesApprovals').then(m => ({ default: m.SalesApprovalsView })))
+const ServiceAcceptancesView = lazy(() => import('./ServiceAcceptances').then(m => ({ default: m.ServiceAcceptancesView })))
+const SpecialJournalsView = lazy(() => import('./SpecialJournals').then(m => ({ default: m.SpecialJournalsView })))
+const PaymentDiscountView = lazy(() => import('./PaymentDiscount').then(m => ({ default: m.PaymentDiscountView })))
+const GroupsView = lazy(() => import('./Groups').then(m => ({ default: m.GroupsView })))
+const PayrollView = lazy(() => import('./Payroll').then(m => ({ default: m.PayrollView })))
+const ProcurementView = lazy(() => import('./Procurement').then(m => ({ default: m.ProcurementView })))
+const RevenueView = lazy(() => import('./Revenue').then(m => ({ default: m.RevenueView })))
+const SetupView = lazy(() => import('./Setup').then(m => ({ default: m.SetupView })))
+const ProductionView = lazy(() => import('./ProductionOrders').then(m => ({ default: m.ProductionView })))
+const ReportEngineView = lazy(() => import('./ReportEngine').then(m => ({ default: m.ReportEngineView })))
+const PeriodsView = lazy(() => import('./Periods').then(m => ({ default: m.PeriodsView })))
+const TradeView = lazy(() => import('./Trade').then(m => ({ default: m.TradeView })))
+const VatView = lazy(() => import('./Vat').then(m => ({ default: m.VatView })))
+const AccountLedgerView = lazy(() => import('./Reports').then(m => ({ default: m.AccountLedgerView })))
+const GeneralJournalView = lazy(() => import('./Reports').then(m => ({ default: m.GeneralJournalView })))
+const ReceivablesView = lazy(() => import('./Reports').then(m => ({ default: m.ReceivablesView })))
+const TrialBalanceView = lazy(() => import('./Reports').then(m => ({ default: m.TrialBalanceView })))
+const VouchersView = lazy(() => import('./Vouchers').then(m => ({ default: m.VouchersView })))
 
 interface Company { id: string; code: string; name: string; roles?: string[]; permissions?: string[] }
 
@@ -171,7 +177,7 @@ export default function App() {
     return (
       <main className="main">
         <div className="toolbar"><button onClick={() => setSystemAdmin(false)}>← Chọn công ty</button><button onClick={logout}>Đăng xuất</button></div>
-        <AdminView />
+        <Suspense fallback={<span className="muted">Đang tải…</span>}><AdminView /></Suspense>
       </main>
     )
   }
@@ -225,9 +231,11 @@ export default function App() {
             {SCREEN_LABELS[k]}{work[k] ? <span className="nav-count">{work[k]}</span> : null}</button>)}
         </div>}
         <main className="main" key={company.id + module.key + tab}>
-          {module.screens.length === 0 ? screenEl(module.key)
-            : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[k]).map(k => [k, work[k]]))} />
-            : screenEl(tab)}
+          <Suspense fallback={<span className="muted">Đang tải…</span>}>
+            {module.screens.length === 0 ? screenEl(module.key)
+              : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[k]).map(k => [k, work[k]]))} />
+              : screenEl(tab)}
+          </Suspense>
         </main>
       </div>
     </div>

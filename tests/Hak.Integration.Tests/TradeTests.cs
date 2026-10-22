@@ -656,6 +656,9 @@ public class TradeTests
         Assert.Equal(1, q["orders"].Count);
         Assert.Equal(1, q["procurement"].Count);
         Assert.Contains("dưới tồn tối thiểu", q["procurement"].Hint);
+        // A settings-only grant (ADMIN: no voucher.view / report.view) cannot open these lists, so it sees no counts either.
+        Assert.Empty(await home.WorkQueueAsync(h.Admin));
+        Assert.Equal(Hak.Application.Cycles.HomeService.ViewPermission.Keys.OrderBy(k => k), new[] { "assets", "bank", "cash", "loans", "orders", "payroll", "procurement", "production", "revenue", "services", "stock", "trade", "vouchers" });
     }
 
     [Fact]

@@ -64,7 +64,7 @@ public static class PackageCrypto
 /// duplicate/conflict detection → validation → (dry-run preview | commit as Draft vouchers) → audit.
 /// Imported vouchers are never posted automatically and never overwrite existing vouchers (master prompt §29).
 /// </summary>
-public sealed class JournalVoucherPackageService(HakDbContext db, AccountingEngine engine, AuditService audit, IClock clock)
+public sealed class JournalVoucherPackageService(HakDbContext db, AccountingEngine engine, AuditService audit, IClock clock, MasterKey? masterKey = null)
 {
 
 
@@ -90,7 +90,7 @@ public sealed class JournalVoucherPackageService(HakDbContext db, AccountingEngi
             k.CompanyId == ctx.CompanyId && k.SourceSystem == sourceSystem && k.KeyId == keyId && k.IsActive)
             ?? throw new DomainException(ErrorCodes.UnknownSource, $"Không có khóa xác thực cho nguồn {sourceSystem}/{keyId}.");
 
-        var expectedSig = Convert.FromBase64String(PackageCrypto.Signature(package, Convert.FromBase64String(SecretProtector.Reveal(key.SecretBase64))));
+        var expectedSig = Convert.FromBase64String(PackageCrypto.Signature(package, Convert.FromBase64String((masterKey ?? MasterKey.None).Reveal(key.SecretBase64))));
         if (!CryptographicOperations.FixedTimeEquals(expectedSig, Convert.FromBase64String((string)package["auth"]!["signature"]!)))
             throw new DomainException(ErrorCodes.PackageSignatureInvalid, "Chữ ký gói dữ liệu không hợp lệ.");
         if (PackageCrypto.PayloadChecksum(package["payload"]!) != (string?)package["checksum"]!["value"])
