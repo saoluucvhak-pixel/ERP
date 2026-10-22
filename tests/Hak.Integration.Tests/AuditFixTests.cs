@@ -19,6 +19,7 @@ public class AuditFixTests
     [InlineData("/api/admin/backups/verify")]
     [InlineData("/api/exchange/keys")]
     [InlineData("/api/exchange/keys/3f0efecc/deactivate")]
+    [InlineData("/api/exchange/keys/3f0efecc/rotate")]
     [InlineData("/api/auth/login")]
     [InlineData("/api/setup/bootstrap")]
     public void Idempotency_NeverRecordsPathsThatCarrySecrets(string path) => Assert.True(IdempotencyMiddleware.ExcludedPath(path));

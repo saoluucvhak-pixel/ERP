@@ -139,7 +139,7 @@ function PayrollPayable({ onCount }: { onCount?: (n: number) => void }) {
   )
 }
 
-interface KeyRow { id: string; sourceSystem: string; keyId: string; isActive: boolean }
+interface KeyRow { id: string; sourceSystem: string; keyId: string; isActive: boolean; exposed?: boolean }
 
 /** HMAC keys of systems allowed to send packages. Hidden for users without config.manage. */
 function ExchangeKeys() {
@@ -164,9 +164,19 @@ function ExchangeKeys() {
           setIssued(await post('/exchange/keys', { sourceSystem: source, keyId })); setKeyId(''); await load()
         })}>Tạo khóa</button>
       </div>
+      {keys.some(k => k.exposed) && <div className="msg error">Có khóa đang dùng mà bí mật đã bị lộ (lưu nhầm vào dữ liệu chống gửi trùng ở bản cũ). Bấm <strong>Cấp lại</strong> cho từng khóa,
+        rồi cấu hình bí mật mới vào hệ thống gửi; gói ký bằng khóa cũ sẽ bị từ chối ngay khi cấp lại.</div>}
       <table className="grid"><thead><tr><th>Hệ thống</th><th>Mã khóa</th><th>Trạng thái</th><th /></tr></thead>
-        <tbody>{keys.map(k => <tr key={k.id}><td>{k.sourceSystem}</td><td>{k.keyId}</td><td>{k.isActive ? 'Đang dùng' : 'Ngừng dùng'}</td>
-          <td>{k.isActive && <button disabled={busy} onClick={() => { const reason = prompt('Lý do ngừng dùng khóa:'); if (reason) run(async () => { await post(`/exchange/keys/${k.id}/deactivate`, { reason }); await load() }) }}>Ngừng dùng</button>}</td></tr>)}</tbody></table>
+        <tbody>{keys.map(k => <tr key={k.id}><td>{k.sourceSystem}</td><td>{k.keyId}</td>
+          <td>{k.isActive ? (k.exposed ? <span className="badge Locked">Đang dùng — đã lộ, cần cấp lại</span> : 'Đang dùng') : 'Ngừng dùng'}</td>
+          <td>{k.isActive && <>
+            <button disabled={busy} className={k.exposed ? 'primary' : undefined} onClick={() => {
+              const newKeyId = prompt(`Mã khóa mới cho ${k.sourceSystem} (khác "${k.keyId}"):`)?.trim(); if (!newKeyId) return
+              const reason = prompt('Lý do cấp lại khóa:', k.exposed ? 'Bí mật bị lộ (SEC-01)' : ''); if (!reason) return
+              run(async () => { setIssued(await post(`/exchange/keys/${k.id}/rotate`, { keyId: newKeyId, reason })); await load() })
+            }}>Cấp lại</button>
+            <button disabled={busy} onClick={() => { const reason = prompt('Lý do ngừng dùng khóa:'); if (reason) run(async () => { await post(`/exchange/keys/${k.id}/deactivate`, { reason }); await load() }) }}>Ngừng dùng</button>
+          </>}</td></tr>)}</tbody></table>
     </section>
   )
 }

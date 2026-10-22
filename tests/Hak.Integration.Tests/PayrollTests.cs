@@ -180,6 +180,82 @@ public class PayrollTests
     }
 
     [Fact]
+    public async Task ExchangeKeys_Rotate_RevokesOldSecret_IssuesNewOnce_InOneStep()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var keys = new ExchangeKeyService(s.Db, s.Audit);
+        var old = await keys.IssueAsync(h.Admin, "HRM", "2026-01");
+        string Signed(string packageId, string keyId, string secret)
+        {
+            var p = JsonNode.Parse(Package(h, packageId, "1", March()))!.AsObject();
+            p["source_system"] = "HRM";
+            PackageCrypto.Seal(p, keyId, Convert.FromBase64String(secret));
+            return p.ToJsonString();
+        }
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => keys.RotateAsync(h.Preparer, old.Id, "2026-02", "Lộ khóa")));
+        Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => keys.RotateAsync(h.Admin, old.Id, "2026-02", " ")));
+        Assert.Equal(ErrorCodes.DuplicateCode, await CodeOf(() => keys.RotateAsync(h.Admin, old.Id, "2026-01", "Lộ khóa")));
+        Assert.True((await keys.ListAsync(h.Admin)).Single(k => k.Id == old.Id).IsActive);   // lần cấp lại hỏng không ngừng khóa cũ
+
+        var rotated = await keys.RotateAsync(h.Admin, old.Id, "2026-02", "Lộ khóa");
+        Assert.Equal(("HRM", "2026-02"), (rotated.SourceSystem, rotated.KeyId));
+        Assert.NotEqual(old.SecretBase64, rotated.SecretBase64);
+        var list = await keys.ListAsync(h.Admin);
+        Assert.Contains(list, k => k.KeyId == "2026-01" && !k.IsActive);
+        Assert.Contains(list, k => k.KeyId == "2026-02" && k.IsActive);
+        Assert.Equal(ErrorCodes.UnknownSource, await CodeOf(() => s.Payroll.ProcessAsync(h.Preparer, Signed("PKG-HRM-0001", "2026-01", old.SecretBase64), commit: false)));
+        Assert.Equal("CREATED", (await s.Payroll.ProcessAsync(h.Preparer, Signed("PKG-HRM-0002", "2026-02", rotated.SecretBase64), commit: true)).Outcome);
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => keys.RotateAsync(h.Admin, old.Id, "2026-03", "Lần nữa")));
+        Assert.True(await s.Db.AuditLogs.AnyAsync(a => a.Action == "exchange_key.rotate" && a.EntityId == old.Id.ToString()));
+        Assert.DoesNotContain(rotated.SecretBase64, string.Join("|", await s.Db.AuditLogs.Select(a => a.DataJson ?? "").ToListAsync()));
+    }
+
+    /// <summary>
+    /// SEC-01, dữ liệu cũ: bản trước bản sửa đã lưu phản hồi "cấp khóa" (có bí mật) và băm nội dung đổi mật khẩu vào bảng chống gửi trùng.
+    /// Bước dọn lúc khởi động xóa đúng các bản ghi đó, giữ bản ghi nghiệp vụ, và đánh dấu khóa bị lộ để màn hình yêu cầu cấp lại.
+    /// </summary>
+    [Fact]
+    public async Task SecretPurge_RemovesRecordsCarryingSecrets_FlagsExposedKeys_AndIsIdempotent()
+    {
+        using var h = await HostAsync();
+        using var s = h.NewScope();
+        var keys = new ExchangeKeyService(s.Db, s.Audit);
+        var leaked = await keys.IssueAsync(h.Admin, "HRM", "2026-01");
+        var safe = await keys.IssueAsync(h.Admin, "ERP2", "2026-01");
+        IdempotencyRecord Rec(string path, string body) => new()
+        {
+            Id = Ids.New(), Scope = "s", Key = Guid.NewGuid().ToString("N"), RequestHash = "h", Method = "POST", Path = path,
+            StatusCode = 200, ContentType = "application/json", ResponseBody = body, CreatedAt = h.Clock.UtcNow,
+        };
+        s.Db.IdempotencyRecords.AddRange(
+            Rec("/api/exchange/keys", System.Text.Json.JsonSerializer.Serialize(new { id = leaked.Id, leaked.SourceSystem, leaked.KeyId, leaked.SecretBase64 })),
+            Rec("/API/Me/Password", ""),
+            Rec("/api/admin/users", """{"id":"00000000-0000-0000-0000-000000000001"}"""),
+            Rec("/api/vouchers", """{"id":"00000000-0000-0000-0000-000000000002"}"""));
+        await s.Db.SaveChangesAsync();
+
+        var result = await Hak.Api.IdempotencySecretPurge.RunAsync(s.Db, s.Audit);
+        Assert.Equal(3, result.Deleted);
+        Assert.Equal([leaked.Id], result.ExposedExchangeKeyIds);
+        Assert.Equal(["/api/vouchers"], await s.Db.IdempotencyRecords.Select(r => r.Path).ToListAsync());
+        Assert.DoesNotContain(leaked.SecretBase64, string.Join("|", await s.Db.AuditLogs.Select(a => a.DataJson ?? "").ToListAsync()));
+
+        var list = await keys.ListAsync(h.Admin);
+        Assert.True(list.Single(k => k.Id == leaked.Id).Exposed);
+        Assert.False(list.Single(k => k.Id == safe.Id).Exposed);
+        // Chạy lại (mỗi lần khởi động): không còn gì để xóa, không ghi thêm nhật ký.
+        var audits = await s.Db.AuditLogs.CountAsync();
+        Assert.Equal(0, (await Hak.Api.IdempotencySecretPurge.RunAsync(s.Db, s.Audit)).Deleted);
+        Assert.Equal(audits, await s.Db.AuditLogs.CountAsync());
+        // Cấp lại: khóa mới không mang cờ "đã lộ", khóa cũ ngừng dùng nên cũng hết cờ.
+        var rotated = await keys.RotateAsync(h.Admin, leaked.Id, "2026-02", "Bí mật bị lộ (SEC-01)");
+        Assert.DoesNotContain(await keys.ListAsync(h.Admin), k => k.Exposed);
+        Assert.Contains(await keys.ListAsync(h.Admin), k => k.Id == rotated.Id && k.IsActive);
+    }
+
+    [Fact]
     public async Task ImportedSheet_IsImmutable()
     {
         using var h = await HostAsync();
