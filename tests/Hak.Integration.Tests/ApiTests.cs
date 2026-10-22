@@ -42,6 +42,55 @@ public class ApiTests
         => Assert.Equal(expected, Hak.Api.DecimalAsStringConverter.Canonical(decimal.Parse(stored, System.Globalization.CultureInfo.InvariantCulture)));
 
     [Fact]
+    public async Task EveryWebApiCall_HasAServerRoute()
+    {
+        // Mọi đường dẫn API mà giao diện gọi (web/src) phải trùng một route của server: đường dẫn lệch nhau thì màn hình luôn nhận 404
+        // (đã xảy ra với /api/cycles/order-worklist và /api/orders/{id}/flow), mà không test nghiệp vụ nào chạm tới.
+        Directory.CreateDirectory(TestHost.Root);
+        await using var f = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Hak:Environment", "Test");
+            b.UseSetting("Hak:DatabasePath", Path.Combine(TestHost.Root, $"api-{Guid.NewGuid():N}.db"));
+        });
+        var routes = f.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>().Endpoints
+            .OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()
+            .Select(e => (Methods: e.Metadata.GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()?.HttpMethods,
+                // null = tham số (khớp mọi giá trị), còn lại là phần chữ cố định của đoạn đường dẫn
+                Segments: e.RoutePattern.PathSegments.Select(s => s.IsSimple && s.Parts[0].IsLiteral
+                    ? ((Microsoft.AspNetCore.Routing.Patterns.RoutePatternLiteralPart)s.Parts[0]).Content : null).ToArray()))
+            .ToList();
+
+        var web = AppContext.BaseDirectory;
+        while (web is not null && !Directory.Exists(Path.Combine(web, "web", "src"))) web = Path.GetDirectoryName(web);
+        Assert.True(web is not null, "không tìm thấy thư mục web/src từ thư mục test");
+        var helper = new System.Text.RegularExpressions.Regex(@"\b(get|post|put|postRaw)(?:<[^>(]*>)?\(\s*([`'""])(/[^`'""]*)\2");
+        var generic = new System.Text.RegularExpressions.Regex(@"\bapi(?:<[^>(]*>)?\(\s*'([A-Z]+)'\s*,\s*([`'""])(/[^`'""]*)\2");
+        var raw = new System.Text.RegularExpressions.Regex(@"([`'""])/api(/[^`'""]*)\1");
+        var calls = new List<(string? Method, string Path, string File)>();
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(web, "web", "src"), "*.ts*", SearchOption.AllDirectories))
+        {
+            if (Path.GetFileName(file) == "api.ts" || file.EndsWith(".test.ts", StringComparison.Ordinal)) continue;
+            var text = File.ReadAllText(file);
+            foreach (System.Text.RegularExpressions.Match m in helper.Matches(text))
+                calls.Add((m.Groups[1].Value == "get" ? "GET" : m.Groups[1].Value == "put" ? "PUT" : "POST", m.Groups[3].Value, Path.GetFileName(file)));
+            foreach (System.Text.RegularExpressions.Match m in generic.Matches(text)) calls.Add((m.Groups[1].Value, m.Groups[3].Value, Path.GetFileName(file)));
+            foreach (System.Text.RegularExpressions.Match m in raw.Matches(text)) calls.Add((null, m.Groups[2].Value, Path.GetFileName(file)));
+        }
+        Assert.True(calls.Count > 400, $"chỉ thấy {calls.Count} lời gọi API trong web/src: cách đọc mã nguồn đã hỏng");
+
+        bool Matches((string? Method, string Path, string File) call)
+        {
+            // ${…} trong chuỗi mẫu = giá trị bất kỳ; bỏ phần query.
+            var path = System.Text.RegularExpressions.Regex.Replace(call.Path, @"\$\{[^}]*\}", "\u0001").Split('?')[0];
+            var segs = ("api/" + path.Trim('/')).Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return routes.Any(r => (call.Method is null || r.Methods is null || r.Methods.Contains(call.Method))
+                && r.Segments.Length == segs.Length
+                && r.Segments.Zip(segs).All(p => p.First is null || p.Second.Contains('\u0001') || string.Equals(p.First, p.Second, StringComparison.OrdinalIgnoreCase)));
+        }
+        Assert.Empty(calls.Where(c => !Matches(c)).Select(c => $"{c.File}: {c.Method ?? "*"} {c.Path}").Distinct());
+    }
+
+    [Fact]
     public async Task EveryApiEndpoint_RequiresASession()
     {
         var dbPath = Path.Combine(TestHost.Root, $"api-{Guid.NewGuid():N}.db");
@@ -221,6 +270,12 @@ public class ApiTests
         // Search is case-insensitive for Vietnamese capitals (non-ASCII) in the stored text too, on SQLite as on PostgreSQL.
         var upper = await Json(await ktt.GetAsync("/api/vouchers?text=" + Uri.EscapeDataString("chi phí Văn Phòng 2")));
         Assert.Equal(1, (int)upper["total"]!);
+
+        // Hồ sơ chu trình đơn hàng: đúng đường dẫn giao diện gọi. Đơn không tồn tại → lỗi nghiệp vụ NOT_FOUND (có mã), không phải 404 vì sai route.
+        Assert.NotNull((await Json(await ktt.GetAsync("/api/cycles/order-worklist?kind=Sales"))).AsArray());
+        var noOrder = await ktt.GetAsync($"/api/orders/{Guid.NewGuid()}/flow");
+        Assert.Equal(HttpStatusCode.NotFound, noOrder.StatusCode);
+        Assert.Equal("NOT_FOUND", (string)JsonNode.Parse(await noOrder.Content.ReadAsStringAsync())!["code"]!);
         Assert.Equal(1, (int)(await Json(await ktt.GetAsync("/api/vouchers?status=Posted")))["total"]!);
     }
 }
