@@ -50,6 +50,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserCompanyRole> UserCompanyRoles => Set<UserCompanyRole>();
     public DbSet<LoginSession> LoginSessions => Set<LoginSession>();
+    public DbSet<LoginThrottle> LoginThrottles => Set<LoginThrottle>();
+    public DbSet<AuditChainAnchor> AuditChainAnchors => Set<AuditChainAnchor>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<ExchangePartnerKey> ExchangePartnerKeys => Set<ExchangePartnerKey>();
@@ -308,7 +310,14 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasIndex(x => x.TokenHash).IsUnique();
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
         });
+        b.Entity<LoginThrottle>(e =>
+        {
+            e.HasKey(x => new { x.UserId, x.Source });
+            e.Property(x => x.Source).HasMaxLength(200);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId);
+        });
         b.Entity<AuditLog>(e => e.HasIndex(x => new { x.CompanyId, x.Seq }).IsUnique());
+        b.Entity<AuditChainAnchor>(e => { e.HasKey(x => x.CompanyId); e.Property(x => x.CompanyId).ValueGeneratedNever(); });   // Guid.Empty = phạm vi hệ thống, không sinh khóa mới
         b.Entity<ImportBatch>(e => e.HasIndex(x => new { x.CompanyId, x.PackageId }).IsUnique());
         b.Entity<ExchangePartnerKey>(e => e.HasIndex(x => new { x.CompanyId, x.SourceSystem, x.KeyId }).IsUnique());
         b.Entity<SettlementAllocation>(e =>

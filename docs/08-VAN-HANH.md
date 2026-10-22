@@ -99,7 +99,7 @@ API trên máy trạm chỉ nghe `127.0.0.1`. Không mở cổng API ra mạng.
 ## 5. Sao lưu và khôi phục
 
 ### Khóa chủ (secret.key)
-Khóa trao đổi (HMAC) trong CSDL được mã hóa AES-256-GCM bằng khóa chủ nằm **ngoài** CSDL và ngoài bản sao lưu `.hakbk`. Lưu `secret.key` (hoặc giá trị `Hak__SecretKey`) ở nơi an toàn, tách khỏi bản sao lưu CSDL. Mất khóa chủ thì khôi phục CSDL xong phải cấp lại các khóa trao đổi (Lương → Khóa trao đổi). Khi nâng cấp, khóa đang lưu dạng thường tự được mã hóa ở lần khởi động đầu. Chế độ LAN: mỗi máy chạy API cần cùng khóa chủ.
+Khóa trao đổi (HMAC) trong CSDL được mã hóa AES-256-GCM bằng khóa chủ nằm **ngoài** CSDL và ngoài bản sao lưu `.hakbk`. Khóa chủ cũng ký chuỗi nhật ký kiểm toán: kiểm tra / khôi phục bản sao lưu cần đúng khóa này. Lưu `secret.key` (hoặc giá trị `Hak__SecretKey`) ở nơi an toàn, tách khỏi bản sao lưu CSDL. Mất khóa chủ thì khôi phục CSDL xong phải cấp lại các khóa trao đổi (Lương → Khóa trao đổi). Khi nâng cấp, khóa đang lưu dạng thường tự được mã hóa ở lần khởi động đầu. Chế độ LAN: mỗi máy chạy API cần cùng khóa chủ.
 
 ### SQLite (một máy)
 - **Quản trị → Sao lưu**: tạo bản `.hakbk` (ảnh chụp trực tuyến, không cần dừng phần mềm), mã hóa AES-256-GCM bằng mật khẩu sao lưu ≥ 12 ký tự. **Mất mật khẩu sao lưu là mất bản sao lưu** — lưu mật khẩu tách biệt (két / quản lý mật khẩu).
@@ -126,10 +126,10 @@ pg_dump -h 127.0.0.1 -U hak_app -Fc -f D:\hak-backup\hak-%DATE%.dump hak
 
 ## 7. Bảo mật vận hành
 
-- Sai mật khẩu 5 lần liên tiếp → khóa 15 phút (quản trị có thể đặt lại mật khẩu). Phiên đăng nhập tối đa 10 giờ.
+- Sai mật khẩu 5 lần liên tiếp **từ một máy** → máy đó bị chặn đăng nhập tài khoản này 15 phút; chủ tài khoản ở máy khác vẫn đăng nhập được (người dò mật khẩu không khóa được tài khoản của người khác). Sai tổng cộng 20 lần từ nhiều máy → khóa cả tài khoản 15 phút. Nhập sai mật khẩu hiện tại khi **đổi mật khẩu** cũng tính vào số lần sai; đến ngưỡng thì mọi phiên của tài khoản bị đóng. Quản trị đặt lại mật khẩu / mở lại tài khoản gỡ mọi khóa. Phiên đăng nhập tối đa 10 giờ.
 - Ngừng dùng người dùng → mọi phiên của người đó bị đóng ngay.
 - Sổ cái, sổ kho, phân bổ, khấu hao… **không sửa/xóa được** (trigger CSDL). Sai sót xử lý bằng chứng từ đảo/điều chỉnh. Tuyệt đối không sửa trực tiếp trong CSDL.
-- Nhật ký kiểm toán là chuỗi băm; xem tại **Quản trị → Nhật ký**; bản sao lưu kiểm tra lại toàn chuỗi.
+- Nhật ký kiểm toán là chuỗi băm **ký bằng khóa chủ** (HMAC): người sửa được tệp CSDL mà không có `secret.key` không viết lại được chuỗi. Bản ghi trước khi nâng cấp giữ cách băm cũ và được "neo" ở lần khởi động đầu. Xem tại **Quản trị → Nhật ký**; bản sao lưu kiểm tra lại toàn chuỗi — **cần đúng `secret.key` của máy đã ghi** (thiếu thì báo không kiểm được, không khôi phục).
 
 ### 7a. Sự cố SEC-01: bí mật trong bảng chống gửi trùng — dọn dữ liệu và cấp lại khóa trao đổi
 Phiên bản trước bản sửa SEC-01 lưu vào bảng `idempotency_records` (giữ 7 ngày, **đi theo bản sao lưu**): nguyên văn phản hồi khi **cấp khóa trao đổi** (có bí mật HMAC) và băm nội dung các yêu cầu đổi / đặt lại mật khẩu, tạo người dùng, mật khẩu sao lưu.
@@ -149,7 +149,7 @@ Phiên bản trước bản sửa SEC-01 lưu vào bảng `idempotency_records` 
 | `CONCURRENCY_CONFLICT` | Người khác vừa sửa cùng dữ liệu — tải lại rồi làm lại |
 | `LEDGER_IMMUTABLE` | Cố sửa dữ liệu đã ghi sổ — dùng đảo/điều chỉnh |
 | `RULE_ROLE_UNMAPPED` | Thiếu ánh xạ vai trò TK — Thiết lập → Vai trò tài khoản |
-| Tài khoản bị khóa | Chờ 15 phút hoặc quản trị đặt lại mật khẩu |
+| Tài khoản bị khóa | Đăng nhập từ máy khác, chờ 15 phút, hoặc quản trị đặt lại mật khẩu |
 | Quên mật khẩu quản trị duy nhất | Trên máy chạy API (cùng cấu hình CSDL), mở cửa sổ dòng lệnh: `Hak.Api.exe --reset-admin-password <tên đăng nhập>` → nhập mật khẩu mới 2 lần (không hiện ký tự). Chỉ áp dụng cho quản trị hệ thống đang hoạt động; tài khoản được mở khóa, mọi phiên bị đóng, ghi nhật ký `user.password_recover_local` (tên máy, tài khoản Windows). Vẫn nên duy trì ít nhất 2 quản trị hệ thống |
 
 ## Ảnh đính kèm và điện thoại

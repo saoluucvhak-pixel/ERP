@@ -50,6 +50,18 @@ public static class PackageCrypto
         return Convert.ToBase64String(HMACSHA256.HashData(secret, Encoding.UTF8.GetBytes(JsonCanonicalizer.Canonicalize(copy))));
     }
 
+    /// <summary>
+    /// Receiver side: true only for a well-formed signature that matches. Never throws on what the sender wrote (missing auth,
+    /// non-string or non-base64 signature) — that is an invalid signature, not a server error, whether or not the schema caught it first (SEC-10).
+    /// </summary>
+    public static bool Verify(JsonObject package, byte[] secret)
+    {
+        if (package["auth"] is not JsonObject auth || auth["signature"] is not JsonValue value || !value.TryGetValue<string>(out var text)) return false;
+        Span<byte> given = stackalloc byte[64];
+        if (!Convert.TryFromBase64String(text, given, out var length)) return false;
+        return CryptographicOperations.FixedTimeEquals(Convert.FromBase64String(Signature(package, secret)), given[..length]);
+    }
+
     /// <summary>Fills checksum and signature in place (sender side).</summary>
     public static void Seal(JsonObject package, string keyId, byte[] secret)
     {
@@ -90,8 +102,7 @@ public sealed class JournalVoucherPackageService(HakDbContext db, AccountingEngi
             k.CompanyId == ctx.CompanyId && k.SourceSystem == sourceSystem && k.KeyId == keyId && k.IsActive)
             ?? throw new DomainException(ErrorCodes.UnknownSource, $"Không có khóa xác thực cho nguồn {sourceSystem}/{keyId}.");
 
-        var expectedSig = Convert.FromBase64String(PackageCrypto.Signature(package, Convert.FromBase64String((masterKey ?? MasterKey.None).Reveal(key.SecretBase64))));
-        if (!CryptographicOperations.FixedTimeEquals(expectedSig, Convert.FromBase64String((string)package["auth"]!["signature"]!)))
+        if (!PackageCrypto.Verify(package, Convert.FromBase64String((masterKey ?? MasterKey.None).Reveal(key.SecretBase64))))
             throw new DomainException(ErrorCodes.PackageSignatureInvalid, "Chữ ký gói dữ liệu không hợp lệ.");
         if (PackageCrypto.PayloadChecksum(package["payload"]!) != (string?)package["checksum"]!["value"])
             throw new DomainException(ErrorCodes.PackageChecksumMismatch, "Checksum payload không khớp.");

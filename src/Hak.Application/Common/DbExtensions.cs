@@ -91,8 +91,10 @@ public sealed class HakRuntimeOptions
     public string Environment { get; set; } = "Production";
     public bool IsProduction => string.Equals(Environment, "Production", StringComparison.OrdinalIgnoreCase);
     public TimeSpan SessionLifetime { get; set; } = TimeSpan.FromHours(10);
-    /// <summary>Failed logins in a row before the account is locked for <see cref="LockoutDuration"/>.</summary>
+    /// <summary>Failed logins in a row FROM ONE SOURCE before that source is locked out of the account for <see cref="LockoutDuration"/>.</summary>
     public int MaxFailedLogins { get; set; } = 5;
+    /// <summary>Failed logins in a row from all sources together before the whole account is locked (backstop against distributed guessing).</summary>
+    public int MaxFailedLoginsAllSources { get; set; } = 20;
     public TimeSpan LockoutDuration { get; set; } = TimeSpan.FromMinutes(15);
     public int PasswordIterations { get; set; } = Security.PasswordHasher.DefaultIterations;
 }

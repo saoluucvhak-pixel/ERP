@@ -53,6 +53,35 @@ public sealed class LoginSession
     public DateTime? RevokedAt { get; set; }
 }
 
+/// <summary>
+/// Lần đăng nhập / nhập mật khẩu sai liên tiếp của một tài khoản TỪ MỘT NGUỒN (máy chạy API + địa chỉ gửi yêu cầu, do server xác định).
+/// Khóa theo nguồn để người dò mật khẩu ở một máy không khóa được tài khoản của người khác ở máy khác (SEC-07); khóa chung của
+/// <see cref="User.LockedUntil"/> chỉ còn là lưới an toàn với ngưỡng cao hơn, cho kiểu dò phân tán.
+/// </summary>
+public sealed class LoginThrottle
+{
+    public Guid UserId { get; set; }
+    public string Source { get; set; } = "";
+    public int FailedCount { get; set; }
+    public DateTime? LockedUntil { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Mốc chuyển chuỗi nhật ký của một phạm vi (công ty, hoặc Guid.Empty = hệ thống) sang chuỗi có khóa (SEC-09): bản ghi đến
+/// <see cref="LegacySeq"/> dùng SHA-256 thường (ghi trước khi có khóa chủ), mọi bản ghi sau bắt buộc có khóa. Mac = HMAC bằng khóa chủ,
+/// nên không giả được mốc; thiếu mốc trong một chuỗi đang có bản ghi thì coi là bị sửa (kẻ tấn công không thể "hạ" cả đuôi chuỗi về
+/// SHA-256 thường mà không bị phát hiện). Chỉ thêm, không sửa / xóa (trigger).
+/// </summary>
+public sealed class AuditChainAnchor
+{
+    public Guid CompanyId { get; set; }
+    public long LegacySeq { get; set; }
+    public string LegacyHash { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public string Mac { get; set; } = "";
+}
+
 /// <summary>Hash-chained audit record (docs/02 ADR-08). Chain is per company; Guid.Empty = system scope.</summary>
 public sealed class AuditLog
 {

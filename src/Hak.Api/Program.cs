@@ -95,6 +95,9 @@ using (var scope = app.Services.CreateScope())
     if (purged.Deleted > 0)
         app.Logger.LogWarning("Đã xóa {Count} bản ghi chống gửi trùng chứa bí mật; {Keys} khóa trao đổi cần cấp lại (màn Lương → Khóa trao đổi dữ liệu).",
             purged.Deleted, purged.ExposedExchangeKeyIds.Count);
+    // SEC-09: neo mọi chuỗi nhật ký tại điểm cuối hiện có (ký bằng khóa chủ); từ đây bản ghi mới đều có khóa.
+    var anchors = await scope.ServiceProvider.GetRequiredService<Hak.Application.Audit.AuditService>().EnsureAnchorsAsync();
+    if (anchors > 0) app.Logger.LogInformation("Đã neo {Count} chuỗi nhật ký kiểm toán vào khóa chủ.", anchors);
 
     // Local administrator recovery (docs/08 §8): Hak.Api.exe --reset-admin-password <user>; the password is typed twice, never echoed.
     var at = Array.IndexOf(args, "--reset-admin-password");

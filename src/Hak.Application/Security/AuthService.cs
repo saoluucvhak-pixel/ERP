@@ -22,18 +22,25 @@ public sealed class AuthService(HakDbContext db, AuditService audit, IClock cloc
     /// <summary>Hash of a random password per iteration count: verified when the user does not exist, so that path costs the same PBKDF2 time.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> DummyHashes = new();
 
-    public async Task<LoginResult> LoginAsync(string userName, string password, string? device)
+    /// <summary>Longest password that is hashed at all: PBKDF2 over a megabyte-long "password" is a cheap way to burn server CPU.</summary>
+    public const int MaxPasswordLength = 1024;
+
+    /// <param name="source">Where the attempt comes from, as the server sees it (API host + client address); see <see cref="LoginThrottling"/>.</param>
+    public async Task<LoginResult> LoginAsync(string userName, string password, string? device, string? source = null)
     {
-        var norm = userName.Trim().ToLowerInvariant();
+        // SEC-04: what the caller sent is stored in the audit log and the session, so it is bounded before it is used.
+        var norm = LoginThrottling.Clip(userName.Trim().ToLowerInvariant());
+        device = string.IsNullOrEmpty(device) ? null : LoginThrottling.Clip(device);
+        source = LoginThrottling.NormalizeSource(source);
         var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == norm);
         // Always run PBKDF2 (unknown, inactive and locked users too): response time must not reveal which case applied.
-        var passwordOk = PasswordHasher.Verify(password, user?.PasswordHash
+        var passwordOk = password.Length <= MaxPasswordLength && PasswordHasher.Verify(password, user?.PasswordHash
             ?? DummyHashes.GetOrAdd(options.PasswordIterations, n => PasswordHasher.Hash(Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)), n)));
-        if (user is { LockedUntil: { } until } && until > clock.UtcNow)
+        if (user is not null && await LoginThrottling.LockedUntilAsync(db, user, source, clock.UtcNow) is { } until)
         {
             await db.InTransactionAsync(async () =>
             {
-                await audit.AppendAsync(Guid.Empty, null, "auth.login", "user", user.Id.ToString(), new { device, lockedUntil = until }, result: "LOCKED");
+                await audit.AppendAsync(Guid.Empty, null, "auth.login", "user", user.Id.ToString(), new { device, source, lockedUntil = until }, result: "LOCKED");
                 await db.SaveChangesAsync();
             });
             // Same answer as a wrong password while locked, so the lock does not reveal whether the password was right.
@@ -43,28 +50,11 @@ public sealed class AuthService(HakDbContext db, AuditService audit, IClock cloc
         {
             await db.InTransactionAsync(async () =>
             {
-                if (user is not null)
-                {
-                    var tracked = await db.Users.FirstAsync(u => u.Id == user.Id);
-                    tracked.FailedLoginCount++;
-                    if (tracked.FailedLoginCount >= options.MaxFailedLogins)
-                    {
-                        tracked.LockedUntil = clock.UtcNow.Add(options.LockoutDuration);
-                        tracked.FailedLoginCount = 0;
-                        await audit.AppendAsync(Guid.Empty, null, "auth.lockout", "user", user.Id.ToString(), new { until = tracked.LockedUntil }, result: "LOCKED");
-                    }
-                    tracked.RowVersion++;
-                }
-                await audit.AppendAsync(Guid.Empty, null, "auth.login", "user", norm, new { device }, result: "DENIED");
+                if (user is not null) await LoginThrottling.RegisterFailureAsync(db, audit, options, clock.UtcNow, user.Id, source);
+                await audit.AppendAsync(Guid.Empty, null, "auth.login", "user", norm, new { device, source }, result: "DENIED");
                 await db.SaveChangesAsync();
             });
             throw new DomainException(ErrorCodes.Unauthenticated, LoginDeniedMessage);
-        }
-        if (user.FailedLoginCount != 0 || user.LockedUntil is not null)
-        {
-            user.FailedLoginCount = 0;
-            user.LockedUntil = null;
-            user.RowVersion++;
         }
 
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
@@ -75,6 +65,7 @@ public sealed class AuthService(HakDbContext db, AuditService audit, IClock cloc
         };
         await db.InTransactionAsync(async () =>
         {
+            await LoginThrottling.ResetAsync(db, user, source);
             db.LoginSessions.Add(session);
             await audit.AppendAsync(Guid.Empty, null, "auth.login", "user", user.Id.ToString(), new { device, session = session.Id }, userIdOverride: user.Id);
             await db.SaveChangesAsync();

@@ -42,7 +42,7 @@ public static class AdminEndpoints
         app.MapPost("/api/me/password", async (HttpContext http, ChangePasswordRequest r, Hak.Application.Setup.SetupService s) =>
         {
             var (user, session) = await http.AuthAsync();
-            await s.ChangeOwnPasswordAsync(user.Id, session.Id, r.CurrentPassword, r.NewPassword);
+            await s.ChangeOwnPasswordAsync(user.Id, session.Id, r.CurrentPassword, r.NewPassword, http.ClientSource());
             return Results.NoContent();
         });
         app.MapGet("/api/me", async (HttpContext http) =>
