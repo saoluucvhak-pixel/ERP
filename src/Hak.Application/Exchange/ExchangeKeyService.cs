@@ -33,6 +33,9 @@ public sealed partial class ExchangeKeyService(HakDbContext db, AuditService aud
         keyId = keyId.Trim();
         if (!Code().IsMatch(sourceSystem)) throw new DomainException(ErrorCodes.ValidationFailed, "Mã hệ thống nguồn chỉ gồm A-Z, 0-9, _ . - (tối đa 30 ký tự).");
         if (keyId.Length is 0 or > 50) throw new DomainException(ErrorCodes.ValidationFailed, "Mã khóa bắt buộc, tối đa 50 ký tự.");
+        // "HAK.*" là nguồn của chứng từ do chính các phân hệ sinh ra (AccountingEngine coi là chứng từ phân hệ, không sửa tay): bên ngoài không được mang nguồn này (SEC-06).
+        if (sourceSystem.StartsWith("HAK.", StringComparison.Ordinal) || sourceSystem == "HAK")
+            throw new DomainException(ErrorCodes.ValidationFailed, "Mã nguồn HAK / HAK.* dành cho các phân hệ của phần mềm; dùng mã của hệ thống gửi (ví dụ HRM).");
         return await db.InTransactionAsync(async () =>
         {
             if (await db.ExchangePartnerKeys.AnyAsync(k => k.CompanyId == ctx.CompanyId && k.SourceSystem == sourceSystem && k.KeyId == keyId))

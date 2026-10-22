@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Hak.Application.Exchange;
 using Hak.Application.Security;
@@ -17,13 +18,63 @@ public sealed record AuditRow(long Seq, DateTime At, string? UserName, string? D
 public sealed record AuditPage(int Total, IReadOnlyList<AuditRow> Rows);
 
 /// <summary>
-/// Hash-chained audit log (docs/02 ADR-08): hash = SHA256(prev_hash + canonical JSON of the record).
+/// Hash-chained audit log (docs/02 ADR-08): hash = HMAC-SHA256(chain key, prev_hash + canonical JSON of the record), stored as "h1:" + hex.
+/// The chain key is derived from the master key outside the database (SEC-09), so someone who can edit the database file cannot
+/// recompute the chain after changing a row. Without a master key (tests) and in rows written before SEC-09 the hash is the plain
+/// SHA256(prev_hash + canonical JSON). A signed <see cref="AuditChainAnchor"/> per chain records where the plain part ends; every row
+/// after it must be keyed, so rewriting the tail in the plain form (or deleting the anchor) is detected.
 /// Deleting, reordering or editing any row breaks the chain, which <see cref="VerifyChainAsync"/> detects.
 /// Must be called inside the same transaction as the change it records.
 /// </summary>
-public sealed class AuditService(HakDbContext db, IClock clock)
+public sealed class AuditService(HakDbContext db, IClock clock, MasterKey? masterKey = null)
 {
     public const string Genesis = "GENESIS";
+
+    /// <summary>Prefix of keyed (HMAC) hashes.</summary>
+    public const string KeyedPrefix = "h1:";
+
+    private readonly byte[]? chainKey = masterKey?.DeriveKey("hak.audit-chain.v1");
+
+    /// <summary>Same key, another database (verifying a backup copy).</summary>
+    public AuditService ForDatabase(HakDbContext other) => new(other, clock, masterKey);
+
+    private string AnchorMac(Guid companyId, long legacySeq, string legacyHash)
+        => Convert.ToHexStringLower(HMACSHA256.HashData(chainKey!, System.Text.Encoding.UTF8.GetBytes($"anchor|{companyId:N}|{legacySeq}|{legacyHash}")));
+
+    /// <summary>
+    /// With a master key, the first keyed row of a chain is preceded by a signed anchor naming the last plain row (SEC-09).
+    /// Not created over a chain that already ends in a keyed row: a missing anchor there is tampering, left for the verifier to report.
+    /// </summary>
+    private async Task AnchorIfMissingAsync(Guid companyId, long lastSeq, string lastHash)
+    {
+        if (chainKey is null || lastHash.StartsWith(KeyedPrefix, StringComparison.Ordinal)) return;
+        if (db.AuditChainAnchors.Local.Any(a => a.CompanyId == companyId) || await db.AuditChainAnchors.AnyAsync(a => a.CompanyId == companyId)) return;
+        db.AuditChainAnchors.Add(new AuditChainAnchor
+        {
+            CompanyId = companyId, LegacySeq = lastSeq, LegacyHash = lastHash, CreatedAt = clock.UtcNow, Mac = AnchorMac(companyId, lastSeq, lastHash),
+        });
+    }
+
+    /// <summary>
+    /// At startup with a master key: anchor every existing chain (system scope and each company) at its current end, so the plain
+    /// history written before SEC-09 is sealed even if that company writes nothing new. No-op without a key or when already anchored.
+    /// </summary>
+    public async Task<int> EnsureAnchorsAsync()
+    {
+        if (chainKey is null) return 0;
+        var scopes = (await db.Companies.AsNoTracking().Select(c => c.Id).ToListAsync()).Prepend(Guid.Empty).ToList();
+        var anchored = (await db.AuditChainAnchors.AsNoTracking().Select(a => a.CompanyId).ToListAsync()).ToHashSet();
+        var added = 0;
+        foreach (var companyId in scopes.Where(c => !anchored.Contains(c)))
+        {
+            var last = await db.AuditLogs.AsNoTracking().Where(a => a.CompanyId == companyId).OrderByDescending(a => a.Seq).Select(a => new { a.Seq, a.Hash }).FirstOrDefaultAsync();
+            var before = db.AuditChainAnchors.Local.Count;
+            await AnchorIfMissingAsync(companyId, last?.Seq ?? 0, last?.Hash ?? Genesis);
+            added += db.AuditChainAnchors.Local.Count - before;
+        }
+        if (added > 0) await db.SaveChangesAsync();
+        return added;
+    }
 
     public async Task<AuditLog> AppendAsync(Guid companyId, SessionContext? ctx, string action, string entityType,
         string? entityId, object? data = null, long? entityRowVersion = null, string result = "OK", Guid? userIdOverride = null)
@@ -40,6 +91,7 @@ public sealed class AuditService(HakDbContext db, IClock clock)
             var last = await db.AuditLogs.Where(a => a.CompanyId == companyId)
                 .OrderByDescending(a => a.Seq).Select(a => new { a.Seq, a.Hash }).FirstOrDefaultAsync();
             if (last is not null) (prevSeq, prevHash) = (last.Seq, last.Hash);
+            await AnchorIfMissingAsync(companyId, prevSeq, prevHash);
         }
 
         var log = new AuditLog
@@ -52,12 +104,21 @@ public sealed class AuditService(HakDbContext db, IClock clock)
             DataJson = data is null ? null : JsonSerializer.Serialize(data),
             PrevHash = prevHash,
         };
-        log.Hash = ComputeHash(log);
+        log.Hash = ComputeHash(log, chainKey);
         db.AuditLogs.Add(log);
         return log;
     }
 
-    public static string ComputeHash(AuditLog a)
+    /// <summary>Plain SHA-256 (no key) or keyed "h1:" HMAC-SHA256 of the previous hash and the record.</summary>
+    public static string ComputeHash(AuditLog a, byte[]? key = null)
+    {
+        var payload = a.PrevHash + Canonical(a);
+        return key is null
+            ? PasswordHasher.Sha256Hex(payload)
+            : KeyedPrefix + Convert.ToHexStringLower(System.Security.Cryptography.HMACSHA256.HashData(key, System.Text.Encoding.UTF8.GetBytes(payload)));
+    }
+
+    private static string Canonical(AuditLog a)
     {
         var body = new Dictionary<string, object?>
         {
@@ -66,7 +127,7 @@ public sealed class AuditService(HakDbContext db, IClock clock)
             ["action"] = a.Action, ["entity_type"] = a.EntityType, ["entity_id"] = a.EntityId,
             ["result"] = a.Result, ["entity_row_version"] = a.EntityRowVersion, ["data"] = a.DataJson,
         };
-        return PasswordHasher.Sha256Hex(a.PrevHash + JsonCanonicalizer.Canonicalize(JsonSerializer.SerializeToNode(body)));
+        return JsonCanonicalizer.Canonicalize(JsonSerializer.SerializeToNode(body));
     }
 
     /// <summary>
@@ -94,16 +155,46 @@ public sealed class AuditService(HakDbContext db, IClock clock)
     }
 
     /// <summary>Returns null when intact, otherwise the first broken sequence number.</summary>
+    /// <remarks>
+    /// Keyed rows need the master key of this installation; without it the chain cannot be checked (not "broken"), so this throws
+    /// INTEGRITY_VIOLATION asking for secret.key / Hak:SecretKey instead of reporting a tampered row.
+    /// </remarks>
     public async Task<long?> VerifyChainAsync(Guid companyId)
     {
+        var anchor = await db.AuditChainAnchors.AsNoTracking().FirstOrDefaultAsync(a => a.CompanyId == companyId);
+        long legacyUntil;   // bản ghi đến số này dùng SHA-256 thường; sau đó bắt buộc có khóa
+        if (chainKey is null)
+        {
+            if (anchor is not null) throw NeedKey();
+            legacyUntil = long.MaxValue;
+        }
+        else if (anchor is null)
+        {
+            // Có khóa chủ thì mọi chuỗi đều được neo (lúc khởi động hoặc ở lần ghi đầu); chuỗi có bản ghi mà không có mốc = mốc bị xóa.
+            return await db.AuditLogs.AnyAsync(x => x.CompanyId == companyId) ? 1 : null;
+        }
+        else if (!Same(AnchorMac(companyId, anchor.LegacySeq, anchor.LegacyHash), anchor.Mac)) return 1;
+        else legacyUntil = anchor.LegacySeq;
+
         var expectedPrev = Genesis;
         long expectedSeq = 1;
         await foreach (var a in db.AuditLogs.AsNoTracking().Where(x => x.CompanyId == companyId).OrderBy(x => x.Seq).AsAsyncEnumerable())
         {
-            if (a.Seq != expectedSeq || a.PrevHash != expectedPrev || ComputeHash(a) != a.Hash) return expectedSeq;
+            if (a.Seq != expectedSeq || a.PrevHash != expectedPrev) return expectedSeq;
+            var keyed = a.Hash.StartsWith(KeyedPrefix, StringComparison.Ordinal);
+            if (keyed && chainKey is null) throw NeedKey();
+            if (keyed != a.Seq > legacyUntil) return expectedSeq;   // bản ghi thường sau mốc (hạ cấp để giả mạo) hoặc có khóa trước mốc
+            if (!Same(ComputeHash(a, keyed ? chainKey : null), a.Hash)) return expectedSeq;
+            if (a.Seq == legacyUntil && !Same(anchor!.LegacyHash, a.Hash)) return expectedSeq;
             expectedPrev = a.Hash;
             expectedSeq++;
         }
+        if (anchor is not null && expectedSeq - 1 < anchor.LegacySeq) return expectedSeq;   // phần chuỗi cũ đã được neo bị xóa bớt
         return null;
     }
+
+    private static bool Same(string a, string b) => CryptographicOperations.FixedTimeEquals(System.Text.Encoding.ASCII.GetBytes(a), System.Text.Encoding.ASCII.GetBytes(b));
+
+    private static DomainException NeedKey() => new(ErrorCodes.IntegrityViolation,
+        "Nhật ký kiểm toán được ký bằng khóa chủ của cài đặt; cần tệp secret.key (hoặc Hak:SecretKey) của máy đã ghi để kiểm tra.");
 }

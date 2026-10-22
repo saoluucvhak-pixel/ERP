@@ -95,6 +95,12 @@ public static class HttpContextExtensions
     }
 
     private const string AuthItem = "hak.auth";
+
+    /// <summary>
+    /// Where a login attempt comes from, as the server sees it: the machine running this API and the client address of the connection
+    /// (never a value the client sends). Lockouts are per source, so failures from one machine do not lock the account elsewhere (SEC-07).
+    /// </summary>
+    public static string ClientSource(this HttpContext http) => $"{Environment.MachineName}|{http.Connection.RemoteIpAddress}";
 }
 
 /// <summary>

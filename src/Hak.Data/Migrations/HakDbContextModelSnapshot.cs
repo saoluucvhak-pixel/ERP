@@ -6346,6 +6346,36 @@ namespace Hak.Data.Migrations
                     b.ToTable("posting_rules");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Security.AuditChainAnchor", b =>
+                {
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LegacyHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("legacy_hash");
+
+                    b.Property<long>("LegacySeq")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("legacy_seq");
+
+                    b.Property<string>("Mac")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mac");
+
+                    b.HasKey("CompanyId")
+                        .HasName("pk_audit_chain_anchors");
+
+                    b.ToTable("audit_chain_anchors");
+                });
+
             modelBuilder.Entity("Hak.Domain.Security.AuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6467,6 +6497,35 @@ namespace Hak.Data.Migrations
                         .HasDatabaseName("ix_login_sessions_user_id");
 
                     b.ToTable("login_sessions");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Security.LoginThrottle", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("failed_count");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("locked_until");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId", "Source")
+                        .HasName("pk_login_throttles");
+
+                    b.ToTable("login_throttles");
                 });
 
             modelBuilder.Entity("Hak.Domain.Security.Role", b =>
@@ -9680,6 +9739,16 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_login_sessions_users_user_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Security.LoginThrottle", b =>
+                {
+                    b.HasOne("Hak.Domain.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_login_throttles_users_user_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Security.RolePermission", b =>

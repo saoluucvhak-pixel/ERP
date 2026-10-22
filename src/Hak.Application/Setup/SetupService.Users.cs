@@ -206,7 +206,7 @@ public sealed partial class SetupService
             if (!active && user.IsSystemAdmin && !await db.Users.AnyAsync(u => u.Id != userId && u.IsActive && u.IsSystemAdmin))
                 throw new DomainException(ErrorCodes.ValidationFailed, "Không khóa quản trị hệ thống cuối cùng.");
             user.IsActive = active;
-            if (active) { user.FailedLoginCount = 0; user.LockedUntil = null; }
+            if (active) { user.FailedLoginCount = 0; user.LockedUntil = null; await Security.LoginThrottling.ClearAllAsync(db, userId); }
             user.RowVersion++;
             var revoked = active ? 0 : await RevokeSessionsAsync(userId, null);
             await audit.AppendAsync(Guid.Empty, null, active ? "user.activate" : "user.deactivate", "user", userId.ToString(), new { reason, revokedSessions = revoked }, userIdOverride: adminId);
@@ -225,6 +225,7 @@ public sealed partial class SetupService
             user.PasswordHash = PasswordHasher.Hash(newPassword, options.PasswordIterations);
             user.FailedLoginCount = 0;
             user.LockedUntil = null;
+            await Security.LoginThrottling.ClearAllAsync(db, userId);
             user.RowVersion++;
             var revoked = await RevokeSessionsAsync(userId, null);
             await audit.AppendAsync(Guid.Empty, null, "user.password_reset", "user", userId.ToString(), new { revokedSessions = revoked }, userIdOverride: adminId);
@@ -250,6 +251,7 @@ public sealed partial class SetupService
             user.PasswordHash = PasswordHasher.Hash(newPassword, options.PasswordIterations);
             user.FailedLoginCount = 0;
             user.LockedUntil = null;
+            await Security.LoginThrottling.ClearAllAsync(db, user.Id);
             user.RowVersion++;
             var revoked = await RevokeSessionsAsync(user.Id, null);
             await audit.AppendAsync(Guid.Empty, null, "user.password_recover_local", "user", user.Id.ToString(),
@@ -258,17 +260,38 @@ public sealed partial class SetupService
         });
     }
 
-    /// <summary>The user changes their own password; other sessions are ended, the current one stays.</summary>
-    public async Task ChangeOwnPasswordAsync(Guid userId, Guid currentSessionId, string currentPassword, string newPassword)
+    /// <summary>
+    /// The user changes their own password; other sessions are ended, the current one stays. A wrong current password counts as a failed
+    /// login from the same source (SEC-10): a stolen session cannot be used to guess the password without limit; at the lockout every
+    /// session of the account ends, the current one too.
+    /// </summary>
+    public async Task ChangeOwnPasswordAsync(Guid userId, Guid currentSessionId, string currentPassword, string newPassword, string? source = null)
     {
         RequirePasswordPolicy(newPassword);
         if (newPassword == currentPassword) throw new DomainException(ErrorCodes.ValidationFailed, "Mật khẩu mới phải khác mật khẩu hiện tại.");
+        source = Security.LoginThrottling.NormalizeSource(source);
+        var current = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId && u.IsActive) ?? throw new DomainException(ErrorCodes.Unauthenticated, "Tài khoản không hợp lệ.");
+        if (await Security.LoginThrottling.LockedUntilAsync(db, current, source, clock.UtcNow) is { } until)
+            throw new DomainException(ErrorCodes.Unauthenticated, $"Nhập sai mật khẩu nhiều lần; tạm khóa đến {until.ToLocalTime():HH:mm}.");
+        if (currentPassword.Length > Security.AuthService.MaxPasswordLength || !PasswordHasher.Verify(currentPassword, current.PasswordHash))
+        {
+            var locked = await db.InTransactionAsync(async () =>
+            {
+                var hit = await Security.LoginThrottling.RegisterFailureAsync(db, audit, options, clock.UtcNow, userId, source);
+                if (hit) await RevokeSessionsAsync(userId, null);
+                await audit.AppendAsync(Guid.Empty, null, "user.password_change", "user", userId.ToString(), new { source, locked = hit }, result: "DENIED", userIdOverride: userId);
+                await db.SaveChangesAsync();
+                return hit;
+            });
+            throw new DomainException(ErrorCodes.Unauthenticated, locked
+                ? "Nhập sai mật khẩu hiện tại quá số lần cho phép: tài khoản tạm khóa và mọi phiên đăng nhập đã đóng."
+                : "Mật khẩu hiện tại không đúng.");
+        }
         await db.InTransactionAsync(async () =>
         {
             var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.IsActive) ?? throw new DomainException(ErrorCodes.Unauthenticated, "Tài khoản không hợp lệ.");
-            if (!PasswordHasher.Verify(currentPassword, user.PasswordHash))
-                throw new DomainException(ErrorCodes.Unauthenticated, "Mật khẩu hiện tại không đúng.");
             user.PasswordHash = PasswordHasher.Hash(newPassword, options.PasswordIterations);
+            await Security.LoginThrottling.ResetAsync(db, user, source);
             user.RowVersion++;
             var revoked = await RevokeSessionsAsync(userId, currentSessionId);
             await audit.AppendAsync(Guid.Empty, null, "user.password_change", "user", userId.ToString(), new { revokedSessions = revoked }, userIdOverride: userId);

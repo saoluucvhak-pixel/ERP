@@ -135,7 +135,7 @@ public sealed class BackupService(HakDbContext db, AuditService audit, IClock cl
             bool systemOk;
             await using (var copy = new HakDbContext(HakDb.SqliteOptions(work)))
             {
-                var chain = new AuditService(copy, clock);
+                var chain = audit.ForDatabase(copy);   // cùng khóa chủ: chuỗi có khóa (SEC-09) kiểm được trên bản sao
                 systemOk = await chain.VerifyChainAsync(Guid.Empty) is null;
                 foreach (var co in await copy.Companies.AsNoTracking().OrderBy(x => x.Code).ToListAsync())
                     companies.Add(new CompanyChainCheck(co.Id, co.Code, await copy.Vouchers.CountAsync(v => v.CompanyId == co.Id),

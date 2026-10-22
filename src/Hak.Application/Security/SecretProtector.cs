@@ -119,4 +119,11 @@ public sealed class MasterKey
         if (!SecretProtector.IsProtected(stored)) return stored;
         return SecretProtector.Reveal(stored, key ?? throw new InvalidOperationException("Dữ liệu đã mã hóa nhưng chưa cấu hình khóa chủ (Hak:SecretKey hoặc tệp secret.key)."));
     }
+
+    /// <summary>
+    /// Khóa con cho một mục đích riêng (HKDF-SHA256 với nhãn <paramref name="purpose"/>), để không dùng chung một khóa cho mã hóa và HMAC.
+    /// null khi chưa cấu hình khóa chủ.
+    /// </summary>
+    public byte[]? DeriveKey(string purpose)
+        => key is null ? null : System.Security.Cryptography.HKDF.DeriveKey(System.Security.Cryptography.HashAlgorithmName.SHA256, key, 32, info: System.Text.Encoding.UTF8.GetBytes(purpose));
 }

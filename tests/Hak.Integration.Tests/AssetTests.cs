@@ -655,9 +655,11 @@ public class AssetTests
 
             // Về lược đồ của bản trước (dữ liệu giữ nguyên) rồi nâng cấp như khi cài bản mới.
             var migrator = Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>(s.Db);
+            // Bản ngay trước DB-08 (trước Phase15ImmutabilityParity), không phải "migration áp chót": các migration sau này không làm test này đổi nghĩa.
             var migrations = s.Db.Database.GetMigrations().ToList();
-            await migrator.MigrateAsync(migrations[^2]);
-            Assert.Equal(migrations[^2], (await s.Db.Database.GetAppliedMigrationsAsync()).Last());
+            var previous = migrations[migrations.FindIndex(m => m.EndsWith("_Phase15ImmutabilityParity", StringComparison.Ordinal)) - 1];
+            await migrator.MigrateAsync(previous);
+            Assert.Equal(previous, (await s.Db.Database.GetAppliedMigrationsAsync()).Last());
             if (!h.IsPostgres)   // bản cũ trên SQLite: lỗ hổng có thật (PostgreSQL đã chặn hai bảng này từ trước)
                 Assert.Equal(1, await s.Db.Database.ExecuteSqlAsync($"UPDATE depreciation_entry_splits SET amount = amount WHERE id = {split.Id}"));
             Hak.Data.HakDb.Migrate(s.Db);
