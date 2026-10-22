@@ -81,10 +81,13 @@ interface SvcItem { id: string; code: string; name: string; unit: string; isServ
 interface TimeRow { id: string; orderNumber: string; orderLineNo: number; itemCode: string; workDate: string; worker: string; hours: string; locked: boolean }
 
 /** Chấm giờ dịch vụ nhanh trên điện thoại: chọn dòng dịch vụ của đơn bán đã xác nhận, ghi người thực hiện và số giờ; xem và xóa các dòng chưa chốt. */
+/** Trình duyệt chặn lưu trữ (chế độ riêng tư) thì ném lỗi: không để cả trang điện thoại trắng. */
+const storedWorker = () => { try { return localStorage.getItem('hak.worker') ?? '' } catch { return '' } }
+
 function MobileTimesheet() {
   const [lines, setLines] = useState<{ key: string; orderId: string; lineNo: number; label: string }[]>([])
   const [rows, setRows] = useState<TimeRow[]>([])
-  const [f, setF] = useState({ key: '', date: today(), worker: localStorage.getItem('hak.worker') ?? '', hours: '', note: '' })
+  const [f, setF] = useState({ key: '', date: today(), worker: storedWorker(), hours: '', note: '' })
   const [info, setInfo] = useState('')
   const { busy, error, run, setError } = useAction()
   const load = useCallback(() => run(async () => {

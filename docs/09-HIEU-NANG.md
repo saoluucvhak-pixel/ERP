@@ -66,3 +66,25 @@ Chưa làm (cần đo hoặc cần migration, xếp theo lợi ích):
 5. (**Đã làm 20/10**, chờ CI: `GET /reports/aging-all`) **Giao diện Tổng quan:** gọi báo cáo tuổi nợ riêng cho từng tài khoản công nợ đang mở; nên có một API trả gộp.
 
 Ghi chú về khóa ghi theo công ty: khóa hiện tại bảo vệ đồng thời số chứng từ, chuỗi băm nhật ký, số thứ tự sổ kho (đều theo công ty) **và** các bảng dùng chung (người dùng, vai trò, loại tiền, công ty). Chia khóa theo công ty chỉ an toàn khi mọi thao tác ghi biết chắc nó chỉ chạm dữ liệu của một công ty; nếu không, hai công ty ghi cùng lúc vào bảng dùng chung có thể ghi trùng/lệch. Việc này cần khảo sát từng điểm gọi `InTransactionAsync` (hàng trăm chỗ) và đo trên nhiều công ty thật trước khi làm; chưa có dữ liệu cho thấy nghẽn.
+
+## Đo bổ sung phía kho và công nợ — 21/10/2026 (đợt kiểm toán)
+
+**Môi trường:** runner GitHub Actions (ubuntu, 2 CPU) — số tham khảo, KHÔNG phải máy khách hàng. Lệnh: `dotnet run -c Release --project tools/Hak.Bench -- --vouchers 6000 --partners 2000 --stock 1500 [--postgres]` (chạy bằng workflow `bench.yml` khi thông điệp commit có `[bench]`). Khối lượng: 12.001 chứng từ, 2.000 đối tượng, mỗi kho đo 1.500 nhập + 1.500 xuất (3.000 biến động / vật tư).
+
+**Phát hiện:** thời gian ghi sổ một phiếu xuất tăng tuyến tính theo độ dài lịch sử của (kho, vật tư) vì mỗi dòng xuất nạp lại toàn bộ lịch sử và tra giá trị bằng một truy vấn cho mỗi 500 biến động. Sổ cái, báo cáo kế toán, tuổi nợ và đối chiếu công nợ đều dưới 0,3 giây ở khối lượng này.
+
+**Sửa:** tra giá trị lịch sử bằng MỘT truy vấn nối (ghi sổ phiếu xuất, nhập–xuất–tồn, thẻ kho, đối chiếu sổ kho). Không đổi cách tính, không cần di chuyển dữ liệu.
+
+| Phép đo | Trước sửa | Sau sửa |
+|---|---|---|
+| SQLite — ghi sổ 1 phiếu xuất, kho bình quân (sau 750 / 1.500 / 2.250 / 3.000 biến động) | 15 / 23 / 31 / 39 ms | **8 / 12 / 13 / 16 ms** |
+| SQLite — kho FIFO | 16 / 24 / 31 / 39 ms | **8 / 10 / 12 / 15 ms** |
+| SQLite — 1.500 nhập + 1.500 xuất (kho bình quân) | 49,6 s | **25,8 s** |
+| SQLite — nhập–xuất–tồn cả năm / đối chiếu sổ kho ↔ sổ cái | 64 / 75 ms | **23 / 24 ms** |
+| PostgreSQL — ghi sổ 1 phiếu xuất, kho bình quân | 30 / 35 / 40 / 43 ms | 35 / 35 / 38 / 40 ms |
+| PostgreSQL — kho FIFO | 32 / 34 / 40 / 43 ms | 32 / 36 / 38 / 41 ms |
+| PostgreSQL — nhập–xuất–tồn / đối chiếu sổ kho | 39 / 41 ms | 28 / 29 ms |
+
+Độ dốc (thời gian tăng thêm cho mỗi 1.000 biến động lịch sử): SQLite ~10 → ~3,5 ms; PostgreSQL ~6 → ~2 ms. Ngoại suy tuyến tính: ở 100.000 biến động trên một vật tư–kho, mỗi dòng xuất khoảng 0,4 s (SQLite) / 0,2 s (PostgreSQL) thay vì ~1 s / ~0,6 s. Trên PostgreSQL cùng máy, phần lớn thời gian là chi phí cố định mỗi phiếu nên cải thiện tổng thể không rõ.
+
+**Còn lại (chưa làm):** vẫn nạp toàn bộ lịch sử (không phải chỉ tổng) của (kho, vật tư) cho mỗi dòng xuất; muốn phẳng hẳn cần bảng số dư lũy kế (cần migration). Chưa đo: BCĐPS với hàng chục nghìn nhóm (đối tượng × tài khoản), Tổng quan, nhập danh mục 20.000 dòng, mở rộng lên 100.000 dòng sổ cái / 100.000 dòng kho.

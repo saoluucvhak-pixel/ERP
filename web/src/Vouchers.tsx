@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { CashDocsView } from './CashDocs'
-import { canCopyVoucher, canEditAsCashDoc, CASH_TYPES } from './voucherguards'
+import { canCopyVoucher, canEditAsCashDoc, canEditJournalVoucher, CASH_TYPES, isModuleGenerated } from './voucherguards'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 
@@ -23,13 +23,16 @@ export function VouchersView() {
   const [editing, setEditing] = useState<Voucher | 'new' | { copyOf: Voucher } | null>(null)
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const { busy, error, run } = useAction()
+  const loadSeq = useRef(0)
   const [info, setInfo] = useState('')
   const [accountId, setAccountId] = useState('')
   const { accounts: allAccounts } = useCatalog()
 
   const load = useCallback(() => run(async () => {
     const q = new URLSearchParams({ from, to, skip: String(page * PAGE), take: String(PAGE), ...(status ? { status } : {}), ...(type ? { type } : {}), ...(search ? { text: search } : {}), ...(accountId ? { accountId } : {}) })
+    const mine = ++loadSeq.current
     const data = await get<{ items: Voucher[]; total: number }>(`/vouchers?${q}`)
+    if (mine !== loadSeq.current) return   // bộ lọc / trang đã đổi: bỏ phản hồi cũ
     setList(data.items)
     setTotal(data.total)
     setSelected(s => (s ? data.items.find(v => v.id === s.id) ?? null : null))
@@ -97,7 +100,7 @@ export function VouchersView() {
             <strong>{v.number}</strong> <span className={`badge ${v.status}`}>{STATUS_VI[v.status]}</span>
             <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {formatDate(v.postingDate)} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
-            {v.status === 'Draft' && (!CASH_TYPES.includes(v.voucherType) || canEditAsCashDoc(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
+            {v.status === 'Draft' && !isModuleGenerated(v) && (CASH_TYPES.includes(v.voucherType) ? canEditAsCashDoc(v) : canEditJournalVoucher(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
             <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
               const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
               setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')
@@ -113,12 +116,12 @@ export function VouchersView() {
             <button onClick={printSheet}>In chứng từ</button>
           </div>
           <StatusBar steps={VOUCHER_STEPS} current={v.status} stopped={{ Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }}>
-              {v.status === 'Draft' && <button onClick={() => act('Đã gửi duyệt', () => post(`/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`))}>Gửi duyệt</button>}
-              {v.status === 'Submitted' && <button onClick={() => act('Đã duyệt', () => post(`/vouchers/${v.id}/approve?rowVersion=${v.rowVersion}`))}>Duyệt</button>}
+              {v.status === 'Draft' && <button disabled={busy} onClick={() => act('Đã gửi duyệt', () => post(`/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`))}>Gửi duyệt</button>}
+              {v.status === 'Submitted' && <button disabled={busy} onClick={() => act('Đã duyệt', () => post(`/vouchers/${v.id}/approve?rowVersion=${v.rowVersion}`))}>Duyệt</button>}
               {(v.status === 'Submitted' || v.status === 'Approved') && <button onClick={() => {
               const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(`/vouchers/${v.id}/reject?rowVersion=${v.rowVersion}`, { reason }))
             }}>Trả lại</button>}
-              {v.status === 'Approved' && <button className="primary" onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
+              {v.status === 'Approved' && <button className="primary" disabled={busy} onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
           </StatusBar>
           <LinesTable voucher={v} />
           <VoucherPrint voucher={v} />
@@ -244,6 +247,8 @@ function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; t
     ? src.lines.map(l => ({ accountId: l.accountId, side: l.side, amount: formatMoney(l.amount), partnerId: l.partnerId ?? '', description: l.description ?? '', cashFlowCode: l.cashFlowCode ?? '' }))
     : [emptyLine('D'), emptyLine('C')])
   const { busy, error, setError, run } = useAction()
+  const busyRef = useRef(false)
+  busyRef.current = busy   // phím tắt Ctrl+S đọc cờ này (hàm xử lý phím giữ bản save cũ), tránh gửi hai lần
 
   const parsed = lines.map(l => parseMoney(l.amount))
   const totalD = useMemo(() => addMoney(lines.map((l, i) => (l.side === 'D' ? parsed[i] ?? '0' : '0'))), [lines, parsed])
@@ -268,9 +273,10 @@ function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; t
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); save() }
+      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); if (!busyRef.current) save() }
       if (e.key === 'Insert') { e.preventDefault(); setLines(ls => [...ls, emptyLine(ls.at(-1)?.side === 'D' ? 'C' : 'D')]) }
-      if (e.key === 'Escape') onDone()
+      // Esc chỉ đóng form khi không đang ở ô nhập / danh sách thả xuống (Esc ở đó dùng để đóng danh sách, không để bỏ dữ liệu).
+      if (e.key === 'Escape' && !(e.target instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName))) onDone()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

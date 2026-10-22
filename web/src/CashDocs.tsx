@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post, put, type OpenItem, type Voucher } from './api'
 import { AccountSelect, ErrorBox, navStore, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog, FlowStrip } from './common'
-import { addMoney, formatDate, formatMoney, parseMoney, today } from './money'
+import { addMoney, daysBefore, formatDate, formatMoney, parseMoney, today } from './money'
 
 const EVENTS: Record<string, { value: string; label: string; needsPartner: boolean; needsCounter: boolean }[]> = {
   CR: [{ value: 'CUSTOMER_RECEIPT', label: 'Thu tiền khách hàng', needsPartner: true, needsCounter: false }],
@@ -59,8 +59,9 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
     if (!mainAccountId) { setBalance(null); setRecent([]); return }
     const q = new URLSearchParams({ accountId: mainAccountId, from: `${date.slice(0, 4)}-01-01`, to: date })
     get<{ closingBalance: string }>(`/reports/account-ledger?${q}`).then(l => setBalance(l.closingBalance)).catch(() => setBalance(null))
-    const since = new Date(date); since.setDate(since.getDate() - 60)
-    const r = new URLSearchParams({ accountId: mainAccountId, from: since.toISOString().slice(0, 10), take: '200' })
+    const sinceDate = daysBefore(date, 60)
+    if (!sinceDate) { setRecent([]); return }   // ô ngày bị xóa trống: chờ nhập lại, không để cả màn hình trắng
+    const r = new URLSearchParams({ accountId: mainAccountId, from: sinceDate, take: '200' })
     get<{ items: Voucher[] }>(`/vouchers?${r}`)
       .then(d => setRecent(d.items.filter(v => ['CR', 'CP', 'BR', 'BP'].includes(v.voucherType)).slice(-10).reverse())).catch(() => setRecent([]))
   }, [mainAccountId, date, created])

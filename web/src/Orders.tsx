@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
-import { formatDate, formatMoney, parseMoney, today } from './money'
+import { formatDate, formatMoney, optionalRate, parseMoney, today } from './money'
 import { SmartFilter, inRange, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
 import { OrderFlowPanel, OrderWorklist } from './OrderFlow'
@@ -37,8 +37,11 @@ export function OrdersView() {
   const { busy, error, setError, run } = useAction()
   useEffect(() => { get<ContractRef[]>(`/contracts?kind=${kind}`).then(c => setContracts(c.filter(x => x.status === 'Active' && !x.expired))).catch(() => setContracts([])); setContractId(''); setContractLines([]) }, [kind])
   useEffect(() => { get<Item[]>('/items').then(setItems).catch(() => setItems([])) }, [])
+  const loadSeq = useRef(0)
   const load = useCallback(() => run(async () => {
+    const mine = ++loadSeq.current
     const pg = await get<{ items: Order[]; total: number }>(`/orders?kind=${kind}&page=1&pageSize=100`)
+    if (mine !== loadSeq.current) return   // đã đổi sang loại đơn khác / tải lại: bỏ phản hồi cũ
     setList(pg.items); setTotal(pg.total)
   }), [run, kind])
   const loadMore = async () => {
@@ -55,12 +58,12 @@ export function OrdersView() {
     : act(() => post(`/orders/${o.id}/confirm`), `Đã xác nhận ${o.number}.`)
 
   const save = () => run(async () => {
-    const parsed = lines.map(l => ({ ...l, q: parseMoney(l.qty), p: parseMoney(l.price), v: l.vat === '' ? null : parseMoney(l.vat) }))
+    const parsed = lines.map(l => ({ ...l, q: parseMoney(l.qty), p: parseMoney(l.price), v: optionalRate(l.vat) }))
     if (parsed.some(l => !l.itemId || !l.q || l.p == null)) { setError(new Error('Dòng đơn hàng thiếu vật tư, số lượng hoặc đơn giá.')); return }
     const item = (id: string) => items.find(i => i.id === id)
     await post('/orders', {
       kind, partnerId: head.partnerId, orderDate: head.orderDate, description: head.description, contractNo: head.contractNo || null, contractId: contractId || null,
-      overDeliveryTolerancePercent: parseMoney(head.tolerance) ?? '0', currency: null, expectedDate: null,
+      overDeliveryTolerancePercent: optionalRate(head.tolerance, 'Dung sai giao vượt') ?? '0', currency: null, expectedDate: null,
       lines: parsed.map(l => ({ itemId: l.itemId, quantity: l.q, unitPrice: l.p, basis: item(l.itemId)?.tracksDryness ? l.basis : 'Quantity', vatRate: l.v, description: null })),
     })
     setInfo('Đã lập đơn hàng (nháp). Người khác có quyền duyệt sẽ xác nhận đơn.')

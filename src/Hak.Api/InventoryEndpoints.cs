@@ -72,7 +72,10 @@ public static class InventoryEndpoints
             var q = db.StockDocuments.AsNoTracking().Include(d => d.Lines).Where(d => d.CompanyId == ctx.CompanyId);
             if (from is not null) q = q.Where(d => d.PostingDate >= from);
             if (to is not null) q = q.Where(d => d.PostingDate <= to);
-            return Results.Ok((await q.OrderBy(d => d.PostingDate).ThenBy(d => d.Number).Take(1000).ToListAsync()).Select(Dto));
+            // Khi quá 1000 phiếu thì giữ 1000 phiếu MỚI nhất (không phải cũ nhất), vẫn trả theo thứ tự tăng dần.
+            var docs = await q.OrderByDescending(d => d.PostingDate).ThenByDescending(d => d.Number).Take(1000).ToListAsync();
+            docs.Reverse();
+            return Results.Ok(docs.Select(Dto));
         });
         api.MapPost("/stock-documents", async (HttpContext http, StockDocumentInput r, StockService s) => Results.Ok(Dto(await s.CreateDocumentAsync(await http.SessionAsync(), r))));
         api.MapPost("/stock-documents/{id:guid}/post", async (HttpContext http, Guid id, StockService s) => Results.Ok(Dto(await s.PostDocumentAsync(await http.SessionAsync(), id))));

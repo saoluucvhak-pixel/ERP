@@ -16,7 +16,7 @@ const STATE_COLOR: Record<string, string> = { None: 'var(--muted, #888)', Partia
 export function OrderFlowPanel({ orderId, onClose }: { orderId: string; onClose: () => void }) {
   const [flow, setFlow] = useState<OrderFlowData | null>(null)
   const { error, run } = useAction()
-  useEffect(() => { run(async () => setFlow(await get<OrderFlowData>(`/orders/${orderId}/flow`))) }, [orderId, run])
+  useEffect(() => { run(async () => setFlow(await get<OrderFlowData>(`/cycles/orders/${orderId}/flow`))) }, [orderId, run])
   return (
     <div className="panel">
       <div className="toolbar"><strong>Hồ sơ chu trình {flow?.number ?? ''}{flow ? ` · ${flow.partnerName}` : ''}</strong><button onClick={onClose}>Đóng</button></div>

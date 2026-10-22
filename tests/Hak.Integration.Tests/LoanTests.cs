@@ -166,6 +166,9 @@ public class LoanTests
             new VoucherLineInput(h.Acc["USDBANK"], Side.Credit, 2_540_000_000, null, "USD", 100_000, 25_400),
         ]));
         await s.Loans.LinkAsync(h.Preparer, loan.Id, [await LoanLineAsync(h, s, repay.Id)]);
+        // Đã trả hết gốc ngày 05/02 nhưng mới trích lãi đến 31/01: chưa được tất toán, nếu không sẽ mất lãi 01–04/02 (chị chốt 21/10/2026).
+        Assert.Equal(ErrorCodes.InterestPending, await CodeOf(() => s.Loans.CloseAsync(h.Preparer, loan.Id)));
+        await s.Loans.AccrueAsync(h.Approver, await PeriodAsync(h, s, 2), [new FxRate("USD", 25_400, 25_400)]);
         Assert.Equal(LoanStatus.Closed, (await s.Loans.CloseAsync(h.Preparer, loan.Id)).Status);
         Assert.Equal(0m, Assert.Single(await s.Loans.ReconcileAsync(h.Auditor, new(2026, 2, 28))).Difference);
     }

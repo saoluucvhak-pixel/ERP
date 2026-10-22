@@ -91,6 +91,25 @@ public class InventoryTests
         Assert.Equal(0m, await Balance(x, "INV", D(3, 31)));
     }
 
+    // Chị chốt 21/10/2026: đóng sổ (khóa kỳ) thì không tính lại giá xuất kho của kỳ đó.
+    [Fact]
+    public async Task LockedPeriod_KeepsItsIssueCosts_CostingCannotBeRerunOrCancelled()
+    {
+        using var x = await SetupAsync();
+        await ReceiveAsync(x, x.Monthly, D(3, 1), 10, 1_000_000);
+        var issue = await IssueAsync(x, x.Monthly, D(3, 5), 4);
+        var march = await x.S.Db.AccountingPeriods.SingleAsync(p => p.PeriodNo == 3);
+        var run = await x.S.Stock.RunMonthlyCostingAsync(x.H.Approver, x.Monthly, march.Id);
+        Assert.Equal(400_000m, await IssueValueAsync(x, issue));
+
+        await x.S.Setup.LockPeriodAsync(x.H.Approver, march.Id);
+        Assert.Equal(ErrorCodes.PeriodLocked, await CodeOf(() => x.S.Stock.ReverseCostingRunAsync(x.H.Approver, run.Id, "Tính lại giá")));
+        Assert.Equal(ErrorCodes.PeriodLocked, await CodeOf(() => x.S.Stock.RunMonthlyCostingAsync(x.H.Approver, x.Monthly, march.Id)));
+
+        await ReceiveAsync(x, x.Monthly, D(4, 2), 10, 2_000_000);        // hoạt động sau đó không đụng giá đã chốt
+        Assert.Equal(400_000m, await IssueValueAsync(x, issue));
+    }
+
     [Fact]
     public async Task MonthlyAverage_IssuesWaitForMonthEndRun_ThenPostOneVoucher()
     {

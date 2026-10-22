@@ -13,7 +13,7 @@ public sealed record FinancialAnalysis(DateOnly From, DateOnly To, DateOnly Prev
 /// Phân tích tài chính: chạy mẫu B01-DN và B02-DN đã nhập của công ty cho kỳ này và kỳ trước (cùng độ dài, liền trước) rồi tính các chỉ số theo mã số chỉ tiêu
 /// (<see cref="FinancialRatios"/>). Chỉ đọc sổ đã ghi, không lưu. Không có mẫu thì báo rõ để nhập mẫu trước.
 /// </summary>
-public sealed class FinancialAnalysisService(HakDbContext db, ReportService reports)
+public sealed class FinancialAnalysisService(ReportService reports)
 {
     public async Task<FinancialAnalysis> AnalyseAsync(SessionContext ctx, DateOnly from, DateOnly to)
     {

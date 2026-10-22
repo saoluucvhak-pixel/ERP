@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ApiError, UNCERTAIN_CODE, get, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
@@ -151,13 +151,30 @@ export function ErrorBox({ error }: { error: unknown }) {
 
 /** Runs an async action, tracking busy state and the last error. */
 export function useAction() {
-  const [busy, setBusy] = useState(false)
+  const [inFlight, setInFlight] = useState(0)
   const [error, setError] = useState<unknown>(null)
   const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
-    setBusy(true); setError(null)
-    try { return await fn() } catch (e) { setError(e); return undefined } finally { setBusy(false) }
+    // Đếm số thao tác đang chạy: thao tác thứ nhất xong không được làm "hết bận" khi thao tác thứ hai còn chạy.
+    setInFlight(n => n + 1); setError(null)
+    try { return await fn() } catch (e) { setError(e); return undefined } finally { setInFlight(n => n - 1) }
   }, [])
-  return { busy, error, setError, run }
+  return { busy: inFlight > 0, error, setError, run }
+}
+
+/** Lỗi không bắt được khi dựng giao diện không làm trắng cả màn hình: hiện thông báo và cho tải lại. */
+export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: Error | null }> {
+  state: { failed: Error | null } = { failed: null }
+  static getDerivedStateFromError(failed: Error) { return { failed } }
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <div className="panel" style={{ margin: 24 }}>
+        <h2>Màn hình gặp lỗi</h2>
+        <p>Dữ liệu đã ghi sổ không bị ảnh hưởng. Chi tiết kỹ thuật: <code>{this.state.failed.message}</code></p>
+        <button className="primary" onClick={() => location.reload()}>Tải lại</button>
+      </div>
+    )
+  }
 }
 
 export function useCatalog() {

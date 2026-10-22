@@ -526,24 +526,66 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         return split;
     }
 
-    /// <summary>Offsets every value-only adjustment booked by an invoice that is being reversed (inside the reversal transaction).</summary>
-    internal async Task ReverseValueAdjustmentsAsync(SessionContext ctx, Guid sourceInvoiceId, DateOnly date, string reason)
+    /// <summary>Phần giá trị của một hóa đơn bị đảo mà hàng đã xuất ra khỏi kho: kế toán chuyển từ tồn kho sang giá vốn.</summary>
+    public sealed record RepriceShift(Guid ItemId, decimal Amount);
+
+    /// <summary>
+    /// Offsets the value-only adjustments booked by an invoice that is being reversed (inside the reversal transaction), re-splitting
+    /// them with the same rule as posting (company decision 15/10/2026, "tính lại đơn giá" confirmed 21/10/2026): only the part
+    /// attributable to stock STILL on hand comes off the stock ledger; the part already carried out by issued goods stays in those
+    /// issues and is returned as a <see cref="RepriceShift"/> so the caller moves it from inventory to COGS in the ledger.
+    /// </summary>
+    internal async Task<IReadOnlyList<RepriceShift>> ReverseValueAdjustmentsAsync(SessionContext ctx, Guid sourceInvoiceId, DateOnly date, string reason, bool reprice = false)
     {
         var originals = await db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.SourceInvoiceId == sourceInvoiceId).ToListAsync();
-        if (originals.Count == 0 || originals.Sum(a => a.Value) == 0) return;
+        if (originals.Count == 0 || originals.Sum(a => a.Value) == 0) return [];
         await RequireOpenPeriodAsync(ctx.CompanyId, date);
         var seq = await MaxSequenceAsync(ctx.CompanyId);
+        var dp = reprice ? await DecimalsAsync(await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId)) : 0;
+        var shifts = new List<RepriceShift>();
         foreach (var g in originals.GroupBy(a => (a.WarehouseId, a.ItemId, a.TargetMovementId)))
         {
-            var value = -g.Sum(a => a.Value);
-            if (value == 0) continue;
+            var booked = g.Sum(a => a.Value);
+            if (booked == 0) continue;
             await GuardCostedAsync(ctx.CompanyId, g.Key.WarehouseId, date);
-            db.StockValueAdjustments.Add(new StockValueAdjustment
+            var keep = booked;                             // đảo thuần (giá thành sản xuất, v.v.): gỡ toàn bộ như đã ghi
+            if (reprice)
             {
-                Id = Ids.New(), CompanyId = ctx.CompanyId, WarehouseId = g.Key.WarehouseId, ItemId = g.Key.ItemId, TargetMovementId = g.Key.TargetMovementId,
-                Sequence = ++seq, AdjustmentDate = date, Value = value, SourceInvoiceId = sourceInvoiceId, Reason = reason, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId,
-            });
+                // Mỗi điều chỉnh đã được chia theo số lượng còn trong kho LÚC ghi sổ; nay chỉ phần thuộc số lượng còn trong kho BÂY GIỜ ở lại với hàng tồn.
+                var mv = await db.StockMovements.AsNoTracking().SingleAsync(m => m.Id == g.Key.TargetMovementId);
+                var now = await InStockQuantityAsync(ctx.CompanyId, mv, null);
+                keep = 0;
+                foreach (var a in g)
+                {
+                    var then = await InStockQuantityAsync(ctx.CompanyId, mv, a.Sequence);
+                    keep += then == 0 ? 0 : now >= then ? a.Value : MoneyMath.Round(a.Value * now / then, dp);
+                }
+            }
+            if (keep != 0)
+                db.StockValueAdjustments.Add(new StockValueAdjustment
+                {
+                    Id = Ids.New(), CompanyId = ctx.CompanyId, WarehouseId = g.Key.WarehouseId, ItemId = g.Key.ItemId, TargetMovementId = g.Key.TargetMovementId,
+                    Sequence = ++seq, AdjustmentDate = date, Value = -keep, SourceInvoiceId = sourceInvoiceId, Reason = reason, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId,
+                });
+            if (booked - keep != 0) shifts.Add(new RepriceShift(g.Key.ItemId, booked - keep));
         }
+        return shifts;
+    }
+
+    /// <summary>
+    /// Quantity of a receipt line still in stock, counting only movements before <paramref name="beforeSequence"/> (null = all up to now):
+    /// FIFO uses the receipt's own remaining layer; average methods use min(receipt qty, quantity on hand) since the receipt merged into the pool.
+    /// </summary>
+    private async Task<decimal> InStockQuantityAsync(Guid companyId, StockMovement mv, long? beforeSequence)
+    {
+        var history = await db.StockMovements.AsNoTracking()
+            .Where(m => m.CompanyId == companyId && m.WarehouseId == mv.WarehouseId && m.ItemId == mv.ItemId && (beforeSequence == null || m.Sequence < beforeSequence))
+            .OrderBy(m => m.Sequence).ToListAsync();
+        if (await MethodForAsync(companyId, mv.WarehouseId, mv.MovementDate) != CostingMethod.Fifo)
+            return Math.Max(0, Math.Min(mv.Quantity, history.Sum(m => m.Quantity)));
+        var values = await ActiveValuesAsync(history.Select(m => m.Id).ToList());
+        return CostingCalculator.FifoRemaining(await CostedHistoryAsync(companyId, mv.WarehouseId, mv.ItemId, history, values), mv.Sequence,
+            await DecimalsAsync(await db.Companies.AsNoTracking().FirstAsync(c => c.Id == companyId)));
     }
 
     /// <summary>Highest sequence used by movements or value adjustments (they share one processing order per company).</summary>
@@ -683,7 +725,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         var q = db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.MovementDate <= to);
         if (warehouseId is not null) q = q.Where(m => m.WarehouseId == warehouseId);
         var moves = await q.ToListAsync();
-        var values = await ActiveValuesAsync(moves.Select(m => m.Id).ToList());
+        var values = await ActiveValuesAsync(q, moves.Select(m => m.Id).ToHashSet());
         var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
         var whs = await db.Warehouses.AsNoTracking().Where(w => w.CompanyId == ctx.CompanyId).ToDictionaryAsync(w => w.Id);
         var adjQ = db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.AdjustmentDate <= to);
@@ -746,8 +788,9 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     {
         ctx.Require(Permissions.ReportView);
         var items = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).ToDictionaryAsync(i => i.Id);
-        var moves = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.MovementDate <= asOf).ToListAsync();
-        var values = await ActiveValuesAsync(moves.Select(m => m.Id).ToList());
+        var movesQ = db.StockMovements.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.MovementDate <= asOf);
+        var moves = await movesQ.ToListAsync();
+        var values = await ActiveValuesAsync(movesQ, moves.Select(m => m.Id).ToHashSet());
         var adjs = await db.StockValueAdjustments.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.AdjustmentDate <= asOf).ToListAsync();
         var rows = new List<InventoryReconcileRow>();
         foreach (var accId in items.Values.Where(i => i.InventoryAccountId != null).Select(i => i.InventoryAccountId!.Value).Distinct())
@@ -792,11 +835,11 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
 
     private async Task<decimal?> IssueValueAsync(Guid companyId, Guid warehouseId, Guid itemId, decimal qty, CostingMethod method, int dp)
     {
-        var stored = await db.StockMovements.AsNoTracking().Where(m => m.CompanyId == companyId && m.WarehouseId == warehouseId && m.ItemId == itemId)
-            .OrderBy(m => m.Sequence).ToListAsync();
+        var scope = db.StockMovements.AsNoTracking().Where(m => m.CompanyId == companyId && m.WarehouseId == warehouseId && m.ItemId == itemId);
+        var stored = await scope.OrderBy(m => m.Sequence).ToListAsync();
         var history = stored.Concat(db.StockMovements.Local.Where(m => m.WarehouseId == warehouseId && m.ItemId == itemId && db.Entry(m).State == EntityState.Added))
             .OrderBy(m => m.Sequence).ToList();
-        var values = await ActiveValuesAsync(history.Select(m => m.Id).ToList());
+        var values = await ActiveValuesAsync(scope, history.Select(m => m.Id).ToHashSet());
 
         if (method == CostingMethod.MonthlyAverage)
         {
@@ -830,13 +873,32 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         foreach (var chunk in movementIds.Chunk(500))
             foreach (var v in await db.StockValuations.AsNoTracking().Where(v => chunk.Contains(v.MovementId) && v.VoidedAt == null).ToListAsync())
                 result[v.MovementId] = v.Value;
+        MergePendingValuations(result, movementIds);
+        return result;
+    }
+
+    /// <summary>
+    /// Same result as <see cref="ActiveValuesAsync(IReadOnlyCollection{Guid})"/> for the movements selected by <paramref name="scope"/>, but in ONE joined query
+    /// instead of one query per 500 ids (đo 21/10/2026: lịch sử 100.000 biến động = 200 truy vấn mỗi dòng xuất).
+    /// </summary>
+    private async Task<Dictionary<Guid, decimal>> ActiveValuesAsync(IQueryable<StockMovement> scope, IReadOnlyCollection<Guid> movementIds)
+    {
+        var rows = await (from v in db.StockValuations.AsNoTracking() join m in scope on v.MovementId equals m.Id where v.VoidedAt == null select new { v.MovementId, v.Value }).ToListAsync();
+        var result = new Dictionary<Guid, decimal>(rows.Count);
+        foreach (var r in rows) result[r.MovementId] = r.Value;
+        MergePendingValuations(result, movementIds);
+        return result;
+    }
+
+    private void MergePendingValuations(Dictionary<Guid, decimal> result, IReadOnlyCollection<Guid> movementIds)
+    {
+        var wanted = movementIds as ISet<Guid> ?? movementIds.ToHashSet();
         foreach (var e in db.ChangeTracker.Entries<StockValuation>())
         {
-            if (!movementIds.Contains(e.Entity.MovementId)) continue;
+            if (!wanted.Contains(e.Entity.MovementId)) continue;
             if (e.Entity.VoidedAt is null) result[e.Entity.MovementId] = e.Entity.Value;
             else result.Remove(e.Entity.MovementId);
         }
-        return result;
     }
 
     /// <summary>Adds one Dr/Cr pair; the partner goes on whichever side's account requires it.</summary>

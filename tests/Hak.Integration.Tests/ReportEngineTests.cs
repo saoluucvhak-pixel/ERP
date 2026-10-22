@@ -60,7 +60,7 @@ public class ReportEngineTests
         using var h = await TestHost.CreateAsync();
         using var s = h.NewScope();
         await SeedAsync(h, s);
-        var analysis = new FinancialAnalysisService(s.Db, s.Reports);
+        var analysis = new FinancialAnalysisService(s.Reports);
         Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => analysis.AnalyseAsync(h.Auditor, new(2026, 1, 1), new(2026, 3, 31))));   // chưa có mẫu B01-DN
 
         await s.Reports.SaveDraftAsync(h.Preparer, new("B01-DN", "Bảng cân đối (mẫu thử)", "Kiểm thử", null,

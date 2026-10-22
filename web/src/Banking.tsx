@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, ExportButton, FlowStrip, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
-import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
+import { addMoney, amountInWords, csvCell, formatDate, formatMoney, parseMoney, today } from './money'
 import type { PartnerBank } from './BankAccounts'
 
 interface PaymentOrder { id: string; number: string; bankAccountId: string; beneficiaryAccountNo: string | null; beneficiaryBank: string | null; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
@@ -47,7 +47,7 @@ function PaymentOrders() {
   const payer = (p: PaymentOrder) => cbanks.find(c => c.accountId === p.bankAccountId)
   const chosen = list.filter(p => picked.has(p.id))
   const csv = () => {
-    const q = (v: string) => `"${v.replace(/"/g, '""')}"`
+    const q = csvCell
     const body = ['STT;Số UNC;Tên người thụ hưởng;Số tài khoản;Ngân hàng;Số tiền;Nội dung'].concat(chosen.map((p, i) => [i + 1, p.number, q(beneficiary(p)), `'${p.beneficiaryAccountNo ?? ''}`, q(p.beneficiaryBank ?? ''), p.amount.replace('.', ','), q(p.description)].join(';')))
     const url = URL.createObjectURL(new Blob(['\ufeff' + body.join('\r\n')], { type: 'text/csv;charset=utf-8' }))
     const a = document.createElement('a'); a.href = url; a.download = `Chuyen_tien_${today()}.csv`; a.click(); URL.revokeObjectURL(url)
@@ -100,15 +100,15 @@ function PaymentOrders() {
               <td>{p.beneficiaryAccountNo ? <>{p.beneficiaryAccountNo}<div className="muted">{p.beneficiaryBank}</div></> : <span className="muted" title="Khai báo ở Danh mục đối tượng › Ngân hàng">chưa có</span>}</td><td>{p.description}</td>
               <td className="num">{formatMoney(p.amount)}</td><td><span className="badge">{PO_STATUS[p.status] ?? p.status}</span></td><td>{p.bankReference}</td>
               <td style={{ display: 'flex', gap: 4 }}>
-                {p.status === 'Created' && <button onClick={() => act(() => post(`/payment-orders/${p.id}/approve`), `Đã duyệt ${p.number}.`)}>Duyệt</button>}
-                {p.status === 'Approved' && <button onClick={() => act(() => post(`/payment-orders/${p.id}/send`), `Đã ghi nhận gửi ngân hàng ${p.number}.`)}>Đã gửi NH</button>}
+                {p.status === 'Created' && <button disabled={busy} onClick={() => act(() => post(`/payment-orders/${p.id}/approve`), `Đã duyệt ${p.number}.`)}>Duyệt</button>}
+                {p.status === 'Approved' && <button disabled={busy} onClick={() => act(() => post(`/payment-orders/${p.id}/send`), `Đã ghi nhận gửi ngân hàng ${p.number}.`)}>Đã gửi NH</button>}
                 {p.status === 'SentToBank' && <button onClick={() => {
                   const ref = prompt('Mã giao dịch ngân hàng:'); if (!ref) return
                   const date = prompt('Ngày ngân hàng thực hiện (yyyy-mm-dd):', today()); if (!date) return
                   act(() => post(`/payment-orders/${p.id}/execute`, { executedDate: date, bankReference: ref }),
                     `Đã ghi nhận ngân hàng thực hiện ${p.number}; đã tạo báo Nợ (Nháp) — duyệt và ghi sổ ở màn hình Chứng từ.`)
                 }}>NH đã thực hiện</button>}
-                {p.status === 'ExecutedByBank' && <button onClick={() => act(() => post(`/payment-orders/${p.id}/recreate-voucher`), 'Đã lập lại chứng từ hạch toán.')}>Lập lại chứng từ</button>}
+                {p.status === 'ExecutedByBank' && <button disabled={busy} onClick={() => act(() => post(`/payment-orders/${p.id}/recreate-voucher`), 'Đã lập lại chứng từ hạch toán.')}>Lập lại chứng từ</button>}
                 {p.status !== 'Cancelled' && <button onClick={() => setPrinting([p])}>In UNC</button>}
                 {['Created', 'Approved', 'SentToBank'].includes(p.status) && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do hủy lệnh:'); if (reason) act(() => post(`/payment-orders/${p.id}/cancel`, { reason }), `Đã hủy ${p.number}.`)

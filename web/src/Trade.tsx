@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
-import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
+import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
@@ -67,10 +67,10 @@ export function TradeView() {
         const price = parseMoney(l.price)
         if (!price) throw new Error(`Dòng ${i + 1}: đơn giá không hợp lệ.`)
         const c = candidates.find(x => x.key === l.candidate)
-        if (c?.svc) return { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: null, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null, orderId: c.svc.orderId, orderLineNo: c.svc.orderLineNo }
+        if (c?.svc) return { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: null, vatRate: optionalRate(l.vat), description: l.description || null, orderId: c.svc.orderId, orderLineNo: c.svc.orderLineNo }
         return c
-          ? { unitPrice: price, stockDocumentId: c.docId, stockLineNo: c.lineNo, basis: l.basis, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null }
-          : { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: l.accountId || null, vatRate: l.vat === '' ? null : parseMoney(l.vat), description: l.description || null }
+          ? { unitPrice: price, stockDocumentId: c.docId, stockLineNo: c.lineNo, basis: l.basis, vatRate: optionalRate(l.vat), description: l.description || null }
+          : { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: l.accountId || null, vatRate: optionalRate(l.vat), description: l.description || null }
       }),
     }
     try {
@@ -143,7 +143,7 @@ export function TradeView() {
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
-                {i.status === 'Draft' && <button className="primary" onClick={() => act(async () => {
+                {i.status === 'Draft' && <button className="primary" disabled={busy} onClick={() => act(async () => {
                   // Purchase invoices against receipts already posted at another value: show the split and require confirmation.
                   const diffs = await get<{ lineNo: number; receiptNumber: string; difference: string; inventoryPart: string; cogsPart: string; quantityInStock: string; receiptQuantity: string }[]>(`/invoices/${i.id}/price-differences`)
                   if (diffs.length > 0) {

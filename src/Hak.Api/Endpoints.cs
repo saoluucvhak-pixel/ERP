@@ -123,7 +123,8 @@ public static class Endpoints
         // Bảng kiểm đóng kỳ (Đợt 5): lỗi chặn / cần xác nhận / chuyển kỳ hợp lệ; khóa theo bảng kiểm từ chối khi còn lỗi chặn.
         api.MapGet("/periods/{id:guid}/close-checklist", async (HttpContext http, Guid id, Hak.Application.Setup.PeriodCloseChecklistService s) => Results.Ok(await s.ForPeriodAsync(await http.SessionAsync(), id)));
         api.MapPost("/periods/{id:guid}/lock-checked", async (HttpContext http, Guid id, Hak.Application.Setup.PeriodCloseChecklistService s) => { await s.LockCheckedAsync(await http.SessionAsync(), id); return Results.NoContent(); });
-        api.MapPost("/periods/{id:guid}/lock", async (HttpContext http, Guid id, SetupService s) => { await s.LockPeriodAsync(await http.SessionAsync(), id); return Results.NoContent(); });
+        // Khóa kỳ luôn đi qua bảng kiểm đóng kỳ (không còn đường khóa thẳng bỏ qua lỗi chặn).
+        api.MapPost("/periods/{id:guid}/lock", async (HttpContext http, Guid id, Hak.Application.Setup.PeriodCloseChecklistService s) => { await s.LockCheckedAsync(await http.SessionAsync(), id); return Results.NoContent(); });
         api.MapPost("/periods/{id:guid}/reopen", async (HttpContext http, Guid id, ReasonRequest r, SetupService s) => { await s.ReopenPeriodAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
 
         api.MapGet("/accounts", async (HttpContext http, HakDbContext db) =>

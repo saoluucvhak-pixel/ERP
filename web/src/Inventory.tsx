@@ -150,7 +150,7 @@ function StockDocs() {
             <tr key={d.id} className={d.id === selId ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelId(d.id)}><td>{formatDate(d.postingDate)}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                {d.status === 'Draft' && <button className="primary" onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
+                {d.status === 'Draft' && <button className="primary" disabled={busy} onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
                 {d.status === 'Draft' && <button className="danger" onClick={() => { const r = prompt('Lý do hủy phiếu nháp:'); if (r) act(() => post(`/stock-documents/${d.id}/cancel`, { reason: r }), `Đã hủy ${d.number}.`) }}>Hủy</button>}
                 {d.status === 'Posted' && !d.number.startsWith('DP') && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo phiếu:'); if (!reason) return
@@ -244,6 +244,7 @@ function StockCount() {
     if (shortage.length) made.push((await post<StockDoc>('/stock-documents', { ...base, type: 'Issue', description: `Kiểm kê kho ngày ${date}: hàng thiếu`, partnerId: null,
       lines: shortage.map(r => ({ itemId: r.itemId, quantity: diff(r)!.slice(1), amount: null, counterAccountId: shortAcc, description: null, orderId: null, orderLineNo: null })) })).number)
     setInfo(made.length ? `Đã lập phiếu Nháp: ${made.join(', ')}. Ghi sổ ở tab Phiếu kho (người khác ghi sổ).` : 'Không có chênh lệch, không cần lập phiếu.')
+    setRows(null)   // lấy lại tồn sổ sách trước khi kiểm kê tiếp: bấm lần nữa sẽ không lập trùng phiếu
   })
   const wname = warehouses.find(w => w.id === warehouseId)
   return (

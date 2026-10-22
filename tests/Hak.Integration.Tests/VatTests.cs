@@ -134,7 +134,7 @@ public class VatTests
     public async Task PeriodEndOffset_DebitsOutputVat_CreditsInputVat_ForTheSmallerBalance_AndIsOncePerPeriod()
     {
         using var fx = await SetupAsync();
-        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine, fx.S.Audit);
+        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine);
         var period = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(3, 1));
         await Book(fx, InvoiceKind.Purchase, fx.Sup, "1C26TAA", "0000901", 10_000_000, 10, D(3, 5));    // input VAT 1.000.000
         await Book(fx, InvoiceKind.Sales, fx.Cus, "1C26TBB", "0000902", 20_000_000, 8, D(3, 10));        // output VAT 1.600.000
@@ -163,7 +163,7 @@ public class VatTests
     public async Task PeriodEndOffset_UsesTheAccountsTheUserPicks_AndRejectsOverlap()
     {
         using var fx = await SetupAsync();
-        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine, fx.S.Audit);
+        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine);
         var period = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(3, 1));
         await Book(fx, InvoiceKind.Purchase, fx.Sup, "1C26TAA", "0000911", 10_000_000, 10, D(3, 5));
         await Book(fx, InvoiceKind.Sales, fx.Cus, "1C26TBB", "0000912", 20_000_000, 8, D(3, 10));
@@ -183,7 +183,7 @@ public class VatTests
     public async Task PeriodEndOffset_Quarterly_CoversTheCalendarQuarter_AndSharesTheOncePerPeriodGuard()
     {
         using var fx = await SetupAsync();
-        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine, fx.S.Audit);
+        var offset = new VatOffsetService(fx.S.Db, fx.S.Engine);
         var jan = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(1, 1));
         var mar = await fx.S.Db.AccountingPeriods.AsNoTracking().FirstAsync(p => p.CompanyId == fx.H.CompanyId && p.StartDate == D(3, 1));
         await Book(fx, InvoiceKind.Purchase, fx.Sup, "1C26TAA", "0000921", 10_000_000, 10, D(1, 15));

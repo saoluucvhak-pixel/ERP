@@ -86,6 +86,10 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
         });
     }
 
+    /// <summary>Nguồn "HAK.*" là chứng từ do một phân hệ sinh ra; chỉ HAK.IMPORT (dữ liệu chuyển từ hệ thống cũ) vẫn sửa tay được.</summary>
+    public static bool IsModuleGenerated(string? sourceSystem)
+        => sourceSystem is not null && sourceSystem.StartsWith("HAK.", StringComparison.Ordinal) && sourceSystem != Setup.CatalogImportService.ImportSource;
+
     public Task<Voucher> UpdateDraftAsync(SessionContext ctx, Guid voucherId, long expectedRowVersion, VoucherInput input)
         => UpdateDraftCoreAsync(ctx, voucherId, expectedRowVersion, input, null);
 
@@ -100,6 +104,11 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             // Chứng từ chiết khấu thanh toán tính từ hóa đơn nguồn: không sửa tay ngày / số tiền / tài khoản (sửa là phá hạn chiết khấu) — hủy nháp rồi tạo lại qua phân hệ.
             if (v.SourceSystem == Hak.Application.Trade.PaymentDiscountService.Source)
                 throw new DomainException(ErrorCodes.ValidationFailed, "Chứng từ chiết khấu thanh toán do phân hệ Chiết khấu thanh toán sinh ra từ hóa đơn; muốn đổi ngày, số tiền hoặc tài khoản tiền thì hủy chứng từ nháp và tạo lại ở màn Chiết khấu thanh toán.");
+            // Chứng từ do phân hệ sinh ra chỉ được TÍNH LẠI ở phân hệ (hủy nháp rồi tạo lại), không sửa tay (chị chốt 21/10/2026):
+            // sửa tay làm số của phân hệ (tạm ứng, vốn góp, lương, kết chuyển…) lệch với sổ cái.
+            if (IsModuleGenerated(v.SourceSystem) || await db.PayrollSheets.AnyAsync(s => s.VoucherId == v.Id))
+                throw new DomainException(ErrorCodes.ValidationFailed,
+                    $"Chứng từ {v.Number} do phân hệ nghiệp vụ ({v.SourceSystem ?? "bảng lương"}) sinh ra nên không sửa tay; hủy chứng từ nháp rồi tính lại / tạo lại ở phân hệ đó.");
             if (VoucherTypes.RuleDriven.Contains(v.VoucherType) != (meta is not null))
                 throw new DomainException(ErrorCodes.ValidationFailed, "Chứng từ nghiệp vụ (thu/chi) phải sửa qua màn hình chứng từ, không sửa định khoản trực tiếp.");
             if (meta is not null)
@@ -114,6 +123,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             if (fy.Id != v.FiscalYearId)
                 throw new DomainException(ErrorCodes.ValidationFailed, "Không được chuyển chứng từ sang năm tài chính khác (số chứng từ theo năm).");
 
+            // Người sửa nội dung nháp trở thành người lập: nếu không, người lập thật có thể bị người khác sửa rồi tự gửi và duyệt qua mặt kiểm soát hai người.
+            var preparerChanged = v.CreatedBy != ctx.UserId;
+            if (preparerChanged) v.CreatedBy = ctx.UserId;
             db.VoucherLines.RemoveRange(v.Lines);
             v.VoucherDate = input.VoucherDate;
             v.PostingDate = input.PostingDate;
@@ -124,7 +136,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             v.RowVersion++;
             AddHistory(v, VoucherStatus.Draft, "update", ctx.UserId);
             await audit.AppendAsync(ctx.CompanyId, ctx, "voucher.update", "voucher", v.Id.ToString(),
-                new { v.Number, debit = v.TotalDebit, credit = v.TotalCredit }, v.RowVersion);
+                new { v.Number, debit = v.TotalDebit, credit = v.TotalCredit, preparerChanged }, v.RowVersion);
             await db.SaveChangesAsync();
             return v;
         });
@@ -229,6 +241,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             var original = await LoadVoucherAsync(ctx, voucherId);
             if (original.Status != VoucherStatus.Posted)
                 throw new DomainException(ErrorCodes.InvalidStateTransition, $"Chỉ đảo được chứng từ đã ghi sổ (hiện tại: {original.Status}).");
+            if (original.ReversesVoucherId is not null || original.VoucherType == VoucherTypes.Reversal)
+                throw new DomainException(ErrorCodes.InvalidStateTransition,
+                    $"Chứng từ {original.Number} là bút toán đảo; không đảo lại một bút toán đảo (sổ cái và phân hệ sẽ lệch nhau). Muốn ghi lại nghiệp vụ thì lập chứng từ mới.");
             if (!allowModuleOwned && original.SourceSystem is { } src && VoucherTypes.ModuleOwnedSources.Contains(src))
                 throw new DomainException(ErrorCodes.InvalidStateTransition,
                     $"Chứng từ {original.Number} do phân hệ nghiệp vụ ({src}) sinh ra; đảo bằng chức năng của phân hệ đó (đảo phiếu kho, hủy lần tính giá, hủy khấu hao, hủy ghi giảm…) để sổ chi tiết và sổ cái luôn khớp.");

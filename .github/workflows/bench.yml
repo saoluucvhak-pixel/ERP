@@ -1,0 +1,47 @@
+name: bench
+# Đo hiệu năng (docs/09) trên runner GitHub — số liệu tham khảo, KHÔNG phải máy khách hàng. Chỉ chạy khi thông điệp commit cuối chứa [bench].
+on:
+  push:
+    branches: [audit/erp-full-quality-upgrade]
+permissions:
+  contents: read
+jobs:
+  bench-sqlite:
+    if: contains(github.event.head_commit.message, '[bench]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run -c Release --project tools/Hak.Bench -- --vouchers 6000 --partners 2000 --stock 1500 | tee bench-sqlite.txt
+      - run: |
+          echo '## Hak.Bench — SQLite' >> "$GITHUB_STEP_SUMMARY"
+          sed -n '/^| Phép đo/,$p' bench-sqlite.txt >> "$GITHUB_STEP_SUMMARY"
+  bench-postgres:
+    if: contains(github.event.head_commit.message, '[bench]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: hak_admin
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U hak_admin"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      HAK_TEST_PG: Host=127.0.0.1;Port=5433;Username=hak_admin;Password=ci_only_password
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run -c Release --project tools/Hak.Bench -- --vouchers 6000 --partners 2000 --stock 1500 --postgres | tee bench-postgres.txt
+      - run: |
+          echo '## Hak.Bench — PostgreSQL' >> "$GITHUB_STEP_SUMMARY"
+          sed -n '/^| Phép đo/,$p' bench-postgres.txt >> "$GITHUB_STEP_SUMMARY"

@@ -139,8 +139,13 @@ public sealed class ClosingService(HakDbContext db, AccountingEngine engine, Aud
         ctx.Require(Permissions.VoucherCreate);
         var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId)
                      ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại.");
-        var existing = await db.Vouchers.AsNoTracking()
-            .FirstOrDefaultAsync(v => v.CompanyId == ctx.CompanyId && v.SourceSystem == SourceSystem && v.SourceId == periodId.ToString() && v.Status != VoucherStatus.Cancelled);
+        // Chứng từ kết chuyển đã bị đảo thì kỳ được kết chuyển lại (chị chốt 21/10/2026). Khóa nguồn của bản đã đảo bị chiếm, nên bản mới mang hậu tố #n.
+        var key = periodId.ToString();
+        var history = await db.Vouchers.AsNoTracking()
+            .Where(v => v.CompanyId == ctx.CompanyId && v.SourceSystem == SourceSystem && (v.SourceId == key || v.SourceId!.StartsWith(key + "#")) && v.Status != VoucherStatus.Cancelled)
+            .ToListAsync();
+        var existing = history.FirstOrDefault(v => v.Status != VoucherStatus.Reversed);
+        var sourceId = history.Count == 0 ? key : $"{key}#{history.Count + 1}";
         if (existing is not null)
             throw new DomainException(existing.Status is VoucherStatus.Posted ? ErrorCodes.AlreadyClosed : ErrorCodes.DuplicateSource,
                 $"Kỳ đã có chứng từ kết chuyển {existing.Number} ({existing.Status}). Hủy nháp hoặc đảo chứng từ đó trước khi tạo lại.");
@@ -153,7 +158,7 @@ public sealed class ClosingService(HakDbContext db, AccountingEngine engine, Aud
         if (lines.Count == 0) throw new DomainException(ErrorCodes.VoucherNoLines, "Không có số dư cần kết chuyển.");
         return await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.Closing, period.EndDate, period.EndDate,
             $"Kết chuyển cuối kỳ {period.StartDate:MM/yyyy} theo {set.Code} v{set.Version}", lines,
-            SourceSystem: SourceSystem, SourceId: periodId.ToString(), SourceVersion: $"{set.Code}:{set.Version}"));
+            SourceSystem: SourceSystem, SourceId: sourceId, SourceVersion: $"{set.Code}:{set.Version}"));
     }
 
     private static List<string> Prefixes(string s) => s.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();

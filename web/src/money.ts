@@ -151,3 +151,28 @@ export function amountInWords(value: string, unit = 'đồng'): string {
   text = (neg ? 'âm ' : '') + text + (unit ? ' ' + unit : '')
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
+/**
+ * Ô số tùy chọn (thuế suất, dung sai): để trống là "không có" (null); đã nhập mà sai định dạng thì báo lỗi
+ * thay vì lặng lẽ coi như để trống — nếu không, "10%" sẽ lưu hóa đơn với thuế 0.
+ */
+export function optionalRate(input: string, label = 'Thuế suất'): string | null {
+  if (input.trim() === '') return null
+  const parsed = parseMoney(input)
+  if (parsed == null) throw new Error(`${label} "${input.trim()}" không hợp lệ: chỉ nhập số (ví dụ 10 hoặc 8,5), không kèm ký hiệu %.`)
+  return parsed
+}
+
+/** Ngày yyyy-MM-dd lùi `days` ngày, hoặc null nếu chuỗi vào không phải ngày hợp lệ (ô ngày bị xóa trống). */
+export function daysBefore(iso: string, days: number): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return null
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  if (Number.isNaN(t)) return null
+  return new Date(t - days * 86_400_000).toISOString().slice(0, 10)
+}
+
+/** Ô CSV: bọc ngoặc kép và vô hiệu hóa công thức (ô bắt đầu bằng = + - @ hoặc ký tự điều khiển sẽ chạy như công thức trong Excel). */
+export function csvCell(text: string): string {
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+  return `"${safe.replace(/"/g, '""')}"`
+}
