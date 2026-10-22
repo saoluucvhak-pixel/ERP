@@ -20,7 +20,7 @@ public sealed record IssuedExchangeKey(Guid Id, string SourceSystem, string KeyI
 /// HMAC keys of external systems allowed to send JSON packages (journal vouchers, payroll). Issuing generates a random 256-bit
 /// secret server-side; keys are deactivated, never deleted, so packages already received stay attributable.
 /// </summary>
-public sealed partial class ExchangeKeyService(HakDbContext db, AuditService audit)
+public sealed partial class ExchangeKeyService(HakDbContext db, AuditService audit, MasterKey? masterKey = null)
 {
     [GeneratedRegex("^[A-Z0-9_.-]{1,30}$")]
     private static partial Regex Code();
@@ -40,7 +40,7 @@ public sealed partial class ExchangeKeyService(HakDbContext db, AuditService aud
             var key = new ExchangePartnerKey
             {
                 Id = Ids.New(), CompanyId = ctx.CompanyId, SourceSystem = sourceSystem, KeyId = keyId,
-                SecretBase64 = SecretProtector.Protect(secret),   // mã hóa khi lưu; chỉ trả bản gốc đúng một lần
+                SecretBase64 = (masterKey ?? MasterKey.None).Protect(secret),   // mã hóa khi lưu; chỉ trả bản gốc đúng một lần
             };
             db.ExchangePartnerKeys.Add(key);
             await audit.AppendAsync(ctx.CompanyId, ctx, "exchange_key.issue", "exchange_key", key.Id.ToString(), new { sourceSystem, keyId });  // never the secret

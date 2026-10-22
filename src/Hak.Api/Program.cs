@@ -53,79 +53,13 @@ var attachmentsRoot = builder.Configuration["Hak:AttachmentsPath"]
                       ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(builder.Configuration["Hak:DatabasePath"]
                           ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "hak.db"))) ?? AppContext.BaseDirectory, "attachments");
 builder.Services.AddSingleton(new Hak.Application.Attachments.AttachmentStore(attachmentsRoot));
-builder.Services.AddScoped<Hak.Application.Attachments.AttachmentService>();
+builder.Services.AddHakApplicationServices();   // ServiceRegistration.cs
 builder.Services.AddSingleton(runtime);
 builder.Services.AddSingleton<IClock, SystemClock>();
-builder.Services.AddScoped<AuditService>();
-builder.Services.AddScoped<SetupService>();
-builder.Services.AddScoped<CatalogImportService>();
-builder.Services.AddScoped<AccountingEngine>();
-builder.Services.AddScoped<LedgerQueryService>();
-builder.Services.AddScoped<AuthService>();
-builder.Services.AddScoped<JournalVoucherPackageService>();
-builder.Services.AddScoped<SettlementService>();
-builder.Services.AddScoped<PostingRuleService>();
-builder.Services.AddScoped<BusinessDocumentService>();
-builder.Services.AddScoped<ClosingService>();
-builder.Services.AddScoped<PaymentOrderService>();
-builder.Services.AddScoped<PaymentAcceptanceService>();
-builder.Services.AddScoped<PurchaseVarianceService>();
-builder.Services.AddScoped<PurchaseReceivingService>();
-builder.Services.AddScoped<OrderFlowService>();
-builder.Services.AddScoped<Hak.Application.Setup.PeriodCloseChecklistService>();
-builder.Services.AddScoped<SalesOrderCheckService>();
-builder.Services.AddScoped<ReorderService>();
-builder.Services.AddScoped<SupplierService>();
-builder.Services.AddScoped<HomeService>();
-builder.Services.AddScoped<Hak.Application.Reports.FinancialAnalysisService>();
-builder.Services.AddScoped<Hak.Application.Reports.DashboardOverviewService>();
-builder.Services.AddScoped<PayrollPaymentService>();
-builder.Services.AddScoped<Hak.Application.Assets.AssetCycleService>();
-builder.Services.AddScoped<Hak.Application.Assets.AssetRepairService>();
-builder.Services.AddScoped<Hak.Application.Assets.AssetJournalService>();
-builder.Services.AddScoped<SalesDispatchService>();
-builder.Services.AddScoped<GoodsInspectionService>();
-builder.Services.AddScoped<PurchaseMatchService>();
-builder.Services.AddScoped<SalesReportService>();
-builder.Services.AddScoped<CashPlanService>();
-builder.Services.AddScoped<BankReconciliationService>();
-builder.Services.AddScoped<StatementVoucherService>();
-builder.Services.AddScoped<StockService>();
-builder.Services.AddScoped<DrynessService>();
-builder.Services.AddScoped<ReservationService>();
-builder.Services.AddScoped<InvoiceService>();
-builder.Services.AddScoped<OrderService>();
-builder.Services.AddScoped<ContractService>();
-builder.Services.AddScoped<Hak.Application.Advances.AdvanceService>();
-builder.Services.AddScoped<SalesApprovalService>();
-builder.Services.AddScoped<ServiceAcceptanceService>();
-builder.Services.AddScoped<ServiceReportService>();
-builder.Services.AddScoped<Hak.Application.Accounting.SpecialJournalService>();
-builder.Services.AddScoped<ContractServicePlanService>();
-builder.Services.AddScoped<ServiceProgressService>();
-builder.Services.AddScoped<PaymentDiscountService>();
-builder.Services.AddScoped<NumberingService>();
-builder.Services.AddScoped<Hak.Application.Setup.GroupService>();
-builder.Services.AddScoped<Hak.Application.Banking.BankAccountService>();
-builder.Services.AddScoped<Hak.Application.Equity.EquityService>();
-builder.Services.AddScoped<Hak.Application.Advances.CashCountService>();
-builder.Services.AddScoped<VatService>();
-builder.Services.AddScoped<VatOffsetService>();
-builder.Services.AddScoped<Hak.Application.Assets.AssetService>();
-builder.Services.AddScoped<Hak.Application.Fx.FxService>();
-builder.Services.AddScoped<Hak.Application.Fx.FxPaymentService>();
-builder.Services.AddScoped<Hak.Application.Loans.LoanService>();
-builder.Services.AddScoped<Hak.Application.Loans.LoanScheduleService>();
-builder.Services.AddScoped<Hak.Application.Payroll.PayrollService>();
-builder.Services.AddScoped<Hak.Application.Exchange.ExchangeKeyService>();
-builder.Services.AddScoped<Hak.Application.Production.ProductionCostService>();
-builder.Services.AddScoped<Hak.Application.Production.ProductionOrderService>();
 builder.Services.AddSingleton(new Hak.Application.Backup.BackupOptions
 {
     Directory = builder.Configuration["Hak:BackupPath"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "backups"),
 });
-builder.Services.AddScoped<Hak.Application.Backup.BackupService>();
-builder.Services.AddScoped<Hak.Application.Reports.ReportService>();
 // Giới hạn tần suất đăng nhập theo IP (chặn dò mật khẩu/tên đăng nhập hàng loạt; khóa theo tài khoản vẫn giữ nguyên). 0 = tắt.
 var loginLimit = builder.Configuration.GetValue("Hak:LoginRateLimitPerMinute", 30);
 if (loginLimit > 0)
@@ -141,9 +75,11 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Ad
 
 // Khóa chủ mã hóa bí mật trong CSDL (khóa trao đổi): Hak:SecretKey (base64 32 byte, nên đặt bằng biến môi trường), hoặc tệp secret.key
 // cạnh thư mục dữ liệu. Phải sao lưu RIÊNG khỏi CSDL; mất khóa chủ thì phải cấp lại khóa trao đổi.
-if (runtime.Environment != "Test" || builder.Configuration["Hak:SecretKey"] is not null)
-    SecretProtector.Configure(SecretProtector.LoadOrCreateKey(builder.Configuration["Hak:SecretKey"],
-        builder.Configuration["Hak:SecretKeyFile"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "secret.key")));
+var masterKey = runtime.Environment != "Test" || builder.Configuration["Hak:SecretKey"] is not null
+    ? new MasterKey(SecretProtector.LoadOrCreateKey(builder.Configuration["Hak:SecretKey"],
+        builder.Configuration["Hak:SecretKeyFile"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "secret.key")))
+    : MasterKey.None;
+builder.Services.AddSingleton(masterKey);
 
 var app = builder.Build();
 
@@ -152,7 +88,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<HakDbContext>();
     HakDb.Migrate(db);
     await scope.ServiceProvider.GetRequiredService<SetupService>().EnsureReferenceDataAsync();
-    var upgraded = await SecretProtector.UpgradeStoredKeysAsync(db);
+    var upgraded = await SecretProtector.UpgradeStoredKeysAsync(db, masterKey);
     if (upgraded > 0) app.Logger.LogInformation("Đã mã hóa {Count} khóa trao đổi đang lưu dạng thường.", upgraded);
 
     // Local administrator recovery (docs/08 §8): Hak.Api.exe --reset-admin-password <user>; the password is typed twice, never echoed.
@@ -203,8 +139,12 @@ if (File.Exists(Path.Combine(webRoot, "index.html")))
 }
 
 app.UseMiddleware<DomainExceptionMiddleware>();
+app.UseMiddleware<RequireSessionMiddleware>();   // mọi /api/* (trừ danh sách trắng) cần phiên hợp lệ, kiểm trước khi mở giao dịch
 app.UseMiddleware<IdempotencyMiddleware>();   // trong DomainExceptionMiddleware: lỗi nghiệp vụ hoàn tác giao dịch rồi mới thành mã HTTP
 app.MapHakEndpoints();
+app.MapAdminEndpoints();
+app.MapAccountEndpoints();
+app.MapImportEndpoints();
 app.MapPhase2Endpoints();
 app.MapBankingEndpoints();
 app.MapCycleEndpoints();

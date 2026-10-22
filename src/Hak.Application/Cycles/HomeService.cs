@@ -8,6 +8,7 @@ using Hak.Domain.Common;
 using Hak.Domain.Cycles;
 using Hak.Domain.Inventory;
 using Hak.Domain.Production;
+using Hak.Domain.Security;
 using Hak.Domain.Trade;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,16 @@ public sealed record WorkItem(string Screen, int Count, string Hint);
 /// </summary>
 public sealed class HomeService(HakDbContext db, PaymentAcceptanceService acceptances, SalesReportService sales, PayrollPaymentService payroll, ReorderService reorder, LoanScheduleService loans, IClock clock, Hak.Application.Trade.ContractServicePlanService? servicePlans = null)
 {
+    /// <summary>Quyền xem của từng màn hình, giống quyền mà API danh sách của màn đó yêu cầu (người không xem được danh sách thì không thấy số đếm).</summary>
+    public static readonly IReadOnlyDictionary<string, string> ViewPermission = new Dictionary<string, string>
+    {
+        ["orders"] = Permissions.VoucherView, ["revenue"] = Permissions.VoucherView, ["procurement"] = Permissions.ReportView,
+        ["services"] = Permissions.VoucherView, ["trade"] = Permissions.VoucherView, ["stock"] = Permissions.VoucherView,
+        ["payroll"] = Permissions.ReportView, ["cash"] = Permissions.VoucherView, ["bank"] = Permissions.VoucherView,
+        ["assets"] = Permissions.ReportView, ["production"] = Permissions.ReportView, ["loans"] = Permissions.ReportView,
+        ["vouchers"] = Permissions.VoucherView,
+    };
+
     public async Task<IReadOnlyList<WorkItem>> WorkQueueAsync(SessionContext ctx)
     {
         var today = DateOnly.FromDateTime(clock.UtcNow);
@@ -31,6 +42,8 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
 
         async Task Add(string screen, Func<Task<(int Count, string Hint)>> compute)
         {
+            // Nhiều mục đếm thẳng trên bảng (không qua service có kiểm quyền), nên kiểm quyền xem của màn hình ở đây, trước khi đếm.
+            if (!ctx.Permissions.Contains(ViewPermission[screen])) return;
             try { var (n, hint) = await compute(); if (n > 0) result.Add(new WorkItem(screen, n, hint)); }
             catch (DomainException e) when (e.Code == ErrorCodes.Forbidden) { /* không có quyền xem phân hệ này */ }
         }

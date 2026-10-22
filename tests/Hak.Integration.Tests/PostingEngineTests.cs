@@ -284,6 +284,27 @@ public class PostingEngineTests
     }
 
     [Fact]
+    public async Task SubmittedVoucher_CanBeCancelledOnlyByItsPreparerOrAnApprover()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        // Lập và gửi duyệt bởi kế toán trưởng; kế toán tổng hợp (sửa được nháp, không có quyền duyệt) không được hủy hộ.
+        var other = await s.Engine.CreateDraftAsync(h.Approver, h.Sale(1000));
+        await s.Engine.SubmitAsync(h.Approver, other.Id);
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Engine.CancelAsync(h.Preparer, other.Id, "Hủy hộ")));
+        await s.Engine.CancelAsync(h.Approver, other.Id, "Người lập rút lại");
+
+        // Người lập tự hủy chứng từ mình đã gửi; người có quyền duyệt hủy chứng từ của người khác.
+        var own = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000));
+        await s.Engine.SubmitAsync(h.Preparer, own.Id);
+        await s.Engine.CancelAsync(h.Preparer, own.Id, "Lập nhầm");
+        var byApprover = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000));
+        await s.Engine.SubmitAsync(h.Preparer, byApprover.Id);
+        await s.Engine.CancelAsync(h.Approver, byApprover.Id, "Không duyệt, hủy");
+        Assert.Equal(3, await s.Db.Vouchers.CountAsync(v => v.Status == VoucherStatus.Cancelled));
+    }
+
+    [Fact]
     public async Task DuplicateSource_IsRejected()
     {
         using var h = await TestHost.CreateAsync();

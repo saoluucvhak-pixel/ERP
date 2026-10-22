@@ -41,7 +41,7 @@ public sealed record PayrollSheetRow(Guid Id, string SourceId, string SourceVers
 /// Cr PAYROLL_SI_PAYABLE, PAYROLL_HI_PAYABLE, PAYROLL_UI_PAYABLE (employee + employer parts), PAYROLL_PIT_PAYABLE,
 /// PAYROLL_OTHER_DEDUCTION, PAYROLL_UNION_PAYABLE. A group without its own role falls back to PAYROLL_EXPENSE_GENERAL.
 /// </summary>
-public sealed class PayrollService(HakDbContext db, AccountingEngine engine, AuditService audit, IClock clock)
+public sealed class PayrollService(HakDbContext db, AccountingEngine engine, AuditService audit, IClock clock, MasterKey? masterKey = null)
 {
     public async Task<PayrollImportResult> ProcessAsync(SessionContext ctx, string json, bool commit)
     {
@@ -64,7 +64,7 @@ public sealed class PayrollService(HakDbContext db, AccountingEngine engine, Aud
         var key = await db.ExchangePartnerKeys.AsNoTracking().FirstOrDefaultAsync(k =>
                       k.CompanyId == ctx.CompanyId && k.SourceSystem == sourceSystem && k.KeyId == keyId && k.IsActive)
                   ?? throw new DomainException(ErrorCodes.UnknownSource, $"Không có khóa xác thực cho nguồn {sourceSystem}/{keyId}.");
-        var expected = Convert.FromBase64String(PackageCrypto.Signature(package, Convert.FromBase64String(SecretProtector.Reveal(key.SecretBase64))));
+        var expected = Convert.FromBase64String(PackageCrypto.Signature(package, Convert.FromBase64String((masterKey ?? MasterKey.None).Reveal(key.SecretBase64))));
         if (!CryptographicOperations.FixedTimeEquals(expected, Convert.FromBase64String((string)package["auth"]!["signature"]!)))
             throw new DomainException(ErrorCodes.PackageSignatureInvalid, "Chữ ký gói dữ liệu không hợp lệ.");
         if (PackageCrypto.PayloadChecksum(package["payload"]!) != (string?)package["checksum"]!["value"])

@@ -1,23 +1,24 @@
 name: setup-exe
 # Tao bo cai HAK-Setup.exe tren may Windows cua GitHub (khong the build .exe tren Linux).
 # Chay tay: Actions -> setup-exe -> Run workflow; hoac tu dong khi dat tag v*.
+# Phien ban action va Node giong ci.yml (Node 24 theo README), de bo cai duoc build bang dung bo cong cu da chay test.
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
-    branches: ['ccr-825b7ba0-llbo2o']
-    paths: ['tools/package/**', '.github/workflows/setup-exe.yml']
+permissions:
+  contents: read
 jobs:
   setup:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Dong goi thu muc chuong trinh
         shell: pwsh
         run: ./tools/package/package.ps1
@@ -32,7 +33,7 @@ jobs:
           & $iscc "/DAppVersion=1.0.${{ github.run_number }}" tools/package/HAK.iss
           if ($LASTEXITCODE) { throw "iscc loi" }
           Get-FileHash artifacts/HAK-Setup.exe -Algorithm SHA256 | Format-List
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: HAK-Setup
           path: artifacts/HAK-Setup.exe

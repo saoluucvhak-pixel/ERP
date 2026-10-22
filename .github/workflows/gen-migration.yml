@@ -2,9 +2,10 @@ name: gen-migration
 # Sinh migration EF (SQLite + PostgreSQL) bằng đúng công cụ dotnet-ef rồi đẩy lại lên chính nhánh đó.
 # Dùng khi máy phát triển không có .NET SDK: đẩy một commit có dòng "[gen-migration:Phase12Reservations]" trong nội dung.
 # Commit do GITHUB_TOKEN đẩy không tự kích hoạt CI; sau khi lấy commit đó về, đẩy thêm một commit thật để CI chạy.
+# Chạy trên mọi nhánh làm việc, không bao giờ trên main (main chỉ nhận migration qua gộp nhánh đã có CI xanh).
 on:
   push:
-    branches: [ccr-cac32296-dbzjjq]
+    branches-ignore: [main]
 permissions:
   contents: write
 jobs:

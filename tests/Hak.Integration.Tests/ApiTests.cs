@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Hak.Integration.Tests;
 
@@ -39,6 +40,52 @@ public class ApiTests
     [InlineData("-7.2500", "-7.25")]
     public void MoneyIsSerialisedInCanonicalForm(string stored, string expected)
         => Assert.Equal(expected, Hak.Api.DecimalAsStringConverter.Canonical(decimal.Parse(stored, System.Globalization.CultureInfo.InvariantCulture)));
+
+    [Fact]
+    public async Task EveryApiEndpoint_RequiresASession()
+    {
+        var dbPath = Path.Combine(TestHost.Root, $"api-{Guid.NewGuid():N}.db");
+        Directory.CreateDirectory(TestHost.Root);
+        await using var f = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Hak:Environment", "Test");
+            b.UseSetting("Hak:LoginRateLimitPerMinute", "0");
+            b.UseSetting("Hak:DatabasePath", dbPath);
+        });
+        var anon = f.CreateClient();
+        var forged = As(f, "khong-phai-token-that");
+        var routes = f.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>().Endpoints
+            .OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()
+            .Where(e => e.RoutePattern.RawText?.StartsWith("/api", StringComparison.Ordinal) == true)
+            .SelectMany(e => (e.Metadata.GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()?.HttpMethods ?? ["GET"]).Select(m => (Method: m, e.RoutePattern)))
+            .ToList();
+        Assert.True(routes.Count > 300, $"chỉ thấy {routes.Count} route: cách liệt kê endpoint đã hỏng");
+
+        var open = new List<string>();
+        foreach (var (method, pattern) in routes)
+        {
+            // Điền tham số đường dẫn: GUID cho {x:guid}, chữ cho phần còn lại; thân "{}" để endpoint POST/PUT không dừng ở 415.
+            var url = "/" + string.Join("/", pattern.PathSegments.Select(seg => string.Concat(seg.Parts.Select(p => p switch
+            {
+                Microsoft.AspNetCore.Routing.Patterns.RoutePatternLiteralPart l => l.Content,
+                Microsoft.AspNetCore.Routing.Patterns.RoutePatternParameterPart q when q.ParameterPolicies.Any(pp => pp.Content == "guid") => Guid.NewGuid().ToString(),
+                Microsoft.AspNetCore.Routing.Patterns.RoutePatternParameterPart => "x",
+                _ => "",
+            }))));
+            var path = url.TrimEnd('/');
+            foreach (var client in new[] { anon, forged })
+            {
+                var status = (await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), url)
+                    { Content = method is "GET" or "DELETE" ? null : new StringContent("{}", System.Text.Encoding.UTF8, "application/json") })).StatusCode;
+                if (Hak.Api.RequireSessionMiddleware.Anonymous.Contains(path)) continue;
+                if (status != HttpStatusCode.Unauthorized) open.Add($"{method} {url} → {(int)status}");
+            }
+        }
+        Assert.Empty(open);
+        // Danh sách trắng chỉ gồm route có thật (không để sót tên sai làm lộ endpoint khác).
+        Assert.All(Hak.Api.RequireSessionMiddleware.Anonymous, a => Assert.Contains(routes, r => "/" + string.Join("/", r.RoutePattern.PathSegments.Select(s =>
+            string.Concat(s.Parts.OfType<Microsoft.AspNetCore.Routing.Patterns.RoutePatternLiteralPart>().Select(l => l.Content)))) == a));
+    }
 
     [Fact]
     public async Task FullFlow_OverHttp()
