@@ -71,6 +71,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npm audit --audit-level=high
+      # Lỗ hổng mức high trở lên làm hỏng CI; máy chủ audit của npm lỗi tạm (503, hết giờ) thì thử lại tối đa 3 lần (xem script).
+      - name: npm audit (thử lại khi máy chủ npm lỗi tạm)
+        run: bash ../.github/scripts/npm-audit-retry.sh
+        timeout-minutes: 10
       - run: npm test
       - run: npm run build
