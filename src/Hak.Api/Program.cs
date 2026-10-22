@@ -90,6 +90,11 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<SetupService>().EnsureReferenceDataAsync();
     var upgraded = await SecretProtector.UpgradeStoredKeysAsync(db, masterKey);
     if (upgraded > 0) app.Logger.LogInformation("Đã mã hóa {Count} khóa trao đổi đang lưu dạng thường.", upgraded);
+    // SEC-01: xóa bí mật mà bản cũ đã lưu vào bảng chống gửi trùng; khóa trao đổi bị lộ được đánh dấu để cấp lại (docs/08).
+    var purged = await IdempotencySecretPurge.RunAsync(db, scope.ServiceProvider.GetRequiredService<Hak.Application.Audit.AuditService>());
+    if (purged.Deleted > 0)
+        app.Logger.LogWarning("Đã xóa {Count} bản ghi chống gửi trùng chứa bí mật; {Keys} khóa trao đổi cần cấp lại (màn Lương → Khóa trao đổi dữ liệu).",
+            purged.Deleted, purged.ExposedExchangeKeyIds.Count);
 
     // Local administrator recovery (docs/08 §8): Hak.Api.exe --reset-admin-password <user>; the password is typed twice, never echoed.
     var at = Array.IndexOf(args, "--reset-admin-password");

@@ -131,6 +131,15 @@ pg_dump -h 127.0.0.1 -U hak_app -Fc -f D:\hak-backup\hak-%DATE%.dump hak
 - Sổ cái, sổ kho, phân bổ, khấu hao… **không sửa/xóa được** (trigger CSDL). Sai sót xử lý bằng chứng từ đảo/điều chỉnh. Tuyệt đối không sửa trực tiếp trong CSDL.
 - Nhật ký kiểm toán là chuỗi băm; xem tại **Quản trị → Nhật ký**; bản sao lưu kiểm tra lại toàn chuỗi.
 
+### 7a. Sự cố SEC-01: bí mật trong bảng chống gửi trùng — dọn dữ liệu và cấp lại khóa trao đổi
+Phiên bản trước bản sửa SEC-01 lưu vào bảng `idempotency_records` (giữ 7 ngày, **đi theo bản sao lưu**): nguyên văn phản hồi khi **cấp khóa trao đổi** (có bí mật HMAC) và băm nội dung các yêu cầu đổi / đặt lại mật khẩu, tạo người dùng, mật khẩu sao lưu.
+
+1. **Nâng cấp** theo mục 6. Ở lần khởi động đầu, phần mềm tự xóa mọi bản ghi như vậy (chạy lại mỗi lần khởi động, không có gì để xóa thì bỏ qua); log báo `Đã xóa N bản ghi chống gửi trùng chứa bí mật; K khóa trao đổi cần cấp lại`, nhật ký kiểm toán hệ thống có `idempotency.purge_secrets`.
+2. Khóa trao đổi có bí mật nằm trong các bản ghi đó được ghi nhật ký `exchange_key.exposed` và hiện **"Đang dùng — đã lộ, cần cấp lại"** ở **Lương → Khóa trao đổi dữ liệu**.
+3. **Cấp lại từng khóa bị đánh dấu**: bấm **Cấp lại** → nhập mã khóa mới (khác mã cũ, ví dụ `2026-02`) và lý do. Trong một bước, khóa cũ ngừng dùng và khóa mới được cấp; bí mật mới **chỉ hiện một lần** — cấu hình ngay vào hệ thống gửi (phần mềm lương…). Từ lúc này gói ký bằng khóa cũ bị từ chối (`UNKNOWN_SOURCE`), nên hẹn trước với bên gửi. Nhật ký: `exchange_key.rotate` (không bao giờ chứa bí mật).
+4. **Nên cấp lại cả khóa không bị đánh dấu** nếu được cấp trước bản sửa: bảng chỉ giữ 7 ngày nên khóa cấp sớm hơn không còn dấu vết để đánh dấu, nhưng có thể đã nằm trong **bản sao lưu** lập trong 7 ngày sau khi cấp.
+5. **Bản sao lưu `.hakbk` lập trước khi nâng cấp** vẫn chứa các bản ghi cũ (đã mã hóa bằng mật khẩu sao lưu). Sau bước 3 bí mật cũ vô hiệu; vẫn giữ các tệp này như tài liệu mật và không chia sẻ mật khẩu sao lưu. Người dùng đã đổi / được đặt lại mật khẩu trong thời gian dùng bản cũ: nếu mật khẩu yếu thì nên đổi lại (bảng chỉ lưu băm SHA-256 của nội dung, đoán được mật khẩu ngắn).
+
 ## 8. Sự cố thường gặp
 
 | Hiện tượng | Nguyên nhân / cách xử lý |

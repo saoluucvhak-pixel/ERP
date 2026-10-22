@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Application.Exchange;
 
-public sealed record ExchangeKeyRow(Guid Id, string SourceSystem, string KeyId, bool IsActive);
+/// <param name="Exposed">Khóa đang dùng mà bí mật đã lộ (nhật ký "exchange_key.exposed", ví dụ sự cố SEC-01): phải cấp lại.</param>
+public sealed record ExchangeKeyRow(Guid Id, string SourceSystem, string KeyId, bool IsActive, bool Exposed = false);
 
 /// <summary>A newly issued key. The secret is shown once, to be configured in the sending system, and never returned again.</summary>
 public sealed record IssuedExchangeKey(Guid Id, string SourceSystem, string KeyId, string SecretBase64);
@@ -52,8 +53,36 @@ public sealed partial class ExchangeKeyService(HakDbContext db, AuditService aud
     public async Task<IReadOnlyList<ExchangeKeyRow>> ListAsync(SessionContext ctx)
     {
         ctx.Require(Permissions.ConfigManage);
-        return await db.ExchangePartnerKeys.AsNoTracking().Where(k => k.CompanyId == ctx.CompanyId)
-            .OrderBy(k => k.SourceSystem).ThenBy(k => k.KeyId).Select(k => new ExchangeKeyRow(k.Id, k.SourceSystem, k.KeyId, k.IsActive)).ToListAsync();
+        var exposed = (await db.AuditLogs.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.Action == ExposedAction && a.EntityId != null)
+            .Select(a => a.EntityId!).ToListAsync()).ToHashSet();
+        return (await db.ExchangePartnerKeys.AsNoTracking().Where(k => k.CompanyId == ctx.CompanyId)
+                .OrderBy(k => k.SourceSystem).ThenBy(k => k.KeyId).ToListAsync())
+            .Select(k => new ExchangeKeyRow(k.Id, k.SourceSystem, k.KeyId, k.IsActive, k.IsActive && exposed.Contains(k.Id.ToString()))).ToList();
+    }
+
+    /// <summary>Nhật ký kiểm toán đánh dấu khóa bị lộ bí mật (ghi bởi bước dọn SEC-01 khi khởi động).</summary>
+    public const string ExposedAction = "exchange_key.exposed";
+
+    /// <summary>
+    /// Cấp lại khóa (khi bí mật bị lộ hoặc đến hạn đổi): trong MỘT giao dịch ngừng dùng khóa cũ và cấp khóa mới cùng hệ thống nguồn với mã
+    /// khóa mới. Bí mật mới chỉ trả về một lần; từ lúc này gói ký bằng khóa cũ bị từ chối, nên cấu hình khóa mới vào hệ thống gửi ngay.
+    /// </summary>
+    public async Task<IssuedExchangeKey> RotateAsync(SessionContext ctx, Guid id, string newKeyId, string reason)
+    {
+        ctx.Require(Permissions.ConfigManage);
+        if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ReasonRequired, "Phải ghi lý do cấp lại khóa.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var old = await db.ExchangePartnerKeys.FirstOrDefaultAsync(k => k.Id == id && k.CompanyId == ctx.CompanyId)
+                      ?? throw new DomainException(ErrorCodes.NotFound, "Khóa không tồn tại.");
+            if (!old.IsActive) throw new DomainException(ErrorCodes.InvalidStateTransition, "Khóa đã ngừng dùng; tạo khóa mới thay vì cấp lại.");
+            old.IsActive = false;
+            var issued = await IssueAsync(ctx, old.SourceSystem, newKeyId);
+            await audit.AppendAsync(ctx.CompanyId, ctx, "exchange_key.rotate", "exchange_key", old.Id.ToString(),
+                new { old.SourceSystem, oldKeyId = old.KeyId, newKeyId = issued.KeyId, newId = issued.Id, reason });
+            await db.SaveChangesAsync();
+            return issued;
+        });
     }
 
     public async Task DeactivateAsync(SessionContext ctx, Guid id, string reason)
