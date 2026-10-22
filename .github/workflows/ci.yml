@@ -28,12 +28,15 @@ jobs:
           dotnet list HakAccounting.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
           if grep -qE '^\s+>\s' vulnerable.txt; then echo '::error::Có gói NuGet có lỗ hổng đã biết'; exit 1; fi
       - run: dotnet test --no-build -c Release --logger trx --results-directory TestResults
+      # Kết quả test (.trx) chỉ cần để điều tra khi có test hỏng: tải lên khi bước trước thất bại, giữ 3 ngày.
+      # Hết dung lượng lưu artifact của tài khoản ("Artifact storage quota has been hit", 23/10) không được làm đỏ job khi test đã đạt.
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: failure()
+        continue-on-error: true
         with:
           name: test-results
           path: TestResults
-          retention-days: 14
+          retention-days: 3
   # Cùng bộ test tích hợp nhưng chạy trên PostgreSQL (chế độ LAN); mỗi test tạo/xóa DB hak_test_<guid>.
   backend-postgres:
     runs-on: ubuntu-latest
