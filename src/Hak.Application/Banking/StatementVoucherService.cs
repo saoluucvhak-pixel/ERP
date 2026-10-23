@@ -1,6 +1,7 @@
 using System.Text;
 using Hak.Application.Accounting;
 using Hak.Application.Audit;
+using Hak.Application.Common;
 using Hak.Application.Security;
 using Hak.Data;
 using Hak.Domain.Banking;
@@ -48,6 +49,13 @@ public sealed class StatementVoucherService(HakDbContext db, AccountingEngine en
     {
         ctx.Require(Permissions.BankReconcile);
         ctx.Require(Permissions.VoucherCreate);
+        // ACC-07 / DB-10: kiểm trùng, tạo nháp và ghi nhật ký trong MỘT giao dịch (một người ghi tại một thời điểm): trước đây nhật ký ghi
+        // ở lần lưu riêng sau khi nháp đã lưu — lỗi ở giữa để lại chứng từ không có nhật ký, hai người bấm cùng lúc tạo được hai nháp.
+        return await db.InTransactionAsync(() => CreateDraftCoreAsync(ctx, statementLineId, counterAccountId, partnerId, description));
+    }
+
+    private async Task<Voucher> CreateDraftCoreAsync(SessionContext ctx, Guid statementLineId, Guid counterAccountId, Guid? partnerId, string? description)
+    {
         var sl = await LineAsync(ctx, statementLineId);
         if (sl.Status == StatementLineStatus.Matched) throw new DomainException(ErrorCodes.MatchInvalid, "Dòng sao kê đã được đối chiếu.");
         if (counterAccountId == sl.BankAccountId) throw new DomainException(ErrorCodes.ValidationFailed, "TK đối ứng phải khác TK ngân hàng.");

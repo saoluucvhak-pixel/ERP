@@ -9,11 +9,16 @@ namespace Hak.Domain.Vouchers;
 /// </summary>
 public static class VoucherValidator
 {
+    /// <param name="currencyDecimals">
+    /// Decimal places per currency code. When given, a foreign line must use a known currency and its foreign amount may not have more
+    /// decimals than that currency allows (ACC-08: JPY 1.5 or an unknown code used to pass).
+    /// </param>
     public static List<ValidationError> Validate(
         Voucher voucher,
         IReadOnlyDictionary<Guid, Account> accounts,
         IReadOnlyDictionary<Guid, BusinessPartner> partners,
-        int functionalDecimals)
+        int functionalDecimals,
+        IReadOnlyDictionary<string, int>? currencyDecimals = null)
     {
         var errors = new List<ValidationError>();
         if (voucher.Lines.Count == 0)
@@ -65,6 +70,11 @@ public static class VoucherValidator
                     errors.Add(new(ErrorCodes.ValidationFailed, "Dòng ngoại tệ phải có đủ mã nguyên tệ, số nguyên tệ và tỷ giá.", line.LineNo));
                 else if (line.ExchangeRate <= 0 || line.ForeignAmount <= 0)
                     errors.Add(new(ErrorCodes.AmountNotPositive, "Nguyên tệ và tỷ giá phải lớn hơn 0.", line.LineNo));
+                else if (currencyDecimals is not null && !currencyDecimals.TryGetValue(line.ForeignCurrency, out _))
+                    errors.Add(new(ErrorCodes.ValidationFailed, $"Loại tiền {line.ForeignCurrency} không có trong danh mục loại tiền.", line.LineNo));
+                else if (currencyDecimals is not null && !MoneyMath.HasAtMostDecimals(line.ForeignAmount.Value, currencyDecimals[line.ForeignCurrency]))
+                    errors.Add(new(ErrorCodes.AmountPrecision,
+                        $"Số nguyên tệ {line.ForeignAmount} vượt quá {currencyDecimals[line.ForeignCurrency]} chữ số thập phân của {line.ForeignCurrency}.", line.LineNo));
                 else if (MoneyMath.Convert(line.ForeignAmount.Value, line.ExchangeRate.Value, functionalDecimals) != line.Amount)
                     errors.Add(new(ErrorCodes.ValidationFailed,
                         $"Số tiền quy đổi {line.Amount} khác nguyên tệ × tỷ giá đã làm tròn " +

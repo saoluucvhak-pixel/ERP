@@ -21,8 +21,13 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
     [GeneratedRegex("^[A-Z0-9_.-]{1,30}$")]
     private static partial Regex CodePattern();
 
-    /// <summary>Idempotent seeding of ISO currencies and the default role catalogue.</summary>
-    public async Task EnsureReferenceDataAsync()
+    /// <summary>
+    /// Idempotent seeding of ISO currencies and the default role catalogue. One transaction (single writer): in LAN mode several
+    /// machines start at once, and the audit append must not race another writer on the system chain (ACC-07 / DB-10).
+    /// </summary>
+    public Task EnsureReferenceDataAsync() => db.InTransactionAsync(EnsureReferenceDataCoreAsync);
+
+    private async Task EnsureReferenceDataCoreAsync()
     {
         var currencies = new[] { ("VND", "Đồng Việt Nam", 0), ("USD", "Đô la Mỹ", 2), ("EUR", "Euro", 2), ("CNY", "Nhân dân tệ", 2), ("JPY", "Yên Nhật", 0) };
         foreach (var (code, name, dp) in currencies)

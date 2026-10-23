@@ -183,7 +183,8 @@ public sealed class JournalVoucherPackageService(HakDbContext db, AccountingEngi
         var partnerByCode = partners.ToDictionary(p => p.Code);
         var accById = accounts.ToDictionary(a => a.Id);
         var partnerById = partners.ToDictionary(p => p.Id);
-        var dp = await db.Currencies.Where(c => c.Code == company.FunctionalCurrency).Select(c => c.DecimalPlaces).FirstAsync();
+        var currencies = await db.Currencies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.DecimalPlaces);
+        var dp = currencies[company.FunctionalCurrency];
         var periods = await db.AccountingPeriods.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToListAsync();
         var sourceIds = vouchers.Select(v => (string)v!["source_id"]!).ToList();
         var existing = await db.Vouchers.AsNoTracking()
@@ -252,7 +253,7 @@ public sealed class JournalVoucherPackageService(HakDbContext db, AccountingEngi
                     LineNo = i + 1, AccountId = l.AccountId, PartnerId = l.PartnerId, Side = l.Side, Amount = l.Amount,
                     ForeignCurrency = l.ForeignCurrency, ForeignAmount = l.ForeignAmount, ExchangeRate = l.ExchangeRate,
                 }).ToList() };
-                errors.AddRange(VoucherValidator.Validate(probe, accById, partnerById, dp).Select(e => new ImportError(e.Code, e.Message, e.LineNo)));
+                errors.AddRange(VoucherValidator.Validate(probe, accById, partnerById, dp, currencies).Select(e => new ImportError(e.Code, e.Message, e.LineNo)));
                 var period = periods.FirstOrDefault(p => p.Contains(postingDate));
                 if (period is null) errors.Add(new(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {postingDate.Vn()}."));
                 else if (period.Status == PeriodStatus.Locked) errors.Add(new(ErrorCodes.PeriodLocked, $"Kỳ {period.StartDate:MM/yyyy} đã khóa."));

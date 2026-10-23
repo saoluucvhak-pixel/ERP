@@ -146,6 +146,13 @@ public class RulesCashClosingTests
         Assert.Equal(ErrorCodes.RuleConstraint, await CodeOf(() => s.Documents.CreateAsync(h.Preparer, new BusinessDocument(VoucherTypes.BankPayment,
             "INTERNAL_TRANSFER", Mar10, Mar10, "Sai", null, h.Acc["BANK"], [new BusinessDocumentLine(1, h.Acc["REV"])]))));
 
+        // ACC-09: đối tượng ở đầu chứng từ của công ty khác bị từ chối, kể cả khi quy tắc không đưa đối tượng xuống dòng nào.
+        var b = await s.Setup.CreateCompanyAsync(h.AdminId, "TEST02", "Công ty B", null, "VND", h.RegimeVersionId);
+        await s.Setup.GrantRoleAsync(h.AdminId, h.AdminId, b.Id, "ADMIN");
+        var foreignPartner = await s.Setup.CreatePartnerAsync(await s.Auth.ResolveContextAsync(h.AdminId, b.Id), "KHB", "Khách của công ty B", Hak.Domain.Catalog.PartnerRoles.Customer, null);
+        Assert.Equal(ErrorCodes.PartnerWrongCompany, await CodeOf(() => s.Documents.CreateAsync(h.Preparer, new BusinessDocument(VoucherTypes.BankPayment,
+            "INTERNAL_TRANSFER", Mar10, Mar10, "Chuyển tiền", foreignPartner.Id, h.Acc["BANK"], [new BusinessDocumentLine(1, h.Acc["BANK2"])]))));
+
         var tb = await s.Ledger.TrialBalanceAsync(h.Auditor, new(2026, 3, 1), new(2026, 3, 31));
         Assert.DoesNotContain(tb.Rows, r => r.AccountCode is "REV" or "EXP");
         Assert.Equal(400_000m, tb.Rows.Single(r => r.AccountCode == "BANK2").ClosingDebit);

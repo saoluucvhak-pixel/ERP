@@ -411,9 +411,11 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
         // Load by id regardless of company so a foreign-company account is reported as such, not as missing.
         var accounts = await db.Accounts.AsNoTracking().Where(a => accountIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id);
         var partners = await db.BusinessPartners.AsNoTracking().Where(p => partnerIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id);
-        var dp = await db.Currencies.Where(c => c.Code == company.FunctionalCurrency).Select(c => c.DecimalPlaces).FirstAsync();
+        var currencies = await db.Currencies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.DecimalPlaces);
+        var dp = currencies[company.FunctionalCurrency];
 
-        var errors = VoucherValidator.Validate(v, accounts, partners, dp);
+        // ACC-08: nguyên tệ theo đúng số chữ số lẻ của loại tiền. Chứng từ đảo chép nguyên dòng đã ghi sổ nên không kiểm lại (đảo được cả chứng từ cũ).
+        var errors = VoucherValidator.Validate(v, accounts, partners, dp, v.VoucherType == VoucherTypes.Reversal ? null : currencies);
         var period = await db.AccountingPeriods.AsNoTracking()
             .FirstOrDefaultAsync(p => p.CompanyId == v.CompanyId && p.StartDate <= v.PostingDate && p.EndDate >= v.PostingDate);
         if (period is null) errors.Add(new(ErrorCodes.PeriodNotFound, $"Không có kỳ kế toán chứa ngày {v.PostingDate.Vn()}."));
