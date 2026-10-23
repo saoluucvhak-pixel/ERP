@@ -64,6 +64,22 @@ public class VoucherRulesTests
         Assert.Contains(ErrorCodes.ValidationFailed, Codes(V(bad, L(Ar, Side.Credit, 31_290_541m, Customer))));
     }
 
+    // ACC-08: số nguyên tệ theo đúng số chữ số lẻ của loại tiền; loại tiền phải có trong danh mục.
+    private static readonly Dictionary<string, int> CurrencyDecimals = new() { ["VND"] = 0, ["USD"] = 2, ["JPY"] = 0 };
+
+    private static List<string> ForeignCodes(string currency, decimal foreignAmount, decimal rate)
+    {
+        var amount = MoneyMath.Convert(foreignAmount, rate, 0);
+        var l = L(Cash, Side.Debit, amount);
+        l.ForeignCurrency = currency; l.ForeignAmount = foreignAmount; l.ExchangeRate = rate;
+        return VoucherValidator.Validate(V(l, L(Ar, Side.Credit, amount, Customer)), Accounts, Partners, 0, CurrencyDecimals).Select(e => e.Code).ToList();
+    }
+
+    [Fact] public void ForeignAmount_WithinCurrencyDecimals_IsValid() => Assert.Empty(ForeignCodes("USD", 1234.56m, 25_000m));
+    [Fact] public void ForeignAmount_TooManyDecimalsForUsd() => Assert.Contains(ErrorCodes.AmountPrecision, ForeignCodes("USD", 1234.567m, 25_000m));
+    [Fact] public void ForeignAmount_DecimalsForZeroDecimalYen() => Assert.Contains(ErrorCodes.AmountPrecision, ForeignCodes("JPY", 1.5m, 170m));
+    [Fact] public void ForeignCurrency_UnknownCode() => Assert.Contains(ErrorCodes.ValidationFailed, ForeignCodes("XYZ", 10m, 1_000m));
+
     [Fact]
     public void ForeignCurrency_IncompleteFieldsRejected()
     {

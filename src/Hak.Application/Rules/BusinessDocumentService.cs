@@ -48,6 +48,10 @@ public sealed class BusinessDocumentService(HakDbContext db, AccountingEngine en
                 throw new DomainException(ErrorCodes.ValidationFailed,
                     $"Tài khoản {main.Code} không phải {(kind == CashKind.Cash ? "quỹ tiền mặt" : "tài khoản tiền gửi ngân hàng")}.");
         }
+        // ACC-09: đối tượng ở đầu chứng từ được lưu lên chứng từ (in phiếu, sổ theo đối tượng) dù quy tắc có đưa xuống dòng hay không,
+        // nên phải thuộc công ty — trước đây chỉ dòng chi tiết được kiểm.
+        if (doc.PartnerId is { } partnerId && !await db.BusinessPartners.AsNoTracking().AnyAsync(p => p.Id == partnerId && p.CompanyId == ctx.CompanyId))
+            throw new DomainException(ErrorCodes.PartnerWrongCompany, "Đối tượng không tồn tại hoặc không thuộc công ty.");
 
         var rule = await rules.ResolveAsync(ctx.CompanyId, doc.DocumentType, doc.BusinessEvent, doc.PostingDate);
         var lines = await rules.EvaluateAsync(rule, doc);

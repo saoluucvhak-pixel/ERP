@@ -276,6 +276,40 @@ public class BankingTests
             s.StatementVouchers.CreateDraftAsync(h.Preparer, fee.Id, h.Acc["EXP"], null, null))).Code);
     }
 
+    /// <summary>Lần lưu nhật ký "bank_statement.voucher_draft" thất bại (mô phỏng mất kết nối, đầy đĩa…).</summary>
+    private sealed class FailStatementAudit : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context!.ChangeTracker.Entries<Hak.Domain.Security.AuditLog>()
+                .Any(e => e.State == EntityState.Added && e.Entity.Action == "bank_statement.voucher_draft"))
+                throw new InvalidOperationException("Mô phỏng lỗi khi lưu nhật ký.");
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
+    // ACC-07 / DB-10: tạo nháp từ dòng sao kê và ghi nhật ký là một giao dịch; nhật ký lỗi thì không để lại chứng từ nháp không có nhật ký.
+    [Fact]
+    public async Task DraftFromStatementLine_AndItsAuditRecord_AreOneTransaction()
+    {
+        var (h, s) = await SetupAsync();
+        var st = await s.BankRecon.ImportAsync(h.Approver, Statement(h, 0, "file-atomic",
+            new StatementLineInput(new(2026, 3, 31), -22_000, "FEE9", "Phí SMS-Banking tháng 3")));
+        var fee = await s.Db.BankStatementLines.AsNoTracking().SingleAsync(l => l.StatementId == st.Id);
+        var before = await s.Db.Vouchers.CountAsync();
+
+        using (var failing = h.NewScope(new FailStatementAudit()))
+            await Assert.ThrowsAnyAsync<Exception>(() => failing.StatementVouchers.CreateDraftAsync(h.Preparer, fee.Id, h.Acc["EXP"], null, null));
+        Assert.Equal(before, await s.Db.Vouchers.CountAsync());   // không có chứng từ mồ côi
+
+        // Lần sau (không lỗi) tạo được bình thường, không bị chặn vì "dòng sao kê đã có chứng từ".
+        var v = await s.StatementVouchers.CreateDraftAsync(h.Preparer, fee.Id, h.Acc["EXP"], null, null);
+        Assert.True(await s.Db.AuditLogs.AnyAsync(a => a.Action == "bank_statement.voucher_draft" && a.EntityId == fee.Id.ToString()));
+        Assert.Equal(before + 1, await s.Db.Vouchers.CountAsync());
+        _ = v;
+    }
+
     [Fact]
     public async Task ApprovalPolicy_OnePersonMayPrepareAndApprove_WhenTheCompanySwitchesDistinctApproverOff()
     {
