@@ -25,6 +25,7 @@ public sealed record CompanyRequest(string Code, string Name, string? TaxCode, s
 public sealed record FiscalYearRequest(string Code, DateOnly StartDate, DateOnly EndDate);
 public sealed record AccountRequest(string Code, string Name, string? ParentCode, bool IsPostable = true, bool RequiresPartner = false, BalanceDisplay BalanceDisplay = BalanceDisplay.Net,
     OpenItemNature OpenItemNature = OpenItemNature.None, CashKind CashKind = CashKind.None, NegativeBalancePolicy NegativeBalancePolicy = NegativeBalancePolicy.None);
+public sealed record PartnerFullUpdateRequest(long RowVersion, string Name, string? TaxCode, bool IsActive, string? Address, string? Phone, string? Email, decimal? CreditLimit, int? PaymentTermsDays, decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null);
 public sealed record PartnerCommercialRequest(string? Address, string? Phone, string? Email, decimal? CreditLimit, int? PaymentTermsDays, decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null);
 public sealed record PartnerRequest(string Code, string Name, PartnerRoles Roles, string? TaxCode);
 public sealed record LineRequest(Guid AccountId, string Side, decimal Amount, Guid? PartnerId, string? ForeignCurrency, decimal? ForeignAmount, decimal? ExchangeRate, string? Description, string? CashFlowCode = null);
@@ -141,9 +142,11 @@ public static class Endpoints
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
             return Results.Ok(await db.BusinessPartners.Where(p => p.CompanyId == ctx.CompanyId).OrderBy(p => p.Code)
-                .Select(p => new { p.Id, p.Code, p.Name, p.TaxCode, p.IsActive, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays, p.PaymentDiscountPercent, p.PaymentDiscountDays,
+                .Select(p => new { p.Id, p.Code, p.Name, p.TaxCode, p.IsActive, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays, p.PaymentDiscountPercent, p.PaymentDiscountDays, p.RowVersion,
                     isSupplier = (p.Roles & PartnerRoles.Supplier) != 0, isCustomer = (p.Roles & PartnerRoles.Customer) != 0, isEmployee = (p.Roles & PartnerRoles.Employee) != 0, supplierStatus = p.SupplierStatus.ToString(), p.SupplierStatusReason }).ToListAsync());
         });
+        api.MapPut("/partners/{id:guid}/full", async (HttpContext http, Guid id, PartnerFullUpdateRequest r, SetupService s) =>
+        { await s.UpdatePartnerFullAsync(await http.SessionAsync(), id, r.RowVersion, r.Name, r.TaxCode, r.IsActive, r.Address, r.Phone, r.Email, r.CreditLimit, r.PaymentTermsDays, r.PaymentDiscountPercent, r.PaymentDiscountDays); return Results.NoContent(); });
         api.MapPut("/partners/{id:guid}/commercial", async (HttpContext http, Guid id, PartnerCommercialRequest r, SetupService s) =>
         { await s.UpdatePartnerCommercialAsync(await http.SessionAsync(), id, r.Address, r.Phone, r.Email, r.CreditLimit, r.PaymentTermsDays, r.PaymentDiscountPercent, r.PaymentDiscountDays); return Results.NoContent(); });
         api.MapPost("/partners", async (HttpContext http, PartnerRequest r, SetupService s) =>

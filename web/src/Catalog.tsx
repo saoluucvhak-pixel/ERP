@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put, type Partner } from './api'
 import { ErrorBox, useAction } from './common'
-import { formatMoney, parseMoney, parseRate } from './money'
+import { formatMoney, parseMoney, parseRate, parseWholeNumber } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { PartnerBankModal } from './BankAccounts'
@@ -65,10 +65,13 @@ export function CatalogView() {
               if (v.creditLimit.trim() && limit == null) throw new Error('Hạn mức tín dụng không hợp lệ.')
               const disc = v.discPct.trim() ? parseRate(v.discPct) : null
               if (v.discPct.trim() && disc == null) throw new Error('Tỷ lệ chiết khấu thanh toán không hợp lệ.')
-              const terms = v.terms.trim() ? Number.parseInt(v.terms, 10) : null
-              if (v.terms.trim() && (terms == null || Number.isNaN(terms))) throw new Error('Hạn thanh toán phải là số ngày.')
-              await put(`/partners/${p.id}`, { name: v.name, taxCode: v.taxCode || null, isActive: v.isActive })
-              await put(`/partners/${p.id}/commercial`, { address: v.address || null, phone: v.phone || null, email: v.email || null, creditLimit: limit, paymentTermsDays: terms, paymentDiscountPercent: disc, paymentDiscountDays: v.discDays.trim() ? Number(v.discDays) : null }); setEdit(s => { const c = { ...s }; delete c[p.id]; return c }); setInfo(`Đã cập nhật ${p.code}.`); await load()
+              const terms = v.terms.trim() ? parseWholeNumber(v.terms) : null
+              if (v.terms.trim() && terms == null) throw new Error('Hạn thanh toán phải là số ngày (chỉ gồm chữ số).')
+              const discDays = v.discDays.trim() ? parseWholeNumber(v.discDays) : null
+              if (v.discDays.trim() && discDays == null) throw new Error('Số ngày chiết khấu thanh toán phải là số (chỉ gồm chữ số).')
+              if (p.rowVersion == null) throw new Error('Thiếu phiên bản đối tượng; tải lại danh sách rồi lưu lại.')
+              // MỘT lệnh cập nhật hợp nhất (một giao dịch, đúng phiên bản đã xem): hoặc lưu đủ, hoặc không đổi gì.
+              await put(`/partners/${p.id}/full`, { rowVersion: p.rowVersion, name: v.name, taxCode: v.taxCode || null, isActive: v.isActive, address: v.address || null, phone: v.phone || null, email: v.email || null, creditLimit: limit, paymentTermsDays: terms, paymentDiscountPercent: disc, paymentDiscountDays: discDays }); setEdit(s => { const c = { ...s }; delete c[p.id]; return c }); setInfo(`Đã cập nhật ${p.code}.`); await load()
             })}>Lưu</button>}</td></tr>
         })}</tbody>
       </table></div>
