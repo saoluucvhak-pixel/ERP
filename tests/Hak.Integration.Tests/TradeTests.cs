@@ -158,6 +158,24 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task ReversingAPurchaseInvoice_KeepsLedgerSubledgerAndStockReconciled()
+    {
+        // ERP-P2.5: đối chiếu sổ cái – công nợ – kho sau đảo hóa đơn (có một phần hàng đã xuất nên giá trị chuyển từ tồn kho sang giá vốn).
+        using var fx = await SetupAsync();
+        var invoice = await PostedPurchaseOfAdditiveAsync(fx);
+        await PostedIssueAsync(fx, 40, D(3, 5), fx.Add);
+        async Task AssertReconciledAsync(DateOnly asOf)
+        {
+            Assert.True((await fx.S.Settlement.ReconcileAsync(fx.H.Auditor, asOf)).IsReconciled, "sổ cái ≠ công nợ");
+            Assert.All(await fx.S.Stock.ReconcileAsync(fx.H.Auditor, asOf), r => Assert.Equal(0m, r.Difference));   // sổ cái ≠ kho
+        }
+        await AssertReconciledAsync(D(3, 31));
+        await fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 20), "Nhà cung cấp hủy hóa đơn");
+        await AssertReconciledAsync(D(3, 31));
+        await AssertReconciledAsync(D(3, 10));   // ngày trước đảo cũng khớp
+    }
+
+    [Fact]
     public async Task ReverseInvoice_IsBlockedWhenItsStockDocumentBelongsToACompletedProductionOrder()
     {
         // Chốt 24/10/2026: phiếu kho thuộc lệnh sản xuất đã hoàn thành → chặn đảo hóa đơn.
