@@ -56,27 +56,32 @@ export function newIdempotencyKey(): string {
 }
 
 export const UNCERTAIN_CODE = 'KET_QUA_CHUA_XAC_DINH'
-interface PendingWrite { method: string; path: string; body: unknown; key: string }
+/** Ngữ cảnh (phiên + công ty) tại thời điểm tạo thao tác; mọi lần gửi lại dùng đúng ngữ cảnh này, không đọc lại biến toàn cục. */
+interface Ctx { token: string | null; companyId: string | null }
+const snapshot = (): Ctx => ({ token, companyId })
+const sameCtx = (c: Ctx) => c.token === token && c.companyId === companyId
+interface PendingWrite { method: string; path: string; body: unknown; key: string; ctx: Ctx }
 let pendingWrite: PendingWrite | null = null
-export const hasPendingWrite = () => pendingWrite !== null
+/** Chỉ báo có thao tác chờ khi đang ở đúng phiên/công ty đã tạo ra nó; đổi tài khoản hay công ty thì ẩn (không xóa, không gửi dưới ngữ cảnh mới). */
+export const hasPendingWrite = () => pendingWrite !== null && sameCtx(pendingWrite.ctx)
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 /**
  * Thao tác ghi (POST/PUT/DELETE) mang một Idempotency-Key: mất kết nối giữa chừng thì tự gửi lại tối đa 2 lần với CÙNG khóa (máy chủ trả phản hồi cũ nếu lần trước đã ghi,
  * không ghi hai lần). Vẫn không nối được thì báo "kết quả chưa xác định" và giữ yêu cầu để người dùng bấm thử lại an toàn; không bao giờ đoán là đã ghi hay chưa.
  */
-export async function api<T = unknown>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+export async function api<T = unknown>(method: string, path: string, body?: unknown, idempotencyKey?: string, ctx: Ctx = snapshot()): Promise<T> {
   const mutating = method === 'POST' || method === 'PUT' || method === 'DELETE'
   const key = mutating ? (idempotencyKey ?? newIdempotencyKey()) : undefined
   for (let attempt = 0; ; attempt++) {
     try {
-      const result = await apiOnce<T>(method, path, body, key)
+      const result = await apiOnce<T>(method, path, body, key, ctx)
       if (pendingWrite && pendingWrite.key === key) pendingWrite = null
       return result
     } catch (e) {
       if (!(mutating && e instanceof ApiError && e.status === 0)) throw e
       if (attempt >= 2) {
-        pendingWrite = { method, path, body, key: key! }
+        pendingWrite = { method, path, body, key: key!, ctx }
         throw new ApiError(0, UNCERTAIN_CODE, 'Mất kết nối khi đang ghi: thao tác CÓ THỂ đã được lưu. Bấm "Thử lại an toàn" (không ghi trùng) hoặc mở lại danh sách để kiểm tra trước khi nhập lại.')
       }
       await sleep(1000 * (attempt + 1))
@@ -87,24 +92,25 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 /** Gửi lại thao tác ghi chưa xác định với đúng khóa cũ. Trả về true nếu máy chủ xác nhận (ghi mới hoặc nhận lại phản hồi cũ). */
 export async function retryPendingWrite(): Promise<boolean> {
   const p = pendingWrite
-  if (!p) return false
-  await api(p.method, p.path, p.body, p.key)
+  if (!p || !sameCtx(p.ctx)) return false
+  await api(p.method, p.path, p.body, p.key, p.ctx)
   return true
 }
 
-async function apiOnce<T = unknown>(method: string, path: string, body?: unknown, key?: string): Promise<T> {
+async function apiOnce<T = unknown>(method: string, path: string, body: unknown, key: string | undefined, ctx: Ctx): Promise<T> {
   const headers: Record<string, string> = { 'X-Device': 'web' }
   if (key) headers['Idempotency-Key'] = key
-  if (token) headers.Authorization = `Bearer ${token}`
-  if (companyId) headers['X-Company-Id'] = companyId
+  if (ctx.token) headers.Authorization = `Bearer ${ctx.token}`
+  if (ctx.companyId) headers['X-Company-Id'] = ctx.companyId
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const res = await send(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
   if (res.status === 204) return undefined as T
   const text = await res.text()
   const data = parse(text, res.status)
   if (!res.ok) {
-    if (res.status === 401 && token && (data?.code ?? '') === 'UNAUTHENTICATED') { session.setToken(null); onExpired?.() }
-    else if (res.status === 401 && !token) session.setToken(null)
+    // chỉ phiên hiện hành mới bị coi là hết hạn; phản hồi 401 của một phiên cũ không được đăng xuất phiên mới
+    if (res.status === 401 && ctx.token && ctx.token === token && (data?.code ?? '') === 'UNAUTHENTICATED') { session.setToken(null); onExpired?.() }
+    else if (res.status === 401 && !ctx.token && !token) session.setToken(null)
     throw new ApiError(res.status, data?.code ?? 'HTTP_' + res.status, data?.message ?? res.statusText, data?.errors ?? [])
   }
   return data as T
