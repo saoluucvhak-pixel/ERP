@@ -2197,6 +2197,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("request_hash");
 
+                    b.Property<string>("RequiredPermissions")
+                        .HasColumnType("text")
+                        .HasColumnName("required_permissions");
+
                     b.Property<string>("ResponseBody")
                         .IsRequired()
                         .HasColumnType("text")
@@ -6831,6 +6835,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("source_voucher_id");
 
+                    b.Property<DateOnly?>("VoidEffectiveDate")
+                        .HasColumnType("date")
+                        .HasColumnName("void_effective_date");
+
                     b.Property<string>("VoidReason")
                         .HasColumnType("text")
                         .HasColumnName("void_reason");
@@ -7381,6 +7389,10 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<Guid>("PartnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("partner_id");
+
+                    b.Property<string>("PartnerOverrideReason")
+                        .HasColumnType("text")
+                        .HasColumnName("partner_override_reason");
 
                     b.Property<int?>("PaymentDiscountDays")
                         .HasColumnType("integer")
