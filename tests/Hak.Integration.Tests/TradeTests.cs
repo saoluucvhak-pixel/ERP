@@ -841,6 +841,13 @@ public class TradeTests
         Assert.Equal(1, q["orders"].Count);
         Assert.Equal(1, q["procurement"].Count);
         Assert.Contains("dưới tồn tối thiểu", q["procurement"].Hint);
+        // Đơn mua và đơn bán là hai chu trình: đếm riêng từng chiều, không cộng lẫn.
+        Assert.Equal("Sales", Assert.Single(await home.WorkQueueAsync(h.Auditor), w => w.Screen == "orders").Kind);
+        await Orders(fx).CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Purchase, h.Partner["NCC01"], D(3, 2), "Đơn mua", [new OrderLineInput(fx.Add, 5, 1000)]));
+        var split = (await home.WorkQueueAsync(h.Auditor)).Where(w => w.Screen == "orders").ToDictionary(w => w.Kind!);
+        Assert.Equal((1, 1), (split["Sales"].Count, split["Purchase"].Count));
+        Assert.Contains("đơn bán hàng", split["Sales"].Hint);
+        Assert.Contains("đơn mua hàng", split["Purchase"].Hint);
         // A settings-only grant (ADMIN: no voucher.view / report.view) cannot open these lists, so it sees no counts either.
         Assert.Empty(await home.WorkQueueAsync(h.Admin));
         Assert.Equal(Hak.Application.Cycles.HomeService.ViewPermission.Keys.OrderBy(k => k), new[] { "assets", "bank", "cash", "loans", "orders", "payroll", "procurement", "production", "revenue", "services", "stock", "trade", "vouchers" });
@@ -1332,7 +1339,7 @@ public class TradeTests
         var home = new Hak.Application.Cycles.HomeService(ss.Db, ss.PaymentAcceptances, new Hak.Application.Cycles.SalesReportService(ss.Db, ss.Settlement),
             new Hak.Application.Cycles.PayrollPaymentService(ss.Db, ss.Settlement, ss.PaymentOrders, ss.Audit), new Hak.Application.Cycles.ReorderService(ss.Db), new Hak.Application.Loans.LoanScheduleService(ss.Db, ss.Audit, hh.Clock), hh.Clock,
             new ContractServicePlanService(ss.Db, ss.Audit, hh.Clock));
-        Assert.Contains("1 biên bản nghiệm thu dịch vụ chờ xác nhận", (await home.WorkQueueAsync(hh.Auditor)).Single(w => w.Screen == "services").Hint);
+        Assert.Contains("1 biên bản nghiệm thu dịch vụ bán chờ xác nhận", (await home.WorkQueueAsync(hh.Auditor)).Single(w => w.Screen == "services" && w.Kind == "Sales").Hint);
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => prog.CompleteMilestoneAsync(fx.H.Preparer, ms[0].Id, D(3, 11))));   // đã hoàn thành
         Assert.Equal("WAITING", (await prog.MilestonesAsync(fx.H.Auditor, order.Id, D(3, 15)))[0].Status);
         await acc.DecideAsync(fx.H.Approver, a1.Id, true, null);

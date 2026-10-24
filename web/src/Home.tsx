@@ -3,7 +3,7 @@ import { get } from './api'
 import { navStore } from './common'
 import { Worklist } from './Worklist'
 
-interface WorkItem { screen: string; count: number; hint: string }
+interface WorkItem { screen: string; count: number; hint: string; kind?: 'Sales' | 'Purchase' | null }
 /** `screen` và `kind`: ô riêng cho một chiều của màn dùng chung (đơn / hóa đơn bán và mua); không có thì mở màn mang khóa `key`. */
 export interface HomeScreen { key: string; group: string; label: string; screen?: string; kind?: 'Sales' | 'Purchase' }
 
@@ -50,7 +50,7 @@ const TILE: Record<string, { icon: string; color: string; desc: string }> = {
 export function HomeLauncher({ screens }: { screens: readonly HomeScreen[] }) {
   const [work, setWork] = useState<Record<string, WorkItem>>({})
   useEffect(() => {
-    get<WorkItem[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.screen, x])))).catch(() => setWork({}))
+    get<WorkItem[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.kind ? `${x.screen}:${x.kind}` : x.screen, x])))).catch(() => setWork({}))
   }, [])
   const groups = [...new Set(screens.filter(s => s.group).map(s => s.group))]
   const total = Object.values(work).reduce((n, w) => n + w.count, 0)
@@ -65,7 +65,7 @@ export function HomeLauncher({ screens }: { screens: readonly HomeScreen[] }) {
           <div className="app-grid">
             {screens.filter(s => s.group === g).map(s => {
               const target = s.screen ?? s.key
-              const t = TILE[s.key] ?? TILE[target]; const w = s.kind ? undefined : work[target]
+              const t = TILE[s.key] ?? TILE[target]; const w = s.kind ? work[`${target}:${s.kind}`] : work[target]
               return (
                 <button key={s.key} className="app-tile" onClick={() => navStore.go?.(target, s.kind)} title={w?.hint}>
                   <span className="app-icon" style={{ background: t?.color ?? '#5f6b7a' }} aria-hidden>{t?.icon ?? '▪'}</span>

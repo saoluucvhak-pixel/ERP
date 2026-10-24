@@ -19,7 +19,7 @@ const empty = (): LineDraft => ({ candidate: '', basis: 'Bdmt', price: '', vat: 
 /** Hóa đơn mua / bán. Dăm gỗ: đơn giá theo BDMT (lấy từ kết quả đo / chứng thư của dòng phiếu kho); giá vốn vẫn tính theo MT. */
 export function TradeView() {
   const { accounts, partners } = useCatalog()
-  const [kind, setKind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Sales')
+  const [kind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Sales')   // chiều do phân hệ đang mở quyết định
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [list, setList] = useState<Invoice[]>([])
   const [total, setTotal] = useState(0)
@@ -91,9 +91,7 @@ export function TradeView() {
   return (
     <>
       <div className="toolbar">
-        <h2>Mua hàng / Bán hàng</h2>
-        <button className={kind === 'Sales' ? 'primary' : ''} onClick={() => setKind('Sales')}>Hóa đơn bán</button>
-        <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => setKind('Purchase')}>Hóa đơn mua</button>
+        <h2>{kind === 'Sales' ? 'Hóa đơn bán' : 'Hóa đơn mua'}</h2>
       </div>
       <FlowStrip steps={[
         { label: 'Hóa đơn nháp (từ phiếu kho / phiếu giao hàng)', journal: false, count: `${list.filter(i => i.status === 'Draft').length} hóa đơn nháp` },

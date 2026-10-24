@@ -17,7 +17,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Hak.Application.Cycles;
 
 /// <summary>Số việc đang chờ ở một phân hệ (màn hình chính dạng ô ứng dụng). Hint nói rõ việc gì để người dùng không phải đoán con số.</summary>
-public sealed record WorkItem(string Screen, int Count, string Hint);
+public sealed record WorkItem(string Screen, int Count, string Hint, string? Kind = null);   // Kind: Sales / Purchase cho màn dùng chung (đơn, hóa đơn, nghiệm thu): mỗi chu trình đếm riêng
 
 /// <summary>
 /// Một việc cụ thể trên một chứng từ cụ thể: dẫn thẳng tới đúng chứng từ (EntityType + EntityId) và nói rõ hành động kế tiếp, người lập, tuổi việc,
@@ -48,16 +48,21 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
         var cid = ctx.CompanyId;
         var result = new List<WorkItem>();
 
-        async Task Add(string screen, Func<Task<(int Count, string Hint)>> compute)
+        async Task Add(string screen, Func<Task<(int Count, string Hint)>> compute, InvoiceKind? kind = null)
         {
             // Nhiều mục đếm thẳng trên bảng (không qua service có kiểm quyền), nên kiểm quyền xem của màn hình ở đây, trước khi đếm.
             if (!ctx.Permissions.Contains(ViewPermission[screen])) return;
-            try { var (n, hint) = await compute(); if (n > 0) result.Add(new WorkItem(screen, n, hint)); }
+            try { var (n, hint) = await compute(); if (n > 0) result.Add(new WorkItem(screen, n, hint, kind?.ToString())); }
             catch (DomainException e) when (e.Code == ErrorCodes.Forbidden) { /* không có quyền xem phân hệ này */ }
         }
         static string Join(params (int n, string text)[] parts) => string.Join("; ", parts.Where(p => p.n > 0).Select(p => $"{p.n} {p.text}"));
 
-        await Add("orders", async () => { var n = await db.TradeOrders.CountAsync(o => o.CompanyId == cid && o.Status == OrderStatus.Draft); return (n, $"{n} đơn hàng chờ xác nhận"); });
+        // Đơn hàng, hóa đơn, nghiệm thu dịch vụ dùng chung màn hình cho hai chu trình: đếm RIÊNG từng chiều bán / mua để không lẫn việc của chu trình kia.
+        foreach (var kind in new[] { InvoiceKind.Sales, InvoiceKind.Purchase })
+        {
+            var k = kind; var word = k == InvoiceKind.Sales ? "bán" : "mua";
+            await Add("orders", async () => { var n = await db.TradeOrders.CountAsync(o => o.CompanyId == cid && o.Kind == k && o.Status == OrderStatus.Draft); return (n, $"{n} đơn {word} hàng chờ xác nhận"); }, k);
+        }
         await Add("revenue", async () =>
         {
             var drafts = await db.SalesDispatchOrders.CountAsync(o => o.CompanyId == cid && o.Status == DispatchOrderStatus.Draft);
@@ -72,16 +77,25 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
             var low = (await reorder.ListAsync(ctx)).Count;
             return (notAccepted + awaiting + low, Join((notAccepted, "hóa đơn mua chờ chấp nhận thanh toán"), (awaiting, "bàn giao chờ tạo lệnh chi"), (low, "vật tư dưới tồn tối thiểu")));
         });
-        await Add("services", async () =>
+        foreach (var kind in new[] { InvoiceKind.Sales, InvoiceKind.Purchase })
         {
-            var waiting = await db.ServiceAcceptances.CountAsync(a => a.CompanyId == cid && a.Status == ApprovalStatus.Requested);
-            var live = db.ServiceAcceptances.Where(a => a.CompanyId == cid && (a.Status == ApprovalStatus.Requested || a.Status == ApprovalStatus.Approved)).Select(a => a.Id);
-            var lateMilestones = await db.ServiceMilestones.CountAsync(m => m.CompanyId == cid && m.DueDate < today && (m.AcceptanceId == null || !live.Contains(m.AcceptanceId.Value)));
-            var latePlans = servicePlans is null ? 0 : (await servicePlans.OverdueAsync(ctx, null, today)).Count;
-            var n = waiting + lateMilestones + latePlans;
-            return (n, Join((waiting, "biên bản nghiệm thu dịch vụ chờ xác nhận"), (lateMilestones, "mốc dịch vụ quá hạn"), (latePlans, "đợt nghiệm thu theo hợp đồng quá hạn")));
-        });
-        await Add("trade", async () => { var n = await db.CommercialInvoices.CountAsync(i => i.CompanyId == cid && i.Status == InvoiceStatus.Draft); return (n, $"{n} hóa đơn nháp chờ ghi sổ"); });
+            var k = kind; var word = k == InvoiceKind.Sales ? "bán" : "mua";
+            await Add("services", async () =>
+            {
+                var waiting = await db.ServiceAcceptances.CountAsync(a => a.CompanyId == cid && a.Kind == k && a.Status == ApprovalStatus.Requested);
+                var live = db.ServiceAcceptances.Where(a => a.CompanyId == cid && (a.Status == ApprovalStatus.Requested || a.Status == ApprovalStatus.Approved)).Select(a => a.Id);
+                var lateMilestones = await db.ServiceMilestones.CountAsync(m => m.CompanyId == cid && m.DueDate < today && (m.AcceptanceId == null || !live.Contains(m.AcceptanceId.Value))
+                                                                                 && db.TradeOrders.Any(o => o.Id == m.OrderId && o.Kind == k));
+                var latePlans = servicePlans is null ? 0 : (await servicePlans.OverdueAsync(ctx, k, today)).Count;
+                var n = waiting + lateMilestones + latePlans;
+                return (n, Join((waiting, $"biên bản nghiệm thu dịch vụ {word} chờ xác nhận"), (lateMilestones, "mốc dịch vụ quá hạn"), (latePlans, "đợt nghiệm thu theo hợp đồng quá hạn")));
+            }, k);
+        }
+        foreach (var kind in new[] { InvoiceKind.Sales, InvoiceKind.Purchase })
+        {
+            var k = kind; var word = k == InvoiceKind.Sales ? "bán" : "mua";
+            await Add("trade", async () => { var n = await db.CommercialInvoices.CountAsync(i => i.CompanyId == cid && i.Kind == k && i.Status == InvoiceStatus.Draft); return (n, $"{n} hóa đơn {word} nháp chờ ghi sổ"); }, k);
+        }
         await Add("stock", async () => { var n = await db.StockDocuments.CountAsync(d => d.CompanyId == cid && d.Status == StockDocumentStatus.Draft); return (n, $"{n} phiếu kho nháp chờ ghi sổ"); });
         await Add("payroll", async () => { var n = (await payroll.QueueAsync(ctx, today)).Count(r => r.PaymentOrderNumber == null); return (n, $"{n} khoản lương chưa có lệnh thanh toán"); });
         await Add("cash", async () =>
