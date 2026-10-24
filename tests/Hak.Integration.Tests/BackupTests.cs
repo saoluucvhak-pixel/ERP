@@ -2,6 +2,7 @@ using Hak.Application.Attachments;
 using Hak.Application.Backup;
 using Hak.Data;
 using Hak.Domain.Common;
+using Hak.Domain.Vouchers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,6 +56,13 @@ public class BackupTests
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.CreateAsync(h.ApproverId, Pass)));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.CreateAsync(h.AdminId, "ngan")));
 
+        static async Task<SortedDictionary<string, decimal>> BalancesAsync(HakDbContext db)
+        {
+            var lines = await db.JournalLines.AsNoTracking().Select(l => new { l.AccountId, l.PartnerId, l.Side, l.Amount }).ToListAsync();
+            return new SortedDictionary<string, decimal>(lines.GroupBy(l => $"{l.AccountId}|{l.PartnerId}").ToDictionary(g => g.Key, g => g.Sum(l => l.Side == Side.Debit ? l.Amount : -l.Amount)));
+        }
+        var atBackup = await BalancesAsync(s.Db);                       // số dư theo (tài khoản, đối tượng) tại thời điểm sao lưu
+        var allocationsAtBackup = await s.Db.SettlementAllocations.CountAsync();
         var backup = await svc.CreateAsync(h.AdminId, Pass, "Trước khi khóa sổ quý 1");
         Assert.Equal(backup.FileName, Assert.Single(await svc.ListAsync(h.AdminId)).FileName);
 
@@ -71,7 +79,12 @@ public class BackupTests
         Assert.NotNull(restored.RestoredPath);
         Assert.NotEqual(Path.GetFullPath(h.DbPath), Path.GetFullPath(restored.RestoredPath!));
         await using (var copy = new HakDbContext(HakDb.SqliteOptions(restored.RestoredPath!)))
+        {
             Assert.Equal(1, await copy.JournalEntries.CountAsync());
+            // Diễn tập khôi phục: số dư theo tài khoản / đối tượng và phân bổ công nợ của bản khôi phục khớp đúng trạng thái lúc sao lưu.
+            Assert.Equal(atBackup, await BalancesAsync(copy));
+            Assert.Equal(allocationsAtBackup, await copy.SettlementAllocations.CountAsync());
+        }
         SqliteConnection.ClearAllPools();
         Assert.Equal(2, await s.Db.JournalEntries.CountAsync());
         Assert.Contains(await s.Db.AuditLogs.Where(a => a.CompanyId == Guid.Empty).Select(a => a.Action).ToListAsync(), a => a == "backup.restore");

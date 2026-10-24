@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName, FlowStrip } from './common'
+import { focusRowProps, useOpenTarget } from './opentarget'
 import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
@@ -18,6 +19,7 @@ const stateText = (r: Row) => r.status === 'Approved' && r.paymentPending ? `Đ�
 
 /** Tạm ứng và hoàn ứng: đề nghị → duyệt (người khác) → chứng từ chi nháp → quyết toán (bảng kê chi, hoàn lại hoặc chi bổ sung) → tuổi nợ theo hạn quyết toán. */
 export function AdvancesView() {
+  const openId = useOpenTarget('advance')
   const { accounts, partners } = useCatalog()
   const [tab, setTab] = useState<'list' | 'aging'>('list')
   const [rows, setRows] = useState<Row[]>([])
@@ -91,7 +93,7 @@ export function AdvancesView() {
             chip('overdue', 'Quá hạn quyết toán', rows.filter(r => r.overdueDays > 0).length), chip('Settled', 'Đã quyết toán', rows.filter(r => r.status === 'Settled').length)]} />
         <div className="scroll"><table className="grid">
           <thead><tr><th>Số</th><th>Nhân viên</th><th>Lý do</th><th className="num">Số tiền</th><th>Hạn quyết toán</th><th>Trạng thái</th><th className="num">Còn nợ</th><th /></tr></thead>
-          <tbody>{shown.map(r => <tr key={r.id}>
+          <tbody>{shown.map(r => <tr key={r.id} {...focusRowProps(r.id, openId)}>
             <td>{r.number}<div className="muted">{formatDate(r.requestDate)}</div></td><td>{r.employeeCode} – {r.employeeName}</td><td>{r.purpose}</td>
             <td className="num">{formatMoney(r.amount)}</td><td>{formatDate(r.dueDate)}{r.overdueDays > 0 && <div className="msg error" style={{ padding: '0 6px', display: 'inline-block' }}>quá {r.overdueDays} ngày</div>}</td>
             <td>{stateText(r)}</td><td className="num">{r.outstanding === '0' ? '' : formatMoney(r.outstanding)}</td>

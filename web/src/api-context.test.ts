@@ -47,3 +47,29 @@ test('a GET answered after the company changed is dropped, not delivered to the 
     assert.deepEqual(await api.get('/partners'), [{ id: 'data-of-company-B' }])   // cùng ngữ cảnh: giao bình thường
   } finally { globalThis.fetch = original }
 })
+
+test('an identical write already in flight is shared (double click sends one request with one key); different writes are not', async () => {
+  const api = await import('./api.ts?double-click')
+  api.session.setToken('test-session-A'); api.session.setCompany('company-A')
+  const original = globalThis.fetch
+  const calls: { key: string; body: string }[] = []
+  let release: () => void = () => {}
+  const gate = new Promise<void>(r => { release = r })
+  globalThis.fetch = async (_url, init) => {
+    calls.push({ key: (init as { headers: Record<string, string> }).headers['Idempotency-Key'], body: String((init as { body?: string }).body) })
+    await gate
+    return new Response(JSON.stringify({ id: 'x' }), { status: 200 })
+  }
+  try {
+    const a = api.post('/partners', { code: 'DUP', name: 'Một' })
+    const b = api.post('/partners', { code: 'DUP', name: 'Một' })      // nhấp đúp: cùng nội dung
+    const c = api.post('/partners', { code: 'OTHER', name: 'Hai' })    // thao tác khác: gửi riêng
+    release()
+    await Promise.all([a, b, c])
+    assert.equal(calls.length, 2)
+    assert.equal(calls.filter(x => x.body.includes('DUP')).length, 1)
+    assert.notEqual(calls[0].key, calls[1].key)
+    await api.post('/partners', { code: 'DUP', name: 'Một' })           // đã xong: thao tác y hệt sau đó là thao tác mới
+    assert.equal(calls.length, 3)
+  } finally { globalThis.fetch = original }
+})

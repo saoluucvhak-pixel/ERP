@@ -294,7 +294,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             SourceSystem: "HAK.INVOICE", SourceId: inv.Id + ":reprice"));
     }
 
-    public async Task<CommercialInvoice> CancelAsync(SessionContext ctx, Guid invoiceId, string reason)
+    public async Task<CommercialInvoice> CancelAsync(SessionContext ctx, Guid invoiceId, string reason, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.InvoiceDocument);
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ReasonRequired, "Phải ghi lý do hủy.");
@@ -302,6 +302,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         {
             var inv = await db.CommercialInvoices.FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
+            RowVersionCheck.Require(expectedRowVersion, inv.RowVersion, $"Hóa đơn {inv.Number}");
             if (inv.Status != InvoiceStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, "Chỉ hủy được hóa đơn nháp.");
             inv.Status = InvoiceStatus.Cancelled;
             inv.RowVersion++;

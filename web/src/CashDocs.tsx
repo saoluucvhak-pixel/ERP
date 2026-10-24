@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { get, post, put, type OpenItem, type Voucher } from './api'
 import { AccountSelect, ErrorBox, navStore, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog, FlowStrip } from './common'
+import { useUnsavedWhenChanged } from './unsaved'
 import { addMoney, daysBefore, formatDate, formatMoney, parseMoney, today } from './money'
 
 const EVENTS: Record<string, { value: string; label: string; needsPartner: boolean; needsCounter: boolean }[]> = {
@@ -37,6 +38,7 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
   const [mainAccountId, setMainAccountId] = useState(voucher?.mainAccountId ?? '')
   const [lines, setLines] = useState<DocLine[]>(voucher ? linesOf(voucher) : [{ amount: prefill ? formatMoney(prefill.amount) : '', counterAccountId: '', settle: prefill?.settleJournalLineId ?? '', description: '' }])
   const [openItems, setOpenItems] = useState<OpenItem[]>([])
+  useUnsavedWhenChanged([type, event, date, description, partnerId, cpName, cpUnit, mainAccountId, lines], !!voucher)   // phiếu đang sửa do màn gọi quản lý
   const [created, setCreated] = useState<Voucher | null>(null)
   const [balance, setBalance] = useState<string | null>(null)
   const [recent, setRecent] = useState<Voucher[]>([])

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, ExportButton, FlowStrip, Modal, useAction, navStore } from './common'
+import { focusRowProps, useOpenTarget } from './opentarget'
 import { formatDate, formatMoney, monthStart, parseMoney, today } from './money'
 import type { Order } from './Orders'
 import { ServiceProgress } from './ServiceProgress'
@@ -17,6 +18,7 @@ interface Cand { orderId: string; orderNumber: string; orderLineNo: number; item
 
 /** Nghiệm thu dịch vụ (khâu thay cho giao / nhận hàng của dịch vụ: vận chuyển thuê, tư vấn…): lập biên bản theo dòng đơn hàng, người khác xác nhận, hóa đơn chỉ lập trong phạm vi đã nghiệm thu. */
 export function ServiceAcceptancesView() {
+  const openId = useOpenTarget('serviceAcceptance')
   const [kind, setKind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')
   const [rows, setRows] = useState<Row[]>([])
   const [orders, setOrders] = useState<Order[]>([])
@@ -76,7 +78,7 @@ export function ServiceAcceptancesView() {
             {cands.length === 0 && <tr><td colSpan={7} className="muted">Không có dịch vụ nào chờ lập hóa đơn. Lập hóa đơn ở màn Hóa đơn, chọn dòng dịch vụ đã nghiệm thu.</td></tr>}</tbody></table></div></section>
       <section className="panel"><h3>Biên bản nghiệm thu</h3>
         <div className="scroll"><table className="grid"><thead><tr><th>Số</th><th>Ngày</th><th>Đơn</th><th>Đối tượng</th><th>Dịch vụ nghiệm thu</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{rows.map(r => <tr key={r.id}><td>{r.number}</td><td>{formatDate(r.acceptanceDate)}</td><td>{r.orderNumber}</td><td>{r.partnerCode} – {r.partnerName}</td>
+          <tbody>{rows.map(r => <tr key={r.id} {...focusRowProps(r.id, openId)}><td>{r.number}</td><td>{formatDate(r.acceptanceDate)}</td><td>{r.orderNumber}</td><td>{r.partnerCode} – {r.partnerName}</td>
             <td>{r.lines.map(l => `${l.itemCode} × ${formatMoney(l.quantity)} ${l.unit} (dòng ${l.orderLineNo})`).join('; ')}{r.note ? <div className="muted">{r.note}</div> : null}</td>
             <td>{STATUS_VI[r.status]}{r.decisionNote ? <div className="muted">{r.decisionNote}</div> : null}</td>
             <td>{r.status === 'Requested' && <><button className="primary" disabled={busy} title="Cần quyền duyệt chứng từ; khác người lập" onClick={() => act('Đã xác nhận nghiệm thu.', () => post(`/service-acceptances/${r.id}/decide`, { approve: true }))}>Xác nhận</button>

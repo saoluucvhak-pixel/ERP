@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
+import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget, focusRowProps } from './opentarget'
 import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } from './money'
 
@@ -24,6 +25,7 @@ export function TradeView() {
   const [total, setTotal] = useState(0)
   const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '', discPct: '', discDays: '' })
   const [lines, setLines] = useState<LineDraft[]>([empty()])
+  useUnsavedWhenChanged([head, lines])
   const [info, setInfo] = useState('')
   const [adjusting, setAdjusting] = useState<Invoice | null>(null)
   const openId = useOpenTarget('invoice')
@@ -156,7 +158,7 @@ export function TradeView() {
                   }
                   await post(`/invoices/${i.id}/post?rowVersion=${i.rowVersion}&acknowledgePriceDifferences=${diffs.length > 0}`)
                 }, `Đã ghi sổ ${i.number}.`)}>Ghi sổ</button>}
-                {i.status === 'Draft' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy:'); if (reason) act(() => post(`/invoices/${i.id}/cancel`, { reason }), `Đã hủy ${i.number}.`) }}>Hủy</button>}
+                {i.status === 'Draft' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy:'); if (reason) act(() => post(`/invoices/${i.id}/cancel?rowVersion=${i.rowVersion}`, { reason }), `Đã hủy ${i.number}.`) }}>Hủy</button>}
                 {i.status === 'Posted' && i.purpose === 'Normal' && <button onClick={() => setAdjusting(i)}>Điều chỉnh</button>}
                 {i.status === 'Posted' && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo hóa đơn:'); if (!reason) return

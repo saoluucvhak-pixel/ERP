@@ -70,7 +70,7 @@ public static class TradeEndpoints
         api.MapGet("/invoices/{id:guid}/price-differences", async (HttpContext http, Guid id, InvoiceService s) => Results.Ok(await s.PriceDifferencesAsync(await http.SessionAsync(), id)));
         api.MapPost("/invoices/{id:guid}/post", async (HttpContext http, Guid id, long rowVersion, bool? acknowledgePriceDifferences, InvoiceService s) =>   // rowVersion bắt buộc: thiếu → 400, cũ → 409
             Results.Ok(Dto(await s.PostAsync(await http.SessionAsync(), id, acknowledgePriceDifferences ?? false, rowVersion))));
-        api.MapPost("/invoices/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, InvoiceService s) => Results.Ok(Dto(await s.CancelAsync(await http.SessionAsync(), id, r.Reason))));
+        api.MapPost("/invoices/{id:guid}/cancel", async (HttpContext http, Guid id, long rowVersion, ReasonRequest r, InvoiceService s) => Results.Ok(Dto(await s.CancelAsync(await http.SessionAsync(), id, r.Reason, rowVersion))));
         api.MapPost("/invoices/{id:guid}/reverse", async (HttpContext http, Guid id, long rowVersion, ReverseRequest r, InvoiceService s) =>
             Results.Ok(Dto(await s.ReverseAsync(await http.SessionAsync(), id, r.ReversalDate, r.Reason, rowVersion))));
         // Purchase return, step 1: a Draft issue back to the supplier (valued by the warehouse costing method when posted).
@@ -107,8 +107,8 @@ public static class TradeEndpoints
         api.MapPost("/orders/{id:guid}/close", async (HttpContext http, Guid id, ReasonRequest r, OrderService s) => { await s.CloseAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
         api.MapPost("/orders/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, OrderService s) => { await s.CancelAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
         api.MapGet("/orders/{id:guid}/fulfilment", async (HttpContext http, Guid id, OrderService s) => Results.Ok(await s.FulfilmentAsync(await http.SessionAsync(), id)));
-        api.MapPost("/stock-documents/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, Hak.Application.Inventory.StockService s) =>
-        { await s.CancelDocumentAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
+        api.MapPost("/stock-documents/{id:guid}/cancel", async (HttpContext http, Guid id, long rowVersion, ReasonRequest r, Hak.Application.Inventory.StockService s) =>
+        { await s.CancelDocumentAsync(await http.SessionAsync(), id, r.Reason, rowVersion); return Results.NoContent(); });
         api.MapGet("/reports/uninvoiced", async (HttpContext http, InvoiceKind kind, DateOnly asOf, InvoiceService s) =>
             Results.Ok(await s.UninvoicedAsync(await http.SessionAsync(), kind, asOf)));
     }

@@ -2,6 +2,7 @@ using Hak.Application.Assets;
 using Hak.Application.Loans;
 using Hak.Application.Security;
 using Hak.Data;
+using Hak.Domain.Advances;
 using Hak.Domain.Assets;
 using Hak.Domain.Banking;
 using Hak.Domain.Common;
@@ -23,7 +24,7 @@ public sealed record WorkItem(string Screen, int Count, string Hint);
 /// và — nếu người đang xem chưa làm được — lý do bị chặn (thiếu quyền hoặc quy tắc tách người lập / người duyệt).
 /// </summary>
 public sealed record WorkTask(string Screen, string? Kind, string EntityType, Guid EntityId, string Number, string Title, string Action, Guid OwnerId, string OwnerName,
-    DateOnly Date, int AgeDays, string? BlockedReason);
+    DateOnly Date, int AgeDays, string? BlockedReason, DateOnly? Due = null);
 
 /// <summary>
 /// Việc đang chờ xử lý theo phân hệ: mỗi chu trình tự nhận việc từ khâu trước (ví dụ hóa đơn mua chờ chấp nhận thanh toán, lệnh chi chờ duyệt).
@@ -134,6 +135,7 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
         var cid = ctx.CompanyId;
         var distinct = await db.Companies.AsNoTracking().Where(c => c.Id == cid).Select(c => c.RequireDistinctApprover).FirstAsync();
         var rows = new List<(string Screen, string? Kind, string Type, Guid Id, string Number, string Title, string Action, Guid Owner, DateOnly Date, string? Blocked)>();
+        var dues = new Dictionary<Guid, DateOnly>();   // hạn xử lý theo chứng từ (nếu chứng từ có hạn)
         bool Can(string screen) => ctx.Permissions.Contains(ViewPermission[screen]);
         string? Blocked(string permission, string label, Guid owner, bool separate)
             => !ctx.Permissions.Contains(permission) ? $"Cần quyền {label}"
@@ -193,10 +195,28 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
                 rows.Add(("contracts", c.Kind.ToString(), "contract", c.Id, c.Code, c.Name, "Duyệt hợp đồng", c.CreatedBy, c.EffectiveDate, Blocked(Permissions.VoucherApprove, "duyệt hợp đồng", c.CreatedBy, true)));
         }
 
+        if (ctx.Permissions.Contains(Permissions.VoucherView))   // màn Tạm ứng dùng quyền xem chứng từ
+        {
+            var advs = await db.AdvanceRequests.AsNoTracking().Where(a => a.CompanyId == cid && a.Status == AdvanceStatus.Requested)
+                .OrderBy(a => a.DueDate).ThenBy(a => a.Number).Take(Per).Select(a => new { a.Id, a.Number, a.Purpose, a.RequestDate, a.DueDate, a.CreatedBy }).ToListAsync();
+            foreach (var a in advs)
+            {
+                rows.Add(("advances", null, "advance", a.Id, a.Number, a.Purpose, "Duyệt đề nghị tạm ứng", a.CreatedBy, a.RequestDate, Blocked(Permissions.VoucherApprove, "duyệt", a.CreatedBy, true)));
+                dues[a.Id] = a.DueDate;
+            }
+        }
+        if (Can("services"))
+        {
+            var sas = await db.ServiceAcceptances.AsNoTracking().Where(a => a.CompanyId == cid && a.Status == ApprovalStatus.Requested)
+                .OrderBy(a => a.AcceptanceDate).ThenBy(a => a.Number).Take(Per).Select(a => new { a.Id, a.Number, a.Note, a.AcceptanceDate, a.CreatedBy }).ToListAsync();
+            foreach (var a in sas)
+                rows.Add(("services", null, "serviceAcceptance", a.Id, a.Number, a.Note ?? "", "Xác nhận nghiệm thu dịch vụ", a.CreatedBy, a.AcceptanceDate, Blocked(Permissions.VoucherApprove, "duyệt", a.CreatedBy, true)));
+        }
+
         var ordered = rows.OrderBy(r => r.Blocked is null ? 0 : 1).ThenBy(r => r.Date).ThenBy(r => r.Number, StringComparer.Ordinal).Take(take).ToList();
         var ids = ordered.Select(r => r.Owner).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName);
         return ordered.Select(r => new WorkTask(r.Screen, r.Kind, r.Type, r.Id, r.Number, r.Title, r.Action, r.Owner, names.GetValueOrDefault(r.Owner, ""),
-            r.Date, Math.Max(0, today.DayNumber - r.Date.DayNumber), r.Blocked)).ToList();
+            r.Date, Math.Max(0, today.DayNumber - r.Date.DayNumber), r.Blocked, dues.TryGetValue(r.Id, out var due) ? due : null)).ToList();
     }
 }

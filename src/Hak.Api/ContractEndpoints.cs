@@ -21,8 +21,8 @@ public static class ContractEndpoints
         api.MapPut("/{id:guid}", async (HttpContext http, Guid id, ContractInput i, ContractService s) => Results.Ok(new { (await s.UpdateAsync(await http.SessionAsync(), id, i)).Id }));
         api.MapPost("/{id:guid}/submit", async (HttpContext http, Guid id, int version, ContractService s) => Results.Ok(new { (await s.SubmitAsync(await http.SessionAsync(), id, version)).Id }));   // version = phiên bản nội dung đã xem, bắt buộc
         api.MapPost("/{id:guid}/decide", async (HttpContext http, Guid id, int version, ContractDecisionRequest r, ContractService s) => Results.Ok(new { (await s.DecideAsync(await http.SessionAsync(), id, r.Approve, r.Note, version)).Id }));
-        api.MapPost("/{id:guid}/complete", async (HttpContext http, Guid id, ContractCompleteRequest r, ContractService s) => Results.Ok(new { (await s.CompleteAsync(await http.SessionAsync(), id, r.Note)).Id }));
-        api.MapPost("/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, ContractService s) => Results.Ok(new { (await s.CancelAsync(await http.SessionAsync(), id, r.Reason)).Id }));
+        api.MapPost("/{id:guid}/complete", async (HttpContext http, Guid id, int version, ContractCompleteRequest r, ContractService s) => Results.Ok(new { (await s.CompleteAsync(await http.SessionAsync(), id, r.Note, version)).Id }));
+        api.MapPost("/{id:guid}/cancel", async (HttpContext http, Guid id, int version, ReasonRequest r, ContractService s) => Results.Ok(new { (await s.CancelAsync(await http.SessionAsync(), id, r.Reason, version)).Id }));
         api.MapPost("/{id:guid}/amend", async (HttpContext http, Guid id, ContractAmendRequest r, ContractService s) =>
             Results.Ok(new { (await s.AmendAsync(await http.SessionAsync(), id, r.Date, r.Summary, r.ValueChange, r.NewExpirationDate, r.LineChanges)).Code }));
         api.MapPost("/{id:guid}/milestones/{milestoneId:guid}/pay", async (HttpContext http, Guid id, Guid milestoneId, ContractPaymentRequest r, ContractService s) =>

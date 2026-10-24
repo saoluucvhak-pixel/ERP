@@ -6,12 +6,12 @@ import type { OpenType } from './quickadd'
 
 interface Task {
   screen: string; kind: 'Sales' | 'Purchase' | null; entityType: OpenType; entityId: string; number: string; title: string; action: string
-  ownerId: string; ownerName: string; date: string; ageDays: number; blockedReason: string | null
+  ownerId: string; ownerName: string; date: string; ageDays: number; blockedReason: string | null; due: string | null
 }
 
 /** Nguồn dữ liệu của việc (màn hình sở hữu chứng từ), để người dùng biết việc đến từ đâu. */
 const SOURCE: Record<string, string> = {
-  vouchers: 'Chứng từ kế toán', trade: 'Hóa đơn', stock: 'Kho', bank: 'Ngân hàng', orders: 'Đơn hàng', contracts: 'Hợp đồng',
+  vouchers: 'Chứng từ kế toán', trade: 'Hóa đơn', stock: 'Kho', bank: 'Ngân hàng', orders: 'Đơn hàng', contracts: 'Hợp đồng', advances: 'Tạm ứng', services: 'Nghiệm thu dịch vụ',
 }
 
 /**
@@ -34,11 +34,11 @@ export function Worklist({ limit = 20 }: { limit?: number }) {
       <div className="toolbar"><h3 style={{ margin: 0 }}>Chứng từ đang chờ bạn <span className="badge-count">{tasks.length}</span></h3>
         <span className="muted">Việc làm được ngay xếp trước; việc bị chặn ghi rõ lý do.</span></div>
       <div className="scroll"><table className="grid">
-        <thead><tr><th>Việc cần làm</th><th>Chứng từ</th><th>Nội dung</th><th>Nguồn</th><th>Người lập</th><th>Ngày</th><th className="num">Tuổi (ngày)</th><th>Tình trạng</th><th /></tr></thead>
+        <thead><tr><th>Việc cần làm</th><th>Chứng từ</th><th>Nội dung</th><th>Nguồn</th><th>Người lập</th><th>Ngày</th><th>Hạn</th><th className="num">Tuổi (ngày)</th><th>Tình trạng</th><th /></tr></thead>
         <tbody>{shown.map(t => (
           <tr key={t.entityType + t.entityId}>
             <td><strong>{t.action}</strong></td><td>{t.number}</td><td>{t.title}</td><td>{SOURCE[t.screen] ?? t.screen}{t.kind ? ` · ${t.kind === 'Sales' ? 'bán' : 'mua'}` : ''}</td>
-            <td>{t.ownerName}</td><td>{formatDate(t.date)}</td><td className="num">{t.ageDays}</td>
+            <td>{t.ownerName}</td><td>{formatDate(t.date)}</td><td>{t.due ? formatDate(t.due) : ''}</td><td className="num">{t.ageDays}</td>
             <td>{t.blockedReason ? <span className="muted" title={t.blockedReason}>⛔ {t.blockedReason}</span> : 'Làm được ngay'}</td>
             <td><button className={t.blockedReason ? '' : 'primary'} onClick={() => open(t)}>Mở</button></td>
           </tr>))}</tbody>

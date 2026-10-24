@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
+import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget } from './opentarget'
 import { formatDate, formatMoney, optionalRate, parseMoney, today } from './money'
 import { SmartFilter, inRange, useFilterState } from './SmartFilter'
@@ -28,6 +29,7 @@ export function OrdersView() {
   const [total, setTotal] = useState(0)
   const [head, setHead] = useState({ partnerId: '', contractNo: '', orderDate: today(), description: '', tolerance: '0' })
   const [lines, setLines] = useState<LineDraft[]>([{ itemId: '', qty: '', basis: 'Bdmt', price: '', vat: '' }])
+  useUnsavedWhenChanged([head, lines])
   const [detail, setDetail] = useState<Fulfil | null>(null)
   const openId = useOpenTarget('order')
   const [flowId, setFlowId] = useState<string | null>(openId ?? null)

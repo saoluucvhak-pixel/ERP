@@ -1,7 +1,7 @@
 /** Ý định mở màn hình từ "Thêm nhanh": chiều bán/mua + loại chứng từ cụ thể, để mỗi nút mở ĐÚNG form (không phụ thuộc màn đang mở hay mặc định của màn). */
 export type NavKind = 'Sales' | 'Purchase'
 /** Chứng từ cần mở thẳng (từ danh sách việc cần làm). */
-export type OpenType = 'voucher' | 'invoice' | 'stockDocument' | 'paymentOrder' | 'order' | 'contract'
+export type OpenType = 'voucher' | 'invoice' | 'stockDocument' | 'paymentOrder' | 'order' | 'contract' | 'advance' | 'serviceAcceptance'
 export interface OpenTarget { type: OpenType; id: string }
 export interface NavIntent {
   open?: OpenTarget
