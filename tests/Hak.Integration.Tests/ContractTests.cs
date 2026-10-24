@@ -38,7 +38,8 @@ public class ContractTests
         await contracts.SubmitAsync(h.Preparer, c.Id);
         Assert.Equal(ErrorCodes.ReasonRequired, await CodeOf(() => contracts.DecideAsync(h.Approver, c.Id, false, " ")));
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => contracts.UpdateAsync(h.Preparer, c.Id, input)));
-        Assert.Equal(ContractStatus.Active, (await contracts.DecideAsync(h.Approver, c.Id, true, null)).Status);
+        Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => contracts.DecideAsync(h.Approver, c.Id, true, null, c.Version + 1)));   // duyệt bản chưa từng xem / đã cũ
+        Assert.Equal(ContractStatus.Active, (await contracts.DecideAsync(h.Approver, c.Id, true, null, c.Version)).Status);
 
         // Đơn kế thừa: sai đối tác / ngoài hiệu lực / vật tư ngoài hợp đồng / vượt cam kết đều bị chặn.
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => orders.CreateAsync(h.Preparer, Call(h, c.Id, line) with { PartnerId = h.Partner["KH02"] })));

@@ -185,6 +185,24 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task PostAndReverse_WithStaleRowVersion_AreRejected_ThenSucceedWithTheViewedVersion()
+    {
+        // Phạm vi bắt buộc version mở rộng: ghi sổ phiếu kho, ghi sổ / đảo hóa đơn đúng bản đã xem.
+        using var fx = await SetupAsync();
+        var d = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 2), D(3, 2), "Nhập",
+            [new StockLineInput(fx.Add, 100, 5_000_000, fx.A("GRNI"))], PartnerId: fx.H.Partner["NCC01"]));
+        Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, d.Id, d.RowVersion - 1)));
+        Assert.Equal(StockDocumentStatus.Draft, (await fx.S.Db.StockDocuments.AsNoTracking().SingleAsync(x => x.Id == d.Id)).Status);
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, d.Id, d.RowVersion);
+
+        var inv = await fx.Inv.CreateAsync(fx.H.Preparer, Purchase(fx, "0000555", new InvoiceLineInput(50_000, d.Id, 1, VatRate: 10)));
+        Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, inv.Id, false, inv.RowVersion + 1)));
+        var posted = await fx.Inv.PostAsync(fx.H.Approver, inv.Id, false, inv.RowVersion);
+        Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion - 1)));
+        Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion)).Status);
+    }
+
+    [Fact]
     public async Task Purchase_PricedPerBdmt_ValuesTheDraftReceipt_AndBooksApWithVat()
     {
         using var fx = await SetupAsync();

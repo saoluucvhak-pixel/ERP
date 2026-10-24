@@ -8,7 +8,7 @@ import type { Order } from './Orders'
 
 interface Warehouse { id: string; code: string; name: string; policies: { method: string; effectiveFrom: string }[] }
 interface Item { id: string; code: string; name: string; unit: string; tracksDryness?: boolean; altUnit?: string | null; altFactor?: string | null }
-interface StockDoc { id: string; number: string; type: string; warehouseId: string; toWarehouseId: string | null; documentDate?: string; postingDate: string; description: string; partnerId?: string | null; status: string; voucherId: string | null; lines: { lineNo: number; itemId: string; quantity: string; amount: string | null; counterAccountId?: string | null; description?: string | null }[] }
+interface StockDoc { id: string; rowVersion: number; number: string; type: string; warehouseId: string; toWarehouseId: string | null; documentDate?: string; postingDate: string; description: string; partnerId?: string | null; status: string; voucherId: string | null; lines: { lineNo: number; itemId: string; quantity: string; amount: string | null; counterAccountId?: string | null; description?: string | null }[] }
 
 const METHOD_VI: Record<string, string> = { Fifo: 'Nhập trước xuất trước', MovingAverage: 'Bình quân tức thời', MonthlyAverage: 'Bình quân cuối tháng' }
 const TYPE_VI: Record<string, string> = { Receipt: 'Phiếu nhập', Issue: 'Phiếu xuất', Transfer: 'Điều chuyển' }
@@ -151,7 +151,7 @@ function StockDocs({ initialType }: { initialType?: 'Receipt' | 'Issue' | 'Trans
             <tr key={d.id} className={d.id === selId ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelId(d.id)}><td>{formatDate(d.postingDate)}</td><td>{d.number}</td><td>{TYPE_VI[d.type]}</td><td>{wh(d.warehouseId)}{d.toWarehouseId ? ' → ' + wh(d.toWarehouseId) : ''}</td><td>{d.description}</td>
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                {d.status === 'Draft' && <button className="primary" disabled={busy} onClick={() => act(() => post(`/stock-documents/${d.id}/post`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
+                {d.status === 'Draft' && <button className="primary" disabled={busy} onClick={() => act(() => post(`/stock-documents/${d.id}/post?rowVersion=${d.rowVersion}`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
                 {d.status === 'Draft' && <button className="danger" onClick={() => { const r = prompt('Lý do hủy phiếu nháp:'); if (r) act(() => post(`/stock-documents/${d.id}/cancel`, { reason: r }), `Đã hủy ${d.number}.`) }}>Hủy</button>}
                 {d.status === 'Posted' && !d.number.startsWith('DP') && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo phiếu:'); if (!reason) return

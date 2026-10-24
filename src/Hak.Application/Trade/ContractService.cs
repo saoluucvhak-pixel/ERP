@@ -80,15 +80,15 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
         });
     }
 
-    public Task<Contract> SubmitAsync(SessionContext ctx, Guid id) => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "contract.submit", (c, _) =>
+    public Task<Contract> SubmitAsync(SessionContext ctx, Guid id, int? expectedVersion = null) => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "contract.submit", (c, _) =>
     {
         if (c.Lines.Count == 0 && c.Category != ContractCategory.Value) throw new DomainException(ErrorCodes.VoucherNoLines, "Hợp đồng chưa có dòng hàng hóa.");
         c.Move(ContractStatus.Draft, ContractStatus.PendingApproval); c.SubmittedBy = ctx.UserId;
         return Task.CompletedTask;
-    });
+    }, expectedVersion);
 
     /// <summary>Duyệt (→ Hiệu lực) hoặc từ chối (→ Nháp, cần lý do). Người duyệt khác người lập khi công ty bắt buộc tách người.</summary>
-    public Task<Contract> DecideAsync(SessionContext ctx, Guid id, bool approve, string? note) => TransitionAsync(ctx, id, Permissions.VoucherApprove, approve ? "contract.approve" : "contract.reject", (c, company) =>
+    public Task<Contract> DecideAsync(SessionContext ctx, Guid id, bool approve, string? note, int? expectedVersion = null) => TransitionAsync(ctx, id, Permissions.VoucherApprove, approve ? "contract.approve" : "contract.reject", (c, company) =>
     {
         if (c.Status != ContractStatus.PendingApproval) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hợp đồng {c.Code} không ở trạng thái chờ duyệt.");
         if (company.RequireDistinctApprover && c.CreatedBy == ctx.UserId) throw new DomainException(ErrorCodes.SodViolation, "Người duyệt hợp đồng không được trùng người lập.");
@@ -96,7 +96,7 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
         if (approve) { c.Move(ContractStatus.PendingApproval, ContractStatus.Active); c.ApprovedBy = ctx.UserId; c.ApprovedAt = clock.UtcNow; c.SignedDate ??= Today; }
         else { c.Move(ContractStatus.PendingApproval, ContractStatus.Draft); c.StatusReason = note!.Trim(); }
         return Task.CompletedTask;
-    });
+    }, expectedVersion);
 
     /// <summary>Thanh lý / đóng hợp đồng đã thực hiện đủ hoặc hết hiệu lực.</summary>
     public Task<Contract> CompleteAsync(SessionContext ctx, Guid id, string? note) => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "contract.complete", (c, _) =>
@@ -287,12 +287,15 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
 
     // ------------------------------------------------------------ internals
 
-    private async Task<Contract> TransitionAsync(SessionContext ctx, Guid id, string permission, string action, Func<Contract, Hak.Domain.Organization.Company, Task> change)
+    private async Task<Contract> TransitionAsync(SessionContext ctx, Guid id, string permission, string action, Func<Contract, Hak.Domain.Organization.Company, Task> change, int? expectedVersion = null)
     {
         ctx.Require(permission);
         return await db.InTransactionAsync(async () =>
         {
             var c = await LoadAsync(ctx, id);
+            // Phiên bản NỘI DUNG hợp đồng (tăng mỗi lần sửa) mà người dùng đã xem; người khác sửa sau đó thì phải xem lại.
+            if (expectedVersion is { } ev && c.Version != ev)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Hợp đồng {c.Code} đã được sửa (phiên bản {c.Version}, bạn đang xem phiên bản {ev}). Vui lòng tải lại.");
             var company = await db.Companies.AsNoTracking().FirstAsync(x => x.Id == ctx.CompanyId);
             await change(c, company);
             c.RowVersion++;

@@ -118,13 +118,15 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         return result;
     }
 
-    public async Task<CommercialInvoice> PostAsync(SessionContext ctx, Guid invoiceId, bool acknowledgePriceDifferences = false)
+    public async Task<CommercialInvoice> PostAsync(SessionContext ctx, Guid invoiceId, bool acknowledgePriceDifferences = false, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.VoucherPost);
         return await db.InTransactionAsync(async () =>
         {
             var inv = await db.CommercialInvoices.Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
+            if (expectedRowVersion is { } rv && inv.RowVersion != rv)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Hóa đơn {inv.Number} đã được thay đổi (phiên bản {inv.RowVersion}, bạn đang xem phiên bản {rv}). Vui lòng tải lại.");
             if (inv.Status != InvoiceStatus.Draft)
                 throw new DomainException(inv.Status == InvoiceStatus.Posted ? ErrorCodes.AlreadyPosted : ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} ở trạng thái {inv.Status}.");
             var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
@@ -224,13 +226,15 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
     }
 
     /// <summary>Reverses the invoice voucher (settlements released by the engine). Receipts stay on GRNI awaiting a new invoice.</summary>
-    public async Task<CommercialInvoice> ReverseAsync(SessionContext ctx, Guid invoiceId, DateOnly reversalDate, string reason)
+    public async Task<CommercialInvoice> ReverseAsync(SessionContext ctx, Guid invoiceId, DateOnly reversalDate, string reason, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.VoucherReverse);
         return await db.InTransactionAsync(async () =>
         {
             var inv = await db.CommercialInvoices.FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
+            if (expectedRowVersion is { } rv && inv.RowVersion != rv)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Hóa đơn {inv.Number} đã được thay đổi (phiên bản {inv.RowVersion}, bạn đang xem phiên bản {rv}). Vui lòng tải lại.");
             if (inv.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} chưa ghi sổ hoặc đã đảo.");
             // Hóa đơn gốc còn điều chỉnh (trả hàng / giảm giá / điều chỉnh tăng) đã ghi sổ: phải đảo chứng từ phụ thuộc trước, nếu không điều chỉnh mồ côi
             // (giảm công nợ / giá trị kho trên một hóa đơn không còn). Kiểm trước mọi thao tác ghi nên thất bại không để lại gì dở dang.

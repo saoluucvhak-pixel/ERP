@@ -5,7 +5,7 @@ import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } f
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
-interface Invoice { id: string; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string }
+interface Invoice { id: string; rowVersion: number; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string }
 interface SvcCand { orderId: string; orderNumber: string; orderLineNo: number; itemCode: string; itemName: string; unit: string; remaining: string; unitPrice: string; vatRate: string | null; description: string | null }
 interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string; svc?: SvcCand }
 interface LineDraft { candidate: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string; qty: string; accountId: string; description: string }
@@ -150,13 +150,13 @@ export function TradeView() {
                     const text = diffs.map(d => `Dòng ${d.lineNo} – phiếu ${d.receiptNumber}: chênh ${formatMoney(d.difference)} → tồn kho ${formatMoney(d.inventoryPart)} (còn ${formatMoney(d.quantityInStock)}/${formatMoney(d.receiptQuantity)}), giá vốn ${formatMoney(d.cogsPart)}`).join('\n')
                     if (!confirm(`CẢNH BÁO: giá hóa đơn khác giá trị đã nhập kho.\n\n${text}\n\nGhi sổ và điều chỉnh như trên?`)) throw new Error('Đã hủy ghi sổ: chưa xác nhận chênh lệch giá.')
                   }
-                  await post(`/invoices/${i.id}/post?acknowledgePriceDifferences=${diffs.length > 0}`)
+                  await post(`/invoices/${i.id}/post?rowVersion=${i.rowVersion}&acknowledgePriceDifferences=${diffs.length > 0}`)
                 }, `Đã ghi sổ ${i.number}.`)}>Ghi sổ</button>}
                 {i.status === 'Draft' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy:'); if (reason) act(() => post(`/invoices/${i.id}/cancel`, { reason }), `Đã hủy ${i.number}.`) }}>Hủy</button>}
                 {i.status === 'Posted' && i.purpose === 'Normal' && <button onClick={() => setAdjusting(i)}>Điều chỉnh</button>}
                 {i.status === 'Posted' && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo hóa đơn:'); if (!reason) return
-                  const d = prompt('Ngày đảo (yyyy-mm-dd):', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`)
+                  const d = prompt('Ngày đảo (yyyy-mm-dd):', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse?rowVersion=${i.rowVersion}`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`)
                 }}>Đảo</button>}
               </td></tr>))}
             {list.length === 0 && <tr><td colSpan={9} className="muted">Chưa có hóa đơn.</td></tr>}

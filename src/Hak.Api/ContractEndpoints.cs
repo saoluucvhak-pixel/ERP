@@ -18,8 +18,8 @@ public static class ContractEndpoints
         api.MapPost("", async (HttpContext http, ContractInput i, ContractService s) => Results.Ok(new { (await s.CreateAsync(await http.SessionAsync(), i)).Id }));
         api.MapGet("/{id:guid}", async (HttpContext http, Guid id, ContractService s) => Results.Ok(await s.GetAsync(await http.SessionAsync(), id)));
         api.MapPut("/{id:guid}", async (HttpContext http, Guid id, ContractInput i, ContractService s) => Results.Ok(new { (await s.UpdateAsync(await http.SessionAsync(), id, i)).Id }));
-        api.MapPost("/{id:guid}/submit", async (HttpContext http, Guid id, ContractService s) => Results.Ok(new { (await s.SubmitAsync(await http.SessionAsync(), id)).Id }));
-        api.MapPost("/{id:guid}/decide", async (HttpContext http, Guid id, ContractDecisionRequest r, ContractService s) => Results.Ok(new { (await s.DecideAsync(await http.SessionAsync(), id, r.Approve, r.Note)).Id }));
+        api.MapPost("/{id:guid}/submit", async (HttpContext http, Guid id, int version, ContractService s) => Results.Ok(new { (await s.SubmitAsync(await http.SessionAsync(), id, version)).Id }));   // version = phiên bản nội dung đã xem, bắt buộc
+        api.MapPost("/{id:guid}/decide", async (HttpContext http, Guid id, int version, ContractDecisionRequest r, ContractService s) => Results.Ok(new { (await s.DecideAsync(await http.SessionAsync(), id, r.Approve, r.Note, version)).Id }));
         api.MapPost("/{id:guid}/complete", async (HttpContext http, Guid id, ContractCompleteRequest r, ContractService s) => Results.Ok(new { (await s.CompleteAsync(await http.SessionAsync(), id, r.Note)).Id }));
         api.MapPost("/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, ContractService s) => Results.Ok(new { (await s.CancelAsync(await http.SessionAsync(), id, r.Reason)).Id }));
         api.MapPost("/{id:guid}/amend", async (HttpContext http, Guid id, ContractAmendRequest r, ContractService s) =>

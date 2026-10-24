@@ -295,13 +295,15 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         });
     }
 
-    public async Task<StockDocument> PostDocumentAsync(SessionContext ctx, Guid documentId)
+    public async Task<StockDocument> PostDocumentAsync(SessionContext ctx, Guid documentId, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.VoucherPost);
         return await db.InTransactionAsync(async () =>
         {
             var doc = await db.StockDocuments.Include(d => d.Lines).FirstOrDefaultAsync(d => d.Id == documentId && d.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Phiếu kho không tồn tại.");
+            if (expectedRowVersion is { } rv && doc.RowVersion != rv)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Phiếu {doc.Number} đã được thay đổi (phiên bản {doc.RowVersion}, bạn đang xem phiên bản {rv}). Vui lòng tải lại.");
             if (doc.Status != StockDocumentStatus.Draft)
                 throw new DomainException(doc.Status == StockDocumentStatus.Posted ? ErrorCodes.AlreadyPosted : ErrorCodes.InvalidStateTransition, $"Phiếu {doc.Number} ở trạng thái {doc.Status}.");
             var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
