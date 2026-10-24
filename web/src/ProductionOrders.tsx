@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, FlowStrip, navStore, useAction } from './common'
+import { focusRowProps, useOpenTarget } from './opentarget'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { PeriodCostingView } from './Production'
 
@@ -55,7 +56,8 @@ function useMaster() {
 function Orders() {
   const m = useMaster()
   const [orders, setOrders] = useState<Order[]>([])
-  const [sel, setSel] = useState<string | null>(null)
+  const openId = useOpenTarget('productionOrder')
+  const [sel, setSel] = useState<string | null>(openId ?? null)
   const [form, setForm] = useState({ itemId: '', costObjectId: '', warehouseId: '', qty: '', start: today(), note: '' })
   const [info, setInfo] = useState('')
   const { busy, error, run, setError } = useAction()
@@ -102,7 +104,7 @@ function Orders() {
 
       <table className="grid">
         <thead><tr><th>Số lệnh</th><th>Thành phẩm</th><th className="num">Kế hoạch</th><th className="num">Thực nhập</th><th>Bắt đầu</th><th>Trạng thái</th><th className="num">Giá thành</th><th className="num">Giá thành đơn vị</th></tr></thead>
-        <tbody>{orders.map(o => <tr key={o.id} className={o.id === sel ? 'selected' : ''} style={{ cursor: 'pointer' }} onClick={() => setSel(o.id)}>
+        <tbody>{orders.map(o => <tr key={o.id} {...(o.id === openId && o.id !== sel ? focusRowProps(o.id, openId) : { className: o.id === sel ? 'selected' : '' })} style={{ cursor: 'pointer' }} onClick={() => setSel(o.id)}>
           <td>{o.number}</td><td>{o.itemCode} – {o.itemName}</td><td className="num">{formatMoney(o.plannedQuantity)} {o.unit}</td><td className="num">{o.actualQuantity ? `${formatMoney(o.actualQuantity)} ${o.unit}` : ''}</td>
           <td>{o.plannedStart}</td><td>{STATUS_VI[o.status]}</td><td className="num">{o.status === 'Completed' || o.status === 'Closed' ? formatMoney(o.totalCost) : ''}</td><td className="num">{o.status === 'Completed' || o.status === 'Closed' ? formatMoney(o.unitCost) : ''}</td></tr>)}
           {orders.length === 0 && <tr><td colSpan={8} className="muted">Chưa có lệnh sản xuất. Lập định mức ở tab &quot;Định mức &amp; tổ xưởng&quot; trước.</td></tr>}</tbody>

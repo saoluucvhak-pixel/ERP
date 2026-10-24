@@ -55,7 +55,7 @@ Bộ mã **R** là của báo cáo `BAO-CAO-GITHUB.md` (24/10/2026, commit rà s
 | PG-01 | **P1** | Migration chỉ sinh cho SQLite → PostgreSQL báo `PendingModelChangesWarning`, hỏng mọi test tích hợp (PR #39–#44) | Sinh thêm bộ `src/Hak.Data.Postgres/Migrations` — **luôn sinh CẢ HAI bộ** khi đổi model | CI job `backend-postgres` |
 | TOOL-01 | P2 | `web/scripts/dev-seed.mjs` và `tools/migrate-fast/hak_import.mjs` gọi submit/approve/post không kèm `rowVersion` | Chuyền phiên bản vừa nhận sang bước sau. `hak_import.mjs` **chưa chạy với dữ liệu thật** | seed chạy được |
 
-Còn mở từ đợt này: đảo hóa đơn MUA làm lệch giá thành đã chốt; worklist chưa có lệnh sản xuất / đề nghị tài sản / người phụ trách riêng; phân trang phía máy chủ cho phiếu kho và lệnh thanh toán; test giao diện tự động `npm run e2e` (Playwright, 4 kịch bản: Thêm nhanh, Kiểm tra chứng từ, Worklist, tách mua/bán) chạy được cục bộ; job CI `e2e` mới thêm, **chưa có kết quả chạy trên GitHub Actions**; màn "Thanh toán chiết khấu" và "Công nợ phải thu/phải trả" vẫn dùng chung hai phân hệ.
+Còn mở từ đợt này: đảo hóa đơn MUA làm lệch giá thành đã chốt; worklist đã có lệnh sản xuất và đề nghị tài sản (lệnh sản xuất chưa kiểm bằng trình duyệt), chưa có người phụ trách riêng; phân trang phía máy chủ cho phiếu kho và lệnh thanh toán; test giao diện tự động `npm run e2e` (Playwright, 6 kịch bản: Thêm nhanh, Kiểm tra chứng từ, Worklist x2, tách mua/bán, cảnh báo nháp chưa lưu) chạy được cục bộ; job CI `e2e` mới thêm, **chưa có kết quả chạy trên GitHub Actions**; màn "Thanh toán chiết khấu" và "Công nợ phải thu/phải trả" vẫn dùng chung hai phân hệ.
 
 ## Chờ chị quyết (đổi quy tắc hạch toán hoặc phân quyền)
 | Mã | Mức | Vấn đề | Đề xuất |

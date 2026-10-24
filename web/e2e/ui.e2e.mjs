@@ -110,3 +110,34 @@ test('Chu trình mua / bán không lẫn: mỗi phân hệ chỉ có đơn của
   }
   await page.close()
 })
+
+test('Worklist: đề nghị mua sắm tài sản chờ duyệt mở thẳng và tô nổi đúng dòng', async () => {
+  const req = await call('POST', '/assets/requests', { class: 'FixedAsset', name: 'E2E máy xúc', department: 'Sản xuất', estimatedCost: '50000000', neededDate: '2026-12-31', reason: 'E2E' }, ctx.preparerToken, ctx.company)
+  const page = await open('ktt')
+  await page.click('.sidebar button:has-text("Quản lý chu trình")'); await page.waitForTimeout(1200)
+  const row = page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: req.number })
+  assert.match(await row.textContent(), /Duyệt đề nghị mua sắm tài sản/)
+  assert.match(await row.textContent(), /Làm được ngay/)
+  await row.locator('button:has-text("Mở")').click(); await page.waitForTimeout(1500)
+  const focused = page.locator('tr.focus-row')
+  assert.equal(await focused.count(), 1)
+  assert.ok((await focused.textContent()).includes(req.number))
+  await page.close()
+})
+
+test('Cảnh báo nội dung nhập dở: đổi phân hệ khi đang nhập phiếu thì hỏi, hủy thì ở lại', async () => {
+  const page = await open('ktt')
+  page.removeAllListeners('dialog')
+  const asked = []
+  page.on('dialog', d => { asked.push(d.message()); d.dismiss() })
+  await page.click('.quick-add-btn'); await page.click('.quick-add-pop >> text="Thu tiền"'); await page.waitForTimeout(700)
+  await page.fill('label:has-text("Diễn giải") input', 'E2E đang nhập dở')
+  await page.click('.sidebar button:has-text("Kho")'); await page.waitForTimeout(500)
+  assert.equal(asked.length, 1, 'phải hỏi trước khi rời')
+  assert.match(asked[0], /chưa lưu/)
+  assert.equal(await page.locator('label:has-text("Diễn giải") input').inputValue(), 'E2E đang nhập dở', 'hủy thì ở lại, giữ nội dung')
+  page.removeAllListeners('dialog'); page.on('dialog', d => d.accept())
+  await page.click('.sidebar button:has-text("Kho")'); await page.waitForTimeout(700)
+  assert.equal(await page.locator('label:has-text("Diễn giải") input').count(), 0, 'đồng ý thì rời màn')
+  await page.close()
+})
