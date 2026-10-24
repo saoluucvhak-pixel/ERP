@@ -241,12 +241,29 @@ public class ApiTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Keyed("short", Voucher("Khóa ngắn", "1000"))).StatusCode);
         Assert.Equal(totalBefore + 1, (int)(await Json(await lap.GetAsync("/api/vouchers")))["total"]!);
 
-        await Json(await lap.PostAsync($"/api/vouchers/{id}/submit", null));
-        Assert.Equal(HttpStatusCode.Forbidden, (await lap.PostAsync($"/api/vouchers/{id}/approve", null)).StatusCode);
-        await Json(await ktt.PostAsync($"/api/vouchers/{id}/approve", null));
+        // Thao tác của người dùng bắt buộc mang rowVersion đã xem: thiếu → 400, cũ → 409, đúng → chạy.
+        var rv = (long)v["rowVersion"]!;
+        Assert.Equal(HttpStatusCode.BadRequest, (await lap.PostAsync($"/api/vouchers/{id}/submit", null)).StatusCode);
+        rv = (long)(await Json(await lap.PostAsync($"/api/vouchers/{id}/submit?rowVersion={rv}", null)))["rowVersion"]!;
+        Assert.Equal(HttpStatusCode.Forbidden, (await lap.PostAsync($"/api/vouchers/{id}/approve?rowVersion={rv}", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ktt.PostAsync($"/api/vouchers/{id}/approve", null)).StatusCode);
+        rv = (long)(await Json(await ktt.PostAsync($"/api/vouchers/{id}/approve?rowVersion={rv}", null)))["rowVersion"]!;
         Assert.Equal(HttpStatusCode.Conflict, (await ktt.PostAsync($"/api/vouchers/{id}/post?rowVersion=1", null)).StatusCode);
-        await Json(await ktt.PostAsync($"/api/vouchers/{id}/post", null));
-        Assert.Equal(HttpStatusCode.Conflict, (await ktt.PostAsync($"/api/vouchers/{id}/post", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ktt.PostAsync($"/api/vouchers/{id}/post", null)).StatusCode);
+        await Json(await ktt.PostAsync($"/api/vouchers/{id}/post?rowVersion={rv}", null));
+        Assert.Equal(HttpStatusCode.Conflict, (await ktt.PostAsync($"/api/vouchers/{id}/post?rowVersion={rv}", null)).StatusCode);
+
+        // Xem v → người khác trả lại, sửa, gửi lại (v mới) → duyệt bằng v cũ hoặc bỏ version bị từ chối; đúng version mới được duyệt.
+        var vc = await Json(await lap.PostAsJsonAsync("/api/vouchers", Voucher("Duyệt đúng bản đã xem", "5000")));
+        var vcId = (string)vc["id"]!;
+        var seen = (long)(await Json(await lap.PostAsync($"/api/vouchers/{vcId}/submit?rowVersion={(long)vc["rowVersion"]!}", null)))["rowVersion"]!;   // ktt xem bản này
+        var back = await Json(await ktt.PostAsJsonAsync($"/api/vouchers/{vcId}/reject?rowVersion={seen}", new { reason = "Sửa lại số liệu" }));
+        Assert.Equal(HttpStatusCode.OK, (await lap.PutAsJsonAsync($"/api/vouchers/{vcId}?rowVersion={(long)back["rowVersion"]!}", Voucher("Đã sửa nội dung", "6000"))).StatusCode);
+        var edited = await Json(await lap.GetAsync($"/api/vouchers/{vcId}"));
+        var resubmitted = (long)(await Json(await lap.PostAsync($"/api/vouchers/{vcId}/submit?rowVersion={(long)edited["rowVersion"]!}", null)))["rowVersion"]!;
+        Assert.Equal(HttpStatusCode.Conflict, (await ktt.PostAsync($"/api/vouchers/{vcId}/approve?rowVersion={seen}", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ktt.PostAsync($"/api/vouchers/{vcId}/approve", null)).StatusCode);
+        Assert.Equal("Approved", (string)(await Json(await ktt.PostAsync($"/api/vouchers/{vcId}/approve?rowVersion={resubmitted}", null)))["status"]!);
 
         var tb = await Json(await ktt.GetAsync("/api/reports/trial-balance?from=2026-03-01&to=2026-03-31"));
         Assert.True((bool)tb["isBalanced"]!);

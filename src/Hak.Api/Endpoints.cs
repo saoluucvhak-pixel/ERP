@@ -196,15 +196,16 @@ public static class Endpoints
             Results.Ok(VoucherDto.From(await e.CreateAdjustmentAsync(await http.SessionAsync(), id, ToInput(r)))));
         api.MapPost("/vouchers/{id:guid}/validate", async (HttpContext http, Guid id, AccountingEngine e) =>
             Results.Ok(await e.ValidateAsync(await http.SessionAsync(), id)));
-        api.MapPost("/vouchers/{id:guid}/submit", async (HttpContext http, Guid id, long? rowVersion, AccountingEngine e) =>
+        // Thao tác của người dùng trên chứng từ BẮT BUỘC mang rowVersion đã xem (thiếu → 400, cũ → 409); lệnh nội bộ gọi thẳng AccountingEngine với version tùy chọn.
+        api.MapPost("/vouchers/{id:guid}/submit", async (HttpContext http, Guid id, long rowVersion, AccountingEngine e) =>
             Results.Ok(VoucherDto.From(await e.SubmitAsync(await http.SessionAsync(), id, rowVersion))));
-        api.MapPost("/vouchers/{id:guid}/approve", async (HttpContext http, Guid id, long? rowVersion, AccountingEngine e) =>
+        api.MapPost("/vouchers/{id:guid}/approve", async (HttpContext http, Guid id, long rowVersion, AccountingEngine e) =>
             Results.Ok(VoucherDto.From(await e.ApproveAsync(await http.SessionAsync(), id, rowVersion))));
-        api.MapPost("/vouchers/{id:guid}/reject", async (HttpContext http, Guid id, long? rowVersion, ReasonRequest r, AccountingEngine e) =>
+        api.MapPost("/vouchers/{id:guid}/reject", async (HttpContext http, Guid id, long rowVersion, ReasonRequest r, AccountingEngine e) =>
             Results.Ok(VoucherDto.From(await e.RejectAsync(await http.SessionAsync(), id, r.Reason, rowVersion))));
-        api.MapPost("/vouchers/{id:guid}/cancel", async (HttpContext http, Guid id, long? rowVersion, ReasonRequest r, AccountingEngine e) =>
+        api.MapPost("/vouchers/{id:guid}/cancel", async (HttpContext http, Guid id, long rowVersion, ReasonRequest r, AccountingEngine e) =>
             Results.Ok(VoucherDto.From(await e.CancelAsync(await http.SessionAsync(), id, r.Reason, rowVersion))));
-        api.MapPost("/vouchers/{id:guid}/post", async (HttpContext http, Guid id, long? rowVersion, AccountingEngine e) =>
+        api.MapPost("/vouchers/{id:guid}/post", async (HttpContext http, Guid id, long rowVersion, AccountingEngine e) =>
         {
             var j = await e.PostAsync(await http.SessionAsync(), id, rowVersion);
             return Results.Ok(new { journalEntryId = j.Id, j.PostingDate, j.VoucherNumber });
