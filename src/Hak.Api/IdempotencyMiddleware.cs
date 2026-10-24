@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Hak.Application.Common;
+using Hak.Application.Security;
 using Hak.Data;
 using Hak.Domain.Common;
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +48,8 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
         var buffer = new MemoryStream();
         IdempotencyRecord? replay = null;
         var recorded = false;
+        var required = new HashSet<string>(StringComparer.Ordinal);
+        SessionContext.Tracker.Value = required;
         try
         {
             http.Response.Body = buffer;
@@ -66,6 +69,7 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
                 {
                     Id = Ids.New(), Scope = scope, Key = key!, RequestHash = hash, Method = req.Method, Path = req.Path.Value ?? "", StatusCode = http.Response.StatusCode,
                     ContentType = http.Response.ContentType, ResponseBody = Encoding.UTF8.GetString(buffer.ToArray()), CreatedAt = clock.UtcNow,
+                    RequiredPermissions = string.Join(',', required.Order(StringComparer.Ordinal)),
                 });
                 await db.IdempotencyRecords.Where(r => r.CreatedAt < clock.UtcNow - Retention).ExecuteDeleteAsync();
                 await db.SaveChangesAsync();
@@ -73,10 +77,11 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
             });
         }
         catch (NotRecorded) { /* trả phản hồi lỗi đã đệm bên dưới */ }
-        finally { http.Response.Body = original; }
+        finally { http.Response.Body = original; SessionContext.Tracker.Value = null; }
 
         if (replay is not null)
         {
+            await AuthorizeReplayAsync(http, replay);   // quyền HIỆN TẠI, trước mọi phản hồi đã lưu (kể cả 422 khóa dùng lại)
             if (replay.RequestHash != hash)
             {
                 http.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
@@ -92,6 +97,17 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
         _ = recorded;
         buffer.Position = 0;
         await buffer.CopyToAsync(original);
+    }
+
+    /// <summary>
+    /// Phản hồi đã lưu chỉ được trả khi người gọi VẪN còn quyền: còn vai trò tại công ty và còn đủ các quyền yêu cầu gốc đã đòi. Không chạy lại thao tác ghi.
+    /// Bản ghi cũ (chưa lưu quyền) chỉ kiểm được việc còn thuộc công ty.
+    /// </summary>
+    private static async Task AuthorizeReplayAsync(HttpContext http, IdempotencyRecord record)
+    {
+        var ctx = await http.SessionAsync();   // 401 nếu phiên hết hiệu lực, 403 nếu không còn vai trò nào tại công ty
+        if (string.IsNullOrEmpty(record.RequiredPermissions)) return;
+        foreach (var p in record.RequiredPermissions.Split(',', StringSplitOptions.RemoveEmptyEntries)) ctx.Require(p);
     }
 
     /// <summary>

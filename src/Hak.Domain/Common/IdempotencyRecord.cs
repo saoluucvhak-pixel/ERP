@@ -17,5 +17,7 @@ public sealed class IdempotencyRecord
     public int StatusCode { get; set; }
     public string? ContentType { get; set; }
     public string ResponseBody { get; set; } = "";
+    /// <summary>Các quyền (phân tách bằng dấu phẩy) mà yêu cầu gốc đã đòi khi chạy; kiểm lại với quyền HIỆN TẠI trước khi trả phản hồi đã lưu. Null = bản ghi cũ, không biết quyền.</summary>
+    public string? RequiredPermissions { get; set; }
     public DateTime CreatedAt { get; set; }
 }

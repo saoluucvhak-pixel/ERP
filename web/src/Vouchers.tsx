@@ -25,6 +25,7 @@ export function VouchersView() {
   const { busy, error, run } = useAction()
   const loadSeq = useRef(0)
   const [info, setInfo] = useState('')
+  const [infoBad, setInfoBad] = useState(false)   // kết quả Kiểm tra có lỗi: hiện màu lỗi, không bị thông báo chung ghi đè
   const [accountId, setAccountId] = useState('')
   const { accounts: allAccounts } = useCatalog()
 
@@ -40,7 +41,13 @@ export function VouchersView() {
   }), [from, to, status, type, search, accountId, page, run])
   useEffect(() => { load() }, [load])
 
-  const act = (label: string, fn: () => Promise<unknown>) => run(async () => { await fn(); setInfo(label); await load() })
+  // label có thể là hàm của kết quả fn, để thông báo cuối cùng (kể cả lỗi kiểm tra chi tiết) được đặt MỘT lần, sau khi action kết thúc.
+  const act = (label: string | ((result: any) => { text: string; bad?: boolean }), fn: () => Promise<unknown>) => run(async () => {
+    const result = await fn()
+    const out = typeof label === 'function' ? label(result) : { text: label, bad: false }
+    setInfo(out.text); setInfoBad(!!out.bad)
+    await load()
+  })
   // Bulk actions on the ticked vouchers: one by one in posting-date order through the same endpoints as a single voucher, so every
   // check still applies (approver ≠ preparer, open period, cash funds not negative…); failures are listed, the rest continue.
   const bulk = (label: string, from: string[], steps: string[]) => run(async () => {
@@ -56,7 +63,7 @@ export function VouchersView() {
       } catch (e) { failed.push(`${x.number}: ${e instanceof Error ? e.message : String(e)}`) }
     }
     const skipped = checked.size - todo.length
-    setInfo(`${label}: ${done} chứng từ.${skipped ? ` Bỏ qua ${skipped} chứng từ không ở trạng thái phù hợp.` : ''}${failed.length ? ` Không làm được ${failed.length}: ${failed.slice(0, 8).join(' | ')}${failed.length > 8 ? ' …' : ''}` : ''}`)
+    setInfoBad(false); setInfo(`${label}: ${done} chứng từ.${skipped ? ` Bỏ qua ${skipped} chứng từ không ở trạng thái phù hợp.` : ''}${failed.length ? ` Không làm được ${failed.length}: ${failed.slice(0, 8).join(' | ')}${failed.length > 8 ? ' …' : ''}` : ''}`)
     setChecked(new Set())
     await load()
   })
@@ -84,7 +91,7 @@ export function VouchersView() {
         shown={list.length} total={total} />
       <div className="toolbar"><label>Tài khoản<AccountSelect accounts={allAccounts} value={accountId} onChange={id => { setAccountId(id); setPage(0) }} ariaLabel="Lọc theo tài khoản" /></label></div>
       <ErrorBox error={error} />
-      {info && !error && <div className={info.includes('Không làm được') ? 'msg error' : 'msg ok'}>{info}</div>}
+      {info && !error && <div className={infoBad || info.includes('Không làm được') ? 'msg error' : 'msg ok'}>{info}</div>}
       {checked.size > 0 && <div className="toolbar panel">
         <strong>Đã chọn {checked.size} chứng từ</strong>
         <button disabled={busy || !count('Draft')} onClick={() => bulk('Đã gửi duyệt', ['Draft'], ['submit'])}>Gửi duyệt ({count('Draft')})</button>
@@ -101,10 +108,10 @@ export function VouchersView() {
             <span className="muted">{TYPE_VI[v.voucherType] ?? v.voucherType} · {formatDate(v.postingDate)} · {v.description}</span>
             <span style={{ marginLeft: 'auto' }} />
             {v.status === 'Draft' && !isModuleGenerated(v) && (CASH_TYPES.includes(v.voucherType) ? canEditAsCashDoc(v) : canEditJournalVoucher(v)) && <button onClick={() => setEditing(v)}>Sửa</button>}
-            <button onClick={() => act('Kiểm tra: xem kết quả bên dưới', async () => {
-              const errs = await post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`)
-              setInfo(errs.length ? errs.map(e => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | ') : 'Hợp lệ, có thể gửi duyệt.')
-            })}>Kiểm tra</button>
+            <button onClick={() => act(errs => errs.length
+              ? { text: errs.map((e: { lineNo: number | null; message: string }) => `${e.lineNo ? 'Dòng ' + e.lineNo + ': ' : ''}${e.message}`).join(' | '), bad: true }
+              : { text: 'Hợp lệ, có thể gửi duyệt.' },
+            () => post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`))}>Kiểm tra</button>
             {v.status === 'Posted' && <button className="danger" onClick={() => {
               const reason = prompt('Lý do đảo bút toán:'); if (!reason) return
               const date = prompt('Ngày đảo (yyyy-mm-dd):', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }))
