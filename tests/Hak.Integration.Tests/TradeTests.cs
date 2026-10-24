@@ -137,6 +137,26 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task ReverseOriginal_IsBlockedWhilePostedAdjustmentsExist_AndWritesNothing()
+    {
+        // ERP-P2.3: không đảo hóa đơn gốc khi còn hóa đơn điều chỉnh (giảm giá / trả hàng) đã ghi sổ — đảo điều chỉnh trước.
+        using var fx = await SetupAsync();
+        var invoice = await PostedPurchaseOfAdditiveAsync(fx);
+        var discount = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(invoice.Id, InvoicePurpose.Discount, "1C26TAA", "0000310", D(3, 12), D(3, 12),
+            "Giảm giá", [new AdjustmentLineInput(1, Amount: 1_000_000)]));
+        await fx.Inv.PostAsync(fx.H.Approver, discount.Id);
+        var inv = await fx.Bal("INV"); var ap = await fx.Bal("AP", fx.H.Partner["NCC01"]);
+        var journals = await fx.S.Db.JournalEntries.CountAsync();
+
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 14), "Đảo hóa đơn gốc")));
+        Assert.Equal((inv, ap, journals), (await fx.Bal("INV"), await fx.Bal("AP", fx.H.Partner["NCC01"]), await fx.S.Db.JournalEntries.CountAsync()));   // không có bút toán hay điều chỉnh giá dở dang
+        Assert.Equal(InvoiceStatus.Posted, (await fx.S.Db.CommercialInvoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id)).Status);
+
+        await fx.Inv.ReverseAsync(fx.H.Approver, discount.Id, D(3, 13), "Hủy giảm giá");           // đảo điều chỉnh trước…
+        Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 14), "Đảo hóa đơn gốc")).Status);   // …rồi mới đảo được hóa đơn gốc
+    }
+
+    [Fact]
     public async Task Purchase_PricedPerBdmt_ValuesTheDraftReceipt_AndBooksApWithVat()
     {
         using var fx = await SetupAsync();
