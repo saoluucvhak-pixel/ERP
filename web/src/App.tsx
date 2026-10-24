@@ -6,6 +6,7 @@ import { FlowTab, MODULES, moduleOfScreen } from './Modules'
 import { QuickAdd } from './QuickAdd'
 import { ErrorBox, navStore, useAction } from './common'
 import { confirmLeave } from './unsaved'
+import { setPermissions } from './perms'
 import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
 
 // Màn hình nghiệp vụ tải theo nhu cầu (mỗi màn một chunk): lần mở đầu chỉ tải khung, Tổng quan và màn đang mở.
@@ -203,6 +204,14 @@ export default function App() {
     if (!token || !companyId) return
     get<{ screen: string; count: number; kind?: string | null }[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.kind ? `${x.screen}:${x.kind}` : x.screen, x.count])))).catch(() => setWork({}))
   }, [token, companyId, moduleKey, tab])
+
+  // Quyền tại công ty đang chọn (để ẩn chức năng không được phép, ví dụ Xuất Excel khi thiếu data.export).
+  useEffect(() => {
+    if (!token || !companyId) { setPermissions(null); return }
+    let live = true
+    get<string[]>('/me/permissions').then(p => { if (live) setPermissions(p) }).catch(() => { if (live) setPermissions(null) })
+    return () => { live = false }
+  }, [token, companyId])
 
   const logout = async () => {
     try { await post('/auth/logout') } catch { /* already expired */ }

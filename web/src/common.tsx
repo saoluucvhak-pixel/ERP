@@ -1,6 +1,7 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { NavIntent } from './quickadd'
+import { usePermission } from './perms'
 import { ApiError, UNCERTAIN_CODE, get, isStaleContext, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
@@ -40,8 +41,9 @@ export function FlowStrip({ steps }: { steps: FlowStep[] }) {
 export function ExportButton({ fileName, sheet, columns, rows, disabled, title, subtitle }:
   { fileName: string; sheet: string; columns: Column[]; rows: Cell[][]; disabled?: boolean; title?: string; subtitle?: string }) {
   const [printing, setPrinting] = useState(false)
+  const canExport = usePermission('data.export')   // quyền xuất dữ liệu; In vẫn dùng được (bản in chính thức)
   return <>
-    <button disabled={disabled || rows.length === 0} onClick={() => downloadXlsx(fileName, sheet, columns, rows)}>Xuất Excel</button>
+    {canExport && <button disabled={disabled || rows.length === 0} onClick={() => downloadXlsx(fileName, sheet, columns, rows)}>Xuất Excel</button>}
     <button disabled={disabled || rows.length === 0} onClick={() => setPrinting(true)} title="In bản chính thức: tên công ty, tiêu đề, chữ ký">In</button>
     {printing && <TablePrint title={title ?? sheet} subtitle={subtitle ?? fileName.replace(/_/g, ' ')} columns={columns} rows={rows} onDone={() => setPrinting(false)} />}
   </>

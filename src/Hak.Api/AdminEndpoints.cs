@@ -45,6 +45,12 @@ public static class AdminEndpoints
             await s.ChangeOwnPasswordAsync(user.Id, session.Id, r.CurrentPassword, r.NewPassword, http.ClientSource());
             return Results.NoContent();
         });
+        // Quyền của người dùng tại công ty đang chọn (header X-Company-Id): giao diện dùng để ẩn chức năng không được phép (xuất file chạy ở trình duyệt nên máy chủ không chặn được, chỉ chặn dữ liệu gốc).
+        app.MapGet("/api/me/permissions", async (HttpContext http) =>
+        {
+            var ctx = await http.SessionAsync();
+            return Results.Ok(ctx.Permissions.OrderBy(p => p, StringComparer.Ordinal).ToList());
+        });
         app.MapGet("/api/me", async (HttpContext http) =>
         {
             var (user, _) = await http.AuthAsync();

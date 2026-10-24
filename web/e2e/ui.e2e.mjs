@@ -141,3 +141,28 @@ test('Cảnh báo nội dung nhập dở: đổi phân hệ khi đang nhập phi
   assert.equal(await page.locator('label:has-text("Diễn giải") input').count(), 0, 'đồng ý thì rời màn')
   await page.close()
 })
+
+test('data.export: người chỉ có quyền xem (kiểm toán nội bộ) không thấy nút Xuất Excel, kế toán trưởng thấy', async () => {
+  const admin = (await call('POST', '/auth/login', { userName: 'admin', password: creds.users.admin })).token
+  const pw = 'E2e-Password-123'
+  const u = await call('POST', '/admin/users', { userName: 'e2eaudit', fullName: 'Kiểm toán E2E', password: pw }, admin)
+  await call('POST', '/admin/grants', { userId: u.id, companyId: ctx.company, roleCode: 'INTERNAL_AUDITOR' }, admin)
+  const openAs = async (user, password) => {
+    const page = await browser.newPage(); page.on('dialog', d => d.accept())
+    await page.goto(WEB + '/')
+    await page.fill('input[type=text], input:not([type])', user); await page.fill('input[type=password]', password)
+    await page.click('button:has-text("Đăng nhập")'); await page.waitForTimeout(1200)
+    const company = page.locator('button', { hasText: 'DEV01' }); if (await company.count()) await company.first().click()
+    await page.waitForSelector('.quick-add-btn'); await page.waitForTimeout(800)
+    await page.click('.sidebar button:has-text("Tổng hợp")'); await page.waitForTimeout(600)
+    await page.click('[role=tab]:has-text("Chứng từ kế toán")'); await page.waitForTimeout(1200)
+    return page
+  }
+  const auditor = await openAs('e2eaudit', pw)
+  assert.equal(await auditor.locator('button:has-text("Xuất Excel")').count(), 0, 'kiểm toán không có data.export')
+  assert.ok(await auditor.locator('button:has-text("In")').count() > 0, 'vẫn in được')
+  await auditor.close()
+  const chief = await openAs('ktt', creds.users.ktt)
+  assert.ok(await chief.locator('button:has-text("Xuất Excel")').count() > 0, 'kế toán trưởng có data.export')
+  await chief.close()
+})
