@@ -195,3 +195,21 @@ test('Công nợ và Chiết khấu thanh toán tách theo chiều: Bán hàng c
   }
   await page.close()
 })
+
+test('Worklist: lệnh sản xuất nháp chờ ban hành mở thẳng và chọn sẵn đúng lệnh', async () => {
+  const damsx = ctx.item('DAMSX'), gokeo = ctx.item('GOKEO')
+  await call('PUT', `/production/boms/${damsx}`, { lines: [{ rawItemId: gokeo, quantityPerUnit: '1', scrapRate: '0' }], note: 'E2E định mức' }, ctx.preparerToken, ctx.company)
+  const objects = await call('GET', '/production/cost-objects', null, ctx.preparerToken, ctx.company)
+  const wh = (await call('GET', '/warehouses', null, ctx.preparerToken, ctx.company))[0].id
+  const order = await call('POST', '/production/orders', { itemId: damsx, costObjectId: objects.find(o => o.code === 'SX-DAM').id, warehouseId: wh, plannedQuantity: '10', plannedStart: '2026-11-01', note: 'E2E lệnh sản xuất' }, ctx.preparerToken, ctx.company)
+  const page = await open('ktt')
+  await page.click('.sidebar button:has-text("Quản lý chu trình")'); await page.waitForTimeout(1200)
+  const row = page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: order.number })
+  assert.match(await row.textContent(), /Ban hành lệnh sản xuất/)
+  assert.match(await row.textContent(), /Làm được ngay/)
+  await row.locator('button:has-text("Mở")').click(); await page.waitForTimeout(1500)
+  const selectedRow = page.locator('tr.selected')
+  assert.equal(await selectedRow.count(), 1)
+  assert.ok((await selectedRow.textContent()).includes(order.number))
+  await page.close()
+})
