@@ -20,7 +20,9 @@ public sealed record InvoiceLineInput(decimal UnitPrice, Guid? StockDocumentId =
 
 public sealed record InvoiceInput(InvoiceKind Kind, Guid PartnerId, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate,
     string Description, IReadOnlyList<InvoiceLineInput> Lines, DateOnly? DueDate = null, string? Currency = null, decimal? ExchangeRate = null,
-    decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null);
+    decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null,
+    /// <summary>Lý do cố ý lập hóa đơn từ phiếu kho của đối tượng khác; chỉ có tác dụng với người có quyền invoice.partner_override và được ghi nhật ký.</summary>
+    string? PartnerOverrideReason = null);
 
 public sealed record PriceDifferenceWarning(int LineNo, string ReceiptNumber, decimal ReceiptValue, decimal InvoiceValue, decimal Difference,
     decimal ReceiptQuantity, decimal QuantityInStock, decimal InventoryPart, decimal CogsPart, string Method);
@@ -71,12 +73,15 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             };
             inv.Number = await NextNumberAsync(ctx.CompanyId, fy, input.Kind == InvoiceKind.Purchase ? "HDM" : "HDB");
             var n = 0;
+            var partnerOverrides = new List<string>();
             foreach (var l in input.Lines)
-                inv.Lines.Add(await BuildLineAsync(ctx, inv, l, ++n, curDp, funcDp));
+                inv.Lines.Add(await BuildLineAsync(ctx, inv, l, ++n, curDp, funcDp, input.PartnerOverrideReason, partnerOverrides));
             await CheckTotalsAgainstSourcesAsync(ctx.CompanyId, inv);
             db.CommercialInvoices.Add(inv);
             await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.create", "invoice", inv.Id.ToString(),
                 new { inv.Number, inv.Kind, inv.InvoiceSeries, inv.InvoiceNo, total = inv.Lines.Sum(x => x.FunctionalAmount + x.VatAmount) });
+            if (partnerOverrides.Count > 0)
+                await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.partner_override", "invoice", inv.Id.ToString(), new { inv.Number, reason = input.PartnerOverrideReason!.Trim(), documents = partnerOverrides });
             await db.SaveChangesAsync();
             return inv;
         });
@@ -319,7 +324,8 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
 
     // ------------------------------------------------------------------ helpers
 
-    private async Task<CommercialInvoiceLine> BuildLineAsync(SessionContext ctx, CommercialInvoice inv, InvoiceLineInput l, int lineNo, int curDp, int funcDp)
+    private async Task<CommercialInvoiceLine> BuildLineAsync(SessionContext ctx, CommercialInvoice inv, InvoiceLineInput l, int lineNo, int curDp, int funcDp,
+        string? partnerOverrideReason = null, List<string>? partnerOverrides = null)
     {
         if (l.UnitPrice < 0 || !MoneyMath.HasAtMostDecimals(l.UnitPrice, MoneyMath.StorageScale))
             throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: đơn giá không hợp lệ (≥ 0, tối đa 4 chữ số thập phân).");
@@ -350,7 +356,13 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 throw new DomainException(ErrorCodes.OrderMismatch, $"Dòng {lineNo}: đối tượng hóa đơn khác đối tượng của đơn hàng gắn với phiếu {doc.Number}.");
             // Phiếu kho (kể cả phiếu không có đơn) phải cùng đối tượng với hóa đơn; phiếu không ghi đối tượng thì không có gì để so.
             if (doc.PartnerId is { } docPartner && docPartner != inv.PartnerId)
-                throw new DomainException(ErrorCodes.PartnerMismatch, $"Dòng {lineNo}: phiếu {doc.Number} thuộc đối tượng khác với đối tượng của hóa đơn.");
+            {
+                // Ngoại lệ: người có quyền invoice.partner_override ghi lý do thì được lập; mọi trường hợp khác bị chặn. Ngoại lệ được ghi nhật ký ở CreateAsync.
+                if (string.IsNullOrWhiteSpace(partnerOverrideReason) || partnerOverrides is null)
+                    throw new DomainException(ErrorCodes.PartnerMismatch, $"Dòng {lineNo}: phiếu {doc.Number} thuộc đối tượng khác với đối tượng của hóa đơn.");
+                ctx.Require(Permissions.InvoicePartnerOverride);
+                partnerOverrides.Add(doc.Number);
+            }
             line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(ctx.CompanyId, doc.Id, sl.LineNo, null);
             if (line.StockQuantity <= 0) throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {lineNo}: phiếu {doc.Number} dòng {sl.LineNo} đã lập hóa đơn đủ.");
             await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null);

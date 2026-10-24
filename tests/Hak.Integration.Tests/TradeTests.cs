@@ -191,10 +191,20 @@ public class TradeTests
         var d = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 10), D(3, 10), "Xuất bán KH01",
             [new StockLineInput(fx.Dam, 10, CounterAccountId: fx.A("COGS"))], PartnerId: fx.H.Partner["KH01"]));
         var issue = await fx.S.Stock.PostDocumentAsync(fx.H.Approver, d.Id);
-        InvoiceInput For(string partner) => new(InvoiceKind.Sales, fx.H.Partner[partner], "1C26TXK", "0000077", D(3, 12), D(3, 12), "Bán hàng",
+        InvoiceInput For(string partner, string no = "0000077") => new(InvoiceKind.Sales, fx.H.Partner[partner], "1C26TXK", no, D(3, 12), D(3, 12), "Bán hàng",
             [new InvoiceLineInput(2_000_000, issue.Id, 1, VatRate: 8)], DueDate: D(4, 11));
         Assert.Equal(ErrorCodes.PartnerMismatch, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, For("KH02"))));
         Assert.Equal(InvoiceStatus.Draft, (await fx.Inv.CreateAsync(fx.H.Preparer, For("KH01"))).Status);
+
+        var d2 = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 11), D(3, 11), "Xuất bán KH01 (lần 2)",
+            [new StockLineInput(fx.Dam, 5, CounterAccountId: fx.A("COGS"))], PartnerId: fx.H.Partner["KH01"]));
+        issue = await fx.S.Stock.PostDocumentAsync(fx.H.Approver, d2.Id);   // phiếu chưa lập hóa đơn nào, cho các lần thử ngoại lệ
+        // Ngoại lệ có quyền + lý do + nhật ký: thiếu lý do vẫn bị chặn (kể cả người có quyền); thiếu quyền → Forbidden; đủ cả hai → lập được và có dòng nhật ký.
+        Assert.Equal(ErrorCodes.PartnerMismatch, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Approver, For("KH02", "0000079") with { PartnerOverrideReason = "  " })));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, For("KH02", "0000079") with { PartnerOverrideReason = "Khách đổi pháp nhân" })));
+        var overridden = await fx.Inv.CreateAsync(fx.H.Approver, For("KH02", "0000078") with { PartnerOverrideReason = "Khách đổi pháp nhân, có công văn 12/2026" });
+        Assert.Equal(fx.H.Partner["KH02"], overridden.PartnerId);
+        Assert.Contains(await fx.S.Db.AuditLogs.AsNoTracking().ToListAsync(), a => a.Action == "invoice.partner_override" && a.EntityId == overridden.Id.ToString());
     }
 
     [Fact]

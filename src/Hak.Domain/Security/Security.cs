@@ -130,6 +130,8 @@ public static class Permissions
     public const string PaymentVariance = "payment.variance";
     /// <summary>Chấp thuận xác nhận đơn bán vượt hạn mức tín dụng của khách hàng (người có thẩm quyền, kèm lý do).</summary>
     public const string CreditOverride = "credit.override";
+    /// <summary>Cố ý lập hóa đơn từ phiếu kho của đối tượng khác (bắt buộc ghi lý do; có nhật ký).</summary>
+    public const string InvoicePartnerOverride = "invoice.partner_override";
     public const string BankReconcile = "bank.reconcile";
     public const string StockDocument = "stock.document";
     public const string InvoiceDocument = "invoice.document";
