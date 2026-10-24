@@ -2160,6 +2160,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("request_hash");
 
+                    b.Property<string>("RequiredPermissions")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("required_permissions");
+
                     b.Property<string>("ResponseBody")
                         .IsRequired()
                         .HasColumnType("TEXT")

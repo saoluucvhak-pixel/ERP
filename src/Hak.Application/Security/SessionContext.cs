@@ -14,8 +14,12 @@ public sealed record SessionContext(
     Guid? SessionId = null,
     string? Device = null)
 {
+    /// <summary>Nếu được đặt (bởi IdempotencyMiddleware), mọi quyền được đòi trong yêu cầu hiện tại được ghi vào đây để kiểm lại khi trả phản hồi đã lưu.</summary>
+    public static readonly AsyncLocal<HashSet<string>?> Tracker = new();
+
     public void Require(string permission)
     {
+        Tracker.Value?.Add(permission);
         if (!Permissions.Contains(permission))
             throw new DomainException(ErrorCodes.Forbidden, $"Người dùng không có quyền '{permission}' tại công ty này.");
     }
