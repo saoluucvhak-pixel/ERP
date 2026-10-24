@@ -6,6 +6,7 @@ import { FlowTab, MODULES, moduleOfScreen } from './Modules'
 import { QuickAdd } from './QuickAdd'
 import { ErrorBox, navStore, useAction } from './common'
 import { confirmLeave } from './unsaved'
+import { setPermissions } from './perms'
 import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
 
 // Màn hình nghiệp vụ tải theo nhu cầu (mỗi màn một chunk): lần mở đầu chỉ tải khung, Tổng quan và màn đang mở.
@@ -132,8 +133,8 @@ const KIND_OF_MODULE: Record<string, 'Purchase' | 'Sales'> = { purchase: 'Purcha
 const KINDED_SCREENS = new Set(['orders', 'trade', 'services'])
 const workKey = (moduleKey: string, screen: string) => (KIND_OF_MODULE[moduleKey] && KINDED_SCREENS.has(screen) ? `${screen}:${KIND_OF_MODULE[moduleKey]}` : screen)
 const KIND_LABELS: Record<string, Record<string, string>> = {
-  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua' },
-  sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán' },
+  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua', arap: 'Công nợ phải trả', paydiscount: 'Chiết khấu được hưởng' },
+  sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán', arap: 'Công nợ phải thu', paydiscount: 'Chiết khấu cho khách' },
 }
 const tabLabel = (moduleKey: string, screen: string) => KIND_LABELS[moduleKey]?.[screen] ?? SCREEN_LABELS[screen]
 
@@ -203,6 +204,16 @@ export default function App() {
     if (!token || !companyId) return
     get<{ screen: string; count: number; kind?: string | null }[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.kind ? `${x.screen}:${x.kind}` : x.screen, x.count])))).catch(() => setWork({}))
   }, [token, companyId, moduleKey, tab])
+
+  // Đổi công ty: bỏ mọi trạng thái điều hướng còn sót của công ty cũ (phiếu thu dựng sẵn, sổ cái nhảy tới, ý định mở chứng từ) để không dùng nhầm id của công ty khác.
+  useEffect(() => { navStore.receipt = undefined; navStore.ledger = undefined; navStore.intent = undefined; navStore.intentDest = undefined; navStore.setupTab = undefined }, [companyId])
+  // Quyền tại công ty đang chọn (để ẩn chức năng không được phép, ví dụ Xuất Excel khi thiếu data.export).
+  useEffect(() => {
+    if (!token || !companyId) { setPermissions(null); return }
+    let live = true
+    get<string[]>('/me/permissions').then(p => { if (live) setPermissions(p) }).catch(() => { if (live) setPermissions(null) })
+    return () => { live = false }
+  }, [token, companyId])
 
   const logout = async () => {
     try { await post('/auth/logout') } catch { /* already expired */ }

@@ -141,3 +141,75 @@ test('Cảnh báo nội dung nhập dở: đổi phân hệ khi đang nhập phi
   assert.equal(await page.locator('label:has-text("Diễn giải") input').count(), 0, 'đồng ý thì rời màn')
   await page.close()
 })
+
+test('data.export: người chỉ có quyền xem (kiểm toán nội bộ) không thấy nút Xuất Excel, kế toán trưởng thấy', async () => {
+  const admin = (await call('POST', '/auth/login', { userName: 'admin', password: creds.users.admin })).token
+  const pw = 'E2e-Password-123'
+  const u = await call('POST', '/admin/users', { userName: 'e2eaudit', fullName: 'Kiểm toán E2E', password: pw }, admin)
+  await call('POST', '/admin/grants', { userId: u.id, companyId: ctx.company, roleCode: 'INTERNAL_AUDITOR' }, admin)
+  const openAs = async (user, password) => {
+    const page = await browser.newPage(); page.on('dialog', d => d.accept())
+    await page.goto(WEB + '/')
+    await page.fill('input[type=text], input:not([type])', user); await page.fill('input[type=password]', password)
+    await page.click('button:has-text("Đăng nhập")'); await page.waitForTimeout(1200)
+    const company = page.locator('button', { hasText: 'DEV01' }); if (await company.count()) await company.first().click()
+    await page.waitForSelector('.quick-add-btn'); await page.waitForTimeout(800)
+    await page.click('.sidebar button:has-text("Tổng hợp")'); await page.waitForTimeout(600)
+    await page.click('[role=tab]:has-text("Chứng từ kế toán")'); await page.waitForTimeout(1200)
+    return page
+  }
+  const auditor = await openAs('e2eaudit', pw)
+  assert.equal(await auditor.locator('button:has-text("Xuất Excel")').count(), 0, 'kiểm toán không có data.export')
+  assert.ok(await auditor.locator('button:has-text("In")').count() > 0, 'vẫn in được')
+  await auditor.close()
+  const chief = await openAs('ktt', creds.users.ktt)
+  assert.ok(await chief.locator('button:has-text("Xuất Excel")').count() > 0, 'kế toán trưởng có data.export')
+  await chief.close()
+})
+
+test('Phân trang phía máy chủ: phiếu kho trả tổng số, cờ còn thêm và trang kế tiếp', async () => {
+  const wh = (await call('GET', '/warehouses', null, ctx.preparerToken, ctx.company))[0].id
+  for (const day of ['2026-02-01', '2026-02-02', '2026-02-03'])
+    await call('POST', '/stock-documents', { type: 'Receipt', warehouseId: wh, documentDate: day, postingDate: day, description: 'E2E phân trang',
+      lines: [{ itemId: ctx.item('DAM'), quantity: '1', amount: '1000', counterAccountId: ctx.A('GRNI') }] }, ctx.preparerToken, ctx.company)
+  const q = '/stock-documents/page?from=2026-02-01&to=2026-02-28'
+  const first = await call('GET', `${q}&skip=0&take=2`, null, ctx.preparerToken, ctx.company)
+  assert.equal(first.items.length, 2); assert.equal(first.total, 3); assert.equal(first.hasMore, true)
+  assert.ok(first.items[0].postingDate >= first.items[1].postingDate, 'mới nhất trước')
+  const next = await call('GET', `${q}&skip=2&take=2`, null, ctx.preparerToken, ctx.company)
+  assert.equal(next.items.length, 1); assert.equal(next.hasMore, false)
+  assert.ok(!first.items.some(x => x.id === next.items[0].id), 'trang sau không trùng trang trước')
+})
+
+test('Công nợ và Chiết khấu thanh toán tách theo chiều: Bán hàng chỉ phải thu, Mua hàng chỉ phải trả, không còn nút chuyển', async () => {
+  const page = await open('ktt')
+  const accountOptions = async () => page.locator('label:has-text("Tài khoản công nợ") select option').evaluateAll(os => os.map(o => o.textContent.trim()))
+  for (const [module, tabName, want, notWant, discount] of [['Mua hàng', 'Công nợ phải trả', 'AP', 'AR', 'Chiết khấu được hưởng'], ['Bán hàng', 'Công nợ phải thu', 'AR', 'AP', 'Chiết khấu cho khách']]) {
+    await page.click(`.sidebar button:has-text("${module}")`); await page.waitForTimeout(700)
+    await page.click(`[role=tab]:has-text("${tabName}")`); await page.waitForTimeout(1200)
+    const opts = (await accountOptions()).join('|')
+    assert.ok(opts.includes(want + ' ') || opts.includes(want + '–') || opts.includes(want), `${module}: phải có TK ${want}`)
+    assert.ok(!new RegExp(`(^|\\|)${notWant}\\b`).test(opts), `${module}: không được có TK ${notWant}, thực tế: ${opts}`)
+    await page.click(`[role=tab]:has-text("${discount}")`); await page.waitForTimeout(1000)
+    assert.equal(await page.locator('.toolbar button:has-text("Hóa đơn mua"), .toolbar button:has-text("Hóa đơn bán")').count(), 0, `${module}: chiết khấu không còn nút chuyển`)
+  }
+  await page.close()
+})
+
+test('Worklist: lệnh sản xuất nháp chờ ban hành mở thẳng và chọn sẵn đúng lệnh', async () => {
+  const damsx = ctx.item('DAMSX'), gokeo = ctx.item('GOKEO')
+  await call('PUT', `/production/boms/${damsx}`, { lines: [{ rawItemId: gokeo, quantityPerUnit: '1', scrapRate: '0' }], note: 'E2E định mức' }, ctx.preparerToken, ctx.company)
+  const objects = await call('GET', '/production/cost-objects', null, ctx.preparerToken, ctx.company)
+  const wh = (await call('GET', '/warehouses', null, ctx.preparerToken, ctx.company))[0].id
+  const order = await call('POST', '/production/orders', { itemId: damsx, costObjectId: objects.find(o => o.code === 'SX-DAM').id, warehouseId: wh, plannedQuantity: '10', plannedStart: '2026-11-01', note: 'E2E lệnh sản xuất' }, ctx.preparerToken, ctx.company)
+  const page = await open('ktt')
+  await page.click('.sidebar button:has-text("Quản lý chu trình")'); await page.waitForTimeout(1200)
+  const row = page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: order.number })
+  assert.match(await row.textContent(), /Ban hành lệnh sản xuất/)
+  assert.match(await row.textContent(), /Làm được ngay/)
+  await row.locator('button:has-text("Mở")').click(); await page.waitForTimeout(1500)
+  const selectedRow = page.locator('tr.selected')
+  assert.equal(await selectedRow.count(), 1)
+  assert.ok((await selectedRow.textContent()).includes(order.number))
+  await page.close()
+})

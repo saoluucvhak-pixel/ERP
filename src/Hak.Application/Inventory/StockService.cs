@@ -396,6 +396,13 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
                       ?? throw new DomainException(ErrorCodes.NotFound, "Phiếu kho không tồn tại.");
             RowVersionCheck.Require(expectedRowVersion, doc.RowVersion, $"Phiếu {doc.Number}");
             if (doc.Status != StockDocumentStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Phiếu {doc.Number} chưa ghi sổ hoặc đã đảo.");
+            // BIZ-06 (chị chốt 24/10): phiếu xuất NVL / phiếu nhập thành phẩm của lệnh sản xuất đã hoàn thành không đảo được — giá thành của lệnh đã chốt trên giá trị phiếu này.
+            var finishedOrders = new[] { Hak.Domain.Production.ProductionOrderStatus.Completed, Hak.Domain.Production.ProductionOrderStatus.Closed };
+            var lockedBy = await db.ProductionOrders.AsNoTracking()
+                .Where(o => o.CompanyId == ctx.CompanyId && finishedOrders.Contains(o.Status) && (o.ReceiptDocumentId == doc.Id || db.ProductionOrderIssues.Any(i => i.OrderId == o.Id && i.StockDocumentId == doc.Id)))
+                .OrderBy(o => o.Number).Select(o => o.Number).ToListAsync();
+            if (lockedBy.Count > 0)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Phiếu {doc.Number} thuộc lệnh sản xuất đã hoàn thành ({string.Join(", ", lockedBy)}); không đảo được khi giá thành đã chốt.");
             if (reversalDate < doc.PostingDate) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày đảo không được trước ngày ghi sổ phiếu.");
             await RequireOpenPeriodAsync(ctx.CompanyId, reversalDate);
 

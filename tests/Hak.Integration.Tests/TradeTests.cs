@@ -200,6 +200,29 @@ public class TradeTests
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, sale.Id, D(3, 20), "Đảo")));
         Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
         Assert.Equal(InvoiceStatus.Posted, (await fx.S.Db.CommercialInvoices.AsNoTracking().SingleAsync(i => i.Id == sale.Id)).Status);
+        // BIZ-06: đảo trực tiếp phiếu xuất của lệnh đã hoàn thành cũng bị chặn.
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.S.Stock.ReverseDocumentAsync(fx.H.Approver, issue.Id, D(3, 20), "Đảo phiếu xuất")));
+    }
+
+    [Fact]
+    public async Task ReversePurchaseInvoice_IsBlockedWhenTheItemWasConsumedByACompletedProductionOrder()
+    {
+        // Hóa đơn mua: đảo làm lệch giá kho đã chảy vào giá thành lệnh sản xuất đã hoàn thành → chặn (quy tắc thận trọng).
+        using var fx = await SetupAsync();
+        var invoice = await PostedPurchaseOfAdditiveAsync(fx);
+        var issue = await PostedIssueAsync(fx, 40, D(3, 5), fx.Add);
+        var cost = new CostObject { Id = Ids.New(), CompanyId = fx.H.CompanyId, Code = "CO2", Name = "Sản xuất", ItemId = fx.Dam, WipAccountId = fx.A("INV"), CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        var order = new ProductionOrder { Id = Ids.New(), CompanyId = fx.H.CompanyId, Number = "LSX2026-000002", ItemId = fx.Dam, CostObjectId = cost.Id, WarehouseId = fx.Wh, PlannedQuantity = 10,
+            PlannedStart = D(3, 2), Status = ProductionOrderStatus.InProgress, CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        fx.S.Db.CostObjects.Add(cost); fx.S.Db.ProductionOrders.Add(order);
+        fx.S.Db.ProductionOrderIssues.Add(new ProductionOrderIssue { Id = Ids.New(), CompanyId = fx.H.CompanyId, OrderId = order.Id, StockDocumentId = issue.Id });
+        await fx.S.Db.SaveChangesAsync();
+        // Lệnh còn đang chạy: chưa chốt giá thành → vẫn đảo được kiểm ở các bước khác (ở đây chưa chặn bởi quy tắc này).
+        order.Status = ProductionOrderStatus.Completed; order.CompletedDate = D(3, 15);
+        await fx.S.Db.SaveChangesAsync();
+        var journals = await fx.S.Db.JournalEntries.CountAsync();
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 20), "Đảo hóa đơn mua")));
+        Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
     }
 
     [Fact]
@@ -813,6 +836,9 @@ public class TradeTests
         var stockTask = Assert.Single(mine, t => t.EntityType == "stockDocument");
         Assert.Equal((receipt.Id, receipt.Number, "stock", "Ghi sổ phiếu kho"), (stockTask.EntityId, stockTask.Number, stockTask.Screen, stockTask.Action));
         Assert.Contains("cần người khác", stockTask.BlockedReason);
+        // Người phụ trách = người có quyền làm bước kế tiếp; người lập (không được tự ghi sổ) không nằm trong danh sách.
+        Assert.Contains("Kế toán trưởng", stockTask.Assignees!);
+        Assert.DoesNotContain("Kế toán tổng hợp", stockTask.Assignees!);
         var orderTask = Assert.Single(mine, t => t.EntityType == "order");
         Assert.Equal((order.Id, "Sales", "orders"), (orderTask.EntityId, orderTask.Kind, orderTask.Screen));
         Assert.Null(orderTask.BlockedReason);                                                 // xác nhận đơn không bị tách người
@@ -2030,7 +2056,7 @@ public class TradeTests
         using var fx = await SetupAsync();
         var (h, s) = (fx.H, fx.S);
         await Phase2Fixture.ConfigureAsync(h, s);
-        var check = new Hak.Application.Setup.PeriodCloseChecklistService(s.Db, s.Stock, s.Settlement, s.Assets, s.Loans, fx.Inv, s.Setup);
+        var check = new Hak.Application.Setup.PeriodCloseChecklistService(s.Db, s.Stock, s.Settlement, s.Assets, s.Loans, fx.Inv, s.Setup, new Hak.Application.Tax.VatOffsetService(s.Db, s.Engine));
         var march = await s.Db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.PeriodNo == 3);
         string Sev(Hak.Application.Setup.PeriodCloseChecklist c, string code) => c.Items.Single(i => i.Code == code).Severity;
 
@@ -2041,6 +2067,12 @@ public class TradeTests
         Assert.Equal(("Ok", "CarryOver", "Confirm", "Ok"), (Sev(clean, "INVENTORY_GL"), Sev(clean, "GRNI_CARRYOVER"), Sev(clean, "STOCK_DRAFT"), Sev(clean, "SUBLEDGER_GL")));
         Assert.True(clean.CanLock);
         Assert.Equal(1_000_000m, clean.Items.Single(i => i.Code == "GRNI_CARRYOVER").Amount);
+        // Việc cuối kỳ (cần xác nhận): có bộ quy tắc kết chuyển hiệu lực mà kỳ chưa có chứng từ kết chuyển → nhắc, không chặn khóa.
+        var set = await s.Closing.CreateRuleSetAsync(h.Admin, "CLOSE-CHK", new(2026, 1, 1), null, [new Hak.Application.Rules.ClosingStepInput("DT", "REV", "RESULT")]);
+        await s.Closing.ActivateRuleSetAsync(h.Admin, set.Id);
+        var withRules = await check.ForPeriodAsync(h.Auditor, march.Id);
+        Assert.Equal("Confirm", Sev(withRules, "CLOSING_VOUCHER"));
+        Assert.True(withRules.CanLock);
 
         // An approved-but-unposted voucher is a blocking error: the checked lock refuses, the checklist says why.
         var v = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000));

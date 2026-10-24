@@ -11,7 +11,7 @@ interface Cand { invoiceId: string; invoiceNumber: string; invoiceSeries: string
 /** Chiết khấu thanh toán: hóa đơn còn trong hạn hưởng, số chiết khấu và số tiền thực trả / thực thu; lập chứng từ nháp thanh toán có chiết khấu. */
 export function PaymentDiscountView() {
   const { accounts } = useCatalog()
-  const [kind, setKind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Purchase')
+  const [kind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Purchase')   // chiều do phân hệ đang mở quyết định
   const [asOf, setAsOf] = useState(today())
   const [rows, setRows] = useState<Cand[]>([])
   const [f, pf, cf] = useFilterState('paydiscount')
@@ -24,9 +24,7 @@ export function PaymentDiscountView() {
   const purchase = kind === 'Purchase'
   return (
     <>
-      <div className="toolbar"><h2>Chiết khấu thanh toán</h2>
-        <button className={purchase ? 'primary' : ''} onClick={() => setKind('Purchase')}>Hóa đơn mua (được hưởng)</button>
-        <button className={!purchase ? 'primary' : ''} onClick={() => setKind('Sales')}>Hóa đơn bán (cho khách)</button>
+      <div className="toolbar"><h2>{purchase ? 'Chiết khấu thanh toán được hưởng (hóa đơn mua)' : 'Chiết khấu thanh toán cho khách (hóa đơn bán)'}</h2>
         <label>Tính đến ngày<input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
         <ExportButton fileName={`Chiet_khau_thanh_toan_${kind}_${asOf}`} sheet="Chiết khấu thanh toán" disabled={shown.length === 0}
           columns={[{ header: 'Hóa đơn', width: 18 }, { header: 'Ngày HĐ', width: 12 }, { header: 'Đối tượng', width: 30 }, { header: 'Hạn hưởng', width: 12 }, { header: 'Còn mở', numeric: true, width: 16 }, { header: 'Chiết khấu', numeric: true, width: 14 }, { header: purchase ? 'Thực trả' : 'Thực thu', numeric: true, width: 16 }]}
