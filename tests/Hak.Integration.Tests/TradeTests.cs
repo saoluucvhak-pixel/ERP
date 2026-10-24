@@ -1,3 +1,4 @@
+using Hak.Domain.Production;
 using Hak.Domain.Catalog;
 using Hak.Application.Accounting;
 using Hak.Domain.Vouchers;
@@ -154,6 +155,33 @@ public class TradeTests
 
         await fx.Inv.ReverseAsync(fx.H.Approver, discount.Id, D(3, 13), "Hủy giảm giá");           // đảo điều chỉnh trước…
         Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 14), "Đảo hóa đơn gốc")).Status);   // …rồi mới đảo được hóa đơn gốc
+    }
+
+    [Fact]
+    public async Task ReverseInvoice_IsBlockedWhenItsStockDocumentBelongsToACompletedProductionOrder()
+    {
+        // Chốt 24/10/2026: phiếu kho thuộc lệnh sản xuất đã hoàn thành → chặn đảo hóa đơn.
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 100, 150_000_000, D(3, 1), fx.Dam);
+        var issue = await PostedIssueAsync(fx, 10, D(3, 10));
+        var sale = await fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26TXK", "0000090", D(3, 12), D(3, 12), "Bán",
+            [new InvoiceLineInput(2_000_000, issue.Id, 1, VatRate: 8)], DueDate: D(4, 11)));
+        await fx.Inv.PostAsync(fx.H.Approver, sale.Id);
+
+        var cost = new CostObject { Id = Ids.New(), CompanyId = fx.H.CompanyId, Code = "CO1", Name = "Dăm", ItemId = fx.Dam, WipAccountId = fx.A("INV"), CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        var order = new ProductionOrder { Id = Ids.New(), CompanyId = fx.H.CompanyId, Number = "LSX2026-000001", ItemId = fx.Dam, CostObjectId = cost.Id, WarehouseId = fx.Wh, PlannedQuantity = 10,
+            PlannedStart = D(3, 2), Status = ProductionOrderStatus.InProgress, CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        fx.S.Db.CostObjects.Add(cost); fx.S.Db.ProductionOrders.Add(order);
+        fx.S.Db.ProductionOrderIssues.Add(new ProductionOrderIssue { Id = Ids.New(), CompanyId = fx.H.CompanyId, OrderId = order.Id, StockDocumentId = issue.Id });
+        await fx.S.Db.SaveChangesAsync();
+
+        // Lệnh còn đang chạy: đảo được kiểm ở bước khác; đã hoàn thành: chặn và không để lại gì dở dang.
+        order.Status = ProductionOrderStatus.Completed; order.CompletedDate = D(3, 15);
+        await fx.S.Db.SaveChangesAsync();
+        var journals = await fx.S.Db.JournalEntries.CountAsync();
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, sale.Id, D(3, 20), "Đảo")));
+        Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
+        Assert.Equal(InvoiceStatus.Posted, (await fx.S.Db.CommercialInvoices.AsNoTracking().SingleAsync(i => i.Id == sale.Id)).Status);
     }
 
     [Fact]

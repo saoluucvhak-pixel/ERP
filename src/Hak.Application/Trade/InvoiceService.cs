@@ -8,6 +8,7 @@ using Hak.Domain.Common;
 using Hak.Domain.Inventory;
 using Hak.Domain.Organization;
 using Hak.Domain.Security;
+using Hak.Domain.Production;
 using Hak.Domain.Trade;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
@@ -237,6 +238,19 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 .OrderBy(d => d.Number).Select(d => d.Number).ToListAsync();
             if (dependents.Count > 0)
                 throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} còn hóa đơn điều chỉnh đã ghi sổ ({string.Join(", ", dependents)}). Đảo các hóa đơn điều chỉnh trước.");
+            // Chốt của chị 24/10/2026: hóa đơn gắn phiếu xuất NVL hoặc phiếu nhập thành phẩm của lệnh sản xuất đã hoàn thành (Completed/Closed) thì CHẶN đảo —
+            // giá thành của lệnh đã chốt trên giá kho hiện tại, đảo (tính lại đơn giá kho) sẽ làm giá thành lệch. Muốn đảo phải mở lại lệnh sản xuất theo quy trình riêng.
+            var stockDocIds = await db.CommercialInvoiceLines.AsNoTracking().Where(l => l.InvoiceId == inv.Id && l.StockDocumentId != null).Select(l => l.StockDocumentId!.Value).Distinct().ToListAsync();
+            if (stockDocIds.Count > 0)
+            {
+                var done = new[] { ProductionOrderStatus.Completed, ProductionOrderStatus.Closed };
+                var finished = await db.ProductionOrders.AsNoTracking()
+                    .Where(o => o.CompanyId == ctx.CompanyId && done.Contains(o.Status)
+                                && (db.ProductionOrderIssues.Any(i => i.OrderId == o.Id && stockDocIds.Contains(i.StockDocumentId)) || (o.ReceiptDocumentId != null && stockDocIds.Contains(o.ReceiptDocumentId.Value))))
+                    .OrderBy(o => o.Number).Select(o => o.Number).ToListAsync();
+                if (finished.Count > 0)
+                    throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} gắn phiếu kho của lệnh sản xuất đã hoàn thành ({string.Join(", ", finished)}); không đảo được khi giá thành đã chốt.");
+            }
             // Tính lại đơn giá khi đảo: phần giá trị hóa đơn đã nằm trong hàng xuất được chuyển từ tồn kho sang giá vốn TRƯỚC khi ghi bút toán đảo,
             // để tài khoản tồn kho (có thể chặn số dư âm) không âm giữa chừng. Sổ kho: chỉ gỡ phần còn thuộc hàng tồn (adjustments bất biến, không xóa).
             var shifts = await stock.ReverseValueAdjustmentsAsync(ctx, inv.Id, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}", reprice: true);
