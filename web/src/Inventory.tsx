@@ -83,7 +83,16 @@ function StockDocs({ initialType }: { initialType?: 'Receipt' | 'Issue' | 'Trans
   const [selId, setSelId] = useState(openId ?? '')
   const [pinned, setPinned] = useState<StockDoc | null>(null)
   useEffect(() => { if (openId) get<StockDoc>(`/stock-documents/${openId}`).then(setPinned).catch(() => { /* không còn / không có quyền */ }) }, [openId])
-  const load = useCallback(() => run(async () => { setList(await get<StockDoc[]>(`/stock-documents?from=${from}&to=${to}`)); setOrders(await get<Order[]>('/orders')) }), [run, from, to])
+  const [paging, setPaging] = useState({ total: 0, hasMore: false })
+  const load = useCallback(() => run(async () => {
+    const page = await get<{ items: StockDoc[]; total: number; hasMore: boolean }>(`/stock-documents/page?from=${from}&to=${to}&skip=0&take=200`)
+    setList(page.items); setPaging({ total: page.total, hasMore: page.hasMore })
+    setOrders(await get<Order[]>('/orders'))
+  }), [run, from, to])
+  const loadMore = () => run(async () => {
+    const page = await get<{ items: StockDoc[]; total: number; hasMore: boolean }>(`/stock-documents/page?from=${from}&to=${to}&skip=${list.length}&take=200`)
+    setList(l => [...l, ...page.items]); setPaging({ total: page.total, hasMore: page.hasMore })
+  })
   useEffect(() => { load() }, [load])
   const orderKind = type === 'Receipt' ? 'Purchase' : type === 'Issue' ? 'Sales' : ''
   const orderLines = orders.filter(o => o.status === 'Confirmed' && o.kind === orderKind && o.partnerId === partnerId)
@@ -164,6 +173,7 @@ function StockDocs({ initialType }: { initialType?: 'Receipt' | 'Issue' | 'Trans
                   const dt = prompt('Ngày đảo (yyyy-mm-dd):', d.postingDate); if (dt) act(() => post(`/stock-documents/${d.id}/reverse?rowVersion=${d.rowVersion}`, { reversalDate: dt, reason }), `Đã đảo ${d.number}.`)
                 }}>Đảo</button>}
               </td></tr>))}
+            {paging.hasMore && <tr><td colSpan={7}><span className="muted">Đã tải {list.length}/{paging.total} phiếu (mới nhất trước). </span><button disabled={busy} onClick={loadMore}>Tải thêm</button></td></tr>}
             {shown.length === 0 && <tr><td colSpan={7} className="muted">Không có phiếu kho trong khoảng đã chọn.</td></tr>}
           </tbody>
         </table>

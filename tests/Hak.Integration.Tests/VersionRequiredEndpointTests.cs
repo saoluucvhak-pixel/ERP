@@ -51,6 +51,11 @@ public class VersionRequiredEndpointTests
             Assert.Equal(HttpStatusCode.BadRequest, (await ktt.PostAsJsonAsync(path, new { reversalDate = "2026-03-01", reason = "x" })).StatusCode);   // thiếu rowVersion
         foreach (var path in new[] { $"/api/contracts/{id}/submit", $"/api/contracts/{id}/decide", $"/api/contracts/{id}/complete", $"/api/contracts/{id}/cancel" })
             Assert.Equal(HttpStatusCode.BadRequest, (await ktt.PostAsJsonAsync(path, new { approve = true, note = (string?)null })).StatusCode);              // thiếu version
+        // Phân trang phía máy chủ trả tổng số và cờ còn thêm (danh sách rỗng thì total = 0).
+        var stockPage = await Json(await ktt.GetAsync("/api/stock-documents/page?skip=0&take=10"));
+        Assert.Equal((0, false), ((int)stockPage["total"]!, (bool)stockPage["hasMore"]!));
+        var orderPage = await Json(await ktt.GetAsync("/api/payment-orders/page?skip=0&take=10"));
+        Assert.Equal((0, false), ((int)orderPage["total"]!, (bool)orderPage["hasMore"]!));
         // Có phiên bản thì đi tiếp tới tầng nghiệp vụ (đối tượng không tồn tại → 404), chứng tỏ tham số được nhận.
         Assert.Equal(HttpStatusCode.NotFound, (await ktt.PostAsync($"/api/invoices/{id}/post?rowVersion=1", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await ktt.PostAsync($"/api/stock-documents/{id}/post?rowVersion=1", null)).StatusCode);

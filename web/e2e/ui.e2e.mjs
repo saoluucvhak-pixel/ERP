@@ -166,3 +166,17 @@ test('data.export: người chỉ có quyền xem (kiểm toán nội bộ) khô
   assert.ok(await chief.locator('button:has-text("Xuất Excel")').count() > 0, 'kế toán trưởng có data.export')
   await chief.close()
 })
+
+test('Phân trang phía máy chủ: phiếu kho trả tổng số, cờ còn thêm và trang kế tiếp', async () => {
+  const wh = (await call('GET', '/warehouses', null, ctx.preparerToken, ctx.company))[0].id
+  for (const day of ['2026-02-01', '2026-02-02', '2026-02-03'])
+    await call('POST', '/stock-documents', { type: 'Receipt', warehouseId: wh, documentDate: day, postingDate: day, description: 'E2E phân trang',
+      lines: [{ itemId: ctx.item('DAM'), quantity: '1', amount: '1000', counterAccountId: ctx.A('GRNI') }] }, ctx.preparerToken, ctx.company)
+  const q = '/stock-documents/page?from=2026-02-01&to=2026-02-28'
+  const first = await call('GET', `${q}&skip=0&take=2`, null, ctx.preparerToken, ctx.company)
+  assert.equal(first.items.length, 2); assert.equal(first.total, 3); assert.equal(first.hasMore, true)
+  assert.ok(first.items[0].postingDate >= first.items[1].postingDate, 'mới nhất trước')
+  const next = await call('GET', `${q}&skip=2&take=2`, null, ctx.preparerToken, ctx.company)
+  assert.equal(next.items.length, 1); assert.equal(next.hasMore, false)
+  assert.ok(!first.items.some(x => x.id === next.items[0].id), 'trang sau không trùng trang trước')
+})

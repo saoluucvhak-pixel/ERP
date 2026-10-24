@@ -77,6 +77,18 @@ public static class InventoryEndpoints
             docs.Reverse();
             return Results.Ok(docs.Select(Dto));
         });
+        // Phân trang phía máy chủ (mới nhất trước) kèm tổng số và cờ còn thêm: giao diện tải được MỌI phiếu, không bị cắt 1000 như danh sách cũ.
+        api.MapGet("/stock-documents/page", async (HttpContext http, HakDbContext db, DateOnly? from, DateOnly? to, int? skip, int? take) =>
+        {
+            var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
+            var q = db.StockDocuments.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId);
+            if (from is not null) q = q.Where(d => d.PostingDate >= from);
+            if (to is not null) q = q.Where(d => d.PostingDate <= to);
+            var s = Math.Max(0, skip ?? 0); var t = Math.Clamp(take ?? 200, 1, 500);
+            var total = await q.CountAsync();
+            var docs = await q.Include(d => d.Lines).OrderByDescending(d => d.PostingDate).ThenByDescending(d => d.Number).Skip(s).Take(t).ToListAsync();
+            return Results.Ok(new { items = docs.Select(Dto), total, hasMore = s + docs.Count < total });
+        });
         api.MapGet("/stock-documents/{id:guid}", async (HttpContext http, Guid id, HakDbContext db) =>
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);

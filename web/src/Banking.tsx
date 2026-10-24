@@ -36,8 +36,14 @@ function PaymentOrders() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [printing, setPrinting] = useState<PaymentOrder[] | null>(null)
   const { busy, error, setError, run } = useAction()
+  const [paging, setPaging] = useState({ total: 0, hasMore: false })
+  const loadMore = () => run(async () => {
+    const page = await get<{ items: PaymentOrder[]; total: number; hasMore: boolean }>(`/payment-orders/page?skip=${list.length}&take=200`)
+    setList(l => [...l, ...page.items]); setPaging({ total: page.total, hasMore: page.hasMore })
+  })
   const load = useCallback(() => run(async () => {
-    setList(await get<PaymentOrder[]>('/payment-orders'))
+    const page = await get<{ items: PaymentOrder[]; total: number; hasMore: boolean }>('/payment-orders/page?skip=0&take=200')
+    setList(page.items); setPaging({ total: page.total, hasMore: page.hasMore })
     setPbanks(await get<PartnerBank[]>('/bank-accounts/partners').catch(() => []))
     setCbanks(await get<{ accountId: string; bankName: string; accountNo: string; accountName: string }[]>('/bank-accounts/company').catch(() => []))
   }), [run])
@@ -117,6 +123,7 @@ function PaymentOrders() {
                 }}>Hủy</button>}
               </td>
             </tr>))}
+            {paging.hasMore && <tr><td colSpan={10}><span className="muted">Đã tải {list.length}/{paging.total} lệnh (mới nhất trước). </span><button disabled={busy} onClick={loadMore}>Tải thêm</button></td></tr>}
             {list.length === 0 && <tr><td colSpan={10} className="muted">Chưa có lệnh thanh toán.</td></tr>}
           </tbody>
         </table>

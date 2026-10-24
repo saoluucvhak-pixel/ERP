@@ -31,6 +31,15 @@ public static class BankingEndpoints
             var list = await db.PaymentOrders.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).OrderByDescending(p => p.Number).Take(500).ToListAsync();
             return Results.Ok(list.Select(Dto));
         });
+        api.MapGet("/payment-orders/page", async (HttpContext http, HakDbContext db, int? skip, int? take) =>
+        {
+            var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
+            var q = db.PaymentOrders.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId);
+            var s = Math.Max(0, skip ?? 0); var t = Math.Clamp(take ?? 200, 1, 500);
+            var total = await q.CountAsync();
+            var rows = await q.OrderByDescending(p => p.Number).Skip(s).Take(t).ToListAsync();
+            return Results.Ok(new { items = rows.Select(Dto), total, hasMore = s + rows.Count < total });
+        });
         api.MapPost("/payment-orders", async (HttpContext http, PaymentOrderInput r, PaymentOrderService s) => Results.Ok(Dto(await s.CreateAsync(await http.SessionAsync(), r))));
         api.MapPost("/payment-orders/{id:guid}/approve", async (HttpContext http, Guid id, long rowVersion, PaymentOrderService s) => Results.Ok(Dto(await s.ApproveAsync(await http.SessionAsync(), id, rowVersion))));
         api.MapPost("/payment-orders/{id:guid}/send", async (HttpContext http, Guid id, PaymentOrderService s) => Results.Ok(Dto(await s.MarkSentAsync(await http.SessionAsync(), id))));
