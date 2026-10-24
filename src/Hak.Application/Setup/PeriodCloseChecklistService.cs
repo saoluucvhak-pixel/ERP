@@ -26,7 +26,7 @@ public sealed record PeriodCloseChecklist(Guid PeriodId, int PeriodNo, DateOnly 
 /// LỖI CHẶN (sai lệch số liệu) với việc cần xác nhận và khoản CHUYỂN KỲ HỢP LỆ — hàng về chưa có hóa đơn (GRNI), hàng giao chưa lập hóa đơn, tiền đang chuyển: không buộc bằng 0.
 /// Chỉ đọc. Khóa kỳ theo bảng kiểm (<see cref="LockCheckedAsync"/>) từ chối khi còn lỗi chặn; lệnh khóa cũ giữ nguyên để không đổi hành vi của người đang dùng.
 /// </summary>
-public sealed class PeriodCloseChecklistService(HakDbContext db, StockService stock, SettlementService settlement, AssetService assets, LoanService loans, InvoiceService invoices, SetupService setup)
+public sealed class PeriodCloseChecklistService(HakDbContext db, StockService stock, SettlementService settlement, AssetService assets, LoanService loans, InvoiceService invoices, SetupService setup, Hak.Application.Tax.VatOffsetService vat)
 {
     public async Task<PeriodCloseChecklist> ForPeriodAsync(SessionContext ctx, Guid periodId)
     {
@@ -85,6 +85,36 @@ public sealed class PeriodCloseChecklistService(HakDbContext db, StockService st
         var inTransit = await db.PaymentOrders.AsNoTracking().Where(o => o.CompanyId == ctx.CompanyId && (o.Status == PaymentOrderStatus.SentToBank || o.Status == PaymentOrderStatus.ExecutedByBank)).ToListAsync();
         Add("PAYMENTS_IN_TRANSIT", inTransit.Count > 0 ? "CarryOver" : "Ok", "Lệnh chi đã gửi ngân hàng, chưa ghi sổ", inTransit.Count, inTransit.Sum(o => o.Amount),
             inTransit.Count > 0 ? "Tiền đang đi: chuyển kỳ hợp lệ." : "", "bank");
+
+        // ---- việc cuối kỳ chưa làm (cần xác nhận, không chặn): khấu hao, lãi vay, khấu trừ GTGT, kết chuyển — mỗi mục dẫn tới màn hình để xử lý
+        var cid = ctx.CompanyId;
+        if (await db.LongTermAssets.AnyAsync(a => a.CompanyId == cid && a.Status == Hak.Domain.Assets.AssetStatus.Active))
+        {
+            var done = await db.DepreciationRuns.AnyAsync(r => r.CompanyId == cid && r.Status == Hak.Domain.Assets.DepreciationRunStatus.Active && r.PeriodEnd >= periodEnd);
+            Add("DEPRECIATION_RUN", Sev(!done, "Confirm"), "Khấu hao / phân bổ kỳ này đã chạy", done ? 0 : 1, null, done ? "" : "Còn thẻ tài sản / CCDC đang dùng nhưng chưa có lần chạy khấu hao / phân bổ phủ kỳ này.", "assets");
+        }
+        if (await db.LoanContracts.AnyAsync(l => l.CompanyId == cid && l.Status == Hak.Domain.Loans.LoanStatus.Active))
+        {
+            var done = await db.LoanInterestRuns.AnyAsync(r => r.CompanyId == cid && r.Status == Hak.Domain.Loans.LoanRunStatus.Active && r.PeriodEnd >= periodEnd);
+            Add("LOAN_INTEREST_RUN", Sev(!done, "Confirm"), "Lãi vay kỳ này đã trích", done ? 0 : 1, null, done ? "" : "Còn khế ước vay đang hiệu lực nhưng chưa có lần trích lãi phủ kỳ này.", "loans");
+        }
+        try
+        {
+            var vatPreview = await vat.PreviewAsync(ctx, periodId);
+            if (vatPreview.OffsetAmount > 0)
+            {
+                var offsetDone = await db.Vouchers.AnyAsync(v => v.CompanyId == cid && v.SourceSystem == Hak.Application.Tax.VatOffsetService.SourceSystem && v.SourceId == p.Id.ToString() && v.Status != VoucherStatus.Cancelled && v.Status != VoucherStatus.Reversed);
+                Add("VAT_OFFSET", Sev(!offsetDone, "Confirm"), "Khấu trừ thuế GTGT cuối kỳ đã lập", offsetDone ? 0 : 1, vatPreview.OffsetAmount, offsetDone ? "" : $"Có thể khấu trừ {vatPreview.OffsetAmount} nhưng chưa có chứng từ khấu trừ của kỳ.", "vat");
+            }
+        }
+        catch (DomainException) { /* chưa ánh xạ vai trò thuế: công ty không dùng khấu trừ GTGT tự động */ }
+        var hasClosingRules = await db.ClosingRuleSets.AnyAsync(r => r.CompanyId == cid && r.Status == Hak.Domain.Rules.RuleStatus.Active && r.EffectiveFrom <= periodEnd && (r.EffectiveTo == null || r.EffectiveTo >= periodEnd));
+        if (hasClosingRules)
+        {
+            var key = p.Id.ToString();
+            var closed = await db.Vouchers.AnyAsync(v => v.CompanyId == cid && v.SourceSystem == Hak.Application.Rules.ClosingService.SourceSystem && (v.SourceId == key || v.SourceId!.StartsWith(key + "#")) && v.Status != VoucherStatus.Cancelled && v.Status != VoucherStatus.Reversed);
+            Add("CLOSING_VOUCHER", Sev(!closed, "Confirm"), "Chứng từ kết chuyển cuối kỳ đã lập", closed ? 0 : 1, null, closed ? "" : "Có bộ quy tắc kết chuyển đang hiệu lực nhưng kỳ chưa có chứng từ kết chuyển (làm sau khi các bút toán điều chỉnh xong).", "periods");
+        }
 
         var blocking = items.Count(i => i.Severity == "Blocking");
         return new PeriodCloseChecklist(p.Id, p.PeriodNo, periodStart, periodEnd, p.Status.ToString(), blocking == 0 && p.Status == PeriodStatus.Open, items);

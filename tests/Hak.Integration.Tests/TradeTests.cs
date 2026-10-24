@@ -2056,7 +2056,7 @@ public class TradeTests
         using var fx = await SetupAsync();
         var (h, s) = (fx.H, fx.S);
         await Phase2Fixture.ConfigureAsync(h, s);
-        var check = new Hak.Application.Setup.PeriodCloseChecklistService(s.Db, s.Stock, s.Settlement, s.Assets, s.Loans, fx.Inv, s.Setup);
+        var check = new Hak.Application.Setup.PeriodCloseChecklistService(s.Db, s.Stock, s.Settlement, s.Assets, s.Loans, fx.Inv, s.Setup, new Hak.Application.Tax.VatOffsetService(s.Db, s.Engine));
         var march = await s.Db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.PeriodNo == 3);
         string Sev(Hak.Application.Setup.PeriodCloseChecklist c, string code) => c.Items.Single(i => i.Code == code).Severity;
 
@@ -2067,6 +2067,12 @@ public class TradeTests
         Assert.Equal(("Ok", "CarryOver", "Confirm", "Ok"), (Sev(clean, "INVENTORY_GL"), Sev(clean, "GRNI_CARRYOVER"), Sev(clean, "STOCK_DRAFT"), Sev(clean, "SUBLEDGER_GL")));
         Assert.True(clean.CanLock);
         Assert.Equal(1_000_000m, clean.Items.Single(i => i.Code == "GRNI_CARRYOVER").Amount);
+        // Việc cuối kỳ (cần xác nhận): có bộ quy tắc kết chuyển hiệu lực mà kỳ chưa có chứng từ kết chuyển → nhắc, không chặn khóa.
+        var set = await s.Closing.CreateRuleSetAsync(h.Admin, "CLOSE-CHK", new(2026, 1, 1), null, [new Hak.Application.Rules.ClosingStepInput("DT", "REV", "RESULT")]);
+        await s.Closing.ActivateRuleSetAsync(h.Admin, set.Id);
+        var withRules = await check.ForPeriodAsync(h.Auditor, march.Id);
+        Assert.Equal("Confirm", Sev(withRules, "CLOSING_VOUCHER"));
+        Assert.True(withRules.CanLock);
 
         // An approved-but-unposted voucher is a blocking error: the checked lock refuses, the checklist says why.
         var v = await s.Engine.CreateDraftAsync(h.Preparer, h.Sale(1000));
