@@ -836,6 +836,9 @@ public class TradeTests
         var stockTask = Assert.Single(mine, t => t.EntityType == "stockDocument");
         Assert.Equal((receipt.Id, receipt.Number, "stock", "Ghi sổ phiếu kho"), (stockTask.EntityId, stockTask.Number, stockTask.Screen, stockTask.Action));
         Assert.Contains("cần người khác", stockTask.BlockedReason);
+        // Người phụ trách = người có quyền làm bước kế tiếp; người lập (không được tự ghi sổ) không nằm trong danh sách.
+        Assert.Contains("Kế toán trưởng", stockTask.Assignees!);
+        Assert.DoesNotContain("Kế toán tổng hợp", stockTask.Assignees!);
         var orderTask = Assert.Single(mine, t => t.EntityType == "order");
         Assert.Equal((order.Id, "Sales", "orders"), (orderTask.EntityId, orderTask.Kind, orderTask.Screen));
         Assert.Null(orderTask.BlockedReason);                                                 // xác nhận đơn không bị tách người

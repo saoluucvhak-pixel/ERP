@@ -24,7 +24,7 @@ public sealed record WorkItem(string Screen, int Count, string Hint, string? Kin
 /// và — nếu người đang xem chưa làm được — lý do bị chặn (thiếu quyền hoặc quy tắc tách người lập / người duyệt).
 /// </summary>
 public sealed record WorkTask(string Screen, string? Kind, string EntityType, Guid EntityId, string Number, string Title, string Action, Guid OwnerId, string OwnerName,
-    DateOnly Date, int AgeDays, string? BlockedReason, DateOnly? Due = null);
+    DateOnly Date, int AgeDays, string? BlockedReason, DateOnly? Due = null, IReadOnlyList<string>? Assignees = null);   // Assignees: người trong công ty có quyền làm bước kế tiếp (tối đa 4)
 
 /// <summary>
 /// Việc đang chờ xử lý theo phân hệ: mỗi chu trình tự nhận việc từ khâu trước (ví dụ hóa đơn mua chờ chấp nhận thanh toán, lệnh chi chờ duyệt).
@@ -154,6 +154,9 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
         string? Blocked(string permission, string label, Guid owner, bool separate)
             => !ctx.Permissions.Contains(permission) ? $"Cần quyền {label}"
              : separate && distinct && owner == ctx.UserId ? "Người lập không được tự thực hiện bước này; cần người khác" : null;
+        // Ghi lại quyền cần có cho từng việc (và việc đó có đòi người khác người lập không) để suy ra người phụ trách.
+        var needs = new Dictionary<Guid, (string Permission, bool Separate, Guid Owner)>();
+        string? Need(Guid id, string permission, string label, Guid owner, bool separate) { needs[id] = (permission, separate, owner); return Blocked(permission, label, owner, separate); }
         const int Per = 60;
 
         if (Can("vouchers"))
@@ -168,7 +171,7 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
                     VoucherStatus.Submitted => ("Duyệt", Permissions.VoucherApprove, "duyệt chứng từ", true),
                     _ => ("Ghi sổ", Permissions.VoucherPost, "ghi sổ", false),
                 };
-                rows.Add(("vouchers", null, "voucher", v.Id, v.Number, v.Description, action, v.CreatedBy, v.PostingDate, Blocked(perm, label, v.CreatedBy, sep)));
+                rows.Add(("vouchers", null, "voucher", v.Id, v.Number, v.Description, action, v.CreatedBy, v.PostingDate, Need(v.Id, perm, label, v.CreatedBy, sep)));
             }
         }
         if (Can("trade"))
@@ -176,14 +179,14 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
             var invs = await db.CommercialInvoices.AsNoTracking().Where(i => i.CompanyId == cid && i.Status == InvoiceStatus.Draft)
                 .OrderBy(i => i.PostingDate).ThenBy(i => i.Number).Take(Per).Select(i => new { i.Id, i.Number, i.Description, i.PostingDate, i.CreatedBy, i.Kind }).ToListAsync();
             foreach (var i in invs)
-                rows.Add(("trade", i.Kind.ToString(), "invoice", i.Id, i.Number, i.Description, "Ghi sổ hóa đơn", i.CreatedBy, i.PostingDate, Blocked(Permissions.VoucherPost, "ghi sổ", i.CreatedBy, true)));
+                rows.Add(("trade", i.Kind.ToString(), "invoice", i.Id, i.Number, i.Description, "Ghi sổ hóa đơn", i.CreatedBy, i.PostingDate, Need(i.Id, Permissions.VoucherPost, "ghi sổ", i.CreatedBy, true)));
         }
         if (Can("stock"))
         {
             var docs = await db.StockDocuments.AsNoTracking().Where(d => d.CompanyId == cid && d.Status == StockDocumentStatus.Draft)
                 .OrderBy(d => d.PostingDate).ThenBy(d => d.Number).Take(Per).Select(d => new { d.Id, d.Number, d.Description, d.PostingDate, d.CreatedBy }).ToListAsync();
             foreach (var d in docs)
-                rows.Add(("stock", null, "stockDocument", d.Id, d.Number, d.Description, "Ghi sổ phiếu kho", d.CreatedBy, d.PostingDate, Blocked(Permissions.VoucherPost, "ghi sổ", d.CreatedBy, true)));
+                rows.Add(("stock", null, "stockDocument", d.Id, d.Number, d.Description, "Ghi sổ phiếu kho", d.CreatedBy, d.PostingDate, Need(d.Id, Permissions.VoucherPost, "ghi sổ", d.CreatedBy, true)));
         }
         if (Can("bank"))
         {
@@ -191,22 +194,22 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
                 .OrderBy(p => p.RequestedDate).ThenBy(p => p.Number).Take(Per).Select(p => new { p.Id, p.Number, p.Description, p.RequestedDate, p.CreatedBy, p.Status }).ToListAsync();
             foreach (var p in pos)
                 rows.Add(p.Status == PaymentOrderStatus.Created
-                    ? ("bank", null, "paymentOrder", p.Id, p.Number, p.Description, "Duyệt lệnh thanh toán", p.CreatedBy, p.RequestedDate, Blocked(Permissions.PaymentOrderApprove, "duyệt lệnh chi", p.CreatedBy, true))
-                    : ("bank", null, "paymentOrder", p.Id, p.Number, p.Description, "Lập chứng từ cho lệnh đã chi", p.CreatedBy, p.RequestedDate, Blocked(Permissions.BankDocument, "nghiệp vụ ngân hàng", p.CreatedBy, false)));
+                    ? ("bank", null, "paymentOrder", p.Id, p.Number, p.Description, "Duyệt lệnh thanh toán", p.CreatedBy, p.RequestedDate, Need(p.Id, Permissions.PaymentOrderApprove, "duyệt lệnh chi", p.CreatedBy, true))
+                    : ("bank", null, "paymentOrder", p.Id, p.Number, p.Description, "Lập chứng từ cho lệnh đã chi", p.CreatedBy, p.RequestedDate, Need(p.Id, Permissions.BankDocument, "nghiệp vụ ngân hàng", p.CreatedBy, false)));
         }
         if (Can("orders"))
         {
             var os = await db.TradeOrders.AsNoTracking().Where(o => o.CompanyId == cid && o.Status == OrderStatus.Draft)
                 .OrderBy(o => o.OrderDate).ThenBy(o => o.Number).Take(Per).Select(o => new { o.Id, o.Number, o.Description, o.OrderDate, o.CreatedBy, o.Kind }).ToListAsync();
             foreach (var o in os)
-                rows.Add(("orders", o.Kind.ToString(), "order", o.Id, o.Number, o.Description ?? "", "Xác nhận đơn hàng", o.CreatedBy, o.OrderDate, Blocked(Permissions.InvoiceDocument, "đơn hàng", o.CreatedBy, false)));
+                rows.Add(("orders", o.Kind.ToString(), "order", o.Id, o.Number, o.Description ?? "", "Xác nhận đơn hàng", o.CreatedBy, o.OrderDate, Need(o.Id, Permissions.InvoiceDocument, "đơn hàng", o.CreatedBy, false)));
         }
         if (ctx.Permissions.Contains(Permissions.ReportView))
         {
             var cs = await db.Contracts.AsNoTracking().Where(c => c.CompanyId == cid && c.Status == ContractStatus.PendingApproval)
                 .OrderBy(c => c.EffectiveDate).ThenBy(c => c.Code).Take(Per).Select(c => new { c.Id, c.Code, c.Name, c.EffectiveDate, c.CreatedBy, c.Kind }).ToListAsync();
             foreach (var c in cs)
-                rows.Add(("contracts", c.Kind.ToString(), "contract", c.Id, c.Code, c.Name, "Duyệt hợp đồng", c.CreatedBy, c.EffectiveDate, Blocked(Permissions.VoucherApprove, "duyệt hợp đồng", c.CreatedBy, true)));
+                rows.Add(("contracts", c.Kind.ToString(), "contract", c.Id, c.Code, c.Name, "Duyệt hợp đồng", c.CreatedBy, c.EffectiveDate, Need(c.Id, Permissions.VoucherApprove, "duyệt hợp đồng", c.CreatedBy, true)));
         }
 
         if (ctx.Permissions.Contains(Permissions.VoucherView))   // màn Tạm ứng dùng quyền xem chứng từ
@@ -215,7 +218,7 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
                 .OrderBy(a => a.DueDate).ThenBy(a => a.Number).Take(Per).Select(a => new { a.Id, a.Number, a.Purpose, a.RequestDate, a.DueDate, a.CreatedBy }).ToListAsync();
             foreach (var a in advs)
             {
-                rows.Add(("advances", null, "advance", a.Id, a.Number, a.Purpose, "Duyệt đề nghị tạm ứng", a.CreatedBy, a.RequestDate, Blocked(Permissions.VoucherApprove, "duyệt", a.CreatedBy, true)));
+                rows.Add(("advances", null, "advance", a.Id, a.Number, a.Purpose, "Duyệt đề nghị tạm ứng", a.CreatedBy, a.RequestDate, Need(a.Id, Permissions.VoucherApprove, "duyệt", a.CreatedBy, true)));
                 dues[a.Id] = a.DueDate;
             }
         }
@@ -224,7 +227,7 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
             var sas = await db.ServiceAcceptances.AsNoTracking().Where(a => a.CompanyId == cid && a.Status == ApprovalStatus.Requested)
                 .OrderBy(a => a.AcceptanceDate).ThenBy(a => a.Number).Take(Per).Select(a => new { a.Id, a.Number, a.Note, a.AcceptanceDate, a.CreatedBy }).ToListAsync();
             foreach (var a in sas)
-                rows.Add(("services", null, "serviceAcceptance", a.Id, a.Number, a.Note ?? "", "Xác nhận nghiệm thu dịch vụ", a.CreatedBy, a.AcceptanceDate, Blocked(Permissions.VoucherApprove, "duyệt", a.CreatedBy, true)));
+                rows.Add(("services", null, "serviceAcceptance", a.Id, a.Number, a.Note ?? "", "Xác nhận nghiệm thu dịch vụ", a.CreatedBy, a.AcceptanceDate, Need(a.Id, Permissions.VoucherApprove, "duyệt", a.CreatedBy, true)));
         }
 
         if (Can("production"))
@@ -233,8 +236,8 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
                 .OrderBy(o => o.PlannedStart).ThenBy(o => o.Number).Take(Per).Select(o => new { o.Id, o.Number, o.Note, o.PlannedStart, o.CreatedBy, o.Status }).ToListAsync();
             foreach (var o in pos)
                 rows.Add(o.Status == ProductionOrderStatus.Draft
-                    ? ("production", null, "productionOrder", o.Id, o.Number, o.Note ?? "", "Ban hành lệnh sản xuất", o.CreatedBy, o.PlannedStart, Blocked(Permissions.VoucherApprove, "duyệt (ban hành lệnh)", o.CreatedBy, true))
-                    : ("production", null, "productionOrder", o.Id, o.Number, o.Note ?? "", "Ghi sổ phiếu nhập thành phẩm và đóng lệnh", o.CreatedBy, o.PlannedStart, Blocked(Permissions.ProductionManage, "quản lý sản xuất", o.CreatedBy, false)));
+                    ? ("production", null, "productionOrder", o.Id, o.Number, o.Note ?? "", "Ban hành lệnh sản xuất", o.CreatedBy, o.PlannedStart, Need(o.Id, Permissions.VoucherApprove, "duyệt (ban hành lệnh)", o.CreatedBy, true))
+                    : ("production", null, "productionOrder", o.Id, o.Number, o.Note ?? "", "Ghi sổ phiếu nhập thành phẩm và đóng lệnh", o.CreatedBy, o.PlannedStart, Need(o.Id, Permissions.ProductionManage, "quản lý sản xuất", o.CreatedBy, false)));
         }
         if (Can("assets"))
         {
@@ -242,7 +245,7 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
                 .OrderBy(r => r.NeededDate).ThenBy(r => r.Number).Take(Per).Select(r => new { r.Id, r.Number, r.Name, r.CreatedAt, r.NeededDate, r.CreatedBy }).ToListAsync();
             foreach (var r in ars)
             {
-                rows.Add(("assets", null, "assetRequest", r.Id, r.Number, r.Name, "Duyệt đề nghị mua sắm tài sản", r.CreatedBy, DateOnly.FromDateTime(r.CreatedAt), Blocked(Permissions.VoucherApprove, "duyệt", r.CreatedBy, true)));
+                rows.Add(("assets", null, "assetRequest", r.Id, r.Number, r.Name, "Duyệt đề nghị mua sắm tài sản", r.CreatedBy, DateOnly.FromDateTime(r.CreatedAt), Need(r.Id, Permissions.VoucherApprove, "duyệt", r.CreatedBy, true)));
                 dues[r.Id] = r.NeededDate;
             }
         }
@@ -250,7 +253,24 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
         var ordered = rows.OrderBy(r => r.Blocked is null ? 0 : 1).ThenBy(r => r.Date).ThenBy(r => r.Number, StringComparer.Ordinal).Take(take).ToList();
         var ids = ordered.Select(r => r.Owner).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName);
+        // Người phụ trách = người đang hoạt động trong công ty có vai trò chứa quyền của bước kế tiếp; bước đòi tách người thì bỏ người lập.
+        var perms = ordered.Where(r => needs.ContainsKey(r.Id)).Select(r => needs[r.Id].Permission).Distinct().ToList();
+        var holders = new Dictionary<string, List<(Guid Id, string Name)>>();
+        foreach (var perm in perms)
+        {
+            var q = from ucr in db.UserCompanyRoles.AsNoTracking()
+                    join rp in db.RolePermissions.AsNoTracking() on ucr.RoleId equals rp.RoleId
+                    join u in db.Users.AsNoTracking() on ucr.UserId equals u.Id
+                    where ucr.CompanyId == cid && rp.Permission == perm && u.IsActive
+                    select new { u.Id, u.FullName };
+            holders[perm] = (await q.Distinct().OrderBy(x => x.FullName).Take(12).ToListAsync()).Select(x => (x.Id, x.FullName)).ToList();
+        }
+        IReadOnlyList<string>? AssigneesOf(Guid id)
+        {
+            if (!needs.TryGetValue(id, out var n) || !holders.TryGetValue(n.Permission, out var list)) return null;
+            return list.Where(h => !(n.Separate && distinct && h.Id == n.Owner)).Select(h => h.Name).Take(4).ToList();
+        }
         return ordered.Select(r => new WorkTask(r.Screen, r.Kind, r.Type, r.Id, r.Number, r.Title, r.Action, r.Owner, names.GetValueOrDefault(r.Owner, ""),
-            r.Date, Math.Max(0, today.DayNumber - r.Date.DayNumber), r.Blocked, dues.TryGetValue(r.Id, out var due) ? due : null)).ToList();
+            r.Date, Math.Max(0, today.DayNumber - r.Date.DayNumber), r.Blocked, dues.TryGetValue(r.Id, out var due) ? due : null, AssigneesOf(r.Id))).ToList();
     }
 }

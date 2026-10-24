@@ -6,7 +6,7 @@ import type { OpenType } from './quickadd'
 
 interface Task {
   screen: string; kind: 'Sales' | 'Purchase' | null; entityType: OpenType; entityId: string; number: string; title: string; action: string
-  ownerId: string; ownerName: string; date: string; ageDays: number; blockedReason: string | null; due: string | null
+  ownerId: string; ownerName: string; date: string; ageDays: number; blockedReason: string | null; due: string | null; assignees: string[] | null
 }
 
 /** Nguồn dữ liệu của việc (màn hình sở hữu chứng từ), để người dùng biết việc đến từ đâu. */
@@ -49,14 +49,14 @@ export function Worklist({ limit = 20 }: { limit?: number }) {
       <div className="toolbar"><h3 style={{ margin: 0 }}>Chứng từ đang chờ bạn <span className="badge-count">{tasks.length}</span></h3>
         <span className="muted">Việc làm được ngay xếp trước; việc bị chặn ghi rõ lý do.</span></div>
       <div className="scroll"><table className="grid">
-        <thead><tr><th>Việc cần làm</th><th>Chứng từ</th><th>Nội dung</th><th>Nguồn</th><th>Người lập</th><th>Ngày</th><th>Hạn</th><th className="num">Tuổi (ngày)</th><th>Tình trạng</th><th /></tr></thead>
+        <thead><tr><th>Việc cần làm</th><th>Chứng từ</th><th>Nội dung</th><th>Nguồn</th><th>Người lập</th><th>Người có thể làm</th><th>Ngày</th><th>Hạn</th><th className="num">Tuổi (ngày)</th><th>Tình trạng</th><th /></tr></thead>
         <tbody>{CYCLES.flatMap(c => {
           const rows = shown.filter(t => cycleOf(t) === c.key)
           if (rows.length === 0) return []
-          return [<tr key={'h:' + c.key} className="group-row"><th colSpan={10} style={{ textAlign: 'left' }}>{c.label} <span className="badge-count">{rows.length}</span></th></tr>, ...rows.map(t => (
+          return [<tr key={'h:' + c.key} className="group-row"><th colSpan={11} style={{ textAlign: 'left' }}>{c.label} <span className="badge-count">{rows.length}</span></th></tr>, ...rows.map(t => (
           <tr key={t.entityType + t.entityId}>
             <td><strong>{t.action}</strong></td><td>{t.number}</td><td>{t.title}</td><td>{SOURCE[t.screen] ?? t.screen}</td>
-            <td>{t.ownerName}</td><td>{formatDate(t.date)}</td><td>{t.due ? formatDate(t.due) : ''}</td><td className="num">{t.ageDays}</td>
+            <td>{t.ownerName}</td><td>{(t.assignees ?? []).join(', ')}</td><td>{formatDate(t.date)}</td><td>{t.due ? formatDate(t.due) : ''}</td><td className="num">{t.ageDays}</td>
             <td>{t.blockedReason ? <span className="muted" title={t.blockedReason}>⛔ {t.blockedReason}</span> : 'Làm được ngay'}</td>
             <td><button className={t.blockedReason ? '' : 'primary'} onClick={() => open(t)}>Mở</button></td>
           </tr>))]
