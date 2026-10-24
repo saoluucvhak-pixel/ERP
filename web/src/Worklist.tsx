@@ -11,19 +11,21 @@ interface Task {
 
 /** Nguồn dữ liệu của việc (màn hình sở hữu chứng từ), để người dùng biết việc đến từ đâu. */
 const SOURCE: Record<string, string> = {
-  vouchers: 'Chứng từ kế toán', trade: 'Hóa đơn', stock: 'Kho', bank: 'Ngân hàng', orders: 'Đơn hàng', contracts: 'Hợp đồng', advances: 'Tạm ứng', services: 'Nghiệm thu dịch vụ',
+  vouchers: 'Chứng từ kế toán', trade: 'Hóa đơn', stock: 'Kho', bank: 'Ngân hàng', orders: 'Đơn hàng', contracts: 'Hợp đồng', advances: 'Tạm ứng', services: 'Nghiệm thu dịch vụ', production: 'Sản xuất', assets: 'Tài sản / CCDC',
 }
 
 /** Việc thuộc chu trình nào: bán hàng và mua hàng tách riêng; còn lại theo phân hệ. Thứ tự hiện cố định. */
 const CYCLES = [
   { key: 'sales', label: 'Chu trình bán hàng' }, { key: 'purchase', label: 'Chu trình mua hàng' },
-  { key: 'money', label: 'Tiền, thanh toán' }, { key: 'stock', label: 'Kho' }, { key: 'gl', label: 'Kế toán tổng hợp' },
+  { key: 'money', label: 'Tiền, thanh toán' }, { key: 'stock', label: 'Kho' }, { key: 'production', label: 'Chu trình sản xuất' }, { key: 'assets', label: 'Tài sản, CCDC' }, { key: 'gl', label: 'Kế toán tổng hợp' },
 ] as const
 function cycleOf(t: Task): (typeof CYCLES)[number]['key'] {
   if (t.kind === 'Sales') return 'sales'
   if (t.kind === 'Purchase') return 'purchase'
   if (t.screen === 'bank' || t.screen === 'advances') return 'money'
   if (t.screen === 'stock') return 'stock'
+  if (t.screen === 'production') return 'production'
+  if (t.screen === 'assets') return 'assets'
   return 'gl'
 }
 

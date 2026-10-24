@@ -2,6 +2,7 @@ import { CountPrintButton, HandoverPrintButton } from './AssetPrint'
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, FlowStrip, useAction } from './common'
+import { focusRowProps, useOpenTarget } from './opentarget'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { MaintenancePanels } from './AssetMaintenance'
 
@@ -17,6 +18,7 @@ const RESULT_VI = { NotCounted: 'Chưa kiểm', Found: 'Có, đúng sổ', Missi
 
 /** Chu trình quản lý TSCĐ / CCDC (tệp phân tích ERP): đề nghị mua sắm → mua → ghi tăng → bàn giao → khấu hao → kiểm kê → ghi giảm. */
 export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRef[]; depreciationNote: string }) {
+  const openId = useOpenTarget('assetRequest')
   const [reqs, setReqs] = useState<Req[]>([])
   const [cur, setCur] = useState<Cur[]>([])
   const [openWo, setOpenWo] = useState(0)
@@ -74,7 +76,7 @@ export function AssetCyclePanels({ assets, depreciationNote }: { assets: AssetRe
           }}>Lập đề nghị</button>
         </div>
         <table className="grid"><thead><tr><th>Số</th><th>Loại</th><th>Tên</th><th>Bộ phận</th><th className="num">Dự kiến</th><th>Cần trước</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{reqs.map(r => <tr key={r.id}><td>{r.number}</td><td>{CLASS_VI[r.class]}</td><td title={r.reason}>{r.name}</td><td>{r.department ?? ''}</td><td className="num">{formatMoney(r.estimatedCost)}</td><td>{formatDate(r.neededDate)}</td>
+          <tbody>{reqs.map(r => <tr key={r.id} {...focusRowProps(r.id, openId)}><td>{r.number}</td><td>{CLASS_VI[r.class]}</td><td title={r.reason}>{r.name}</td><td>{r.department ?? ''}</td><td className="num">{formatMoney(r.estimatedCost)}</td><td>{formatDate(r.neededDate)}</td>
             <td title={r.decisionNote ?? ''}>{REQ_VI[r.status]}{r.decisionNote ? ` — ${r.decisionNote}` : ''}</td>
             <td style={{ display: 'flex', gap: 6 }}>
               {r.status === 'Pending' && <>

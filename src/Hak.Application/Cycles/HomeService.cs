@@ -227,6 +227,26 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
                 rows.Add(("services", null, "serviceAcceptance", a.Id, a.Number, a.Note ?? "", "Xác nhận nghiệm thu dịch vụ", a.CreatedBy, a.AcceptanceDate, Blocked(Permissions.VoucherApprove, "duyệt", a.CreatedBy, true)));
         }
 
+        if (Can("production"))
+        {
+            var pos = await db.ProductionOrders.AsNoTracking().Where(o => o.CompanyId == cid && (o.Status == ProductionOrderStatus.Draft || o.Status == ProductionOrderStatus.Completed))
+                .OrderBy(o => o.PlannedStart).ThenBy(o => o.Number).Take(Per).Select(o => new { o.Id, o.Number, o.Note, o.PlannedStart, o.CreatedBy, o.Status }).ToListAsync();
+            foreach (var o in pos)
+                rows.Add(o.Status == ProductionOrderStatus.Draft
+                    ? ("production", null, "productionOrder", o.Id, o.Number, o.Note ?? "", "Ban hành lệnh sản xuất", o.CreatedBy, o.PlannedStart, Blocked(Permissions.VoucherApprove, "duyệt (ban hành lệnh)", o.CreatedBy, true))
+                    : ("production", null, "productionOrder", o.Id, o.Number, o.Note ?? "", "Ghi sổ phiếu nhập thành phẩm và đóng lệnh", o.CreatedBy, o.PlannedStart, Blocked(Permissions.ProductionManage, "quản lý sản xuất", o.CreatedBy, false)));
+        }
+        if (Can("assets"))
+        {
+            var ars = await db.AssetRequests.AsNoTracking().Where(r => r.CompanyId == cid && r.Status == AssetRequestStatus.Pending)
+                .OrderBy(r => r.NeededDate).ThenBy(r => r.Number).Take(Per).Select(r => new { r.Id, r.Number, r.Name, r.CreatedAt, r.NeededDate, r.CreatedBy }).ToListAsync();
+            foreach (var r in ars)
+            {
+                rows.Add(("assets", null, "assetRequest", r.Id, r.Number, r.Name, "Duyệt đề nghị mua sắm tài sản", r.CreatedBy, DateOnly.FromDateTime(r.CreatedAt), Blocked(Permissions.VoucherApprove, "duyệt", r.CreatedBy, true)));
+                dues[r.Id] = r.NeededDate;
+            }
+        }
+
         var ordered = rows.OrderBy(r => r.Blocked is null ? 0 : 1).ThenBy(r => r.Date).ThenBy(r => r.Number, StringComparer.Ordinal).Take(take).ToList();
         var ids = ordered.Select(r => r.Owner).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName);

@@ -5,7 +5,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
-    proxy: { '/api': 'http://127.0.0.1:5080' },
+    port: Number(process.env.HAK_WEB_PORT ?? 5173),
+    proxy: { '/api': process.env.HAK_API_ORIGIN ?? 'http://127.0.0.1:5080' },   // HAK_* chỉ dùng cho test e2e (cổng riêng)
   },
 })
