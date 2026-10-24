@@ -1,7 +1,8 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { NavIntent } from './quickadd'
-import { usePermission } from './perms'
+import { hasPermission, usePermission } from './perms'
+import { refuseReason, type ActionOptions } from './actions'
 import { ApiError, UNCERTAIN_CODE, get, isStaleContext, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
@@ -76,9 +77,20 @@ function TablePrint({ title, subtitle, columns, rows, onDone }: { title: string;
         })}</tr>)}</tbody>
       </table>
       <div className="signs"><div><b>Người lập biểu</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-      <div className="foot">HAK Accounting · in lúc {new Date().toLocaleString('vi-VN')}. Mẫu in nội bộ, chưa đối chiếu mẫu sổ/báo cáo theo chế độ kế toán [CẦN XÁC MINH].</div>
+      <div className="foot">HAK Accounting · in lúc <PrintedAt />. Mẫu in nội bộ, chưa đối chiếu mẫu sổ/báo cáo theo chế độ kế toán [CẦN XÁC MINH].</div>
     </PrintSheet>
   )
+}
+
+/** Print timestamp: refreshed right before the browser prints, so the footer shows when it was printed, not when the sheet was mounted. */
+export function PrintedAt() {
+  const [at, setAt] = useState(() => new Date().toLocaleString('vi-VN'))
+  useEffect(() => {
+    const refresh = () => setAt(new Date().toLocaleString('vi-VN'))
+    window.addEventListener('beforeprint', refresh)
+    return () => window.removeEventListener('beforeprint', refresh)
+  }, [])
+  return <>{at}</>
 }
 
 /** A document laid out for paper, outside the app shell; shown only while printSheet() prints it. */
@@ -96,7 +108,7 @@ export function printSheet() {
 export function Modal({ title, onClose, children, footer, busy, onSubmit }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; busy?: boolean; onSubmit?: () => void }) {
   const [box, setBox] = useState<HTMLDivElement | null>(null)
   const latest = useRef({ onClose, busy, onSubmit })
-  latest.current = { onClose, busy, onSubmit }
+  useEffect(() => { latest.current = { onClose, busy, onSubmit } })
   useEffect(() => {
     if (!box) return
     const focusable = () => [...box.querySelectorAll<HTMLElement>('input, select, textarea, button')].filter(el => !(el as HTMLButtonElement).disabled)
@@ -156,10 +168,13 @@ export function ErrorBox({ error }: { error: unknown }) {
 export function useAction() {
   const [inFlight, setInFlight] = useState(0)
   const [error, setError] = useState<unknown>(null)
-  const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+  const count = useRef(0)   // số thao tác đang chạy, đọc được ngay trong cùng một lần bấm (state chỉ cập nhật sau render)
+  const run = useCallback(async <T,>(fn: () => Promise<T>, opts?: ActionOptions): Promise<T | undefined> => {
+    const refused = refuseReason(opts, count.current, hasPermission)
+    if (refused) { if (refused.reason === 'permission') setError(refused); return undefined }
     // Đếm số thao tác đang chạy: thao tác thứ nhất xong không được làm "hết bận" khi thao tác thứ hai còn chạy.
-    setInFlight(n => n + 1); setError(null)
-    try { return await fn() } catch (e) { if (!isStaleContext(e)) setError(e); return undefined } finally { setInFlight(n => n - 1) }
+    count.current++; setInFlight(n => n + 1); setError(null)
+    try { return await fn() } catch (e) { if (!isStaleContext(e)) setError(e); return undefined } finally { count.current--; setInFlight(n => n - 1) }
   }, [])
   return { busy: inFlight > 0, error, setError, run }
 }

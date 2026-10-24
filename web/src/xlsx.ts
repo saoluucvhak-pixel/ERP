@@ -25,6 +25,7 @@ export function crc32(data: Uint8Array): number {
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   // XML 1.0 forbids most control characters.
+  // oxlint-disable-next-line no-control-regex -- cố ý loại ký tự điều khiển XML 1.0 cấm
   .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
 
 function colName(i: number): string {

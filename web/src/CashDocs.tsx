@@ -49,9 +49,11 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
 
   // Đổi loại phiếu thì về nghiệp vụ mặc định của loại đó; lần dựng đầu giữ nghiệp vụ đã chọn (từ phiếu sửa hoặc Thêm nhanh).
   const prevType = useRef(type)
+  // oxlint-disable-next-line react/set-state-in-effect -- đổi loại phiếu thì về nghiệp vụ mặc định
   useEffect(() => { if (!voucher) { if (prevType.current !== type) setEvent(EVENTS[type][0].value); setMainAccountId('') } prevType.current = type }, [type, voucher])
   useEffect(() => {
     const acc = accounts.find(a => a.openItemNature === arapRole)
+    // oxlint-disable-next-line react/set-state-in-effect -- tải khoản mở khi đổi đối tượng/ngày
     if (!acc || !partnerId) { setOpenItems([]); return }
     const q = new URLSearchParams({ accountId: acc.id, partnerId, asOf: date })
     get<OpenItem[]>(`/settlement/open-items?${q}`)
@@ -62,6 +64,7 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
 
   // Fund balance up to the document date (posted entries only) and the latest documents touching that fund.
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- tải số dư quỹ khi đổi tài khoản/ngày
     if (!mainAccountId) { setBalance(null); setRecent([]); return }
     const q = new URLSearchParams({ accountId: mainAccountId, from: `${date.slice(0, 4)}-01-01`, to: date })
     get<{ closingBalance: string }>(`/reports/account-ledger?${q}`).then(l => setBalance(l.closingBalance)).catch(() => setBalance(null))

@@ -19,6 +19,7 @@ export function useGroups(domain: GroupDomain) {
       setTree(await get<GroupRow[]>(`/groups/${domain}`)); setLinks(await get<GroupLink[]>(`/groups/${domain}/links`))
     } catch { setTree([]); setLinks([]) }
   }, [domain])
+  // oxlint-disable-next-line react/set-state-in-effect -- tải cây nhóm khi mở
   useEffect(() => { reload() }, [reload])
   const byId = useMemo(() => Object.fromEntries(tree.map(g => [g.id, g])), [tree])
   /** Mã nhóm và các nhóm con của nó. */

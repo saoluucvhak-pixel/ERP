@@ -229,6 +229,7 @@ function NewAsset({ accounts, groups, onDone }: { accounts: ReturnType<typeof us
   useEffect(() => {
     const idOf = (role: string) => accounts.find(a => a.code === defaults[role])?.id ?? ''
     if (accounts.length === 0) return
+    // oxlint-disable-next-line react/set-state-in-effect -- điền sẵn tài khoản mặc định khi loại thẻ hoặc cấu hình đổi
     setF(x => x.class === 'Tool'
       ? { ...x, assetAccountId: idOf('TOOL_COST_DEFAULT') || x.assetAccountId, expenseAccountId: idOf('TOOL_EXPENSE_DEFAULT') || x.expenseAccountId }
       : { ...x, assetAccountId: idOf('ASSET_COST_DEFAULT') || x.assetAccountId, accumulatedAccountId: idOf('ASSET_ACCUMULATED_DEFAULT') || x.accumulatedAccountId,
@@ -236,6 +237,7 @@ function NewAsset({ accounts, groups, onDone }: { accounts: ReturnType<typeof us
   }, [defaults, accounts, f.class])
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- đổi tài khoản thì xóa lựa chọn và tải lại khoản chi phí ứng viên
     setPicked({})
     if (!f.assetAccountId) { setCandidates([]); return }
     get<Candidate[]>(`/assets/cost-candidates?accountId=${f.assetAccountId}`).then(setCandidates).catch(() => setCandidates([]))
