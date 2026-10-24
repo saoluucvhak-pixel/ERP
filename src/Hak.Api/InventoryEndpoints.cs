@@ -77,6 +77,13 @@ public static class InventoryEndpoints
             docs.Reverse();
             return Results.Ok(docs.Select(Dto));
         });
+        api.MapGet("/stock-documents/{id:guid}", async (HttpContext http, Guid id, HakDbContext db) =>
+        {
+            var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
+            var doc = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstOrDefaultAsync(d => d.Id == id && d.CompanyId == ctx.CompanyId)
+                      ?? throw new Hak.Domain.Common.DomainException(Hak.Domain.Common.ErrorCodes.NotFound, "Phiếu kho không tồn tại.");
+            return Results.Ok(Dto(doc));
+        });
         api.MapPost("/stock-documents", async (HttpContext http, StockDocumentInput r, StockService s) => Results.Ok(Dto(await s.CreateDocumentAsync(await http.SessionAsync(), r))));
         api.MapPost("/stock-documents/{id:guid}/post", async (HttpContext http, Guid id, long rowVersion, StockService s) => Results.Ok(Dto(await s.PostDocumentAsync(await http.SessionAsync(), id, rowVersion))));
         api.MapPost("/stock-documents/{id:guid}/reverse", async (HttpContext http, Guid id, ReverseRequest r, StockService s) =>

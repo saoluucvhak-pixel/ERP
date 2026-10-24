@@ -2,6 +2,7 @@ import { AcceptancePlanPanel } from './ContractServicePlan'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
+import { useOpenTarget } from './opentarget'
 import { formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, overlaps, useFilterState } from './SmartFilter'
 import { matchesQuery, toNumber } from './filter'
@@ -60,6 +61,8 @@ export function ContractsView() {
   useEffect(() => { load() }, [load])
   useEffect(() => { run(async () => setItems(await get<ItemRef[]>('/items'))) }, [run])
   const open = (id: string) => run(async () => setView(await get<View>(`/contracts/${id}`)))
+  const openId = useOpenTarget('contract')
+  useEffect(() => { if (openId) open(openId) }, [openId]) // eslint-disable-line react-hooks/exhaustive-deps
   const act = (msg: string, fn: () => Promise<unknown>) => run(async () => { await fn(); setInfo(msg); await load(); if (view) setView(await get<View>(`/contracts/${view.header.id}`)) })
   const ask = (q: string) => { const v = prompt(q); return v && v.trim() ? v.trim() : null }
   const mine = partners.filter(p => (kind === 'Sales' ? p.isCustomer : p.isSupplier))

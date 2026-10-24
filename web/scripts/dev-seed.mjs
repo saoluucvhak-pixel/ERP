@@ -111,36 +111,34 @@ await as('POST', '/dryness-methods', { code: 'DO-KHO', description: 'BDMT = MT �
 
 // A posted sales invoice (prepared by ketoan, approved and posted by ktt) to give the screens some data.
 const e = (await call('POST', '/auth/login', { userName: 'ketoan', password: creds.ketoan })).token
+// Gửi duyệt → duyệt → ghi sổ: mỗi bước gửi rowVersion của bản vừa nhận (API bắt buộc phiên bản đã xem).
+async function submitApprovePost(v) {
+  const submitted = await call('POST', `/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`, {}, e, company)
+  const approved = await as('POST', `/vouchers/${v.id}/approve?rowVersion=${submitted.rowVersion}`)
+  await as('POST', `/vouchers/${v.id}/post?rowVersion=${approved.rowVersion}`)
+}
 const now = new Date() // local date, not UTC (toISOString gives yesterday before 07:00 in Vietnam)
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 const inv = await call('POST', '/vouchers', { voucherType: 'GJ', voucherDate: today, postingDate: today, description: 'Bán hàng chưa thu tiền (thử)',
   lines: [{ accountId: acc.AR, side: 'D', amount: '15000000', partnerId: par.KH01 }, { accountId: acc.REV, side: 'C', amount: '15000000' }] }, e, company)
-await call('POST', `/vouchers/${inv.id}/submit`, {}, e, company)
-await as('POST', `/vouchers/${inv.id}/approve`)
-await as('POST', `/vouchers/${inv.id}/post`)
+await submitApprovePost(inv)
 
 // A posted asset purchase, so the asset screen has a cost line to assign.
 const fa = await call('POST', '/vouchers', { voucherType: 'GJ', voucherDate: today, postingDate: today, description: 'Mua máy xúc (thử)',
   lines: [{ accountId: acc.FA, side: 'D', amount: '120000000' }, { accountId: acc.AP, side: 'C', amount: '120000000', partnerId: par.NCC01 }] }, e, company)
-await call('POST', `/vouchers/${fa.id}/submit`, {}, e, company)
-await as('POST', `/vouchers/${fa.id}/approve`)
-await as('POST', `/vouchers/${fa.id}/post`)
+await submitApprovePost(fa)
 
 // 1,000 USD received at 25,000 into the USD bank account, for the FX screen.
 const usd = await call('POST', '/vouchers', { voucherType: 'GJ', voucherDate: today, postingDate: today, description: 'Nhận USD (thử)',
   lines: [{ accountId: acc.BANKUSD, side: 'D', amount: '25000000', foreignCurrency: 'USD', foreignAmount: '1000', exchangeRate: '25000' },
     { accountId: acc.REV, side: 'C', amount: '25000000' }] }, e, company)
-await call('POST', `/vouchers/${usd.id}/submit`, {}, e, company)
-await as('POST', `/vouchers/${usd.id}/approve`)
-await as('POST', `/vouchers/${usd.id}/post`)
+await submitApprovePost(usd)
 
 // A 1,000 USD receivable from KH01 at 25,000, for "Thu / chi ngoại tệ theo hóa đơn".
 const usdSale = await call('POST', '/vouchers', { voucherType: 'GJ', voucherDate: today, postingDate: today, description: 'Bán hàng USD (thử)',
   lines: [{ accountId: acc.AR, side: 'D', amount: '25000000', partnerId: par.KH01, foreignCurrency: 'USD', foreignAmount: '1000', exchangeRate: '25000' },
     { accountId: acc.REV, side: 'C', amount: '25000000' }] }, e, company)
-await call('POST', `/vouchers/${usdSale.id}/submit`, {}, e, company)
-await as('POST', `/vouchers/${usdSale.id}/approve`)
-await as('POST', `/vouchers/${usdSale.id}/post`)
+await submitApprovePost(usdSale)
 
 writeFileSync(new URL('../.dev-credentials.json', import.meta.url), JSON.stringify({ api: BASE, company: 'DEV01', users: creds }, null, 2))
 console.log('Đã seed công ty DEV01. Mật khẩu ghi trong web/.dev-credentials.json (không commit).')
@@ -148,6 +146,4 @@ console.log('Đã seed công ty DEV01. Mật khẩu ghi trong web/.dev-credentia
 // A bank loan drawdown (not yet linked to a contract), for the loan screen.
 const draw = await call('POST', '/vouchers', { voucherType: 'GJ', voucherDate: today, postingDate: today, description: 'Giải ngân khế ước vay (thử)',
   lines: [{ accountId: acc.BANK, side: 'D', amount: '1000000000' }, { accountId: acc.LOAN, side: 'C', amount: '1000000000', partnerId: par.VCB }] }, e, company)
-await call('POST', `/vouchers/${draw.id}/submit`, {}, e, company)
-await as('POST', `/vouchers/${draw.id}/approve`)
-await as('POST', `/vouchers/${draw.id}/post`)
+await submitApprovePost(draw)
