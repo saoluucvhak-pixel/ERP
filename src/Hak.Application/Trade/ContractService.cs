@@ -190,12 +190,19 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
 
     // ------------------------------------------------------------ xem, báo cáo
 
-    public async Task<IReadOnlyList<ContractRow>> ListAsync(SessionContext ctx, InvoiceKind? kind = null)
+    /// <summary>Danh sách hiển thị: tối đa 500 hợp đồng (mã giảm dần). KHÔNG dùng cho cảnh báo hay quyết định nghiệp vụ — dùng <see cref="ListCoreAsync"/> với đúng bộ lọc.</summary>
+    public Task<IReadOnlyList<ContractRow>> ListAsync(SessionContext ctx, InvoiceKind? kind = null)
+        => ListCoreAsync(ctx, kind, null, 500);
+
+    /// <summary>Lọc theo công ty/loại/trạng thái TRƯỚC khi giới hạn số dòng; <paramref name="take"/> null = toàn bộ tập khớp.</summary>
+    private async Task<IReadOnlyList<ContractRow>> ListCoreAsync(SessionContext ctx, InvoiceKind? kind, ContractStatus[]? statuses, int? take)
     {
         ctx.Require(Permissions.ReportView);
         var q = db.Contracts.AsNoTracking().Include(c => c.Lines).Where(c => c.CompanyId == ctx.CompanyId);
         if (kind != null) q = q.Where(c => c.Kind == kind);
-        var rows = await q.OrderByDescending(c => c.Code).Take(500).ToListAsync();
+        if (statuses != null) q = q.Where(c => statuses.Contains(c.Status));
+        var ordered = q.OrderByDescending(c => c.Code);
+        var rows = take is { } n ? await ordered.Take(n).ToListAsync() : await ordered.ToListAsync();
         return await RowsAsync(rows);
     }
 
@@ -224,7 +231,7 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
 
     /// <summary>Tiến độ thực hiện: cam kết so với đã đặt qua đơn kế thừa, phần trăm hoàn thành và phần còn lại.</summary>
     public async Task<IReadOnlyList<ContractRow>> FulfilmentReportAsync(SessionContext ctx, InvoiceKind? kind = null)
-        => (await ListAsync(ctx, kind)).Where(r => r.Status is ContractStatus.Active or ContractStatus.Completed).ToList();
+        => await ListCoreAsync(ctx, kind, [ContractStatus.Active, ContractStatus.Completed], 500);
 
     public async Task<IReadOnlyList<MilestoneScheduleRow>> MilestoneScheduleAsync(SessionContext ctx, InvoiceKind? kind = null)
     {
@@ -266,7 +273,7 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
     {
         ctx.Require(Permissions.ReportView);
         var list = new List<ContractAlert>();
-        var rows = (await ListAsync(ctx)).Where(r => r.Status == ContractStatus.Active).ToList();
+        var rows = await ListCoreAsync(ctx, null, [ContractStatus.Active], null);   // toàn bộ hợp đồng còn hiệu lực của công ty, không bị cắt 500 của danh sách
         foreach (var r in rows)
         {
             if (r.Expired) list.Add(new(r.Id, r.Code, "expired", $"Hợp đồng {r.Code} đã hết hạn từ {r.ExpirationDate:dd/MM/yyyy} nhưng chưa thanh lý.", r.ExpirationDate));
