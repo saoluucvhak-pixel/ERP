@@ -1,6 +1,6 @@
 # STATUS — theo Definition of Done (master prompt §48)
 
-Cập nhật: 20/10/2026 (rà soát bảo mật/CI; phần chức năng còn ghi theo mốc 14/10/2026, Giai đoạn 3 — Kho, tính giá xuất kho, MT/BDMT dăm gỗ, hóa đơn mua/bán). Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
+Cập nhật: 24/10/2026 (rà soát GitHub R01–R06 và các mục kiểm soát nghiệp vụ — xem `docs/audit/BUG_REGISTER.md`, mục "Đợt rà soát 24/10/2026"; trước đó 20/10/2026 rà soát bảo mật/CI; phần chức năng còn ghi theo mốc 14/10/2026, Giai đoạn 3 — Kho, tính giá xuất kho, MT/BDMT dăm gỗ, hóa đơn mua/bán). Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
 
 Trạng thái: `NOT_STARTED` · `DESIGNED` · `IN_PROGRESS` (code + test, thiếu UI hoặc tài liệu) · `AWAITING_REAL_DATA_VALIDATION` (code + UI + test tự động đạt, chờ dữ liệu thực) · `DONE`
 
@@ -138,3 +138,5 @@ Chạy đúng, không lỗi console: màn Tổng quan (số khớp chéo với s
 | 20/10/2026 | Bộ mã chứng từ + Thiết lập Bộ mã, chiết khấu thanh toán, dải dòng chảy (migration Phase10Numbering, Phase10PaymentDiscount, Phase10IssueDrynessBasis) | xem lần chạy test cuối | docs/10 mục 9x, docs/11 |
 
 | 20/10/2026 | Nhóm danh mục nhiều cấp, nhiều nhóm mỗi mục (migration Phase10Groups) | xem lần chạy test cuối | docs/10 mục 9y |
+
+| 24/10/2026 | Rà soát GitHub R01–R06 (retry giữ ngữ cảnh, kiểm quyền khi trả cache idempotency, lưu đối tượng nguyên tử, thông báo Kiểm tra, Thêm nhanh đúng nghiệp vụ, cảnh báo hợp đồng đủ tập); version bắt buộc cho duyệt/ghi sổ/hủy/đảo; ngoại lệ lệch đối tượng phiếu kho (quyền `invoice.partner_override`); chặn đảo hóa đơn còn điều chỉnh / gắn phiếu kho của lệnh sản xuất đã hoàn thành; lương từng người cần `sensitive.view`; CLS phải khớp nguồn; hủy phân bổ do đảo có ngày hiệu lực; worklist theo chứng từ; tách chu trình mua / bán; chống bấm trùng; cảnh báo nháp chưa lưu (migration Phase17IdempotencyPermissions, Phase17InvoicePartnerOverride, Phase17AllocationVoidEffectiveDate — **cả hai bộ SQLite và PostgreSQL**) | SQLite: 126 domain + 348 tích hợp, web 54; **PostgreSQL 16: 348 tích hợp** | docs/audit/BUG_REGISTER.md |

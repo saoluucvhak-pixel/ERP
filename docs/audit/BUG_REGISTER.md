@@ -34,17 +34,34 @@ Trạng thái: **ĐÃ SỬA** (có test, chờ CI) · **CHỜ QUYẾT** (đổi 
 | ACC-03 | P2 | Kết chuyển cuối kỳ không tạo lại được sau khi đảo → nay tạo lại được (khóa nguồn hậu tố `#n`, không đổi CSDL). | `RulesCashClosingTests.Closing_CanBeGeneratedAgain*` |
 | OPS-10/12 | P3 | Hai tham số không dùng (CS9113), `ExecuteSqlRawAsync` nội suy (EF1002), tệp rỗng `src/Admin.tsx`. | build |
 
+## Đợt rà soát 24/10/2026 (mã R01–R06 + Prompt 2/3) — ĐÃ SỬA, có test hồi quy
+Bộ mã **R** là của báo cáo `BAO-CAO-GITHUB.md` (24/10/2026, commit rà soát `deb7c5c`); không nhầm với bộ mã UI-/SEC-/ACC-/BIZ- ở trên. Bằng chứng: test tự động trên SQLite **và PostgreSQL 16** (348 tích hợp), kiểm tay bằng trình duyệt (Playwright) cho giao diện. PR #39–#46.
+
+| Mã | Mức | Nội dung | Cách sửa | Test |
+|---|---|---|---|---|
+| R01 | P1 | Retry dùng nhầm công ty/phiên (PendingWrite không mang ngữ cảnh) | Snapshot phiên + công ty khi tạo lệnh; thao tác chờ chỉ hiện/gửi lại trong ngữ cảnh gốc; 401 của phiên cũ không đăng xuất phiên mới (`web/src/api.ts`) | `api-context.test.ts` |
+| R02 | P1 | Mất quyền vẫn nhận phản hồi idempotency đã lưu | Lưu quyền yêu cầu gốc đã đòi (`required_permissions`), kiểm lại quyền HIỆN TẠI trước khi trả cache (kể cả 422) | `IdempotencyReplayAuthTests` |
+| R03 | P2 | Nút Lưu đối tượng gọi hai PUT độc lập; `30abc` thành 30 | `PUT /partners/{id}/full` một giao dịch + kiểm phiên bản; `parseWholeNumber` | `PartnerFullUpdateTests`, `money.test.ts` |
+| R04 | P2 | Kết quả Kiểm tra chứng từ bị thông báo chung ghi đè | `act()` đặt thông báo một lần sau khi xong; lỗi hiện màu lỗi | tay + e2e |
+| R05 | P2 | Thêm nhanh không phân biệt Thu/Chi, mua/bán, Nhập/Xuất/Kiểm kê | `NavIntent` qua `navStore.go`, ý định gắn màn đích; hỏi xác nhận khi dựng lại màn đang mở | `quickadd.test.ts`, e2e |
+| R06 | P2 | Cảnh báo hợp đồng bỏ sót vì `Take(500)` | Lọc công ty/trạng thái trước khi giới hạn; phân trang `GET /contracts/page` (total/hasMore) | `ContractAlertsScaleTests` |
+| ACC-05 | P2 | Duyệt/ghi sổ không bắt buộc `rowVersion` | Bắt buộc ở chứng từ (submit/approve/reject/cancel/post), hóa đơn (post/reverse/cancel), phiếu kho (post/reverse/cancel), lệnh thanh toán (approve/cancel), hợp đồng (submit/decide/complete/cancel — `version` nội dung), phiếu sửa chữa tài sản. **Không áp** cho tạm ứng, cổ tức, điều chỉnh/xóa nợ bán hàng, nghiệm thu dịch vụ, đề nghị tài sản (không có đường sửa sau khi tạo) | `ApiTests`, `VersionRequiredEndpointTests`, `TradeTests`, `ContractTests` |
+| ACC-04 | P2 | CLS nháp có thể cũ khi ghi sổ | `ClosingService.CheckVoucherAsync` tính lại, `CLOSING_OUT_OF_DATE` ở gửi duyệt/duyệt/ghi sổ | `RulesCashClosingTests` |
+| ACC-06 | P2 | Đảo hủy phân bổ làm đổi tuổi nợ kỳ đã khóa | `VoidEffectiveDate` = ngày đảo; báo cáo tại ngày trước đó giữ nguyên | `SettlementTests.ReversingPaymentInALaterPeriod_...` |
+| BIZ-04 | P2 | Hóa đơn nhận phiếu kho của đối tượng khác | `PARTNER_MISMATCH` lúc lập và lúc ghi sổ; ngoại lệ có quyền `invoice.partner_override` + lý do + nhật ký | `TradeTests.Invoice_FromStandaloneIssue_...` |
+| BIZ-05 | P2 | Đảo hóa đơn gốc khi còn điều chỉnh đã ghi sổ | Từ chối, không để lại bút toán dở dang | `TradeTests.ReverseOriginal_...` |
+| SEC-02 | P2 | `report.view` xem lương từng người | Lương từng người cần `sensitive.view` (tổng hợp theo phiếu vẫn `report.view`). **`data.export` vẫn chưa kiểm ở máy chủ**; hàng chờ trả lương vẫn lộ thực lĩnh cho `report.view` | `PayrollTests` |
+| UI-13 | P2 | Hai chu trình mua/bán lẫn trong một màn (đơn, hóa đơn, hợp đồng, nghiệm thu dịch vụ), số việc chờ cộng gộp, cảnh báo/báo cáo hợp đồng trộn hai chiều | Bỏ nút chuyển chiều, chiều do phân hệ quyết định, đếm việc theo chiều, báo cáo hợp đồng lọc theo chiều, worklist chia nhóm theo chu trình | `TradeTests.HomeWorkQueue_...`, `ContractTests`, e2e |
+| PG-01 | **P1** | Migration chỉ sinh cho SQLite → PostgreSQL báo `PendingModelChangesWarning`, hỏng mọi test tích hợp (PR #39–#44) | Sinh thêm bộ `src/Hak.Data.Postgres/Migrations` — **luôn sinh CẢ HAI bộ** khi đổi model | CI job `backend-postgres` |
+| TOOL-01 | P2 | `web/scripts/dev-seed.mjs` và `tools/migrate-fast/hak_import.mjs` gọi submit/approve/post không kèm `rowVersion` | Chuyền phiên bản vừa nhận sang bước sau. `hak_import.mjs` **chưa chạy với dữ liệu thật** | seed chạy được |
+
+Còn mở từ đợt này: đảo hóa đơn MUA làm lệch giá thành đã chốt; worklist chưa có lệnh sản xuất / đề nghị tài sản / người phụ trách riêng; phân trang phía máy chủ cho phiếu kho và lệnh thanh toán; test giao diện tự động chưa chạy trong CI (xem `web/e2e`); màn "Thanh toán chiết khấu" và "Công nợ phải thu/phải trả" vẫn dùng chung hai phân hệ.
+
 ## Chờ chị quyết (đổi quy tắc hạch toán hoặc phân quyền)
 | Mã | Mức | Vấn đề | Đề xuất |
 |---|---|---|---|
-| SEC-02 | P2 | `sensitive.view` và `data.export` khai báo nhưng không nơi nào kiểm → mọi người có `report.view` xem lương/thuế TNCN từng nhân viên. | Kiểm `sensitive.view` ở báo cáo lương (sẽ ẩn màn Lương với kế toán thường). |
-| ACC-04 | P2 | CLS nháp có thể cũ khi ghi sổ (có chứng từ chi phí ghi thêm sau khi tạo). | Tính lại khi duyệt/ghi sổ, lệch thì từ chối. |
-| ACC-05 | P2 | Duyệt/ghi sổ không bắt buộc `rowVersion` → duyệt nội dung chưa xem. | Bắt buộc `rowVersion` cho duyệt/ghi sổ (đổi API, ảnh hưởng giao diện). |
-| ACC-06 | P2 | Đảo chứng từ hủy phân bổ trong kỳ đã khóa → tuổi nợ kỳ đã khóa đổi. | Chặn hoặc tính theo ngày hủy. |
 | BIZ-03 | P2 | Đảo phiếu xuất bình quân cuối tháng sang tháng sau khi chưa tính giá → kẹt tính giá tháng sau. | Chặn đảo khác kỳ khi chưa tính giá. |
-| BIZ-04 | P2 | Hóa đơn bán nhận phiếu xuất của đối tượng khác / phiếu trả hàng NCC; hóa đơn mua không kiểm NCC khớp phiếu nhập. | Kiểm đối tượng khớp. |
-| BIZ-05 | P2 | Đảo hóa đơn gốc khi còn hóa đơn điều chỉnh đã ghi sổ → giảm giá/công nợ mồ côi. | Từ chối khi còn điều chỉnh. |
-| BIZ-06 | P2 | Đảo phiếu xuất NVL sau khi lệnh sản xuất hoàn thành → đếm giá trị hai lần. | Từ chối đảo phiếu thuộc lệnh đã hoàn thành. |
+| BIZ-06 | P2 | Đảo phiếu xuất NVL sau khi lệnh sản xuất hoàn thành → đếm giá trị hai lần. **24/10:** đã chặn đảo HÓA ĐƠN gắn phiếu kho của lệnh đã hoàn thành; **chưa** chặn đảo trực tiếp phiếu kho (`POST /stock-documents/{id}/reverse`) và đảo hóa đơn MUA làm lệch giá thành. | Từ chối đảo phiếu thuộc lệnh đã hoàn thành; quy tắc truy vết giá kho cho hóa đơn mua cần chị chốt. |
 | BIZ-07 | P2 | BDMT dăm trả NCC: sổ BDMT trừ theo bình quân kho, hóa đơn theo tỷ lệ dòng gốc (lệch 1,2 BDMT trong ví dụ). Đã chốt 16/10: theo tỷ lệ dòng gốc. | Ghi BDMT sổ theo tỷ lệ dòng gốc. |
 | SEC-08 | P3 | Quản trị hệ thống tự cấp cho mình vai trò kế toán trưởng và tắt kiểm soát hai người. | Không cho tự cấp / cần admin thứ hai. |
 
