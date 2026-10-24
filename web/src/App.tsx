@@ -5,6 +5,7 @@ import { HomeLauncher } from './Home'
 import { FlowTab, MODULES, moduleOfScreen } from './Modules'
 import { QuickAdd } from './QuickAdd'
 import { ErrorBox, navStore, useAction } from './common'
+import { confirmLeave } from './unsaved'
 import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
 
 // Màn hình nghiệp vụ tải theo nhu cầu (mỗi màn một chunk): lần mở đầu chỉ tải khung, Tổng quan và màn đang mở.
@@ -153,8 +154,11 @@ export default function App() {
   // không nhảy sang phân hệ đầu tiên chứa nó (trước đây "Hợp đồng bán" luôn nhảy vào Mua hàng).
   const moduleKeyRef = useRef(moduleKey)
   moduleKeyRef.current = moduleKey
+  // Cùng màn đang mở: đường 'dựng lại màn' bên dưới có hộp xác nhận riêng, không hỏi hai lần.
+  const sameScreenNow = (key: string) => tabRef.current === key
   useEffect(() => {
     navStore.go = (key, kind, intent) => {
+      if (!(intent && sameScreenNow(key)) && !confirmLeave()) return   // đi sang màn khác khi còn nội dung nhập dở: hỏi trước
       if (key === 'home' || key === 'cycles') { setModuleKey(key); setTab('flow'); return }
       const current = MODULES.find(x => x.key === moduleKeyRef.current)
       // Có chỉ định chiều bán / mua thì vào đúng phân hệ Bán hàng / Mua hàng (màn dùng chung đọc chiều từ phân hệ đang mở).
@@ -233,7 +237,7 @@ export default function App() {
   navStore.kind = module.key === 'purchase' ? 'Purchase' : module.key === 'sales' ? 'Sales' : undefined   // đọc khi màn dùng chung được dựng
   const moduleCount = (m: (typeof MODULES)[number]) => m.screens.reduce((n, k) => n + (work[k] ?? 0), 0)
   const screenEl = (key: string) => SCREENS.find(s => s.key === key)?.el()
-  const openModule = (key: string) => { setModuleKey(key); setTab('flow') }
+  const openModule = (key: string) => { if (!confirmLeave()) return; setModuleKey(key); setTab('flow') }
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Phân hệ">
@@ -247,8 +251,8 @@ export default function App() {
       </nav>
       <div className="content">
         {module.screens.length > 0 && <div className="module-tabs" role="tablist" aria-label={module.label}>
-          <button role="tab" aria-selected={tab === 'flow'} className={tab === 'flow' ? 'active' : ''} onClick={() => setTab('flow')}>Quy trình</button>
-          {module.screens.map(k => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
+          <button role="tab" aria-selected={tab === 'flow'} className={tab === 'flow' ? 'active' : ''} onClick={() => { if (confirmLeave()) setTab('flow') }}>Quy trình</button>
+          {module.screens.map(k => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => { if (confirmLeave()) setTab(k) }}>
             {SCREEN_LABELS[k]}{work[k] ? <span className="nav-count">{work[k]}</span> : null}</button>)}
         </div>}
         <main className="main" key={company.id + module.key + tab + ':' + navSeq}>

@@ -3,6 +3,7 @@ import { ReservationsPanel } from './Reservations'
 import { toAlt, toMain } from './units'
 import { api, get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, navStore, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, FlowStrip } from './common'
+import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget } from './opentarget'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 import type { Order } from './Orders'
@@ -71,6 +72,7 @@ function StockDocs({ initialType }: { initialType?: 'Receipt' | 'Issue' | 'Trans
   const [partnerId, setPartnerId] = useState('')
   const [description, setDescription] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([{ itemId: '', quantity: '', amount: '', counterAccountId: '', orderLine: '' }])
+  useUnsavedWhenChanged([date, partnerId, description, lines])
   const [info, setInfo] = useState('')
   const { busy, error, setError, run } = useAction()
   const [orders, setOrders] = useState<Order[]>([])

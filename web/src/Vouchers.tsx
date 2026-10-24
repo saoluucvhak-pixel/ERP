@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget } from './opentarget'
 import { CashDocsView } from './CashDocs'
 import { canCopyVoucher, canEditAsCashDoc, canEditJournalVoucher, CASH_TYPES, isModuleGenerated } from './voucherguards'
@@ -257,6 +258,7 @@ function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; t
   const [lines, setLines] = useState<LineDraft[]>(src
     ? src.lines.map(l => ({ accountId: l.accountId, side: l.side, amount: formatMoney(l.amount), partnerId: l.partnerId ?? '', description: l.description ?? '', cashFlowCode: l.cashFlowCode ?? '' }))
     : [emptyLine('D'), emptyLine('C')])
+  useUnsavedWhenChanged([type, voucherDate, postingDate, description, lines])
   const { busy, error, setError, run } = useAction()
   const busyRef = useRef(false)
   busyRef.current = busy   // phím tắt Ctrl+S đọc cờ này (hàm xử lý phím giữ bản save cũ), tránh gửi hai lần

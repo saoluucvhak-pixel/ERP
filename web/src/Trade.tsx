@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
+import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget, focusRowProps } from './opentarget'
 import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } from './money'
 
@@ -24,6 +25,7 @@ export function TradeView() {
   const [total, setTotal] = useState(0)
   const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '', discPct: '', discDays: '' })
   const [lines, setLines] = useState<LineDraft[]>([empty()])
+  useUnsavedWhenChanged([head, lines])
   const [info, setInfo] = useState('')
   const [adjusting, setAdjusting] = useState<Invoice | null>(null)
   const openId = useOpenTarget('invoice')
