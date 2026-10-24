@@ -4,6 +4,7 @@ using Hak.Application.Common;
 using Hak.Application.Security;
 using Hak.Data;
 using Hak.Domain.Common;
+using Hak.Domain.Organization;
 using Hak.Domain.Rules;
 using Hak.Domain.Security;
 using Hak.Domain.Vouchers;
@@ -95,16 +96,42 @@ public sealed class ClosingService(HakDbContext db, AccountingEngine engine, Aud
         ctx.Require(Permissions.VoucherView);
         var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == ctx.CompanyId)
                      ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Kỳ kế toán không tồn tại.");
+        return await ComputeAsync(db, ctx.CompanyId, period);
+    }
+
+    /// <summary>
+    /// Kiểm tra chứng từ kết chuyển còn Nháp / Đã gửi / Đã duyệt vẫn KHỚP số dư hiện tại của tập nguồn (tính lại theo bộ quy tắc đang hiệu lực).
+    /// Nếu sau khi tạo nháp có chứng từ khác được ghi sổ trong kỳ (hoặc bộ quy tắc đổi), việc duyệt / ghi sổ bị chặn: hủy nháp rồi tạo lại.
+    /// </summary>
+    public static async Task CheckVoucherAsync(HakDbContext db, Voucher v, List<ValidationError> errors)
+    {
+        if (v.SourceSystem != SourceSystem || v.Status is not (VoucherStatus.Draft or VoucherStatus.Submitted or VoucherStatus.Approved)) return;
+        var id = v.SourceId?.Split('#')[0];
+        var period = Guid.TryParse(id, out var pid)
+            ? await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.Id == pid && p.CompanyId == v.CompanyId) : null;
+        if (period is null) { errors.Add(new(ErrorCodes.PeriodNotFound, "Không tìm thấy kỳ của chứng từ kết chuyển.")); return; }
+        List<VoucherLineInput> expected;
+        try { expected = (await ComputeAsync(db, v.CompanyId, period)).Lines; }
+        catch (DomainException e) { errors.Add(new(e.Code, e.Message)); return; }
+        static string Key(Guid account, Guid? partner, Side side, decimal amount) => $"{account}|{partner}|{(int)side}|{amount:0.0000}";
+        var want = expected.Select(l => Key(l.AccountId, l.PartnerId, l.Side, l.Amount)).Order(StringComparer.Ordinal).ToList();
+        var have = v.Lines.Select(l => Key(l.AccountId, l.PartnerId, l.Side, l.Amount)).Order(StringComparer.Ordinal).ToList();
+        if (!want.SequenceEqual(have))
+            errors.Add(new(ErrorCodes.ClosingOutOfDate, $"Chứng từ kết chuyển {v.Number} không còn khớp số dư hiện tại của kỳ (có biến động sau khi tạo nháp hoặc bộ quy tắc đã đổi). Hủy nháp và tạo lại."));
+    }
+
+    private static async Task<(ClosingRuleSet RuleSet, List<VoucherLineInput> Lines)> ComputeAsync(HakDbContext db, Guid companyId, AccountingPeriod period)
+    {
         var sets = await db.ClosingRuleSets.AsNoTracking().Include(r => r.Steps)
-            .Where(r => r.CompanyId == ctx.CompanyId && r.Status == RuleStatus.Active && r.EffectiveFrom <= period.EndDate
+            .Where(r => r.CompanyId == companyId && r.Status == RuleStatus.Active && r.EffectiveFrom <= period.EndDate
                         && (r.EffectiveTo == null || r.EffectiveTo >= period.EndDate)).ToListAsync();
         if (sets.Count != 1)
             throw new DomainException(sets.Count == 0 ? ErrorCodes.RuleMissing : ErrorCodes.RuleAmbiguous,
                 sets.Count == 0 ? "Chưa có bộ quy tắc kết chuyển đang hiệu lực." : "Có nhiều bộ quy tắc kết chuyển cùng hiệu lực.");
         var set = sets[0];
 
-        var accounts = await db.Accounts.AsNoTracking().Where(a => a.CompanyId == ctx.CompanyId && a.IsPostable).ToListAsync();
-        var sums = await db.JournalLines.Where(l => l.CompanyId == ctx.CompanyId && l.PostingDate <= period.EndDate)
+        var accounts = await db.Accounts.AsNoTracking().Where(a => a.CompanyId == companyId && a.IsPostable).ToListAsync();
+        var sums = await db.JournalLines.Where(l => l.CompanyId == companyId && l.PostingDate <= period.EndDate)
             .GroupBy(l => new { l.AccountId, l.PartnerId, l.Side }).Select(g => new { g.Key.AccountId, g.Key.PartnerId, g.Key.Side, Total = g.Sum(x => x.Amount) })
             .ToListAsync();
         // Signed balance per (account, partner), updated as earlier steps move amounts into later steps' sources.

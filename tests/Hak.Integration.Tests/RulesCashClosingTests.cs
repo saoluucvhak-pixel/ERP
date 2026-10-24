@@ -215,6 +215,33 @@ public class RulesCashClosingTests
     }
 
     [Fact]
+    public async Task Closing_Draft_MustStillMatchTheSourceBalances_WhenSubmittedApprovedOrPosted()
+    {
+        // ERP-P2.5: biến động sau khi tạo nháp kết chuyển (chứng từ khác ghi sổ trong kỳ) phải bị phát hiện ở gửi duyệt / duyệt / ghi sổ.
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        var set = await s.Closing.CreateRuleSetAsync(h.Admin, "C", new(2026, 1, 1), null, [new ClosingStepInput("DT", "REV", "RESULT")]);
+        await s.Closing.ActivateRuleSetAsync(h.Admin, set.Id);
+        await h.PostedAsync(s, h.Sale(500));
+        var march = await s.Db.AccountingPeriods.SingleAsync(p => p.PeriodNo == 3);
+        var cls = await s.Closing.GenerateAsync(h.Preparer, march.Id);
+        await s.Engine.SubmitAsync(h.Preparer, cls.Id);                                  // còn khớp → gửi duyệt được
+
+        await h.PostedAsync(s, h.Sale(250));                                              // biến động sau khi tạo nháp
+        Assert.Equal(ErrorCodes.ClosingOutOfDate, (await s.Engine.ValidateAsync(h.Approver, cls.Id)).Single().Code);
+        Assert.Equal(ErrorCodes.ClosingOutOfDate, await CodeOf(() => s.Engine.ApproveAsync(h.Approver, cls.Id)));
+        Assert.Equal(VoucherStatus.Submitted, (await s.Db.Vouchers.AsNoTracking().SingleAsync(v => v.Id == cls.Id)).Status);
+
+        await s.Engine.RejectAsync(h.Approver, cls.Id, "Có biến động, tạo lại");
+        await s.Engine.CancelAsync(h.Preparer, cls.Id, "Tạo lại");
+        var again = await s.Closing.GenerateAsync(h.Preparer, march.Id);                  // tạo lại theo số dư mới → khớp, duyệt và ghi sổ được
+        Assert.Equal(750m, again.TotalDebit);
+        await s.Engine.SubmitAsync(h.Preparer, again.Id);
+        await s.Engine.ApproveAsync(h.Approver, again.Id);
+        await s.Engine.PostAsync(h.Approver, again.Id);
+    }
+
+    [Fact]
     public async Task Closing_CanBeGeneratedAgainAfterTheClosingVoucherWasReversed()
     {
         using var h = await TestHost.CreateAsync();

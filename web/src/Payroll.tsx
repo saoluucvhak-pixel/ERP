@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, post, postRaw } from './api'
+import { ApiError, get, post, postRaw } from './api'
 import { AccountSelect, ErrorBox, ExportButton, FlowStrip, STATUS_VI, useAction, useCatalog } from './common'
 import { formatDate, formatMoney, today } from './money'
 
@@ -23,12 +23,15 @@ export function PayrollView() {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [summary, setSummary] = useState<SummaryRow[]>([])
+  const [summaryDenied, setSummaryDenied] = useState(false)
   const [unpaid, setUnpaid] = useState(0)
   const { busy, error, run } = useAction()
 
   const load = useCallback(() => run(async () => {
     setSheets(await get<Sheet[]>(`/payroll/sheets?from=${from}&to=${to}`))
-    setSummary(await get<SummaryRow[]>(`/payroll/summary?from=${from}&to=${to}`))
+    // Lương từng người cần quyền xem thông tin nhạy cảm; thiếu quyền thì vẫn xem được tổng hợp theo phiếu, bảng từng người để trống.
+    try { setSummary(await get<SummaryRow[]>(`/payroll/summary?from=${from}&to=${to}`)); setSummaryDenied(false) }
+    catch (e) { if (e instanceof ApiError && e.status === 403) { setSummary([]); setSummaryDenied(true) } else throw e }
   }), [run, from, to])
   useEffect(() => { load() }, [load])
 
@@ -89,6 +92,7 @@ export function PayrollView() {
 
       <section className="panel">
         <div className="toolbar"><h3>Tổng hợp theo nhân viên (chỉ bảng lương đã ghi sổ)</h3>
+          {summaryDenied && <span className="muted">Bạn không có quyền xem lương từng người (cần quyền thông tin nhạy cảm); vẫn xem được tổng hợp theo bảng lương ở trên.</span>}
           <ExportButton fileName={'Tong_hop_luong_' + from + '_' + to} sheet="Tổng hợp lương" columns={[{ header: 'Mã' }, { header: 'Họ tên', width: 28 },
             ...['Lương gộp', 'BHXH', 'BHYT', 'BHTN', 'Thuế TNCN', 'Khấu trừ khác', 'Thực lĩnh', 'DN đóng'].map(h => ({ header: h, numeric: true }))]}
             rows={summary.map(r => [r.employeeCode, r.employeeName, r.gross, r.socialInsurance, r.healthInsurance, r.unemploymentInsurance, r.personalIncomeTax, r.otherDeduction, r.net, r.employerContributions])} /></div>

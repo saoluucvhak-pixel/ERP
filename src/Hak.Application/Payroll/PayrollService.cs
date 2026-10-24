@@ -145,7 +145,9 @@ public sealed class PayrollService(HakDbContext db, AccountingEngine engine, Aud
     /// <summary>Per-employee totals of posted payroll sheets in the range (thu nhập, khấu trừ, thuế TNCN đã khấu trừ).</summary>
     public async Task<IReadOnlyList<PayrollSummaryRow>> SummaryAsync(SessionContext ctx, DateOnly fromDate, DateOnly toDate)
     {
+        // Chi tiết lương TỪNG NGƯỜI là dữ liệu nhạy cảm: ReportView (xem báo cáo) không đủ. Tổng hợp theo phiếu lương (SheetsAsync) không lộ từng người nên giữ ReportView.
         ctx.Require(Permissions.ReportView);
+        ctx.Require(Permissions.SensitiveView);
         var lines = await (from l in db.PayrollSheetLines
                            join s in db.PayrollSheets on l.SheetId equals s.Id
                            join v in db.Vouchers on s.VoucherId equals v.Id

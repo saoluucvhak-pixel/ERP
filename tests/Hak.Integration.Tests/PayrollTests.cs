@@ -89,7 +89,7 @@ public class PayrollTests
 
         var result = await s.Payroll.ProcessAsync(h.Preparer, Package(h, "PKG-PAY-0002", "1", March()), commit: true);
         Assert.Equal("CREATED", result.Outcome);
-        Assert.Empty(await s.Payroll.SummaryAsync(h.Auditor, new(2026, 1, 1), new(2026, 12, 31)));      // Draft voucher: not in reports yet
+        Assert.Empty(await s.Payroll.SummaryAsync(h.Approver, new(2026, 1, 1), new(2026, 12, 31)));      // Draft voucher: not in reports yet
         await PostAsync(h, s, result.VoucherId!.Value);
 
         Assert.Equal(12_350_000m, await BalanceAsync(s, h.Acc["SAL_PROD"]));     // 10,000,000 + employer 2,350,000
@@ -99,7 +99,10 @@ public class PayrollTests
         Assert.Equal(-25_650_000m, await BalanceAsync(s, h.Acc["SAL_PAY"]));
         Assert.Equal(2, (await s.Settlement.OpenItemsAsync(h.Auditor, h.Acc["SAL_PAY"], null, new(2026, 3, 31))).Count);   // net payable per employee
 
-        var summary = await s.Payroll.SummaryAsync(h.Auditor, new(2026, 1, 1), new(2026, 12, 31));
+        // ERP-P2.4: lương từng người cần SensitiveView; kế toán tổng hợp và kiểm toán nội bộ (chỉ ReportView) bị chặn, tổng hợp theo phiếu vẫn xem được.
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Payroll.SummaryAsync(h.Auditor, new(2026, 1, 1), new(2026, 12, 31))));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => s.Payroll.SummaryAsync(h.Preparer, new(2026, 1, 1), new(2026, 12, 31))));
+        var summary = await s.Payroll.SummaryAsync(h.Approver, new(2026, 1, 1), new(2026, 12, 31));
         Assert.Equal((10_000_000m, 200_000m, 8_750_000m), (summary[0].Gross, summary[0].PersonalIncomeTax, summary[0].Net));
         Assert.Equal("NV02", summary[1].EmployeeCode);
         Assert.Equal("Posted", Assert.Single(await s.Payroll.SheetsAsync(h.Auditor, new(2026, 3, 1), new(2026, 3, 31))).VoucherStatus);

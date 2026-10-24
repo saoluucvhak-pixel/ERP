@@ -226,6 +226,12 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             var inv = await db.CommercialInvoices.FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
             if (inv.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} chưa ghi sổ hoặc đã đảo.");
+            // Hóa đơn gốc còn điều chỉnh (trả hàng / giảm giá / điều chỉnh tăng) đã ghi sổ: phải đảo chứng từ phụ thuộc trước, nếu không điều chỉnh mồ côi
+            // (giảm công nợ / giá trị kho trên một hóa đơn không còn). Kiểm trước mọi thao tác ghi nên thất bại không để lại gì dở dang.
+            var dependents = await db.CommercialInvoices.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId && d.AdjustsInvoiceId == inv.Id && d.Status == InvoiceStatus.Posted)
+                .OrderBy(d => d.Number).Select(d => d.Number).ToListAsync();
+            if (dependents.Count > 0)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} còn hóa đơn điều chỉnh đã ghi sổ ({string.Join(", ", dependents)}). Đảo các hóa đơn điều chỉnh trước.");
             // Tính lại đơn giá khi đảo: phần giá trị hóa đơn đã nằm trong hàng xuất được chuyển từ tồn kho sang giá vốn TRƯỚC khi ghi bút toán đảo,
             // để tài khoản tồn kho (có thể chặn số dư âm) không âm giữa chừng. Sổ kho: chỉ gỡ phần còn thuộc hàng tồn (adjustments bất biến, không xóa).
             var shifts = await stock.ReverseValueAdjustmentsAsync(ctx, inv.Id, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}", reprice: true);
@@ -342,6 +348,9 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             line.OrderLineNo = sl.OrderLineNo;
             if (sl.OrderId is { } so && (await db.TradeOrders.AsNoTracking().FirstAsync(o => o.Id == so)).PartnerId != inv.PartnerId)
                 throw new DomainException(ErrorCodes.OrderMismatch, $"Dòng {lineNo}: đối tượng hóa đơn khác đối tượng của đơn hàng gắn với phiếu {doc.Number}.");
+            // Phiếu kho (kể cả phiếu không có đơn) phải cùng đối tượng với hóa đơn; phiếu không ghi đối tượng thì không có gì để so.
+            if (doc.PartnerId is { } docPartner && docPartner != inv.PartnerId)
+                throw new DomainException(ErrorCodes.PartnerMismatch, $"Dòng {lineNo}: phiếu {doc.Number} thuộc đối tượng khác với đối tượng của hóa đơn.");
             line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(ctx.CompanyId, doc.Id, sl.LineNo, null);
             if (line.StockQuantity <= 0) throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {lineNo}: phiếu {doc.Number} dòng {sl.LineNo} đã lập hóa đơn đủ.");
             await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null);
