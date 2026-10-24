@@ -342,6 +342,9 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             line.OrderLineNo = sl.OrderLineNo;
             if (sl.OrderId is { } so && (await db.TradeOrders.AsNoTracking().FirstAsync(o => o.Id == so)).PartnerId != inv.PartnerId)
                 throw new DomainException(ErrorCodes.OrderMismatch, $"Dòng {lineNo}: đối tượng hóa đơn khác đối tượng của đơn hàng gắn với phiếu {doc.Number}.");
+            // Phiếu kho (kể cả phiếu không có đơn) phải cùng đối tượng với hóa đơn; phiếu không ghi đối tượng thì không có gì để so.
+            if (doc.PartnerId is { } docPartner && docPartner != inv.PartnerId)
+                throw new DomainException(ErrorCodes.PartnerMismatch, $"Dòng {lineNo}: phiếu {doc.Number} thuộc đối tượng khác với đối tượng của hóa đơn.");
             line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(ctx.CompanyId, doc.Id, sl.LineNo, null);
             if (line.StockQuantity <= 0) throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {lineNo}: phiếu {doc.Number} dòng {sl.LineNo} đã lập hóa đơn đủ.");
             await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null);

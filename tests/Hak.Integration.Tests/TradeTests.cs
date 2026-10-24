@@ -163,6 +163,21 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task Invoice_FromStandaloneIssue_MustBeForTheSamePartner()
+    {
+        // ERP-P2.2: phiếu xuất KHÔNG có đơn hàng vẫn phải cùng đối tượng với hóa đơn.
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 100, 150_000_000, D(3, 1), fx.Dam);
+        var d = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 10), D(3, 10), "Xuất bán KH01",
+            [new StockLineInput(fx.Dam, 10, CounterAccountId: fx.A("COGS"))], PartnerId: fx.H.Partner["KH01"]));
+        var issue = await fx.S.Stock.PostDocumentAsync(fx.H.Approver, d.Id);
+        InvoiceInput For(string partner) => new(InvoiceKind.Sales, fx.H.Partner[partner], "1C26TXK", "0000077", D(3, 12), D(3, 12), "Bán hàng",
+            [new InvoiceLineInput(2_000_000, issue.Id, 1, VatRate: 8)], DueDate: D(4, 11));
+        Assert.Equal(ErrorCodes.PartnerMismatch, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, For("KH02"))));
+        Assert.Equal(InvoiceStatus.Draft, (await fx.Inv.CreateAsync(fx.H.Preparer, For("KH01"))).Status);
+    }
+
+    [Fact]
     public async Task Sales_ExportInUsdPerBdmt_FromShipCertificate_NoDoubleRevenue()
     {
         using var fx = await SetupAsync();
