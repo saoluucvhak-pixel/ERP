@@ -6719,6 +6719,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("source_voucher_id");
 
+                    b.Property<DateOnly?>("VoidEffectiveDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("void_effective_date");
+
                     b.Property<string>("VoidReason")
                         .HasColumnType("TEXT")
                         .HasColumnName("void_reason");

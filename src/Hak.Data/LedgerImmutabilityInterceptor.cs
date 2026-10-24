@@ -59,7 +59,7 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                     // Only a single void (VoidedAt/By/Reason set once) is allowed.
                     if (entry.OriginalValues[nameof(SettlementAllocation.VoidedAt)] is not null
                         || entry.Properties.Any(p => p.IsModified && !Equals(p.OriginalValue, p.CurrentValue)
-                            && p.Metadata.Name is not (nameof(SettlementAllocation.VoidedAt) or nameof(SettlementAllocation.VoidedBy) or nameof(SettlementAllocation.VoidReason))))
+                            && p.Metadata.Name is not (nameof(SettlementAllocation.VoidedAt) or nameof(SettlementAllocation.VoidedBy) or nameof(SettlementAllocation.VoidReason) or nameof(SettlementAllocation.VoidEffectiveDate))))
                         throw Immutable("Phân bổ thanh toán chỉ được hủy một lần, không được sửa.");
                     break;
 

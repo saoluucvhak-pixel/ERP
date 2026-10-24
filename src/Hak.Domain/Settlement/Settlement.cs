@@ -31,6 +31,11 @@ public sealed class SettlementAllocation
     public DateTime? VoidedAt { get; set; }
     public Guid? VoidedBy { get; set; }
     public string? VoidReason { get; set; }
+    /// <summary>
+    /// Ngày hiệu lực của việc hủy khi hủy do ĐẢO chứng từ (= ngày đảo): báo cáo tại ngày trước đó vẫn thấy phân bổ còn hiệu lực, nên không đổi báo cáo kỳ đã khóa.
+    /// Null = hủy tay hoặc bản ghi cũ: coi như phân bổ không còn hiệu lực ở mọi ngày (hủy tay chỉ cho phép khi kỳ của ngày phân bổ còn mở).
+    /// </summary>
+    public DateOnly? VoidEffectiveDate { get; set; }
 
     public bool IsActive => VoidedAt is null;
 }
