@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { get, post, put, type OpenItem, type Voucher } from './api'
 import { AccountSelect, ErrorBox, navStore, PartnerSelect, STATUS_VI, TYPE_VI, useAction, useCatalog, FlowStrip } from './common'
 import { addMoney, daysBefore, formatDate, formatMoney, parseMoney, today } from './money'
@@ -25,8 +25,10 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
   const { accounts, partners } = useCatalog()
   // Arrived from the revenue cycle's receivable queue: prefill a customer receipt that settles that invoice (consumed once).
   const [prefill] = useState(() => { const r = voucher ? undefined : navStore.receipt; navStore.receipt = undefined; return r })
-  const [type, setType] = useState(voucher?.voucherType ?? 'CR')
-  const [event, setEvent] = useState(voucher?.businessEvent ?? 'CUSTOMER_RECEIPT')
+  // Ý định từ "Thêm nhanh" (Thu / Chi): App xóa sau khi dựng xong, nên đọc trong lúc render là an toàn kể cả khi dựng hai lần.
+  const [intent] = useState(() => (voucher ? undefined : navStore.intent))
+  const [type, setType] = useState(voucher?.voucherType ?? intent?.voucherType ?? 'CR')
+  const [event, setEvent] = useState(voucher?.businessEvent ?? intent?.businessEvent ?? 'CUSTOMER_RECEIPT')
   const [date, setDate] = useState(voucher?.postingDate ?? today())
   const [description, setDescription] = useState(voucher?.description ?? '')
   const [partnerId, setPartnerId] = useState(voucher?.partnerId ?? prefill?.partnerId ?? '')
@@ -43,7 +45,9 @@ export function CashDocsView({ voucher = null, onDone }: { voucher?: Voucher | n
   const cashKind = type === 'CR' || type === 'CP' ? 'Cash' : 'Bank'
   const arapRole = event === 'CUSTOMER_RECEIPT' ? 'Receivable' : event === 'SUPPLIER_PAYMENT' ? 'Payable' : null
 
-  useEffect(() => { if (!voucher) { setEvent(EVENTS[type][0].value); setMainAccountId('') } }, [type, voucher])
+  // Đổi loại phiếu thì về nghiệp vụ mặc định của loại đó; lần dựng đầu giữ nghiệp vụ đã chọn (từ phiếu sửa hoặc Thêm nhanh).
+  const prevType = useRef(type)
+  useEffect(() => { if (!voucher) { if (prevType.current !== type) setEvent(EVENTS[type][0].value); setMainAccountId('') } prevType.current = type }, [type, voucher])
   useEffect(() => {
     const acc = accounts.find(a => a.openItemNature === arapRole)
     if (!acc || !partnerId) { setOpenItems([]); return }
