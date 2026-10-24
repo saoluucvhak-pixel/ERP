@@ -205,6 +205,8 @@ export default function App() {
     get<{ screen: string; count: number; kind?: string | null }[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.kind ? `${x.screen}:${x.kind}` : x.screen, x.count])))).catch(() => setWork({}))
   }, [token, companyId, moduleKey, tab])
 
+  // Đổi công ty: bỏ mọi trạng thái điều hướng còn sót của công ty cũ (phiếu thu dựng sẵn, sổ cái nhảy tới, ý định mở chứng từ) để không dùng nhầm id của công ty khác.
+  useEffect(() => { navStore.receipt = undefined; navStore.ledger = undefined; navStore.intent = undefined; navStore.intentDest = undefined; navStore.setupTab = undefined }, [companyId])
   // Quyền tại công ty đang chọn (để ẩn chức năng không được phép, ví dụ Xuất Excel khi thiếu data.export).
   useEffect(() => {
     if (!token || !companyId) { setPermissions(null); return }
