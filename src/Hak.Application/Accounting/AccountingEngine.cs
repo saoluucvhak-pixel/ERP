@@ -426,6 +426,9 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
         // Chứng từ do phân hệ chiết khấu thanh toán sinh ra: kiểm tra lại điều kiện nguồn (hạn, số tiền, hóa đơn) ở mọi bước gửi duyệt / duyệt / ghi sổ.
         if (v.SourceSystem == Hak.Application.Trade.PaymentDiscountService.Source)
             await Hak.Application.Trade.PaymentDiscountService.CheckVoucherAsync(db, v, errors);
+        // Chứng từ kết chuyển cuối kỳ: phải khớp số dư tập nguồn HIỆN TẠI ở mọi bước gửi duyệt / duyệt / ghi sổ (biến động sau khi tạo nháp bị phát hiện).
+        if (v.SourceSystem == Hak.Application.Rules.ClosingService.SourceSystem)
+            await Hak.Application.Rules.ClosingService.CheckVoucherAsync(db, v, errors);
         return errors;
     }
 

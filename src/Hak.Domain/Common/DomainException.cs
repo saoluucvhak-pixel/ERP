@@ -71,6 +71,7 @@ public static class ErrorCodes
     public const string OverDelivered = "OVER_DELIVERED";
     public const string OrderMismatch = "ORDER_MISMATCH";
     public const string PartnerMismatch = "PARTNER_MISMATCH";
+    public const string ClosingOutOfDate = "CLOSING_OUT_OF_DATE";
     public const string DepreciationPending = "DEPRECIATION_PENDING";
     public const string PeriodDepreciated = "PERIOD_DEPRECIATED";
     public const string AssetCostMismatch = "ASSET_COST_MISMATCH";
