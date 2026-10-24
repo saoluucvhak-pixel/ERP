@@ -73,7 +73,21 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
  * Thao tác ghi (POST/PUT/DELETE) mang một Idempotency-Key: mất kết nối giữa chừng thì tự gửi lại tối đa 2 lần với CÙNG khóa (máy chủ trả phản hồi cũ nếu lần trước đã ghi,
  * không ghi hai lần). Vẫn không nối được thì báo "kết quả chưa xác định" và giữ yêu cầu để người dùng bấm thử lại an toàn; không bao giờ đoán là đã ghi hay chưa.
  */
-export async function api<T = unknown>(method: string, path: string, body?: unknown, idempotencyKey?: string, ctx: Ctx = snapshot()): Promise<T> {
+export function api<T = unknown>(method: string, path: string, body?: unknown, idempotencyKey?: string, ctx: Ctx = snapshot()): Promise<T> {
+  const mutating = method === 'POST' || method === 'PUT' || method === 'DELETE'
+  if (!mutating || idempotencyKey) return apiCore<T>(method, path, body, idempotencyKey, ctx)
+  // Chống bấm trùng (nhấp đúp, phím tắt lặp): yêu cầu GHI giống hệt (cùng phương thức, đường dẫn, nội dung, phiên, công ty) đang bay thì dùng chung một lần gửi
+  // và một khóa — không tạo khóa mới nên không ghi hai lần. Khi lần gửi xong, thao tác y hệt lần sau là một thao tác mới.
+  const signature = `${method} ${path} ${JSON.stringify(body ?? null)} ${ctx.token ?? ''}|${ctx.companyId ?? ''}`
+  const running = inFlightWrites.get(signature)
+  if (running) return running as Promise<T>
+  const p = apiCore<T>(method, path, body, undefined, ctx).finally(() => { inFlightWrites.delete(signature) })
+  inFlightWrites.set(signature, p)
+  return p
+}
+const inFlightWrites = new Map<string, Promise<unknown>>()
+
+async function apiCore<T = unknown>(method: string, path: string, body: unknown, idempotencyKey: string | undefined, ctx: Ctx): Promise<T> {
   const mutating = method === 'POST' || method === 'PUT' || method === 'DELETE'
   const key = mutating ? (idempotencyKey ?? newIdempotencyKey()) : undefined
   for (let attempt = 0; ; attempt++) {
