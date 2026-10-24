@@ -256,6 +256,24 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 if (finished.Count > 0)
                     throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} gắn phiếu kho của lệnh sản xuất đã hoàn thành ({string.Join(", ", finished)}); không đảo được khi giá thành đã chốt.");
             }
+            // Hóa đơn MUA: đảo tính lại đơn giá kho (phần đã xuất chuyển sang giá vốn). Nếu vật tư đó đã xuất cho lệnh sản xuất ĐÃ HOÀN THÀNH từ ngày nhập trở đi thì giá thành đã chốt
+            // sẽ lệch → chặn (quy tắc thận trọng: không truy vết theo lô vì kho tính giá bình quân / FIFO theo kho; có thể chặn dư — muốn đảo phải mở lại lệnh sản xuất).
+            if (inv.Kind == InvoiceKind.Purchase && stockDocIds.Count > 0)
+            {
+                var receipts = await db.StockDocuments.AsNoTracking().Where(d => stockDocIds.Contains(d.Id)).Select(d => new { d.PostingDate }).ToListAsync();
+                var firstReceipt = receipts.Min(r => r.PostingDate);
+                var itemIds = await db.StockDocumentLines.AsNoTracking().Where(l => stockDocIds.Contains(l.DocumentId)).Select(l => l.ItemId).Distinct().ToListAsync();
+                var finishedStatuses = new[] { ProductionOrderStatus.Completed, ProductionOrderStatus.Closed };
+                var consumed = await (from i in db.ProductionOrderIssues.AsNoTracking()
+                                      join o in db.ProductionOrders.AsNoTracking() on i.OrderId equals o.Id
+                                      join d in db.StockDocuments.AsNoTracking() on i.StockDocumentId equals d.Id
+                                      join l in db.StockDocumentLines.AsNoTracking() on d.Id equals l.DocumentId
+                                      where o.CompanyId == ctx.CompanyId && finishedStatuses.Contains(o.Status) && d.Status == StockDocumentStatus.Posted
+                                            && d.PostingDate >= firstReceipt && itemIds.Contains(l.ItemId)
+                                      select o.Number).Distinct().OrderBy(n => n).ToListAsync();
+                if (consumed.Count > 0)
+                    throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number}: vật tư đã xuất cho lệnh sản xuất đã hoàn thành ({string.Join(", ", consumed)}); đảo hóa đơn mua sẽ làm lệch giá thành đã chốt.");
+            }
             // Tính lại đơn giá khi đảo: phần giá trị hóa đơn đã nằm trong hàng xuất được chuyển từ tồn kho sang giá vốn TRƯỚC khi ghi bút toán đảo,
             // để tài khoản tồn kho (có thể chặn số dư âm) không âm giữa chừng. Sổ kho: chỉ gỡ phần còn thuộc hàng tồn (adjustments bất biến, không xóa).
             var shifts = await stock.ReverseValueAdjustmentsAsync(ctx, inv.Id, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}", reprice: true);

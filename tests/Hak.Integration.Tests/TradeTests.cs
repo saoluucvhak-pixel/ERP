@@ -200,6 +200,29 @@ public class TradeTests
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, sale.Id, D(3, 20), "Đảo")));
         Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
         Assert.Equal(InvoiceStatus.Posted, (await fx.S.Db.CommercialInvoices.AsNoTracking().SingleAsync(i => i.Id == sale.Id)).Status);
+        // BIZ-06: đảo trực tiếp phiếu xuất của lệnh đã hoàn thành cũng bị chặn.
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.S.Stock.ReverseDocumentAsync(fx.H.Approver, issue.Id, D(3, 20), "Đảo phiếu xuất")));
+    }
+
+    [Fact]
+    public async Task ReversePurchaseInvoice_IsBlockedWhenTheItemWasConsumedByACompletedProductionOrder()
+    {
+        // Hóa đơn mua: đảo làm lệch giá kho đã chảy vào giá thành lệnh sản xuất đã hoàn thành → chặn (quy tắc thận trọng).
+        using var fx = await SetupAsync();
+        var invoice = await PostedPurchaseOfAdditiveAsync(fx);
+        var issue = await PostedIssueAsync(fx, 40, D(3, 5), fx.Add);
+        var cost = new CostObject { Id = Ids.New(), CompanyId = fx.H.CompanyId, Code = "CO2", Name = "Sản xuất", ItemId = fx.Dam, WipAccountId = fx.A("INV"), CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        var order = new ProductionOrder { Id = Ids.New(), CompanyId = fx.H.CompanyId, Number = "LSX2026-000002", ItemId = fx.Dam, CostObjectId = cost.Id, WarehouseId = fx.Wh, PlannedQuantity = 10,
+            PlannedStart = D(3, 2), Status = ProductionOrderStatus.InProgress, CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        fx.S.Db.CostObjects.Add(cost); fx.S.Db.ProductionOrders.Add(order);
+        fx.S.Db.ProductionOrderIssues.Add(new ProductionOrderIssue { Id = Ids.New(), CompanyId = fx.H.CompanyId, OrderId = order.Id, StockDocumentId = issue.Id });
+        await fx.S.Db.SaveChangesAsync();
+        // Lệnh còn đang chạy: chưa chốt giá thành → vẫn đảo được kiểm ở các bước khác (ở đây chưa chặn bởi quy tắc này).
+        order.Status = ProductionOrderStatus.Completed; order.CompletedDate = D(3, 15);
+        await fx.S.Db.SaveChangesAsync();
+        var journals = await fx.S.Db.JournalEntries.CountAsync();
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 20), "Đảo hóa đơn mua")));
+        Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
     }
 
     [Fact]

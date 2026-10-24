@@ -43,7 +43,8 @@ public class BankingTests
         var (h, s) = await SetupAsync();
         using var _h = h; using var _s = s;
         var svc = new Hak.Application.Cycles.PayrollPaymentService(s.Db, s.Settlement, s.PaymentOrders, s.Audit);
-        Assert.Empty(await svc.QueueAsync(h.Auditor, Mar10));   // chưa ánh xạ vai trò → hàng chờ trống
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.QueueAsync(h.Auditor, Mar10)));   // chỉ ReportView: không thấy thực lĩnh từng người
+        Assert.Empty(await svc.QueueAsync(h.Approver, Mar10));   // chưa ánh xạ vai trò → hàng chờ trống
         var prp = (await s.Setup.CreateAccountAsync(h.Admin, "PRP", "Phải trả người lao động (thử)", null, true, true, Hak.Domain.Catalog.BalanceDisplay.GrossByPartner,
             Hak.Domain.Catalog.OpenItemNature.Payable, Hak.Domain.Catalog.CashKind.None, Hak.Domain.Catalog.NegativeBalancePolicy.None)).Id;
         await s.Rules.SetRoleMappingAsync(h.Admin, "PAYROLL_PAYABLE", "PRP");
@@ -51,18 +52,18 @@ public class BankingTests
         var sheet = await h.PostedAsync(s, new VoucherInput(VoucherTypes.General, Mar05, Mar05, "Lương tháng 02/2026",
             [new(h.Acc["EXP"], Side.Debit, 8_000_000), new(prp, Side.Credit, 8_000_000, emp)]));
 
-        var row = Assert.Single(await svc.QueueAsync(h.Auditor, Mar10));
+        var row = Assert.Single(await svc.QueueAsync(h.Approver, Mar10));
         Assert.Equal(("NV01", 8_000_000m, null), (row.EmployeeCode, row.Open, row.PaymentOrderNumber));
 
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.CreateOrdersAsync(h.Auditor, h.Acc["BANK"], [row.JournalLineId], Mar10)));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.CreateOrdersAsync(h.Preparer, h.Acc["BANK"], [], Mar10)));
         var po = Assert.Single(await svc.CreateOrdersAsync(h.Preparer, h.Acc["BANK"], [row.JournalLineId], Mar10));
         Assert.Equal(("PAYROLL_PAYMENT", 8_000_000m, PaymentOrderStatus.Created, emp), (po.BusinessEvent, po.Amount, po.Status, po.PartnerId));
-        Assert.Equal(po.Number, Assert.Single(await svc.QueueAsync(h.Auditor, Mar10)).PaymentOrderNumber);
+        Assert.Equal(po.Number, Assert.Single(await svc.QueueAsync(h.Approver, Mar10)).PaymentOrderNumber);
         Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => svc.CreateOrdersAsync(h.Preparer, h.Acc["BANK"], [row.JournalLineId], Mar10)));
 
         await s.PaymentOrders.CancelAsync(h.Preparer, po.Id, "Lập nhầm tài khoản chi");   // hủy lệnh → khoản lương lại chờ trả
-        Assert.Null(Assert.Single(await svc.QueueAsync(h.Auditor, Mar10)).PaymentOrderNumber);
+        Assert.Null(Assert.Single(await svc.QueueAsync(h.Approver, Mar10)).PaymentOrderNumber);
     }
 
     [Fact]

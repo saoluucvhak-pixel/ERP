@@ -27,6 +27,9 @@ public sealed class PayrollPaymentService(HakDbContext db, SettlementService set
     public async Task<IReadOnlyList<PayrollPayableRow>> QueueAsync(SessionContext ctx, DateOnly asOf)
     {
         ctx.Require(Permissions.ReportView);
+        // Hàng chờ trả lương lộ số thực lĩnh TỪNG NGƯỜI: chỉ người xem được dữ liệu nhạy cảm hoặc người lập lệnh chi (nghiệp vụ ngân hàng) mới thấy.
+        if (!ctx.Permissions.Contains(Permissions.SensitiveView) && !ctx.Permissions.Contains(Permissions.BankDocument))
+            throw new DomainException(ErrorCodes.Forbidden, "Hàng chờ trả lương cần quyền xem thông tin nhạy cảm hoặc quyền nghiệp vụ ngân hàng.");
         var role = await db.AccountRoleMappings.AsNoTracking().FirstOrDefaultAsync(m => m.CompanyId == ctx.CompanyId && m.RoleCode == "PAYROLL_PAYABLE");
         if (role is null) return [];
         var open = await settlement.OpenItemsAsync(ctx, role.AccountId, null, asOf);
