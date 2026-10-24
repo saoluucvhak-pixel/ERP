@@ -151,7 +151,9 @@ interface AgingRow { partnerId: string; partnerCode: string; partnerName: string
 
 export function ReceivablesView() {
   const { accounts, partners } = useCatalog()
-  const openAccounts = accounts.filter(a => a.openItemNature !== 'None')
+  // Chiều do phân hệ đang mở quyết định: Bán hàng → công nợ phải thu, Mua hàng → công nợ phải trả (hai chu trình không lẫn trong một danh sách tài khoản).
+  const [side] = useState(() => navStore.kind)
+  const openAccounts = accounts.filter(a => side === 'Sales' ? a.openItemNature === 'Receivable' : side === 'Purchase' ? a.openItemNature === 'Payable' : a.openItemNature !== 'None')
   const [accountId, setAccountId] = useState('')
   const [asOf, setAsOf] = useState(today())
   const [aging, setAging] = useState<{ bucketLabels: string[]; rows: AgingRow[] } | null>(null)

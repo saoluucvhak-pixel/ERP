@@ -133,8 +133,8 @@ const KIND_OF_MODULE: Record<string, 'Purchase' | 'Sales'> = { purchase: 'Purcha
 const KINDED_SCREENS = new Set(['orders', 'trade', 'services'])
 const workKey = (moduleKey: string, screen: string) => (KIND_OF_MODULE[moduleKey] && KINDED_SCREENS.has(screen) ? `${screen}:${KIND_OF_MODULE[moduleKey]}` : screen)
 const KIND_LABELS: Record<string, Record<string, string>> = {
-  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua' },
-  sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán' },
+  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua', arap: 'Công nợ phải trả', paydiscount: 'Chiết khấu được hưởng' },
+  sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán', arap: 'Công nợ phải thu', paydiscount: 'Chiết khấu cho khách' },
 }
 const tabLabel = (moduleKey: string, screen: string) => KIND_LABELS[moduleKey]?.[screen] ?? SCREEN_LABELS[screen]
 

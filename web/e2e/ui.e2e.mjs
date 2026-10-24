@@ -180,3 +180,18 @@ test('Phân trang phía máy chủ: phiếu kho trả tổng số, cờ còn th�
   assert.equal(next.items.length, 1); assert.equal(next.hasMore, false)
   assert.ok(!first.items.some(x => x.id === next.items[0].id), 'trang sau không trùng trang trước')
 })
+
+test('Công nợ và Chiết khấu thanh toán tách theo chiều: Bán hàng chỉ phải thu, Mua hàng chỉ phải trả, không còn nút chuyển', async () => {
+  const page = await open('ktt')
+  const accountOptions = async () => page.locator('label:has-text("Tài khoản công nợ") select option').evaluateAll(os => os.map(o => o.textContent.trim()))
+  for (const [module, tabName, want, notWant, discount] of [['Mua hàng', 'Công nợ phải trả', 'AP', 'AR', 'Chiết khấu được hưởng'], ['Bán hàng', 'Công nợ phải thu', 'AR', 'AP', 'Chiết khấu cho khách']]) {
+    await page.click(`.sidebar button:has-text("${module}")`); await page.waitForTimeout(700)
+    await page.click(`[role=tab]:has-text("${tabName}")`); await page.waitForTimeout(1200)
+    const opts = (await accountOptions()).join('|')
+    assert.ok(opts.includes(want + ' ') || opts.includes(want + '–') || opts.includes(want), `${module}: phải có TK ${want}`)
+    assert.ok(!new RegExp(`(^|\\|)${notWant}\\b`).test(opts), `${module}: không được có TK ${notWant}, thực tế: ${opts}`)
+    await page.click(`[role=tab]:has-text("${discount}")`); await page.waitForTimeout(1000)
+    assert.equal(await page.locator('.toolbar button:has-text("Hóa đơn mua"), .toolbar button:has-text("Hóa đơn bán")').count(), 0, `${module}: chiết khấu không còn nút chuyển`)
+  }
+  await page.close()
+})
