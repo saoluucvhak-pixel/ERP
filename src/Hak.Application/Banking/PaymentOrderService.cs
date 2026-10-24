@@ -66,10 +66,10 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
         });
     }
 
-    public async Task<PaymentOrder> ApproveAsync(SessionContext ctx, Guid id)
+    public async Task<PaymentOrder> ApproveAsync(SessionContext ctx, Guid id, long? expectedRowVersion = null)
     {
         var distinct = await db.Companies.AsNoTracking().Where(c => c.Id == ctx.CompanyId).Select(c => c.RequireDistinctApprover).FirstAsync();
-        return await TransitionAsync(ctx, id, Permissions.PaymentOrderApprove, "approve", po => po.Approve(ctx.UserId, distinct));
+        return await TransitionAsync(ctx, id, Permissions.PaymentOrderApprove, "approve", po => po.Approve(ctx.UserId, distinct), expectedRowVersion);
     }
 
     public Task<PaymentOrder> MarkSentAsync(SessionContext ctx, Guid id)
@@ -130,12 +130,14 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
         return v;
     }
 
-    private async Task<PaymentOrder> TransitionAsync(SessionContext ctx, Guid id, string permission, string action, Action<PaymentOrder> apply)
+    private async Task<PaymentOrder> TransitionAsync(SessionContext ctx, Guid id, string permission, string action, Action<PaymentOrder> apply, long? expectedRowVersion = null)
     {
         ctx.Require(permission);
         return await db.InTransactionAsync(async () =>
         {
             var po = await LoadAsync(ctx, id);
+            if (expectedRowVersion is { } rv && po.RowVersion != rv)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Lệnh {po.Number} đã được thay đổi (phiên bản {po.RowVersion}, bạn đang xem phiên bản {rv}). Vui lòng tải lại.");
             var from = po.Status;
             apply(po);
             po.RowVersion++;

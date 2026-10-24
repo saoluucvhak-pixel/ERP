@@ -32,7 +32,7 @@ public static class BankingEndpoints
             return Results.Ok(list.Select(Dto));
         });
         api.MapPost("/payment-orders", async (HttpContext http, PaymentOrderInput r, PaymentOrderService s) => Results.Ok(Dto(await s.CreateAsync(await http.SessionAsync(), r))));
-        api.MapPost("/payment-orders/{id:guid}/approve", async (HttpContext http, Guid id, PaymentOrderService s) => Results.Ok(Dto(await s.ApproveAsync(await http.SessionAsync(), id))));
+        api.MapPost("/payment-orders/{id:guid}/approve", async (HttpContext http, Guid id, long rowVersion, PaymentOrderService s) => Results.Ok(Dto(await s.ApproveAsync(await http.SessionAsync(), id, rowVersion))));
         api.MapPost("/payment-orders/{id:guid}/send", async (HttpContext http, Guid id, PaymentOrderService s) => Results.Ok(Dto(await s.MarkSentAsync(await http.SessionAsync(), id))));
         api.MapPost("/payment-orders/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, PaymentOrderService s) => Results.Ok(Dto(await s.CancelAsync(await http.SessionAsync(), id, r.Reason))));
         api.MapPost("/payment-orders/{id:guid}/execute", async (HttpContext http, Guid id, ExecuteRequest r, PaymentOrderService s) =>

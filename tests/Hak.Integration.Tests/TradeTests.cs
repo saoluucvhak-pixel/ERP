@@ -1,3 +1,4 @@
+using Hak.Domain.Production;
 using Hak.Domain.Catalog;
 using Hak.Application.Accounting;
 using Hak.Domain.Vouchers;
@@ -157,6 +158,51 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task ReverseInvoice_IsBlockedWhenItsStockDocumentBelongsToACompletedProductionOrder()
+    {
+        // Chốt 24/10/2026: phiếu kho thuộc lệnh sản xuất đã hoàn thành → chặn đảo hóa đơn.
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 100, 150_000_000, D(3, 1), fx.Dam);
+        var issue = await PostedIssueAsync(fx, 10, D(3, 10));
+        var sale = await fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26TXK", "0000090", D(3, 12), D(3, 12), "Bán",
+            [new InvoiceLineInput(2_000_000, issue.Id, 1, VatRate: 8)], DueDate: D(4, 11)));
+        await fx.Inv.PostAsync(fx.H.Approver, sale.Id);
+
+        var cost = new CostObject { Id = Ids.New(), CompanyId = fx.H.CompanyId, Code = "CO1", Name = "Dăm", ItemId = fx.Dam, WipAccountId = fx.A("INV"), CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        var order = new ProductionOrder { Id = Ids.New(), CompanyId = fx.H.CompanyId, Number = "LSX2026-000001", ItemId = fx.Dam, CostObjectId = cost.Id, WarehouseId = fx.Wh, PlannedQuantity = 10,
+            PlannedStart = D(3, 2), Status = ProductionOrderStatus.InProgress, CreatedAt = fx.H.Clock.UtcNow, CreatedBy = fx.H.AdminId };
+        fx.S.Db.CostObjects.Add(cost); fx.S.Db.ProductionOrders.Add(order);
+        fx.S.Db.ProductionOrderIssues.Add(new ProductionOrderIssue { Id = Ids.New(), CompanyId = fx.H.CompanyId, OrderId = order.Id, StockDocumentId = issue.Id });
+        await fx.S.Db.SaveChangesAsync();
+
+        // Lệnh còn đang chạy: đảo được kiểm ở bước khác; đã hoàn thành: chặn và không để lại gì dở dang.
+        order.Status = ProductionOrderStatus.Completed; order.CompletedDate = D(3, 15);
+        await fx.S.Db.SaveChangesAsync();
+        var journals = await fx.S.Db.JournalEntries.CountAsync();
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, sale.Id, D(3, 20), "Đảo")));
+        Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
+        Assert.Equal(InvoiceStatus.Posted, (await fx.S.Db.CommercialInvoices.AsNoTracking().SingleAsync(i => i.Id == sale.Id)).Status);
+    }
+
+    [Fact]
+    public async Task PostAndReverse_WithStaleRowVersion_AreRejected_ThenSucceedWithTheViewedVersion()
+    {
+        // Phạm vi bắt buộc version mở rộng: ghi sổ phiếu kho, ghi sổ / đảo hóa đơn đúng bản đã xem.
+        using var fx = await SetupAsync();
+        var d = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Receipt, fx.Wh, D(3, 2), D(3, 2), "Nhập",
+            [new StockLineInput(fx.Add, 100, 5_000_000, fx.A("GRNI"))], PartnerId: fx.H.Partner["NCC01"]));
+        Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, d.Id, d.RowVersion - 1)));
+        Assert.Equal(StockDocumentStatus.Draft, (await fx.S.Db.StockDocuments.AsNoTracking().SingleAsync(x => x.Id == d.Id)).Status);
+        await fx.S.Stock.PostDocumentAsync(fx.H.Approver, d.Id, d.RowVersion);
+
+        var inv = await fx.Inv.CreateAsync(fx.H.Preparer, Purchase(fx, "0000555", new InvoiceLineInput(50_000, d.Id, 1, VatRate: 10)));
+        Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, inv.Id, false, inv.RowVersion + 1)));
+        var posted = await fx.Inv.PostAsync(fx.H.Approver, inv.Id, false, inv.RowVersion);
+        Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion - 1)));
+        Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion)).Status);
+    }
+
+    [Fact]
     public async Task Purchase_PricedPerBdmt_ValuesTheDraftReceipt_AndBooksApWithVat()
     {
         using var fx = await SetupAsync();
@@ -191,10 +237,20 @@ public class TradeTests
         var d = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 10), D(3, 10), "Xuất bán KH01",
             [new StockLineInput(fx.Dam, 10, CounterAccountId: fx.A("COGS"))], PartnerId: fx.H.Partner["KH01"]));
         var issue = await fx.S.Stock.PostDocumentAsync(fx.H.Approver, d.Id);
-        InvoiceInput For(string partner) => new(InvoiceKind.Sales, fx.H.Partner[partner], "1C26TXK", "0000077", D(3, 12), D(3, 12), "Bán hàng",
+        InvoiceInput For(string partner, string no = "0000077") => new(InvoiceKind.Sales, fx.H.Partner[partner], "1C26TXK", no, D(3, 12), D(3, 12), "Bán hàng",
             [new InvoiceLineInput(2_000_000, issue.Id, 1, VatRate: 8)], DueDate: D(4, 11));
         Assert.Equal(ErrorCodes.PartnerMismatch, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, For("KH02"))));
         Assert.Equal(InvoiceStatus.Draft, (await fx.Inv.CreateAsync(fx.H.Preparer, For("KH01"))).Status);
+
+        var d2 = await fx.S.Stock.CreateDocumentAsync(fx.H.Preparer, new StockDocumentInput(StockDocumentType.Issue, fx.Wh, D(3, 11), D(3, 11), "Xuất bán KH01 (lần 2)",
+            [new StockLineInput(fx.Dam, 5, CounterAccountId: fx.A("COGS"))], PartnerId: fx.H.Partner["KH01"]));
+        issue = await fx.S.Stock.PostDocumentAsync(fx.H.Approver, d2.Id);   // phiếu chưa lập hóa đơn nào, cho các lần thử ngoại lệ
+        // Ngoại lệ có quyền + lý do + nhật ký: thiếu lý do vẫn bị chặn (kể cả người có quyền); thiếu quyền → Forbidden; đủ cả hai → lập được và có dòng nhật ký.
+        Assert.Equal(ErrorCodes.PartnerMismatch, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Approver, For("KH02", "0000079") with { PartnerOverrideReason = "  " })));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => fx.Inv.CreateAsync(fx.H.Preparer, For("KH02", "0000079") with { PartnerOverrideReason = "Khách đổi pháp nhân" })));
+        var overridden = await fx.Inv.CreateAsync(fx.H.Approver, For("KH02", "0000078") with { PartnerOverrideReason = "Khách đổi pháp nhân, có công văn 12/2026" });
+        Assert.Equal(fx.H.Partner["KH02"], overridden.PartnerId);
+        Assert.Contains(await fx.S.Db.AuditLogs.AsNoTracking().ToListAsync(), a => a.Action == "invoice.partner_override" && a.EntityId == overridden.Id.ToString());
     }
 
     [Fact]

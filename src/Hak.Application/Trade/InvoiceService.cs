@@ -8,6 +8,7 @@ using Hak.Domain.Common;
 using Hak.Domain.Inventory;
 using Hak.Domain.Organization;
 using Hak.Domain.Security;
+using Hak.Domain.Production;
 using Hak.Domain.Trade;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,9 @@ public sealed record InvoiceLineInput(decimal UnitPrice, Guid? StockDocumentId =
 
 public sealed record InvoiceInput(InvoiceKind Kind, Guid PartnerId, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate,
     string Description, IReadOnlyList<InvoiceLineInput> Lines, DateOnly? DueDate = null, string? Currency = null, decimal? ExchangeRate = null,
-    decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null);
+    decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null,
+    /// <summary>Lý do cố ý lập hóa đơn từ phiếu kho của đối tượng khác; chỉ có tác dụng với người có quyền invoice.partner_override và được ghi nhật ký.</summary>
+    string? PartnerOverrideReason = null);
 
 public sealed record PriceDifferenceWarning(int LineNo, string ReceiptNumber, decimal ReceiptValue, decimal InvoiceValue, decimal Difference,
     decimal ReceiptQuantity, decimal QuantityInStock, decimal InventoryPart, decimal CogsPart, string Method);
@@ -71,12 +74,15 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             };
             inv.Number = await NextNumberAsync(ctx.CompanyId, fy, input.Kind == InvoiceKind.Purchase ? "HDM" : "HDB");
             var n = 0;
+            var partnerOverrides = new List<string>();
             foreach (var l in input.Lines)
-                inv.Lines.Add(await BuildLineAsync(ctx, inv, l, ++n, curDp, funcDp));
+                inv.Lines.Add(await BuildLineAsync(ctx, inv, l, ++n, curDp, funcDp, input.PartnerOverrideReason, partnerOverrides));
             await CheckTotalsAgainstSourcesAsync(ctx.CompanyId, inv);
             db.CommercialInvoices.Add(inv);
             await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.create", "invoice", inv.Id.ToString(),
                 new { inv.Number, inv.Kind, inv.InvoiceSeries, inv.InvoiceNo, total = inv.Lines.Sum(x => x.FunctionalAmount + x.VatAmount) });
+            if (partnerOverrides.Count > 0)
+                await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.partner_override", "invoice", inv.Id.ToString(), new { inv.Number, reason = input.PartnerOverrideReason!.Trim(), documents = partnerOverrides });
             await db.SaveChangesAsync();
             return inv;
         });
@@ -112,13 +118,15 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         return result;
     }
 
-    public async Task<CommercialInvoice> PostAsync(SessionContext ctx, Guid invoiceId, bool acknowledgePriceDifferences = false)
+    public async Task<CommercialInvoice> PostAsync(SessionContext ctx, Guid invoiceId, bool acknowledgePriceDifferences = false, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.VoucherPost);
         return await db.InTransactionAsync(async () =>
         {
             var inv = await db.CommercialInvoices.Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
+            if (expectedRowVersion is { } rv && inv.RowVersion != rv)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Hóa đơn {inv.Number} đã được thay đổi (phiên bản {inv.RowVersion}, bạn đang xem phiên bản {rv}). Vui lòng tải lại.");
             if (inv.Status != InvoiceStatus.Draft)
                 throw new DomainException(inv.Status == InvoiceStatus.Posted ? ErrorCodes.AlreadyPosted : ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} ở trạng thái {inv.Status}.");
             var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
@@ -218,13 +226,15 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
     }
 
     /// <summary>Reverses the invoice voucher (settlements released by the engine). Receipts stay on GRNI awaiting a new invoice.</summary>
-    public async Task<CommercialInvoice> ReverseAsync(SessionContext ctx, Guid invoiceId, DateOnly reversalDate, string reason)
+    public async Task<CommercialInvoice> ReverseAsync(SessionContext ctx, Guid invoiceId, DateOnly reversalDate, string reason, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.VoucherReverse);
         return await db.InTransactionAsync(async () =>
         {
             var inv = await db.CommercialInvoices.FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
+            if (expectedRowVersion is { } rv && inv.RowVersion != rv)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Hóa đơn {inv.Number} đã được thay đổi (phiên bản {inv.RowVersion}, bạn đang xem phiên bản {rv}). Vui lòng tải lại.");
             if (inv.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} chưa ghi sổ hoặc đã đảo.");
             // Hóa đơn gốc còn điều chỉnh (trả hàng / giảm giá / điều chỉnh tăng) đã ghi sổ: phải đảo chứng từ phụ thuộc trước, nếu không điều chỉnh mồ côi
             // (giảm công nợ / giá trị kho trên một hóa đơn không còn). Kiểm trước mọi thao tác ghi nên thất bại không để lại gì dở dang.
@@ -232,6 +242,19 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 .OrderBy(d => d.Number).Select(d => d.Number).ToListAsync();
             if (dependents.Count > 0)
                 throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} còn hóa đơn điều chỉnh đã ghi sổ ({string.Join(", ", dependents)}). Đảo các hóa đơn điều chỉnh trước.");
+            // Chốt của chị 24/10/2026: hóa đơn gắn phiếu xuất NVL hoặc phiếu nhập thành phẩm của lệnh sản xuất đã hoàn thành (Completed/Closed) thì CHẶN đảo —
+            // giá thành của lệnh đã chốt trên giá kho hiện tại, đảo (tính lại đơn giá kho) sẽ làm giá thành lệch. Muốn đảo phải mở lại lệnh sản xuất theo quy trình riêng.
+            var stockDocIds = await db.CommercialInvoiceLines.AsNoTracking().Where(l => l.InvoiceId == inv.Id && l.StockDocumentId != null).Select(l => l.StockDocumentId!.Value).Distinct().ToListAsync();
+            if (stockDocIds.Count > 0)
+            {
+                var done = new[] { ProductionOrderStatus.Completed, ProductionOrderStatus.Closed };
+                var finished = await db.ProductionOrders.AsNoTracking()
+                    .Where(o => o.CompanyId == ctx.CompanyId && done.Contains(o.Status)
+                                && (db.ProductionOrderIssues.Any(i => i.OrderId == o.Id && stockDocIds.Contains(i.StockDocumentId)) || (o.ReceiptDocumentId != null && stockDocIds.Contains(o.ReceiptDocumentId.Value))))
+                    .OrderBy(o => o.Number).Select(o => o.Number).ToListAsync();
+                if (finished.Count > 0)
+                    throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} gắn phiếu kho của lệnh sản xuất đã hoàn thành ({string.Join(", ", finished)}); không đảo được khi giá thành đã chốt.");
+            }
             // Tính lại đơn giá khi đảo: phần giá trị hóa đơn đã nằm trong hàng xuất được chuyển từ tồn kho sang giá vốn TRƯỚC khi ghi bút toán đảo,
             // để tài khoản tồn kho (có thể chặn số dư âm) không âm giữa chừng. Sổ kho: chỉ gỡ phần còn thuộc hàng tồn (adjustments bất biến, không xóa).
             var shifts = await stock.ReverseValueAdjustmentsAsync(ctx, inv.Id, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}", reprice: true);
@@ -319,7 +342,8 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
 
     // ------------------------------------------------------------------ helpers
 
-    private async Task<CommercialInvoiceLine> BuildLineAsync(SessionContext ctx, CommercialInvoice inv, InvoiceLineInput l, int lineNo, int curDp, int funcDp)
+    private async Task<CommercialInvoiceLine> BuildLineAsync(SessionContext ctx, CommercialInvoice inv, InvoiceLineInput l, int lineNo, int curDp, int funcDp,
+        string? partnerOverrideReason = null, List<string>? partnerOverrides = null)
     {
         if (l.UnitPrice < 0 || !MoneyMath.HasAtMostDecimals(l.UnitPrice, MoneyMath.StorageScale))
             throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: đơn giá không hợp lệ (≥ 0, tối đa 4 chữ số thập phân).");
@@ -350,7 +374,13 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 throw new DomainException(ErrorCodes.OrderMismatch, $"Dòng {lineNo}: đối tượng hóa đơn khác đối tượng của đơn hàng gắn với phiếu {doc.Number}.");
             // Phiếu kho (kể cả phiếu không có đơn) phải cùng đối tượng với hóa đơn; phiếu không ghi đối tượng thì không có gì để so.
             if (doc.PartnerId is { } docPartner && docPartner != inv.PartnerId)
-                throw new DomainException(ErrorCodes.PartnerMismatch, $"Dòng {lineNo}: phiếu {doc.Number} thuộc đối tượng khác với đối tượng của hóa đơn.");
+            {
+                // Ngoại lệ: người có quyền invoice.partner_override ghi lý do thì được lập; mọi trường hợp khác bị chặn. Ngoại lệ được ghi nhật ký ở CreateAsync.
+                if (string.IsNullOrWhiteSpace(partnerOverrideReason) || partnerOverrides is null)
+                    throw new DomainException(ErrorCodes.PartnerMismatch, $"Dòng {lineNo}: phiếu {doc.Number} thuộc đối tượng khác với đối tượng của hóa đơn.");
+                ctx.Require(Permissions.InvoicePartnerOverride);
+                partnerOverrides.Add(doc.Number);
+            }
             line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(ctx.CompanyId, doc.Id, sl.LineNo, null);
             if (line.StockQuantity <= 0) throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {lineNo}: phiếu {doc.Number} dòng {sl.LineNo} đã lập hóa đơn đủ.");
             await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null);

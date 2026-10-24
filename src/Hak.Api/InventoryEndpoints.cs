@@ -78,7 +78,7 @@ public static class InventoryEndpoints
             return Results.Ok(docs.Select(Dto));
         });
         api.MapPost("/stock-documents", async (HttpContext http, StockDocumentInput r, StockService s) => Results.Ok(Dto(await s.CreateDocumentAsync(await http.SessionAsync(), r))));
-        api.MapPost("/stock-documents/{id:guid}/post", async (HttpContext http, Guid id, StockService s) => Results.Ok(Dto(await s.PostDocumentAsync(await http.SessionAsync(), id))));
+        api.MapPost("/stock-documents/{id:guid}/post", async (HttpContext http, Guid id, long rowVersion, StockService s) => Results.Ok(Dto(await s.PostDocumentAsync(await http.SessionAsync(), id, rowVersion))));
         api.MapPost("/stock-documents/{id:guid}/reverse", async (HttpContext http, Guid id, ReverseRequest r, StockService s) =>
             Results.Ok(Dto(await s.ReverseDocumentAsync(await http.SessionAsync(), id, r.ReversalDate, r.Reason))));
 

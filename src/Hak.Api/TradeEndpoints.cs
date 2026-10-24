@@ -61,11 +61,11 @@ public static class TradeEndpoints
         });
         api.MapPost("/invoices", async (HttpContext http, InvoiceInput r, InvoiceService s) => Results.Ok(Dto(await s.CreateAsync(await http.SessionAsync(), r))));
         api.MapGet("/invoices/{id:guid}/price-differences", async (HttpContext http, Guid id, InvoiceService s) => Results.Ok(await s.PriceDifferencesAsync(await http.SessionAsync(), id)));
-        api.MapPost("/invoices/{id:guid}/post", async (HttpContext http, Guid id, bool? acknowledgePriceDifferences, InvoiceService s) =>
-            Results.Ok(Dto(await s.PostAsync(await http.SessionAsync(), id, acknowledgePriceDifferences ?? false))));
+        api.MapPost("/invoices/{id:guid}/post", async (HttpContext http, Guid id, long rowVersion, bool? acknowledgePriceDifferences, InvoiceService s) =>   // rowVersion bắt buộc: thiếu → 400, cũ → 409
+            Results.Ok(Dto(await s.PostAsync(await http.SessionAsync(), id, acknowledgePriceDifferences ?? false, rowVersion))));
         api.MapPost("/invoices/{id:guid}/cancel", async (HttpContext http, Guid id, ReasonRequest r, InvoiceService s) => Results.Ok(Dto(await s.CancelAsync(await http.SessionAsync(), id, r.Reason))));
-        api.MapPost("/invoices/{id:guid}/reverse", async (HttpContext http, Guid id, ReverseRequest r, InvoiceService s) =>
-            Results.Ok(Dto(await s.ReverseAsync(await http.SessionAsync(), id, r.ReversalDate, r.Reason))));
+        api.MapPost("/invoices/{id:guid}/reverse", async (HttpContext http, Guid id, long rowVersion, ReverseRequest r, InvoiceService s) =>
+            Results.Ok(Dto(await s.ReverseAsync(await http.SessionAsync(), id, r.ReversalDate, r.Reason, rowVersion))));
         // Purchase return, step 1: a Draft issue back to the supplier (valued by the warehouse costing method when posted).
         api.MapPost("/invoices/{id:guid}/return-issue", async (HttpContext http, Guid id, ReturnReceiptRequest r, InvoiceService s) =>
         {

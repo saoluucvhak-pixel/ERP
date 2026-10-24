@@ -4,7 +4,7 @@ import { AccountSelect, ErrorBox, ExportButton, FlowStrip, PartnerSelect, PrintS
 import { addMoney, amountInWords, csvCell, formatDate, formatMoney, parseMoney, today } from './money'
 import type { PartnerBank } from './BankAccounts'
 
-interface PaymentOrder { id: string; number: string; bankAccountId: string; beneficiaryAccountNo: string | null; beneficiaryBank: string | null; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
+interface PaymentOrder { id: string; rowVersion: number; number: string; bankAccountId: string; beneficiaryAccountNo: string | null; beneficiaryBank: string | null; partnerId: string; amount: string; requestedDate: string; description: string; status: string; executedDate: string | null; bankReference: string | null; voucherId: string | null }
 
 const PO_STATUS: Record<string, string> = {
   Created: 'Đã lập', Approved: 'Đã duyệt', SentToBank: 'Đã gửi NH', ExecutedByBank: 'NH đã thực hiện', Posted: 'Đã hạch toán', Reconciled: 'Đã đối chiếu sao kê', Cancelled: 'Đã hủy',
@@ -100,7 +100,7 @@ function PaymentOrders() {
               <td>{p.beneficiaryAccountNo ? <>{p.beneficiaryAccountNo}<div className="muted">{p.beneficiaryBank}</div></> : <span className="muted" title="Khai báo ở Danh mục đối tượng › Ngân hàng">chưa có</span>}</td><td>{p.description}</td>
               <td className="num">{formatMoney(p.amount)}</td><td><span className="badge">{PO_STATUS[p.status] ?? p.status}</span></td><td>{p.bankReference}</td>
               <td style={{ display: 'flex', gap: 4 }}>
-                {p.status === 'Created' && <button disabled={busy} onClick={() => act(() => post(`/payment-orders/${p.id}/approve`), `Đã duyệt ${p.number}.`)}>Duyệt</button>}
+                {p.status === 'Created' && <button disabled={busy} onClick={() => act(() => post(`/payment-orders/${p.id}/approve?rowVersion=${p.rowVersion}`), `Đã duyệt ${p.number}.`)}>Duyệt</button>}
                 {p.status === 'Approved' && <button disabled={busy} onClick={() => act(() => post(`/payment-orders/${p.id}/send`), `Đã ghi nhận gửi ngân hàng ${p.number}.`)}>Đã gửi NH</button>}
                 {p.status === 'SentToBank' && <button onClick={() => {
                   const ref = prompt('Mã giao dịch ngân hàng:'); if (!ref) return

@@ -37,6 +37,7 @@ public static class PermissionCatalog
             new(Permissions.InvoiceDocument, "Đơn hàng, hóa đơn mua / bán"),
             new(Permissions.SettlementManage, "Thanh toán, bù trừ công nợ"),
             new(Permissions.CreditOverride, "Vượt hạn mức tín dụng"),
+            new(Permissions.InvoicePartnerOverride, "Lập hóa đơn từ phiếu kho của đối tượng khác (cần lý do)"),
         ]),
         new("stock", "Kho", [new(Permissions.StockDocument, "Phiếu nhập / xuất / điều chuyển kho")]),
         new("assets", "Tài sản, CCDC & Vay",
