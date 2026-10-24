@@ -32,3 +32,18 @@ test('pending safe retry must not survive a different login/company silently', a
     assert.equal(api.hasPendingWrite(), false, 'Old pending write remains available in the new session');
   } finally { globalThis.fetch = original; }
 });
+
+test('a GET answered after the company changed is dropped, not delivered to the new context', async () => {
+  const api = await import('./api.ts?stale-get')
+  api.session.setToken('test-session-A'); api.session.setCompany('company-A')
+  const original = globalThis.fetch
+  globalThis.fetch = async () => {
+    api.session.setCompany('company-B')   // đổi công ty khi yêu cầu đang bay
+    return new Response(JSON.stringify([{ id: 'data-of-company-A' }]), { status: 200 })
+  }
+  try {
+    await assert.rejects(api.get('/partners'), e => api.isStaleContext(e))
+    globalThis.fetch = async () => new Response(JSON.stringify([{ id: 'data-of-company-B' }]), { status: 200 })
+    assert.deepEqual(await api.get('/partners'), [{ id: 'data-of-company-B' }])   // cùng ngữ cảnh: giao bình thường
+  } finally { globalThis.fetch = original }
+})

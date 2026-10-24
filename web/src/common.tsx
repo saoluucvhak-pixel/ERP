@@ -1,7 +1,7 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { NavIntent } from './quickadd'
-import { ApiError, UNCERTAIN_CODE, get, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
+import { ApiError, UNCERTAIN_CODE, get, isStaleContext, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
 
@@ -157,7 +157,7 @@ export function useAction() {
   const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
     // Đếm số thao tác đang chạy: thao tác thứ nhất xong không được làm "hết bận" khi thao tác thứ hai còn chạy.
     setInFlight(n => n + 1); setError(null)
-    try { return await fn() } catch (e) { setError(e); return undefined } finally { setInFlight(n => n - 1) }
+    try { return await fn() } catch (e) { if (!isStaleContext(e)) setError(e); return undefined } finally { setInFlight(n => n - 1) }
   }, [])
   return { busy: inFlight > 0, error, setError, run }
 }
@@ -182,8 +182,8 @@ export function useCatalog() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [partners, setPartners] = useState<Partner[]>([])
   useEffect(() => {
-    get<Account[]>('/accounts').then(setAccounts).catch(() => setAccounts([]))
-    get<Partner[]>('/partners').then(setPartners).catch(() => setPartners([]))
+    get<Account[]>('/accounts').then(setAccounts).catch(e => { if (!isStaleContext(e)) setAccounts([]) })
+    get<Partner[]>('/partners').then(setPartners).catch(e => { if (!isStaleContext(e)) setPartners([]) })
   }, [])
   return { accounts, partners, postable: accounts.filter(a => a.isPostable && a.isActive) }
 }
