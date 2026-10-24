@@ -14,6 +14,19 @@ const SOURCE: Record<string, string> = {
   vouchers: 'Chứng từ kế toán', trade: 'Hóa đơn', stock: 'Kho', bank: 'Ngân hàng', orders: 'Đơn hàng', contracts: 'Hợp đồng', advances: 'Tạm ứng', services: 'Nghiệm thu dịch vụ',
 }
 
+/** Việc thuộc chu trình nào: bán hàng và mua hàng tách riêng; còn lại theo phân hệ. Thứ tự hiện cố định. */
+const CYCLES = [
+  { key: 'sales', label: 'Chu trình bán hàng' }, { key: 'purchase', label: 'Chu trình mua hàng' },
+  { key: 'money', label: 'Tiền, thanh toán' }, { key: 'stock', label: 'Kho' }, { key: 'gl', label: 'Kế toán tổng hợp' },
+] as const
+function cycleOf(t: Task): (typeof CYCLES)[number]['key'] {
+  if (t.kind === 'Sales') return 'sales'
+  if (t.kind === 'Purchase') return 'purchase'
+  if (t.screen === 'bank' || t.screen === 'advances') return 'money'
+  if (t.screen === 'stock') return 'stock'
+  return 'gl'
+}
+
 /**
  * Việc cần làm theo từng chứng từ: mỗi dòng là một chứng từ cụ thể kèm hành động kế tiếp, người lập, tuổi việc và (nếu chưa làm được) lý do bị chặn.
  * Bấm "Mở" đi thẳng tới đúng chứng từ ở màn hình của nó — không chỉ tới màn danh sách chung.
@@ -35,13 +48,17 @@ export function Worklist({ limit = 20 }: { limit?: number }) {
         <span className="muted">Việc làm được ngay xếp trước; việc bị chặn ghi rõ lý do.</span></div>
       <div className="scroll"><table className="grid">
         <thead><tr><th>Việc cần làm</th><th>Chứng từ</th><th>Nội dung</th><th>Nguồn</th><th>Người lập</th><th>Ngày</th><th>Hạn</th><th className="num">Tuổi (ngày)</th><th>Tình trạng</th><th /></tr></thead>
-        <tbody>{shown.map(t => (
+        <tbody>{CYCLES.flatMap(c => {
+          const rows = shown.filter(t => cycleOf(t) === c.key)
+          if (rows.length === 0) return []
+          return [<tr key={'h:' + c.key} className="group-row"><th colSpan={10} style={{ textAlign: 'left' }}>{c.label} <span className="badge-count">{rows.length}</span></th></tr>, ...rows.map(t => (
           <tr key={t.entityType + t.entityId}>
-            <td><strong>{t.action}</strong></td><td>{t.number}</td><td>{t.title}</td><td>{SOURCE[t.screen] ?? t.screen}{t.kind ? ` · ${t.kind === 'Sales' ? 'bán' : 'mua'}` : ''}</td>
+            <td><strong>{t.action}</strong></td><td>{t.number}</td><td>{t.title}</td><td>{SOURCE[t.screen] ?? t.screen}</td>
             <td>{t.ownerName}</td><td>{formatDate(t.date)}</td><td>{t.due ? formatDate(t.due) : ''}</td><td className="num">{t.ageDays}</td>
             <td>{t.blockedReason ? <span className="muted" title={t.blockedReason}>⛔ {t.blockedReason}</span> : 'Làm được ngay'}</td>
             <td><button className={t.blockedReason ? '' : 'primary'} onClick={() => open(t)}>Mở</button></td>
-          </tr>))}</tbody>
+          </tr>))]
+        })}</tbody>
       </table></div>
       {tasks.length > limit && <p className="muted">{all ? '' : `Đang hiện ${limit}/${tasks.length}. `}<button onClick={() => setAll(a => !a)}>{all ? 'Thu gọn' : 'Xem tất cả'}</button></p>}
     </section>

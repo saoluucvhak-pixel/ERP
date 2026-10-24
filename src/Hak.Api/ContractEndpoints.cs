@@ -31,7 +31,7 @@ public static class ContractEndpoints
             Results.Ok(new { (await s.AddDocumentAsync(await http.SessionAsync(), id, r.FileName, r.FilePath, r.FileType)).Id }));
         api.MapGet("/reports/fulfilment", async (HttpContext http, InvoiceKind? kind, ContractService s) => Results.Ok(await s.FulfilmentReportAsync(await http.SessionAsync(), kind)));
         api.MapGet("/reports/milestones", async (HttpContext http, InvoiceKind? kind, ContractService s) => Results.Ok(await s.MilestoneScheduleAsync(await http.SessionAsync(), kind)));
-        api.MapGet("/reports/price-variance", async (HttpContext http, Guid? contractId, ContractService s) => Results.Ok(await s.PriceVarianceAsync(await http.SessionAsync(), contractId)));
-        api.MapGet("/alerts", async (HttpContext http, ContractService s) => Results.Ok(await s.AlertsAsync(await http.SessionAsync())));
+        api.MapGet("/reports/price-variance", async (HttpContext http, Guid? contractId, InvoiceKind? kind, ContractService s) => Results.Ok(await s.PriceVarianceAsync(await http.SessionAsync(), contractId, kind)));
+        api.MapGet("/alerts", async (HttpContext http, InvoiceKind? kind, ContractService s) => Results.Ok(await s.AlertsAsync(await http.SessionAsync(), kind)));
     }
 }

@@ -33,7 +33,7 @@ const PAY_VI = { PENDING: 'Chưa đến hạn', PARTIAL: 'Đã trả một phầ
 /** Quản lý hợp đồng mua bán (tệp phân tích quản lý hợp đồng): dự thảo → duyệt → hiệu lực → đơn kế thừa trừ lùi → phụ lục → thanh lý; mốc thanh toán; báo cáo, cảnh báo. */
 export function ContractsView() {
   const { partners } = useCatalog()
-  const [kind, setKind] = useState<Kind>(() => navStore.kind ?? 'Sales')
+  const [kind] = useState<Kind>(() => navStore.kind ?? 'Sales')   // chiều do phân hệ đang mở quyết định
   const [rows, setRows] = useState<Row[]>([])
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [variance, setVariance] = useState<Variance[]>([])
@@ -54,8 +54,8 @@ export function ContractsView() {
   const load = useCallback(() => run(async () => {
     const first = await get<ContractPage>(`/contracts/page?kind=${kind}&skip=0&take=${PAGE}`)
     setRows(first.items); setPaging({ total: first.total, hasMore: first.hasMore })
-    setAlerts(await get<Alert[]>('/contracts/alerts'))
-    setVariance(await get<Variance[]>('/contracts/reports/price-variance'))
+    setAlerts(await get<Alert[]>(`/contracts/alerts?kind=${kind}`))
+    setVariance(await get<Variance[]>(`/contracts/reports/price-variance?kind=${kind}`))
     setSched(await get<Sched[]>(`/contracts/reports/milestones?kind=${kind}`))
   }), [run, kind])
   useEffect(() => { load() }, [load])
@@ -91,9 +91,7 @@ export function ContractsView() {
   return (
     <>
       <div className="toolbar">
-        <h2>Hợp đồng</h2>
-        <button className={kind === 'Sales' ? 'primary' : ''} onClick={() => { setKind('Sales'); setView(null); setForm(null) }}>Hợp đồng bán</button>
-        <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => { setKind('Purchase'); setView(null); setForm(null) }}>Hợp đồng mua</button>
+        <h2>{kind === 'Sales' ? 'Hợp đồng bán' : 'Hợp đồng mua'}</h2>
         <button onClick={blank}>+ Lập hợp đồng</button>
       </div>
       <FlowStrip steps={[

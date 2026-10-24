@@ -258,11 +258,12 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
     }
 
     /// <summary>So đơn giá cam kết (sau chiết khấu) với đơn giá thực tế trên đơn kế thừa.</summary>
-    public async Task<IReadOnlyList<PriceVarianceRow>> PriceVarianceAsync(SessionContext ctx, Guid? contractId = null)
+    public async Task<IReadOnlyList<PriceVarianceRow>> PriceVarianceAsync(SessionContext ctx, Guid? contractId = null, InvoiceKind? kind = null)
     {
         ctx.Require(Permissions.ReportView);
         var q = db.Contracts.AsNoTracking().Include(c => c.Lines).Where(c => c.CompanyId == ctx.CompanyId && c.Status != ContractStatus.Draft && c.Status != ContractStatus.Cancelled);
         if (contractId != null) q = q.Where(c => c.Id == contractId);
+        if (kind != null) q = q.Where(c => c.Kind == kind);   // hợp đồng mua và bán là hai chu trình: báo cáo theo từng chiều
         var cs = await q.ToListAsync();
         var ids = cs.Select(c => c.Id).ToList();
         var orders = await db.TradeOrders.AsNoTracking().Include(o => o.Lines).Where(o => o.ContractId != null && ids.Contains(o.ContractId.Value) && o.Status != OrderStatus.Cancelled).ToListAsync();
@@ -282,18 +283,18 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
     }
 
     /// <summary>Cảnh báo: sắp hết hạn (60 ngày; nhấn mạnh 30 ngày), đã hết hạn còn hiệu lực, mốc thanh toán quá hạn, dùng hết ≥ 90% hạn mức.</summary>
-    public async Task<IReadOnlyList<ContractAlert>> AlertsAsync(SessionContext ctx)
+    public async Task<IReadOnlyList<ContractAlert>> AlertsAsync(SessionContext ctx, InvoiceKind? kind = null)
     {
         ctx.Require(Permissions.ReportView);
         var list = new List<ContractAlert>();
-        var rows = await ListCoreAsync(ctx, null, [ContractStatus.Active], null);   // toàn bộ hợp đồng còn hiệu lực của công ty, không bị cắt 500 của danh sách
+        var rows = await ListCoreAsync(ctx, kind, [ContractStatus.Active], null);   // toàn bộ hợp đồng còn hiệu lực của công ty, không bị cắt 500 của danh sách
         foreach (var r in rows)
         {
             if (r.Expired) list.Add(new(r.Id, r.Code, "expired", $"Hợp đồng {r.Code} đã hết hạn từ {r.ExpirationDate:dd/MM/yyyy} nhưng chưa thanh lý.", r.ExpirationDate));
             else if (r.DaysToExpire <= 60) list.Add(new(r.Id, r.Code, r.DaysToExpire <= 30 ? "expiring30" : "expiring60", $"Hợp đồng {r.Code} còn {r.DaysToExpire} ngày đến hạn ({r.ExpirationDate:dd/MM/yyyy}).", r.ExpirationDate));
             if (r.PercentDone is >= 90) list.Add(new(r.Id, r.Code, "limit", $"Hợp đồng {r.Code} đã dùng {r.PercentDone.Vn(2)}% hạn mức cam kết.", null));
         }
-        foreach (var m in (await MilestoneScheduleAsync(ctx)).Where(m => m.PaymentStatus == "OVERDUE"))
+        foreach (var m in (await MilestoneScheduleAsync(ctx, kind)).Where(m => m.PaymentStatus == "OVERDUE"))
             list.Add(new(m.ContractId, m.ContractCode, "milestone_overdue", $"Mốc \"{m.Name}\" của {m.ContractCode} quá hạn từ {m.DueDate:dd/MM/yyyy}, còn {m.Remaining.Vn(0)}.", m.DueDate));
         return list;
     }

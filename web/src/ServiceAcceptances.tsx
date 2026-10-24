@@ -19,7 +19,7 @@ interface Cand { orderId: string; orderNumber: string; orderLineNo: number; item
 /** Nghiệm thu dịch vụ (khâu thay cho giao / nhận hàng của dịch vụ: vận chuyển thuê, tư vấn…): lập biên bản theo dòng đơn hàng, người khác xác nhận, hóa đơn chỉ lập trong phạm vi đã nghiệm thu. */
 export function ServiceAcceptancesView() {
   const openId = useOpenTarget('serviceAcceptance')
-  const [kind, setKind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')
+  const [kind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')   // chiều do phân hệ đang mở quyết định
   const [rows, setRows] = useState<Row[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [items, setItems] = useState<Item[]>([])
@@ -52,9 +52,7 @@ export function ServiceAcceptancesView() {
   })
   return (
     <>
-      <div className="toolbar"><h2>Nghiệm thu dịch vụ</h2>
-        <button className={kind === 'Sales' ? 'primary' : ''} onClick={() => setKind('Sales')}>Dịch vụ bán</button>
-        <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => setKind('Purchase')}>Dịch vụ mua</button>
+      <div className="toolbar"><h2>{kind === 'Sales' ? 'Nghiệm thu dịch vụ bán' : 'Nghiệm thu dịch vụ mua'}</h2>
         <span className="muted">|</span>
         <button className={sub === 'acc' ? 'primary' : ''} onClick={() => setSub('acc')}>Biên bản nghiệm thu</button>
         <button className={sub === 'progress' ? 'primary' : ''} onClick={() => setSub('progress')}>Mốc, chấm giờ</button>

@@ -78,6 +78,11 @@ public class ContractTests
         var alerts = await contracts.AlertsAsync(h.Auditor);
         Assert.Contains(alerts, x => x.Kind == "milestone_overdue");
         Assert.Contains(alerts, x => x.Kind == "limit" && x.ContractCode == c.Code);     // 1100/1200 ≈ 91,67%
+        // Hợp đồng mua và bán là hai chu trình: báo cáo / cảnh báo lọc theo chiều, hợp đồng bán không lọt sang phía mua.
+        Assert.Contains(await contracts.AlertsAsync(h.Auditor, InvoiceKind.Sales), x => x.ContractCode == c.Code);
+        Assert.DoesNotContain(await contracts.AlertsAsync(h.Auditor, InvoiceKind.Purchase), x => x.ContractCode == c.Code);
+        Assert.Single(await contracts.PriceVarianceAsync(h.Auditor, null, InvoiceKind.Sales), x => x.ContractCode == c.Code);
+        Assert.Empty(await contracts.PriceVarianceAsync(h.Auditor, null, InvoiceKind.Purchase));
 
         // Tài liệu đính kèm và thanh lý.
         await contracts.AddDocumentAsync(h.Preparer, c.Id, "HD-da-ky.pdf", @"\\server\hopdong\2026\HD-da-ky.pdf", "pdf");

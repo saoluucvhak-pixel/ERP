@@ -24,7 +24,8 @@ const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Confirmed: 'Đã xá
 export function OrdersView() {
   const { partners } = useCatalog()
   const [items, setItems] = useState<Item[]>([])
-  const [kind, setKind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')
+  // Chiều bán / mua do phân hệ đang mở quyết định (Bán hàng → đơn bán, Mua hàng → đơn mua); hai chu trình không còn lẫn trong một màn.
+  const [kind] = useState<'Sales' | 'Purchase'>(() => navStore.kind ?? 'Sales')
   const [list, setList] = useState<Order[]>([])
   const [total, setTotal] = useState(0)
   const [head, setHead] = useState({ partnerId: '', contractNo: '', orderDate: today(), description: '', tolerance: '0' })
@@ -82,9 +83,7 @@ export function OrdersView() {
   return (
     <>
       <div className="toolbar">
-        <h2>Đơn hàng</h2>
-        <button className={kind === 'Sales' ? 'primary' : ''} onClick={() => setKind('Sales')}>Đơn bán</button>
-        <button className={kind === 'Purchase' ? 'primary' : ''} onClick={() => setKind('Purchase')}>Đơn mua</button>
+        <h2>{kind === 'Sales' ? 'Đơn bán hàng' : 'Đơn mua hàng'}</h2>
       </div>
       <FlowStrip steps={[
         { label: 'Đơn dự thảo (kiểm tra hợp đồng, tín dụng)', journal: false, count: `${list.filter(o => o.status === 'Draft').length} đơn nháp` },

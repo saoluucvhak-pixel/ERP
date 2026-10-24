@@ -124,6 +124,19 @@ const LAUNCHER = [
 ] as const
 const SCREEN_LABELS: Record<string, string> = Object.fromEntries(SCREENS.map(s => [s.key, s.label]))
 
+/**
+ * Đơn hàng, hóa đơn, hợp đồng, nghiệm thu dịch vụ dùng chung màn hình cho hai chu trình. Mỗi phân hệ (Mua hàng / Bán hàng) chỉ thấy MỘT chiều:
+ * nhãn tab nói rõ mua hay bán và số việc chờ chỉ tính chiều của phân hệ đó.
+ */
+const KIND_OF_MODULE: Record<string, 'Purchase' | 'Sales'> = { purchase: 'Purchase', sales: 'Sales' }
+const KINDED_SCREENS = new Set(['orders', 'trade', 'services'])
+const workKey = (moduleKey: string, screen: string) => (KIND_OF_MODULE[moduleKey] && KINDED_SCREENS.has(screen) ? `${screen}:${KIND_OF_MODULE[moduleKey]}` : screen)
+const KIND_LABELS: Record<string, Record<string, string>> = {
+  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua' },
+  sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán' },
+}
+const tabLabel = (moduleKey: string, screen: string) => KIND_LABELS[moduleKey]?.[screen] ?? SCREEN_LABELS[screen]
+
 export default function App() {
   const [token, setToken] = useState(session.token)
   const [companies, setCompanies] = useState<Company[] | null>(null)
@@ -188,7 +201,7 @@ export default function App() {
   // Số việc đang chờ theo phân hệ để hiện trên thanh bên.
   useEffect(() => {
     if (!token || !companyId) return
-    get<{ screen: string; count: number }[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.screen, x.count])))).catch(() => setWork({}))
+    get<{ screen: string; count: number; kind?: string | null }[]>('/cycles/home/work-queue').then(w => setWork(Object.fromEntries(w.map(x => [x.kind ? `${x.screen}:${x.kind}` : x.screen, x.count])))).catch(() => setWork({}))
   }, [token, companyId, moduleKey, tab])
 
   const logout = async () => {
@@ -235,7 +248,7 @@ export default function App() {
   if (mobile) return <MobileMaintenance company={`${company.code} – ${company.name}`} onFull={() => { window.location.hash = '' }} onLogout={logout} />
   const module = MODULES.find(m => m.key === moduleKey) ?? MODULES[0]
   navStore.kind = module.key === 'purchase' ? 'Purchase' : module.key === 'sales' ? 'Sales' : undefined   // đọc khi màn dùng chung được dựng
-  const moduleCount = (m: (typeof MODULES)[number]) => m.screens.reduce((n, k) => n + (work[k] ?? 0), 0)
+  const moduleCount = (m: (typeof MODULES)[number]) => m.screens.reduce((n, k) => n + (work[workKey(m.key, k)] ?? 0), 0)
   const screenEl = (key: string) => SCREENS.find(s => s.key === key)?.el()
   const openModule = (key: string) => { if (!confirmLeave()) return; setModuleKey(key); setTab('flow') }
   return (
@@ -253,12 +266,12 @@ export default function App() {
         {module.screens.length > 0 && <div className="module-tabs" role="tablist" aria-label={module.label}>
           <button role="tab" aria-selected={tab === 'flow'} className={tab === 'flow' ? 'active' : ''} onClick={() => { if (confirmLeave()) setTab('flow') }}>Quy trình</button>
           {module.screens.map(k => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => { if (confirmLeave()) setTab(k) }}>
-            {SCREEN_LABELS[k]}{work[k] ? <span className="nav-count">{work[k]}</span> : null}</button>)}
+            {tabLabel(module.key, k)}{work[workKey(module.key, k)] ? <span className="nav-count">{work[workKey(module.key, k)]}</span> : null}</button>)}
         </div>}
         <main className="main" key={company.id + module.key + tab + ':' + navSeq}>
           <Suspense fallback={<span className="muted">Đang tải…</span>}>
             {module.screens.length === 0 ? screenEl(module.key)
-              : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[k]).map(k => [k, work[k]]))} />
+              : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[workKey(module.key, k)]).map(k => [k, work[workKey(module.key, k)]]))} />
               : screenEl(tab)}
           </Suspense>
         </main>
