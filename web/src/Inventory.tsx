@@ -158,10 +158,10 @@ function StockDocs({ initialType }: { initialType?: 'Receipt' | 'Issue' | 'Trans
               <td><span className="badge">{STATUS_VI[d.status] ?? d.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
                 {d.status === 'Draft' && <button className="primary" disabled={busy} onClick={() => act(() => post(`/stock-documents/${d.id}/post?rowVersion=${d.rowVersion}`), `Đã ghi sổ ${d.number}.`)}>Ghi sổ</button>}
-                {d.status === 'Draft' && <button className="danger" onClick={() => { const r = prompt('Lý do hủy phiếu nháp:'); if (r) act(() => post(`/stock-documents/${d.id}/cancel`, { reason: r }), `Đã hủy ${d.number}.`) }}>Hủy</button>}
+                {d.status === 'Draft' && <button className="danger" onClick={() => { const r = prompt('Lý do hủy phiếu nháp:'); if (r) act(() => post(`/stock-documents/${d.id}/cancel?rowVersion=${d.rowVersion}`, { reason: r }), `Đã hủy ${d.number}.`) }}>Hủy</button>}
                 {d.status === 'Posted' && !d.number.startsWith('DP') && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo phiếu:'); if (!reason) return
-                  const dt = prompt('Ngày đảo (yyyy-mm-dd):', d.postingDate); if (dt) act(() => post(`/stock-documents/${d.id}/reverse`, { reversalDate: dt, reason }), `Đã đảo ${d.number}.`)
+                  const dt = prompt('Ngày đảo (yyyy-mm-dd):', d.postingDate); if (dt) act(() => post(`/stock-documents/${d.id}/reverse?rowVersion=${d.rowVersion}`, { reversalDate: dt, reason }), `Đã đảo ${d.number}.`)
                 }}>Đảo</button>}
               </td></tr>))}
             {shown.length === 0 && <tr><td colSpan={7} className="muted">Không có phiếu kho trong khoảng đã chọn.</td></tr>}

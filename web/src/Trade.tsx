@@ -158,7 +158,7 @@ export function TradeView() {
                   }
                   await post(`/invoices/${i.id}/post?rowVersion=${i.rowVersion}&acknowledgePriceDifferences=${diffs.length > 0}`)
                 }, `Đã ghi sổ ${i.number}.`)}>Ghi sổ</button>}
-                {i.status === 'Draft' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy:'); if (reason) act(() => post(`/invoices/${i.id}/cancel`, { reason }), `Đã hủy ${i.number}.`) }}>Hủy</button>}
+                {i.status === 'Draft' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy:'); if (reason) act(() => post(`/invoices/${i.id}/cancel?rowVersion=${i.rowVersion}`, { reason }), `Đã hủy ${i.number}.`) }}>Hủy</button>}
                 {i.status === 'Posted' && i.purpose === 'Normal' && <button onClick={() => setAdjusting(i)}>Điều chỉnh</button>}
                 {i.status === 'Posted' && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo hóa đơn:'); if (!reason) return

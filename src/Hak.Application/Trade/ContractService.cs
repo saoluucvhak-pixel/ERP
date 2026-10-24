@@ -100,13 +100,13 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
     }, expectedVersion);
 
     /// <summary>Thanh lý / đóng hợp đồng đã thực hiện đủ hoặc hết hiệu lực.</summary>
-    public Task<Contract> CompleteAsync(SessionContext ctx, Guid id, string? note) => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "contract.complete", (c, _) =>
+    public Task<Contract> CompleteAsync(SessionContext ctx, Guid id, string? note, int? expectedVersion = null) => TransitionAsync(ctx, id, Permissions.InvoiceDocument, "contract.complete", (c, _) =>
     {
         c.Move(ContractStatus.Active, ContractStatus.Completed); c.StatusReason = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
         return Task.CompletedTask;
-    });
+    }, expectedVersion);
 
-    public async Task<Contract> CancelAsync(SessionContext ctx, Guid id, string reason)
+    public async Task<Contract> CancelAsync(SessionContext ctx, Guid id, string reason, int? expectedVersion = null)
     {
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ReasonRequired, "Hủy hợp đồng phải có lý do.");
         return await TransitionAsync(ctx, id, Permissions.InvoiceDocument, "contract.cancel", async (c, _) =>
@@ -116,7 +116,7 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
             if (await db.TradeOrders.AnyAsync(o => o.ContractId == c.Id && o.Status != OrderStatus.Cancelled))
                 throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hợp đồng {c.Code} đã có đơn hàng kế thừa; hủy các đơn đó hoặc thanh lý hợp đồng.");
             c.Status = ContractStatus.Cancelled; c.StatusReason = reason.Trim();
-        });
+        }, expectedVersion);
     }
 
     // ------------------------------------------------------------ phụ lục, mốc, tài liệu

@@ -159,8 +159,8 @@ export function ContractsView() {
           {h.status === 'PendingApproval' && <><button className="primary" disabled={busy} onClick={() => act(`Đã duyệt ${h.code}.`, () => post(`/contracts/${h.id}/decide?version=${h.version}`, { approve: true, note: null }))}>Duyệt</button>
             <button disabled={busy} onClick={() => { const note = ask('Lý do từ chối:'); if (note) act(`Đã trả ${h.code} về nháp.`, () => post(`/contracts/${h.id}/decide?version=${h.version}`, { approve: false, note })) }}>Từ chối</button></>}
           {h.status === 'Active' && <><button disabled={busy} onClick={() => setAmend({ summary: '', value: '', expiry: '', qty: {} })}>Lập phụ lục</button>
-            <button disabled={busy} onClick={() => { const note = ask('Ghi chú thanh lý (đã thực hiện đủ / hết hiệu lực):'); if (note) act(`Đã thanh lý ${h.code}.`, () => post(`/contracts/${h.id}/complete`, { note })) }}>Thanh lý, đóng</button></>}
-          {['Draft', 'PendingApproval', 'Active'].includes(h.status) && <button disabled={busy} onClick={() => { const reason = ask('Lý do hủy hợp đồng:'); if (reason) act(`Đã hủy ${h.code}.`, () => post(`/contracts/${h.id}/cancel`, { reason })) }}>Hủy</button>}
+            <button disabled={busy} onClick={() => { const note = ask('Ghi chú thanh lý (đã thực hiện đủ / hết hiệu lực):'); if (note) act(`Đã thanh lý ${h.code}.`, () => post(`/contracts/${h.id}/complete?version=${h.version}`, { note })) }}>Thanh lý, đóng</button></>}
+          {['Draft', 'PendingApproval', 'Active'].includes(h.status) && <button disabled={busy} onClick={() => { const reason = ask('Lý do hủy hợp đồng:'); if (reason) act(`Đã hủy ${h.code}.`, () => post(`/contracts/${h.id}/cancel?version=${h.version}`, { reason })) }}>Hủy</button>}
           <button disabled={busy} onClick={() => { const n = ask('Tên tệp (VD: HD-da-ky.pdf):'); const pth = n && ask('Đường dẫn lưu trữ tệp:'); if (n && pth) act('Đã đính kèm tài liệu.', () => post(`/contracts/${h.id}/documents`, { fileName: n, filePath: pth, fileType: n.split('.').pop() })) }}>Đính kèm tài liệu</button>
         </div>
         {amend && <div className="form-row"><strong>Phụ lục</strong>

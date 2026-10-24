@@ -386,7 +386,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     /// item has later movements in the warehouse (their FIFO/average cost depended on this document) or when the
     /// month has been costed.
     /// </summary>
-    public async Task<StockDocument> ReverseDocumentAsync(SessionContext ctx, Guid documentId, DateOnly reversalDate, string reason)
+    public async Task<StockDocument> ReverseDocumentAsync(SessionContext ctx, Guid documentId, DateOnly reversalDate, string reason, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.VoucherReverse);
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ReasonRequired, "Phải ghi lý do đảo phiếu kho.");
@@ -394,6 +394,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         {
             var doc = await db.StockDocuments.Include(d => d.Lines).FirstOrDefaultAsync(d => d.Id == documentId && d.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Phiếu kho không tồn tại.");
+            RowVersionCheck.Require(expectedRowVersion, doc.RowVersion, $"Phiếu {doc.Number}");
             if (doc.Status != StockDocumentStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Phiếu {doc.Number} chưa ghi sổ hoặc đã đảo.");
             if (reversalDate < doc.PostingDate) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày đảo không được trước ngày ghi sổ phiếu.");
             await RequireOpenPeriodAsync(ctx.CompanyId, reversalDate);
@@ -460,7 +461,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
     }
 
     /// <summary>Cancels a Draft stock document (frees its order quantity). Refused while a draft invoice still references it.</summary>
-    public async Task<StockDocument> CancelDocumentAsync(SessionContext ctx, Guid documentId, string reason)
+    public async Task<StockDocument> CancelDocumentAsync(SessionContext ctx, Guid documentId, string reason, long? expectedRowVersion = null)
     {
         ctx.Require(Permissions.StockDocument);
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ReasonRequired, "Phải ghi lý do hủy phiếu.");
@@ -468,6 +469,7 @@ public sealed class StockService(HakDbContext db, AccountingEngine engine, Audit
         {
             var doc = await db.StockDocuments.FirstOrDefaultAsync(d => d.Id == documentId && d.CompanyId == ctx.CompanyId)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Phiếu kho không tồn tại.");
+            RowVersionCheck.Require(expectedRowVersion, doc.RowVersion, $"Phiếu {doc.Number}");
             if (doc.Status != StockDocumentStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, "Chỉ hủy được phiếu kho nháp; phiếu đã ghi sổ thì đảo.");
             if (await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
                        where l.StockDocumentId == doc.Id && i.Status == Domain.Trade.InvoiceStatus.Draft select l.Id).AnyAsync())

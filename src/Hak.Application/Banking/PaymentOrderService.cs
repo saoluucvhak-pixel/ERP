@@ -75,8 +75,8 @@ public sealed class PaymentOrderService(HakDbContext db, BusinessDocumentService
     public Task<PaymentOrder> MarkSentAsync(SessionContext ctx, Guid id)
         => TransitionAsync(ctx, id, Permissions.BankDocument, "send", po => po.MarkSent(ctx.UserId, clock.UtcNow));
 
-    public Task<PaymentOrder> CancelAsync(SessionContext ctx, Guid id, string reason)
-        => TransitionAsync(ctx, id, Permissions.BankDocument, "cancel", po => po.Cancel(reason));
+    public Task<PaymentOrder> CancelAsync(SessionContext ctx, Guid id, string reason, long? expectedRowVersion = null)
+        => TransitionAsync(ctx, id, Permissions.BankDocument, "cancel", po => po.Cancel(reason), expectedRowVersion);
 
     /// <summary>
     /// Records the bank's execution and generates the BP Draft voucher (via the posting rule for the order's

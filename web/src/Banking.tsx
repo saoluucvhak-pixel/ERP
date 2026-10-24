@@ -113,7 +113,7 @@ function PaymentOrders() {
                 {p.status === 'ExecutedByBank' && <button disabled={busy} onClick={() => act(() => post(`/payment-orders/${p.id}/recreate-voucher`), 'Đã lập lại chứng từ hạch toán.')}>Lập lại chứng từ</button>}
                 {p.status !== 'Cancelled' && <button onClick={() => setPrinting([p])}>In UNC</button>}
                 {['Created', 'Approved', 'SentToBank'].includes(p.status) && <button className="danger" onClick={() => {
-                  const reason = prompt('Lý do hủy lệnh:'); if (reason) act(() => post(`/payment-orders/${p.id}/cancel`, { reason }), `Đã hủy ${p.number}.`)
+                  const reason = prompt('Lý do hủy lệnh:'); if (reason) act(() => post(`/payment-orders/${p.id}/cancel?rowVersion=${p.rowVersion}`, { reason }), `Đã hủy ${p.number}.`)
                 }}>Hủy</button>}
               </td>
             </tr>))}
