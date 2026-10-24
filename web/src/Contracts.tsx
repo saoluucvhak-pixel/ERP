@@ -11,6 +11,8 @@ type CStatus = 'Draft' | 'PendingApproval' | 'Active' | 'Completed' | 'Cancelled
 interface Row { id: string; code: string; name: string; kind: Kind; category: 'Quantity' | 'Value' | 'Standard'; partnerId: string; partnerCode: string; partnerName: string; currency: string; effectiveDate: string; expirationDate: string; totalAmount: string; orderedAmount: string; percentDone: string | null; status: CStatus; expired: boolean; daysToExpire: number; version: number }
 interface LineV { id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; committedQty: string; unitPrice: string; discountRate: string; taxRate: string; netPrice: string; committedAmount: string; orderedQty: string; orderedAmount: string; remainingQty: string; percentDone: string | null; notes: string | null }
 interface MsV { id: string; name: string; percentage: string | null; dueAmount: string; dueDate: string; paidAmount: string; paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE'; lastPaidDate: string | null }
+const PAGE = 200
+interface ContractPage { items: Row[]; total: number; hasMore: boolean }
 interface View { header: Row; paymentTerms: string | null; signedDate: string | null; exchangeRate: string; taxAmount: string; statusReason: string | null; lines: LineV[]; milestones: MsV[]
   amendments: { id: string; code: string; amendmentDate: string; summary: string; valueChange: string; newExpirationDate: string | null }[]
   documents: { id: string; fileName: string; filePath: string; fileType: string | null; uploadedAt: string }[]
@@ -42,9 +44,15 @@ export function ContractsView() {
   const [f, pf, cf] = useFilterState('contracts')
   const [info, setInfo] = useState('')
   const { busy, error, run, setError } = useAction()
+  const [paging, setPaging] = useState({ total: 0, hasMore: false })
+  const loadMore = () => run(async () => {
+    const next = await get<ContractPage>(`/contracts/page?kind=${kind}&skip=${rows.length}&take=${PAGE}`)
+    setRows(r => [...r, ...next.items]); setPaging({ total: next.total, hasMore: next.hasMore })
+  })
 
   const load = useCallback(() => run(async () => {
-    setRows(await get<Row[]>(`/contracts?kind=${kind}`))
+    const first = await get<ContractPage>(`/contracts/page?kind=${kind}&skip=0&take=${PAGE}`)
+    setRows(first.items); setPaging({ total: first.total, hasMore: first.hasMore })
     setAlerts(await get<Alert[]>('/contracts/alerts'))
     setVariance(await get<Variance[]>('/contracts/reports/price-variance'))
     setSched(await get<Sched[]>(`/contracts/reports/milestones?kind=${kind}`))
@@ -135,6 +143,7 @@ export function ContractsView() {
           <tbody>{shownRows.map(r => <tr key={r.id}><td><button className="link" onClick={() => open(r.id)}>{r.code}</button></td><td>{r.name}</td><td>{r.partnerCode} – {r.partnerName}</td><td>{CATEGORY_VI[r.category]}</td>
             <td>{formatDate(r.effectiveDate)} → {formatDate(r.expirationDate)}</td><td className="num">{formatMoney(r.totalAmount)}</td><td className="num">{formatMoney(r.orderedAmount)}</td><td className="num">{formatMoney(r.percentDone)}</td>
             <td>{r.expired ? 'Hết hạn, chưa thanh lý' : STATUS_VI[r.status]}{r.version > 1 ? ` · v${r.version}` : ''}</td></tr>)}
+            {paging.hasMore && <tr><td colSpan={9}><span className="muted">Đã tải {rows.length}/{paging.total} hợp đồng (các con số và bộ lọc ở trên chỉ tính phần đã tải). </span><button disabled={busy} onClick={loadMore}>Tải thêm</button></td></tr>}
             {shownRows.length === 0 && <tr><td colSpan={9} className="muted">{rows.length === 0 ? 'Chưa có hợp đồng.' : 'Không có hợp đồng khớp bộ lọc.'}</td></tr>}</tbody></table>
       </section>
 

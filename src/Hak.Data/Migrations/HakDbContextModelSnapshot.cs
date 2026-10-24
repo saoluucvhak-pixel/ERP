@@ -6719,6 +6719,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("source_voucher_id");
 
+                    b.Property<DateOnly?>("VoidEffectiveDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("void_effective_date");
+
                     b.Property<string>("VoidReason")
                         .HasColumnType("TEXT")
                         .HasColumnName("void_reason");
@@ -7257,6 +7261,10 @@ namespace Hak.Data.Migrations
                     b.Property<Guid>("PartnerId")
                         .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
+
+                    b.Property<string>("PartnerOverrideReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_override_reason");
 
                     b.Property<int?>("PaymentDiscountDays")
                         .HasColumnType("INTEGER")

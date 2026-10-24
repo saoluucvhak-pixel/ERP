@@ -46,7 +46,7 @@ public class VersionRequiredEndpointTests
         var ktt = As((string)(await Json(await anon.PostAsJsonAsync("/api/auth/login", new { userName = "ktt", password = Pw })))["token"]!, company);
 
         var id = Guid.NewGuid();
-        foreach (var path in new[] { $"/api/invoices/{id}/post", $"/api/invoices/{id}/reverse", $"/api/stock-documents/{id}/post", $"/api/payment-orders/{id}/approve" })
+        foreach (var path in new[] { $"/api/invoices/{id}/post", $"/api/invoices/{id}/reverse", $"/api/stock-documents/{id}/post", $"/api/payment-orders/{id}/approve", $"/api/assets/repairs/{id}/submit", $"/api/assets/repairs/{id}/decide" })
             Assert.Equal(HttpStatusCode.BadRequest, (await ktt.PostAsJsonAsync(path, new { reversalDate = "2026-03-01", reason = "x" })).StatusCode);   // thiếu rowVersion
         foreach (var path in new[] { $"/api/contracts/{id}/submit", $"/api/contracts/{id}/decide" })
             Assert.Equal(HttpStatusCode.BadRequest, (await ktt.PostAsJsonAsync(path, new { approve = true, note = (string?)null })).StatusCode);              // thiếu version

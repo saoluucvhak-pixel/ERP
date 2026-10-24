@@ -158,6 +158,24 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task ReversingAPurchaseInvoice_KeepsLedgerSubledgerAndStockReconciled()
+    {
+        // ERP-P2.5: đối chiếu sổ cái – công nợ – kho sau đảo hóa đơn (có một phần hàng đã xuất nên giá trị chuyển từ tồn kho sang giá vốn).
+        using var fx = await SetupAsync();
+        var invoice = await PostedPurchaseOfAdditiveAsync(fx);
+        await PostedIssueAsync(fx, 40, D(3, 5), fx.Add);
+        async Task AssertReconciledAsync(DateOnly asOf)
+        {
+            Assert.True((await fx.S.Settlement.ReconcileAsync(fx.H.Auditor, asOf)).IsReconciled, "sổ cái ≠ công nợ");
+            Assert.All(await fx.S.Stock.ReconcileAsync(fx.H.Auditor, asOf), r => Assert.Equal(0m, r.Difference));   // sổ cái ≠ kho
+        }
+        await AssertReconciledAsync(D(3, 31));
+        await fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 20), "Nhà cung cấp hủy hóa đơn");
+        await AssertReconciledAsync(D(3, 31));
+        await AssertReconciledAsync(D(3, 10));   // ngày trước đảo cũng khớp
+    }
+
+    [Fact]
     public async Task ReverseInvoice_IsBlockedWhenItsStockDocumentBelongsToACompletedProductionOrder()
     {
         // Chốt 24/10/2026: phiếu kho thuộc lệnh sản xuất đã hoàn thành → chặn đảo hóa đơn.
@@ -251,6 +269,15 @@ public class TradeTests
         var overridden = await fx.Inv.CreateAsync(fx.H.Approver, For("KH02", "0000078") with { PartnerOverrideReason = "Khách đổi pháp nhân, có công văn 12/2026" });
         Assert.Equal(fx.H.Partner["KH02"], overridden.PartnerId);
         Assert.Contains(await fx.S.Db.AuditLogs.AsNoTracking().ToListAsync(), a => a.Action == "invoice.partner_override" && a.EntityId == overridden.Id.ToString());
+        Assert.Equal(InvoiceStatus.Posted, (await fx.Inv.PostAsync(fx.H.Preparer, overridden.Id)).Status);   // ngoại lệ đã có lý do: ghi sổ không bị chặn lại
+
+        // Đối tượng của phiếu nhập nháp bị đổi SAU khi lập hóa đơn thường (không có ngoại lệ): ghi sổ phải phát hiện.
+        var receipt = await DraftReceiptAsync(fx, 10, D(3, 15), fx.Add);
+        var purchase = await fx.Inv.CreateAsync(fx.H.Preparer, Purchase(fx, "0000601", new InvoiceLineInput(50_000, receipt.Id, 1, VatRate: 10)));
+        var tracked = await fx.S.Db.StockDocuments.SingleAsync(x => x.Id == receipt.Id);
+        tracked.PartnerId = fx.H.Partner["KH01"];
+        await fx.S.Db.SaveChangesAsync();
+        Assert.Equal(ErrorCodes.PartnerMismatch, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, purchase.Id)));
     }
 
     [Fact]

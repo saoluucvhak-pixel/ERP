@@ -15,6 +15,7 @@ public static class ContractEndpoints
     {
         var api = app.MapGroup("/api/contracts");
         api.MapGet("", async (HttpContext http, InvoiceKind? kind, ContractService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), kind)));
+        api.MapGet("/page", async (HttpContext http, InvoiceKind? kind, int? skip, int? take, ContractService s) => Results.Ok(await s.ListPageAsync(await http.SessionAsync(), kind, skip ?? 0, take ?? 100)));
         api.MapPost("", async (HttpContext http, ContractInput i, ContractService s) => Results.Ok(new { (await s.CreateAsync(await http.SessionAsync(), i)).Id }));
         api.MapGet("/{id:guid}", async (HttpContext http, Guid id, ContractService s) => Results.Ok(await s.GetAsync(await http.SessionAsync(), id)));
         api.MapPut("/{id:guid}", async (HttpContext http, Guid id, ContractInput i, ContractService s) => Results.Ok(new { (await s.UpdateAsync(await http.SessionAsync(), id, i)).Id }));

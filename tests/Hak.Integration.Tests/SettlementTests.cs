@@ -102,6 +102,27 @@ public class SettlementTests
     }
 
     [Fact]
+    public async Task ReversingPaymentInALaterPeriod_DoesNotChangeTheEarlierPeriodReports()
+    {
+        // ERP-P2.5: đảo chứng từ ở kỳ sau không được làm đổi báo cáo công nợ của kỳ trước (kể cả kỳ đã khóa): hủy phân bổ có hiệu lực từ ngày đảo.
+        var (h, s) = await SetupAsync();
+        using var _h = h; using var _s = s;
+        var invLine = LineOf(s, (await h.PostedAsync(s, Invoice(h, 5_000_000, new(2026, 3, 1)))).Id, h.Acc["AR"]);
+        var pay = await PostDocAsync(h, s, Receipt(h, 5_000_000, Mar10, invLine));
+        var march = await s.Db.AccountingPeriods.SingleAsync(p => p.PeriodNo == 3);
+        Assert.Empty(await s.Settlement.OpenItemsAsync(h.Auditor, h.Acc["AR"], null, Mar31));
+        await s.Setup.LockPeriodAsync(h.Approver, march.Id);
+
+        await s.Engine.ReverseAsync(h.Approver, pay.Id, new(2026, 4, 5), "Séc bị trả lại sau khi khóa tháng 3");
+        Assert.Empty(await s.Settlement.OpenItemsAsync(h.Auditor, h.Acc["AR"], null, Mar31));           // báo cáo tháng 3 giữ nguyên
+        Assert.Empty(await s.Settlement.OpenItemsAsync(h.Auditor, h.Acc["AR"], null, new(2026, 4, 4)));   // trước ngày đảo vẫn đã thanh toán
+        var open = Assert.Single(await s.Settlement.OpenItemsAsync(h.Auditor, h.Acc["AR"], null, new(2026, 4, 30)));
+        Assert.Equal((invLine, 5_000_000m), (open.JournalLineId, open.Open));                             // từ ngày đảo: mở lại
+        Assert.True((await s.Settlement.ReconcileAsync(h.Auditor, Mar31)).IsReconciled);
+        Assert.True((await s.Settlement.ReconcileAsync(h.Auditor, new(2026, 4, 30))).IsReconciled);
+    }
+
+    [Fact]
     public async Task ReversingPayment_ReopensInvoice_AndKeepsSubledgerReconciled()
     {
         var (h, s) = await SetupAsync();

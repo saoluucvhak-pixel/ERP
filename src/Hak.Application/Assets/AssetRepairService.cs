@@ -132,15 +132,15 @@ public sealed class AssetRepairService(HakDbContext db, StockService stock, Audi
         });
     }
 
-    public Task<AssetRepair> SubmitAsync(SessionContext ctx, Guid id) => Transition(ctx, id, Permissions.AssetManage, "asset_repair.submit", async (r, _) =>
+    public Task<AssetRepair> SubmitAsync(SessionContext ctx, Guid id, long? expectedRowVersion = null) => Transition(ctx, id, Permissions.AssetManage, "asset_repair.submit", async (r, _) =>
     {
         if (string.IsNullOrWhiteSpace(r.SolutionPlan)) throw new DomainException(ErrorCodes.ValidationFailed, "Chưa có phương án xử lý để gửi duyệt.");
         r.Move(RepairStatus.Draft, RepairStatus.PendingApproval);
         await SetRequestAsync(r, MaintenanceRequestStatus.Proposed);
-    });
+    }, expectedRowVersion);
 
     /// <summary>Duyệt hoặc từ chối phương án và dự toán. Người duyệt khác người lập khi công ty bắt buộc tách người; từ chối cần lý do.</summary>
-    public Task<AssetRepair> DecideAsync(SessionContext ctx, Guid id, bool approve, string? note) => Transition(ctx, id, Permissions.VoucherApprove, approve ? "asset_repair.approve" : "asset_repair.reject", async (r, company) =>
+    public Task<AssetRepair> DecideAsync(SessionContext ctx, Guid id, bool approve, string? note, long? expectedRowVersion = null) => Transition(ctx, id, Permissions.VoucherApprove, approve ? "asset_repair.approve" : "asset_repair.reject", async (r, company) =>
     {
         if (r.Status != RepairStatus.PendingApproval) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Phiếu {r.Number} không ở trạng thái chờ duyệt.");
         if (company.RequireDistinctApprover && r.CreatedBy == ctx.UserId) throw new DomainException(ErrorCodes.SodViolation, "Người duyệt phương án sửa chữa không được trùng người lập phiếu.");
@@ -148,7 +148,7 @@ public sealed class AssetRepairService(HakDbContext db, StockService stock, Audi
         r.Move(RepairStatus.PendingApproval, approve ? RepairStatus.Approved : RepairStatus.Rejected);
         r.ApprovedBy = ctx.UserId; r.ApprovedAt = clock.UtcNow; if (!string.IsNullOrWhiteSpace(note)) r.Note = note.Trim();
         await SetRequestAsync(r, approve ? MaintenanceRequestStatus.Approved : MaintenanceRequestStatus.Rejected);
-    });
+    }, expectedRowVersion);
 
     public Task<AssetRepair> StartAsync(SessionContext ctx, Guid id) => Transition(ctx, id, Permissions.AssetManage, "asset_repair.start", async (r, _) =>
     {
@@ -315,12 +315,13 @@ public sealed class AssetRepairService(HakDbContext db, StockService stock, Audi
 
     // ------------------------------------------------------------ internals
 
-    private async Task<AssetRepair> Transition(SessionContext ctx, Guid id, string permission, string action, Func<AssetRepair, Company, Task> change)
+    private async Task<AssetRepair> Transition(SessionContext ctx, Guid id, string permission, string action, Func<AssetRepair, Company, Task> change, long? expectedRowVersion = null)
     {
         ctx.Require(permission);
         return await db.InTransactionAsync(async () =>
         {
             var r = await LoadAsync(ctx, id);
+            RowVersionCheck.Require(expectedRowVersion, r.RowVersion, $"Phiếu {r.Number}");
             var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
             await change(r, company);
             r.RowVersion++;

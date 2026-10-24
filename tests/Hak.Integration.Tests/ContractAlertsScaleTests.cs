@@ -32,5 +32,12 @@ public class ContractAlertsScaleTests
         var a = Assert.Single(alerts, x => x.ContractId == first.Id);
         Assert.Equal("expiring30", a.Kind);
         Assert.Equal(first.Code, a.ContractCode);
+
+        // Phân trang phía máy chủ: có tổng số và cờ còn thêm, tải hết các trang thì thấy cả hợp đồng nằm ngoài 500 dòng đầu của danh sách cũ.
+        var p1 = await contracts.ListPageAsync(h.Auditor, null, 0, 200);
+        Assert.Equal((200, 501, true), (p1.Items.Count, p1.Total, p1.HasMore));
+        var p3 = await contracts.ListPageAsync(h.Auditor, null, 400, 200);
+        Assert.Equal((101, 501, false), (p3.Items.Count, p3.Total, p3.HasMore));
+        Assert.Contains(p3.Items, r => r.Id == first.Id);
     }
 }

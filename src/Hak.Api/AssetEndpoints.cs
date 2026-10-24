@@ -70,8 +70,8 @@ public static class AssetEndpoints
         api.MapGet("/repairs", async (HttpContext http, Guid? assetId, AssetRepairService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), assetId)));
         api.MapPost("/repairs", async (HttpContext http, AssetRepairInput i, AssetRepairService s) => Results.Ok(await s.CreateAsync(await http.SessionAsync(), i)));
         api.MapPut("/repairs/{id:guid}/plan", async (HttpContext http, Guid id, AssetRepairInput i, AssetRepairService s) => Results.Ok(await s.UpdatePlanAsync(await http.SessionAsync(), id, i)));
-        api.MapPost("/repairs/{id:guid}/submit", async (HttpContext http, Guid id, AssetRepairService s) => Results.Ok(await s.SubmitAsync(await http.SessionAsync(), id)));
-        api.MapPost("/repairs/{id:guid}/decide", async (HttpContext http, Guid id, AssetDecisionRequest r, AssetRepairService s) => Results.Ok(await s.DecideAsync(await http.SessionAsync(), id, r.Approve, r.Note)));
+        api.MapPost("/repairs/{id:guid}/submit", async (HttpContext http, Guid id, long rowVersion, AssetRepairService s) => Results.Ok(await s.SubmitAsync(await http.SessionAsync(), id, rowVersion)));
+        api.MapPost("/repairs/{id:guid}/decide", async (HttpContext http, Guid id, long rowVersion, AssetDecisionRequest r, AssetRepairService s) => Results.Ok(await s.DecideAsync(await http.SessionAsync(), id, r.Approve, r.Note, rowVersion)));
         api.MapPost("/repairs/{id:guid}/start", async (HttpContext http, Guid id, AssetRepairService s) => Results.Ok(await s.StartAsync(await http.SessionAsync(), id)));
         api.MapPost("/repairs/{id:guid}/issue", async (HttpContext http, Guid id, RepairIssueRequest r, AssetRepairService s) => Results.Ok(await s.IssueMaterialsAsync(await http.SessionAsync(), id, r.WarehouseId, r.CounterAccountId, r.Date)));
         api.MapPost("/repairs/{id:guid}/test", async (HttpContext http, Guid id, RepairTestRequest r, AssetRepairService s) => Results.Ok(await s.RequestAcceptanceAsync(await http.SessionAsync(), id, r.ActualLaborCost, r.Note)));

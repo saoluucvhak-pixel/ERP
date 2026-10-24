@@ -56,6 +56,9 @@ export function newIdempotencyKey(): string {
 }
 
 export const UNCERTAIN_CODE = 'KET_QUA_CHUA_XAC_DINH'
+/** Phản hồi của một yêu cầu ĐỌC thuộc phiên/công ty cũ đến sau khi đã đổi ngữ cảnh: bị bỏ, không được ghi đè dữ liệu của ngữ cảnh mới. */
+export const STALE_CODE = 'NGU_CANH_DA_DOI'
+export const isStaleContext = (e: unknown) => e instanceof ApiError && e.code === STALE_CODE
 /** Ngữ cảnh (phiên + công ty) tại thời điểm tạo thao tác; mọi lần gửi lại dùng đúng ngữ cảnh này, không đọc lại biến toàn cục. */
 interface Ctx { token: string | null; companyId: string | null }
 const snapshot = (): Ctx => ({ token, companyId })
@@ -76,6 +79,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   for (let attempt = 0; ; attempt++) {
     try {
       const result = await apiOnce<T>(method, path, body, key, ctx)
+      if (!mutating && !sameCtx(ctx)) throw new ApiError(0, STALE_CODE, 'Phiên hoặc công ty đã đổi trong lúc tải; bỏ kết quả cũ.')
       if (pendingWrite && pendingWrite.key === key) pendingWrite = null
       return result
     } catch (e) {

@@ -27,6 +27,7 @@ public sealed record ContractDocumentView(Guid Id, string FileName, string FileP
 public sealed record ContractOrderView(Guid OrderId, string Number, DateOnly OrderDate, OrderStatus Status, decimal Amount);
 public sealed record ContractRow(Guid Id, string Code, string Name, InvoiceKind Kind, ContractCategory Category, Guid PartnerId, string PartnerCode, string PartnerName, string Currency,
     DateOnly EffectiveDate, DateOnly ExpirationDate, decimal TotalAmount, decimal OrderedAmount, decimal? PercentDone, ContractStatus Status, bool Expired, int DaysToExpire, int Version);
+public sealed record ContractPage(IReadOnlyList<ContractRow> Items, int Total, bool HasMore);
 public sealed record ContractView(ContractRow Header, string? PaymentTerms, DateOnly? SignedDate, decimal ExchangeRate, decimal TaxAmount, string? StatusReason,
     IReadOnlyList<ContractLineView> Lines, IReadOnlyList<ContractMilestoneView> Milestones, IReadOnlyList<ContractAmendmentView> Amendments,
     IReadOnlyList<ContractDocumentView> Documents, IReadOnlyList<ContractOrderView> Orders);
@@ -193,6 +194,18 @@ public sealed class ContractService(HakDbContext db, AuditService audit, IClock 
     /// <summary>Danh sách hiển thị: tối đa 500 hợp đồng (mã giảm dần). KHÔNG dùng cho cảnh báo hay quyết định nghiệp vụ — dùng <see cref="ListCoreAsync"/> với đúng bộ lọc.</summary>
     public Task<IReadOnlyList<ContractRow>> ListAsync(SessionContext ctx, InvoiceKind? kind = null)
         => ListCoreAsync(ctx, kind, null, 500);
+
+    /// <summary>Phân trang phía máy chủ (mã giảm dần): trả đúng một trang kèm tổng số hợp đồng khớp và cờ còn thêm, để giao diện tải được MỌI hợp đồng.</summary>
+    public async Task<ContractPage> ListPageAsync(SessionContext ctx, InvoiceKind? kind, int skip, int take)
+    {
+        ctx.Require(Permissions.ReportView);
+        skip = Math.Max(0, skip); take = Math.Clamp(take, 1, 500);
+        var q = db.Contracts.AsNoTracking().Where(c => c.CompanyId == ctx.CompanyId);
+        if (kind != null) q = q.Where(c => c.Kind == kind);
+        var total = await q.CountAsync();
+        var rows = await q.Include(c => c.Lines).OrderByDescending(c => c.Code).Skip(skip).Take(take).ToListAsync();
+        return new ContractPage(await RowsAsync(rows), total, skip + rows.Count < total);
+    }
 
     /// <summary>Lọc theo công ty/loại/trạng thái TRƯỚC khi giới hạn số dòng; <paramref name="take"/> null = toàn bộ tập khớp.</summary>
     private async Task<IReadOnlyList<ContractRow>> ListCoreAsync(SessionContext ctx, InvoiceKind? kind, ContractStatus[]? statuses, int? take)

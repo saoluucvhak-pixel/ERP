@@ -287,7 +287,7 @@ public sealed class AccountingEngine(HakDbContext db, AuditService audit, IClock
             // against its mirror so neither stays open.
             var originalEntry = await db.JournalEntries.AsNoTracking().Include(e => e.Lines).SingleAsync(e => e.VoucherId == original.Id);
             var voided = await settlement.VoidForLinesAsync(ctx.CompanyId, originalEntry.Lines.Select(l => l.Id).ToList(), ctx.UserId,
-                $"Đảo chứng từ {original.Number} bởi {rev.Number}");
+                $"Đảo chứng từ {original.Number} bởi {rev.Number}", reversalDate);
             var openItemAccounts = await db.Accounts.AsNoTracking()
                 .Where(a => a.CompanyId == ctx.CompanyId && a.OpenItemNature != OpenItemNature.None).Select(a => a.Id).ToListAsync();
             foreach (var ol in originalEntry.Lines.Where(l => l.PartnerId is not null && openItemAccounts.Contains(l.AccountId)))

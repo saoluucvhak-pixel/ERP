@@ -351,12 +351,12 @@ public sealed class SettlementService(HakDbContext db, AuditService audit, ICloc
     }
 
     /// <summary>Voids every active allocation touching the given journal lines (used by reversal).</summary>
-    internal async Task<int> VoidForLinesAsync(Guid companyId, IReadOnlyCollection<Guid> lineIds, Guid userId, string reason)
+    internal async Task<int> VoidForLinesAsync(Guid companyId, IReadOnlyCollection<Guid> lineIds, Guid userId, string reason, DateOnly? effectiveDate = null)
     {
         var list = await db.SettlementAllocations
             .Where(a => a.CompanyId == companyId && a.VoidedAt == null && (lineIds.Contains(a.DebitLineId) || lineIds.Contains(a.CreditLineId)))
             .ToListAsync();
-        foreach (var a in list) Void(a, userId, reason);
+        foreach (var a in list) { Void(a, userId, reason); a.VoidEffectiveDate = effectiveDate; }
         return list.Count;
     }
 
@@ -393,7 +393,8 @@ public sealed class SettlementService(HakDbContext db, AuditService audit, ICloc
         var lines = await q.AsNoTracking().ToListAsync();
 
         var allocs = await db.SettlementAllocations.AsNoTracking()
-            .Where(a => a.CompanyId == companyId && a.AccountId == accountId && a.VoidedAt == null && a.AllocationDate <= asOf)
+            .Where(a => a.CompanyId == companyId && a.AccountId == accountId && a.AllocationDate <= asOf
+                        && (a.VoidedAt == null || a.VoidEffectiveDate > asOf))   // hủy do đảo chỉ có hiệu lực từ ngày đảo
             .Select(a => new { a.DebitLineId, a.CreditLineId, a.Amount, a.ForeignAmount }).ToListAsync();
         var allocated = new Dictionary<Guid, decimal>();
         var allocatedForeign = new Dictionary<Guid, decimal>();
