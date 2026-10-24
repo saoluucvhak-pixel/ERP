@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get } from './api'
 import { navStore } from './common'
+import { Worklist } from './Worklist'
 
 interface WorkItem { screen: string; count: number; hint: string }
 /** `screen` và `kind`: ô riêng cho một chiều của màn dùng chung (đơn / hóa đơn bán và mua); không có thì mở màn mang khóa `key`. */
@@ -57,6 +58,7 @@ export function HomeLauncher({ screens }: { screens: readonly HomeScreen[] }) {
     <section aria-label="Ứng dụng">
       <h2 style={{ marginTop: 0 }}>Việc cần làm {total > 0 && <span className="badge-count">{total}</span>}</h2>
       {total === 0 && <p className="muted">Không có việc nào đang chờ ở các phân hệ bạn được xem.</p>}
+      <Worklist />
       {groups.map(g => (
         <div key={g} className="app-group">
           <div className="app-group-title">{g}</div>

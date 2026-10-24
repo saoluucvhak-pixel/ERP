@@ -19,6 +19,13 @@ namespace Hak.Application.Cycles;
 public sealed record WorkItem(string Screen, int Count, string Hint);
 
 /// <summary>
+/// Một việc cụ thể trên một chứng từ cụ thể: dẫn thẳng tới đúng chứng từ (EntityType + EntityId) và nói rõ hành động kế tiếp, người lập, tuổi việc,
+/// và — nếu người đang xem chưa làm được — lý do bị chặn (thiếu quyền hoặc quy tắc tách người lập / người duyệt).
+/// </summary>
+public sealed record WorkTask(string Screen, string? Kind, string EntityType, Guid EntityId, string Number, string Title, string Action, Guid OwnerId, string OwnerName,
+    DateOnly Date, int AgeDays, string? BlockedReason);
+
+/// <summary>
 /// Việc đang chờ xử lý theo phân hệ: mỗi chu trình tự nhận việc từ khâu trước (ví dụ hóa đơn mua chờ chấp nhận thanh toán, lệnh chi chờ duyệt).
 /// Tính khi xem từ chính chứng từ nguồn, không lưu. Phân hệ nào người dùng không có quyền xem thì bỏ qua, không báo lỗi.
 /// </summary>
@@ -114,5 +121,82 @@ public sealed class HomeService(HakDbContext db, PaymentAcceptanceService accept
             return (submitted + draft, Join((submitted, "chứng từ chờ duyệt"), (draft, "chứng từ nháp")));
         });
         return result;
+    }
+
+    /// <summary>
+    /// Danh sách việc cụ thể theo chứng từ (tối đa <paramref name="take"/> dòng): chứng từ nháp / chờ duyệt / chờ ghi sổ mà người dùng được xem.
+    /// Việc làm được ngay xếp trước, việc bị chặn (thiếu quyền, người lập không tự duyệt) xếp sau kèm lý do; trong mỗi nhóm việc cũ xếp trước.
+    /// </summary>
+    public async Task<IReadOnlyList<WorkTask>> TasksAsync(SessionContext ctx, int take = 100)
+    {
+        take = Math.Clamp(take, 1, 300);
+        var today = DateOnly.FromDateTime(clock.UtcNow);
+        var cid = ctx.CompanyId;
+        var distinct = await db.Companies.AsNoTracking().Where(c => c.Id == cid).Select(c => c.RequireDistinctApprover).FirstAsync();
+        var rows = new List<(string Screen, string? Kind, string Type, Guid Id, string Number, string Title, string Action, Guid Owner, DateOnly Date, string? Blocked)>();
+        bool Can(string screen) => ctx.Permissions.Contains(ViewPermission[screen]);
+        string? Blocked(string permission, string label, Guid owner, bool separate)
+            => !ctx.Permissions.Contains(permission) ? $"Cần quyền {label}"
+             : separate && distinct && owner == ctx.UserId ? "Người lập không được tự thực hiện bước này; cần người khác" : null;
+        const int Per = 60;
+
+        if (Can("vouchers"))
+        {
+            var vs = await db.Vouchers.AsNoTracking().Where(v => v.CompanyId == cid && (v.Status == VoucherStatus.Draft || v.Status == VoucherStatus.Submitted || v.Status == VoucherStatus.Approved))
+                .OrderBy(v => v.PostingDate).ThenBy(v => v.Number).Take(Per).Select(v => new { v.Id, v.Number, v.Description, v.PostingDate, v.CreatedBy, v.Status }).ToListAsync();
+            foreach (var v in vs)
+            {
+                var (action, perm, label, sep) = v.Status switch
+                {
+                    VoucherStatus.Draft => ("Gửi duyệt", Permissions.VoucherSubmit, "gửi duyệt", false),
+                    VoucherStatus.Submitted => ("Duyệt", Permissions.VoucherApprove, "duyệt chứng từ", true),
+                    _ => ("Ghi sổ", Permissions.VoucherPost, "ghi sổ", false),
+                };
+                rows.Add(("vouchers", null, "voucher", v.Id, v.Number, v.Description, action, v.CreatedBy, v.PostingDate, Blocked(perm, label, v.CreatedBy, sep)));
+            }
+        }
+        if (Can("trade"))
+        {
+            var invs = await db.CommercialInvoices.AsNoTracking().Where(i => i.CompanyId == cid && i.Status == InvoiceStatus.Draft)
+                .OrderBy(i => i.PostingDate).ThenBy(i => i.Number).Take(Per).Select(i => new { i.Id, i.Number, i.Description, i.PostingDate, i.CreatedBy, i.Kind }).ToListAsync();
+            foreach (var i in invs)
+                rows.Add(("trade", i.Kind.ToString(), "invoice", i.Id, i.Number, i.Description, "Ghi sổ hóa đơn", i.CreatedBy, i.PostingDate, Blocked(Permissions.VoucherPost, "ghi sổ", i.CreatedBy, true)));
+        }
+        if (Can("stock"))
+        {
+            var docs = await db.StockDocuments.AsNoTracking().Where(d => d.CompanyId == cid && d.Status == StockDocumentStatus.Draft)
+                .OrderBy(d => d.PostingDate).ThenBy(d => d.Number).Take(Per).Select(d => new { d.Id, d.Number, d.Description, d.PostingDate, d.CreatedBy }).ToListAsync();
+            foreach (var d in docs)
+                rows.Add(("stock", null, "stockDocument", d.Id, d.Number, d.Description, "Ghi sổ phiếu kho", d.CreatedBy, d.PostingDate, Blocked(Permissions.VoucherPost, "ghi sổ", d.CreatedBy, true)));
+        }
+        if (Can("bank"))
+        {
+            var pos = await db.PaymentOrders.AsNoTracking().Where(p => p.CompanyId == cid && (p.Status == PaymentOrderStatus.Created || p.Status == PaymentOrderStatus.ExecutedByBank))
+                .OrderBy(p => p.RequestedDate).ThenBy(p => p.Number).Take(Per).Select(p => new { p.Id, p.Number, p.Description, p.RequestedDate, p.CreatedBy, p.Status }).ToListAsync();
+            foreach (var p in pos)
+                rows.Add(p.Status == PaymentOrderStatus.Created
+                    ? ("bank", null, "paymentOrder", p.Id, p.Number, p.Description, "Duyệt lệnh thanh toán", p.CreatedBy, p.RequestedDate, Blocked(Permissions.PaymentOrderApprove, "duyệt lệnh chi", p.CreatedBy, true))
+                    : ("bank", null, "paymentOrder", p.Id, p.Number, p.Description, "Lập chứng từ cho lệnh đã chi", p.CreatedBy, p.RequestedDate, Blocked(Permissions.BankDocument, "nghiệp vụ ngân hàng", p.CreatedBy, false)));
+        }
+        if (Can("orders"))
+        {
+            var os = await db.TradeOrders.AsNoTracking().Where(o => o.CompanyId == cid && o.Status == OrderStatus.Draft)
+                .OrderBy(o => o.OrderDate).ThenBy(o => o.Number).Take(Per).Select(o => new { o.Id, o.Number, o.Description, o.OrderDate, o.CreatedBy, o.Kind }).ToListAsync();
+            foreach (var o in os)
+                rows.Add(("orders", o.Kind.ToString(), "order", o.Id, o.Number, o.Description ?? "", "Xác nhận đơn hàng", o.CreatedBy, o.OrderDate, Blocked(Permissions.InvoiceDocument, "đơn hàng", o.CreatedBy, false)));
+        }
+        if (ctx.Permissions.Contains(Permissions.ReportView))
+        {
+            var cs = await db.Contracts.AsNoTracking().Where(c => c.CompanyId == cid && c.Status == ContractStatus.PendingApproval)
+                .OrderBy(c => c.EffectiveDate).ThenBy(c => c.Code).Take(Per).Select(c => new { c.Id, c.Code, c.Name, c.EffectiveDate, c.CreatedBy, c.Kind }).ToListAsync();
+            foreach (var c in cs)
+                rows.Add(("contracts", c.Kind.ToString(), "contract", c.Id, c.Code, c.Name, "Duyệt hợp đồng", c.CreatedBy, c.EffectiveDate, Blocked(Permissions.VoucherApprove, "duyệt hợp đồng", c.CreatedBy, true)));
+        }
+
+        var ordered = rows.OrderBy(r => r.Blocked is null ? 0 : 1).ThenBy(r => r.Date).ThenBy(r => r.Number, StringComparer.Ordinal).Take(take).ToList();
+        var ids = ordered.Select(r => r.Owner).Distinct().ToList();
+        var names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName);
+        return ordered.Select(r => new WorkTask(r.Screen, r.Kind, r.Type, r.Id, r.Number, r.Title, r.Action, r.Owner, names.GetValueOrDefault(r.Owner, ""),
+            r.Date, Math.Max(0, today.DayNumber - r.Date.DayNumber), r.Blocked)).ToList();
     }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, ExportButton, FlowStrip, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
+import { useOpenTarget, focusRowProps } from './opentarget'
 import { addMoney, amountInWords, csvCell, formatDate, formatMoney, parseMoney, today } from './money'
 import type { PartnerBank } from './BankAccounts'
 
@@ -26,6 +27,7 @@ export function BankingView() {
 
 function PaymentOrders() {
   const { accounts, partners } = useCatalog()
+  const openId = useOpenTarget('paymentOrder')
   const [list, setList] = useState<PaymentOrder[]>([])
   const [form, setForm] = useState({ bankAccountId: '', partnerId: '', amount: '', requestedDate: today(), description: '', beneficiaryAccountNo: '', beneficiaryBank: '' })
   const [info, setInfo] = useState('')
@@ -94,7 +96,7 @@ function PaymentOrders() {
         <table className="grid">
           <thead><tr><th /><th>Số</th><th>Ngày</th><th>NCC</th><th>Tài khoản thụ hưởng</th><th>Nội dung</th><th className="num">Số tiền</th><th>Trạng thái</th><th>Mã GD NH</th><th>Thao tác</th></tr></thead>
           <tbody>{list.map(p => (
-            <tr key={p.id}>
+            <tr key={p.id} {...focusRowProps(p.id, openId)}>
               <td><input type="checkbox" aria-label={`Chọn ${p.number}`} disabled={p.status === 'Cancelled'} checked={picked.has(p.id)} onChange={e => setPicked(s => { const n = new Set(s); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n })} /></td>
               <td>{p.number}</td><td>{formatDate(p.requestedDate)}</td><td>{partnerName(p.partnerId)}</td>
               <td>{p.beneficiaryAccountNo ? <>{p.beneficiaryAccountNo}<div className="muted">{p.beneficiaryBank}</div></> : <span className="muted" title="Khai báo ở Danh mục đối tượng › Ngân hàng">chưa có</span>}</td><td>{p.description}</td>

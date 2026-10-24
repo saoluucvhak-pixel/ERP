@@ -1,6 +1,10 @@
 /** Ý định mở màn hình từ "Thêm nhanh": chiều bán/mua + loại chứng từ cụ thể, để mỗi nút mở ĐÚNG form (không phụ thuộc màn đang mở hay mặc định của màn). */
 export type NavKind = 'Sales' | 'Purchase'
+/** Chứng từ cần mở thẳng (từ danh sách việc cần làm). */
+export type OpenType = 'voucher' | 'invoice' | 'stockDocument' | 'paymentOrder' | 'order' | 'contract'
+export interface OpenTarget { type: OpenType; id: string }
 export interface NavIntent {
+  open?: OpenTarget
   /** Thu/Chi tiền: loại chứng từ (CR, CP, BR, BP) và nghiệp vụ (businessEvent). */
   voucherType?: 'CR' | 'CP' | 'BR' | 'BP'
   businessEvent?: string

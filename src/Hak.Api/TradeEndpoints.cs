@@ -60,6 +60,13 @@ public static class TradeEndpoints
             return await PagedAsync(http, ordered.Include(i => i.Lines), q.CountAsync(), page, pageSize, i => Dto(i));
         });
         api.MapPost("/invoices", async (HttpContext http, InvoiceInput r, InvoiceService s) => Results.Ok(Dto(await s.CreateAsync(await http.SessionAsync(), r))));
+        api.MapGet("/invoices/{id:guid}", async (HttpContext http, Guid id, HakDbContext db) =>
+        {
+            var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
+            var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == ctx.CompanyId)
+                      ?? throw new Hak.Domain.Common.DomainException(Hak.Domain.Common.ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
+            return Results.Ok(Dto(inv));
+        });
         api.MapGet("/invoices/{id:guid}/price-differences", async (HttpContext http, Guid id, InvoiceService s) => Results.Ok(await s.PriceDifferencesAsync(await http.SessionAsync(), id)));
         api.MapPost("/invoices/{id:guid}/post", async (HttpContext http, Guid id, long rowVersion, bool? acknowledgePriceDifferences, InvoiceService s) =>   // rowVersion bắt buộc: thiếu → 400, cũ → 409
             Results.Ok(Dto(await s.PostAsync(await http.SessionAsync(), id, acknowledgePriceDifferences ?? false, rowVersion))));

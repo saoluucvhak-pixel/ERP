@@ -70,9 +70,11 @@ await importStep(p, 'Hệ thống TK', '/import/accounts', csv('he-thong-tk.csv'
 await importStep(p, 'Đối tượng', '/import/partners', csv('doi-tuong.csv').map((r, i) => ({ line: i + 2, code: r[0], name: r[1], roles: nz(r[2]), taxCode: nz(r[3]) })))
 const opening = await importStep(p, 'Số dư đầu năm', '/import/opening-balances', csv(`so-du-dau-ky-${year}.csv`).map((r, i) => ({ line: i + 2,
   accountCode: r[0], partnerCode: nz(r[1]), debit: nz(r[2]), credit: nz(r[3]), description: nz(r[4]) })), { date: `${year}-01-01`, description: `Số dư đầu năm ${year} chuyển từ FAST` })
-await call(p, 'POST', `/vouchers/${opening.voucherId}/submit`)
-await call(a, 'POST', `/vouchers/${opening.voucherId}/approve`)
-await call(a, 'POST', `/vouchers/${opening.voucherId}/post`)
+// API bắt buộc rowVersion của bản đã xem ở mỗi bước: đọc phiếu rồi chuyền phiên bản vừa nhận sang bước sau.
+const openingDraft = await call(p, 'GET', `/vouchers/${opening.voucherId}`)
+const openingSubmitted = await call(p, 'POST', `/vouchers/${opening.voucherId}/submit?rowVersion=${openingDraft.rowVersion}`)
+const openingApproved = await call(a, 'POST', `/vouchers/${opening.voucherId}/approve?rowVersion=${openingSubmitted.rowVersion}`)
+await call(a, 'POST', `/vouchers/${opening.voucherId}/post?rowVersion=${openingApproved.rowVersion}`)
 console.log('Số dư đầu năm: đã ghi sổ')
 for (const year of years) await importStep(p, `Chứng từ ${year}`, '/import/vouchers', csv(`chung-tu-${year}.csv`).map((r, i) => ({ line: i + 2, key: r[0], date: r[1], number: nz(r[2]),
   description: nz(r[3]), accountCode: r[4], partnerCode: nz(r[5]), debit: nz(r[6]), credit: nz(r[7]), currency: nz(r[8]), foreignAmount: nz(r[9]), lineDescription: nz(r[10]), type: nz(r[11]) })))

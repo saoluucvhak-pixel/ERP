@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
+import { useOpenTarget, focusRowProps } from './opentarget'
 import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
@@ -25,6 +26,9 @@ export function TradeView() {
   const [lines, setLines] = useState<LineDraft[]>([empty()])
   const [info, setInfo] = useState('')
   const [adjusting, setAdjusting] = useState<Invoice | null>(null)
+  const openId = useOpenTarget('invoice')
+  const [pinned, setPinned] = useState<Invoice | null>(null)
+  useEffect(() => { if (openId) get<Invoice>(`/invoices/${openId}`).then(setPinned).catch(() => { /* không còn / không có quyền */ }) }, [openId])
   const { busy, error, setError, run } = useAction()
 
   const load = useCallback(() => run(async () => {
@@ -138,8 +142,8 @@ export function TradeView() {
       <div className="scroll">
         <table className="grid">
           <thead><tr><th>Số</th><th>Ký hiệu / Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Đối tượng</th><th className="num">Tiền hàng (VND)</th><th className="num">Thuế</th><th>Trạng thái</th><th /></tr></thead>
-          <tbody>{list.map(i => (
-            <tr key={i.id}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
+          <tbody>{(pinned && !list.some(x => x.id === pinned.id) ? [pinned, ...list] : list).map(i => (
+            <tr key={i.id} {...focusRowProps(i.id, openId)}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>

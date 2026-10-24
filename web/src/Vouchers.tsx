@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
 import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { useOpenTarget } from './opentarget'
 import { CashDocsView } from './CashDocs'
 import { canCopyVoucher, canEditAsCashDoc, canEditJournalVoucher, CASH_TYPES, isModuleGenerated } from './voucherguards'
 import { SmartFilter, useFilterState } from './SmartFilter'
@@ -20,6 +21,8 @@ export function VouchersView() {
   const [total, setTotal] = useState(0)
   const [list, setList] = useState<Voucher[]>([])
   const [selected, setSelected] = useState<Voucher | null>(null)
+  const openId = useOpenTarget('voucher')
+  useEffect(() => { if (openId) get<Voucher>(`/vouchers/${openId}`).then(setSelected).catch(() => { /* chứng từ không còn / không có quyền: giữ danh sách */ }) }, [openId])
   const [editing, setEditing] = useState<Voucher | 'new' | { copyOf: Voucher } | null>(null)
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const { busy, error, run } = useAction()
@@ -36,9 +39,10 @@ export function VouchersView() {
     if (mine !== loadSeq.current) return   // bộ lọc / trang đã đổi: bỏ phản hồi cũ
     setList(data.items)
     setTotal(data.total)
-    setSelected(s => (s ? data.items.find(v => v.id === s.id) ?? null : null))
+    // Chứng từ được worklist chỉ định giữ nguyên dù nằm ngoài bộ lọc / trang hiện tại.
+    setSelected(s => (s ? data.items.find(v => v.id === s.id) ?? (s.id === openId ? s : null) : null))
     setChecked(c => new Set([...c].filter(id => data.items.some(v => v.id === id))))
-  }), [from, to, status, type, search, accountId, page, run])
+  }), [from, to, status, type, search, accountId, page, run, openId])
   useEffect(() => { load() }, [load])
 
   // label có thể là hàm của kết quả fn, để thông báo cuối cùng (kể cả lỗi kiểm tra chi tiết) được đặt MỘT lần, sau khi action kết thúc.

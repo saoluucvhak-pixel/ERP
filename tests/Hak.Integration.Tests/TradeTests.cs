@@ -798,6 +798,33 @@ public class TradeTests
     }
 
     [Fact]
+    public async Task HomeTasks_ListSpecificDocuments_WithActionOwnerAndBlockedReason()
+    {
+        // Worklist dẫn thẳng tới chứng từ: mỗi việc mang loại + id chứng từ, hành động kế tiếp, người lập và lý do bị chặn.
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        var home = new Hak.Application.Cycles.HomeService(s.Db, s.PaymentAcceptances, new Hak.Application.Cycles.SalesReportService(s.Db, s.Settlement),
+            new Hak.Application.Cycles.PayrollPaymentService(s.Db, s.Settlement, s.PaymentOrders, s.Audit), new Hak.Application.Cycles.ReorderService(s.Db), new Hak.Application.Loans.LoanScheduleService(s.Db, s.Audit, h.Clock), h.Clock, new ContractServicePlanService(s.Db, s.Audit, h.Clock));
+        Assert.Empty(await home.TasksAsync(h.Auditor));
+        var receipt = await DraftReceiptAsync(fx, 10, D(3, 2));                              // phiếu kho nháp do h.Preparer lập
+        var order = await Orders(fx).CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, 2), "Đơn bán", [new OrderLineInput(fx.Dam, 1, 1000)]));
+
+        var mine = await home.TasksAsync(h.Preparer);                                         // người lập: ghi sổ phiếu của chính mình bị chặn
+        var stockTask = Assert.Single(mine, t => t.EntityType == "stockDocument");
+        Assert.Equal((receipt.Id, receipt.Number, "stock", "Ghi sổ phiếu kho"), (stockTask.EntityId, stockTask.Number, stockTask.Screen, stockTask.Action));
+        Assert.Contains("cần người khác", stockTask.BlockedReason);
+        var orderTask = Assert.Single(mine, t => t.EntityType == "order");
+        Assert.Equal((order.Id, "Sales", "orders"), (orderTask.EntityId, orderTask.Kind, orderTask.Screen));
+        Assert.Null(orderTask.BlockedReason);                                                 // xác nhận đơn không bị tách người
+        Assert.Equal(stockTask.OwnerName, orderTask.OwnerName);
+        Assert.True(mine.ToList().FindIndex(t => t.BlockedReason is null) < mine.ToList().FindIndex(t => t.BlockedReason is not null));   // việc làm được xếp trước
+
+        var approver = await home.TasksAsync(h.Approver);                                     // người khác: ghi sổ được
+        Assert.Null(Assert.Single(approver, t => t.EntityType == "stockDocument").BlockedReason);
+        Assert.Empty(await home.TasksAsync(h.Admin));                                         // không quyền xem phân hệ nào → không có việc
+    }
+
+    [Fact]
     public async Task HomeWorkQueue_CountsWaitingWorkPerScreen()
     {
         using var fx = await SetupAsync();

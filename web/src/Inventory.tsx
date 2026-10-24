@@ -3,6 +3,7 @@ import { ReservationsPanel } from './Reservations'
 import { toAlt, toMain } from './units'
 import { api, get, post, type Period } from './api'
 import { AccountSelect, ErrorBox, ExportButton, navStore, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, FlowStrip } from './common'
+import { useOpenTarget } from './opentarget'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
@@ -76,15 +77,18 @@ function StockDocs({ initialType }: { initialType?: 'Receipt' | 'Issue' | 'Trans
   const [from, setFrom] = useState(today().slice(0, 8) + '01')
   const [to, setTo] = useState(today())
   const [statusFilter, setStatusFilter] = useState('')
-  const [selId, setSelId] = useState('')
+  const openId = useOpenTarget('stockDocument')
+  const [selId, setSelId] = useState(openId ?? '')
+  const [pinned, setPinned] = useState<StockDoc | null>(null)
+  useEffect(() => { if (openId) get<StockDoc>(`/stock-documents/${openId}`).then(setPinned).catch(() => { /* không còn / không có quyền */ }) }, [openId])
   const load = useCallback(() => run(async () => { setList(await get<StockDoc[]>(`/stock-documents?from=${from}&to=${to}`)); setOrders(await get<Order[]>('/orders')) }), [run, from, to])
   useEffect(() => { load() }, [load])
   const orderKind = type === 'Receipt' ? 'Purchase' : type === 'Issue' ? 'Sales' : ''
   const orderLines = orders.filter(o => o.status === 'Confirmed' && o.kind === orderKind && o.partnerId === partnerId)
     .flatMap(o => o.lines.map(l => ({ key: `${o.id}:${l.lineNo}`, itemId: l.itemId, label: `${o.number}/${l.lineNo} · đặt ${formatMoney(l.quantity)}` })))
   const wh = (id: string | null) => warehouses.find(w => w.id === id)?.code ?? ''
-  const shown = list.filter(d => !statusFilter || d.status === statusFilter)
-  const sel = list.find(d => d.id === selId) ?? null
+  const shown = (pinned && !list.some(d => d.id === pinned.id) ? [pinned, ...list] : list).filter(d => d.id === openId || !statusFilter || d.status === statusFilter)
+  const sel = (pinned && pinned.id === selId ? pinned : null) ?? list.find(d => d.id === selId) ?? null
   const upd = (i: number, p: Partial<LineDraft>) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
 
   const save = () => run(async () => {
