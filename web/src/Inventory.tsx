@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ReservationsPanel } from './Reservations'
 import { toAlt, toMain } from './units'
 import { api, get, post, type Period } from './api'
-import { AccountSelect, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, FlowStrip } from './common'
+import { AccountSelect, ErrorBox, ExportButton, navStore, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, FlowStrip } from './common'
 import { addMoney, formatDate, formatMoney, formatMonth, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
@@ -26,7 +26,8 @@ function useStockCatalog() {
 }
 
 export function InventoryView() {
-  const [tab, setTab] = useState<'docs' | 'count' | 'summary' | 'card' | 'costing' | 'bdmt' | 'reserve'>('docs')
+  const [intent] = useState(() => navStore.intent)   // từ "Thêm nhanh": Nhập / Xuất / Kiểm kê
+  const [tab, setTab] = useState<'docs' | 'count' | 'summary' | 'card' | 'costing' | 'bdmt' | 'reserve'>(intent?.stockTab ?? 'docs')
   const [counts, setCounts] = useState<{ draft: number; posted: number; pending: number }>({ draft: 0, posted: 0, pending: 0 })
   useEffect(() => {
     Promise.all([get<StockDoc[]>('/stock-documents'), get<unknown[]>('/measurements/pending').catch(() => [])]).then(([d, p]) => setCounts({ draft: d.filter(x => x.status === 'Draft').length, posted: d.filter(x => x.status === 'Posted').length, pending: p.length })).catch(() => undefined)
@@ -45,7 +46,7 @@ export function InventoryView() {
         { label: 'Kiểm kê định kỳ, đối chiếu sổ', journal: false, count: 'tab Kiểm kê' },
         { label: 'MT / BDMT (hàng theo dõi độ khô)', journal: false, count: `${counts.pending} dòng chờ kết quả đo` },
       ]} />
-      {tab === 'docs' && <StockDocs />}
+      {tab === 'docs' && <StockDocs initialType={intent?.stockType} />}
       {tab === 'count' && <StockCount />}
       {tab === 'summary' && <Summary />}
       {tab === 'card' && <StockCard />}
@@ -58,11 +59,11 @@ export function InventoryView() {
 
 interface LineDraft { itemId: string; quantity: string; amount: string; counterAccountId: string; orderLine: string }
 
-function StockDocs() {
+function StockDocs({ initialType }: { initialType?: 'Receipt' | 'Issue' | 'Transfer' }) {
   const { accounts, partners } = useCatalog()
   const { warehouses, items } = useStockCatalog()
   const [list, setList] = useState<StockDoc[]>([])
-  const [type, setType] = useState<'Receipt' | 'Issue' | 'Transfer'>('Receipt')
+  const [type, setType] = useState<'Receipt' | 'Issue' | 'Transfer'>(initialType ?? 'Receipt')
   const [warehouseId, setWarehouseId] = useState('')
   const [toWarehouseId, setToWarehouseId] = useState('')
   const [date, setDate] = useState(today())

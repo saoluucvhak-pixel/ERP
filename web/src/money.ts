@@ -58,6 +58,12 @@ export function parseRate(input: string): string | null {
   return parseDecimal(input, 6)
 }
 
+/** Số nguyên không âm thuần chữ số ("30abc", "1e3", "-5", "3.5" → null; trống → null). parseInt sẽ lặng lẽ đọc "30abc" thành 30. */
+export function parseWholeNumber(input: string): number | null {
+  const t = input.trim()
+  return /^\d{1,9}$/.test(t) ? Number(t) : null
+}
+
 /** Exact decimal addition on strings (up to 4 fraction digits) using BigInt. */
 export function addMoney(values: string[]): string {
   const SCALE = 10000n

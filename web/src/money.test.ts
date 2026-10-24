@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addMoney, amountInWords, csvCell, daysBefore, formatMoney, optionalRate, parseMoney, parseRate, today, formatDate, formatDateTime, formatMonth } from './money.ts'
+import { addMoney, amountInWords, csvCell, daysBefore, formatMoney, optionalRate, parseMoney, parseRate, parseWholeNumber, today, formatDate, formatDateTime, formatMonth } from './money.ts'
 
 test('formatMoney groups with dots and uses comma decimals, never via Number', () => {
   assert.equal(formatMoney('1234567'), '1.234.567')
@@ -113,4 +113,10 @@ test('csvCell: vô hiệu hóa ô bắt đầu bằng ký tự công thức và 
   assert.equal(csvCell('@SUM(A1)'), '"\'@SUM(A1)"')
   assert.equal(csvCell('a=b'), '"a=b"')
   assert.equal(csvCell('Chuyển "gấp"'), '"Chuyển ""gấp"""')
+})
+
+test('parseWholeNumber chỉ nhận số nguyên thuần chữ số (không đọc "30abc" thành 30)', () => {
+  assert.equal(parseWholeNumber('30'), 30)
+  assert.equal(parseWholeNumber(' 0 '), 0)
+  for (const bad of ['30abc', '1e3', '-5', '3.5', '3,5', '', ' ', '1234567890']) assert.equal(parseWholeNumber(bad), null, bad)
 })

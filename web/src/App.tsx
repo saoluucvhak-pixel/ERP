@@ -131,6 +131,10 @@ export default function App() {
   const [systemAdmin, setSystemAdmin] = useState(false)
   const [moduleKey, setModuleKey] = useState('home')
   const [tab, setTab] = useState<string>('flow')
+  const [navSeq, setNavSeq] = useState(0)   // tăng khi phải dựng lại màn đang mở cho một ý định mới (Thêm nhanh)
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const appliedIntent = useRef('')
   const [work, setWork] = useState<Record<string, number>>({})
   const [mobile, setMobile] = useState(isMobileRoute())
   const [expired, setExpired] = useState(false)
@@ -150,16 +154,33 @@ export default function App() {
   const moduleKeyRef = useRef(moduleKey)
   moduleKeyRef.current = moduleKey
   useEffect(() => {
-    navStore.go = (key, kind) => {
+    navStore.go = (key, kind, intent) => {
       if (key === 'home' || key === 'cycles') { setModuleKey(key); setTab('flow'); return }
       const current = MODULES.find(x => x.key === moduleKeyRef.current)
       // Có chỉ định chiều bán / mua thì vào đúng phân hệ Bán hàng / Mua hàng (màn dùng chung đọc chiều từ phân hệ đang mở).
       const wanted = kind === 'Sales' ? 'sales' : kind === 'Purchase' ? 'purchase' : undefined
       const byKind = wanted ? MODULES.find(x => x.key === wanted && x.screens.includes(key)) : undefined
       const m = byKind ?? (current?.screens.includes(key) ? current : moduleOfScreen(key))
-      if (m) { setModuleKey(m.key); setTab(key) }
+      if (!m) return
+      const intentKey = intent ? JSON.stringify(intent) : ''
+      const sameScreen = m.key === moduleKeyRef.current && key === tabRef.current
+      if (sameScreen && intentKey) {
+        // Đã đang ở đúng màn: chỉ dựng lại khi ý định khác cái đang mở, và hỏi trước vì nội dung nhập dở chưa lưu sẽ mất.
+        if (intentKey === appliedIntent.current) return
+        if (!window.confirm('Mở lại màn hình này cho chức năng mới? Nội dung đang nhập chưa lưu sẽ bị bỏ.')) return
+        navStore.intent = intent; navStore.intentDest = `${m.key}/${key}`; appliedIntent.current = intentKey
+        setNavSeq(n => n + 1)
+        return
+      }
+      navStore.intent = intent; navStore.intentDest = intent ? `${m.key}/${key}` : undefined; appliedIntent.current = intentKey
+      setModuleKey(m.key); setTab(key)
     }
   }, [])
+  // Ý định gắn với màn đích: màn dùng lazy-load nên có thể dựng SAU lần commit này, không được xóa khi còn ở đúng màn đích;
+  // rời màn đích (kể cả bấm tab tay) thì bỏ, để lần mở sau không thừa hưởng ý định cũ.
+  useEffect(() => {
+    if (navStore.intentDest !== `${moduleKey}/${tab}`) { navStore.intent = undefined; navStore.intentDest = undefined; appliedIntent.current = '' }
+  }, [moduleKey, tab, navSeq])
   // Số việc đang chờ theo phân hệ để hiện trên thanh bên.
   useEffect(() => {
     if (!token || !companyId) return
@@ -230,7 +251,7 @@ export default function App() {
           {module.screens.map(k => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
             {SCREEN_LABELS[k]}{work[k] ? <span className="nav-count">{work[k]}</span> : null}</button>)}
         </div>}
-        <main className="main" key={company.id + module.key + tab}>
+        <main className="main" key={company.id + module.key + tab + ':' + navSeq}>
           <Suspense fallback={<span className="muted">Đang tải…</span>}>
             {module.screens.length === 0 ? screenEl(module.key)
               : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[k]).map(k => [k, work[k]]))} />

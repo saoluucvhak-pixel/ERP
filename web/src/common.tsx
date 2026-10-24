@@ -1,5 +1,6 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import type { NavIntent } from './quickadd'
 import { ApiError, UNCERTAIN_CODE, get, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
@@ -48,7 +49,7 @@ export function ExportButton({ fileName, sheet, columns, rows, disabled, title, 
 
 /** Cross-screen jump (e.g. trial balance row → account ledger): App registers `go`, the target screen consumes `ledger` once on mount. */
 /** kind: hướng bán/mua của phân hệ đang mở (Bán hàng → 'Sales', Mua hàng → 'Purchase'); các màn dùng chung (hợp đồng, đơn hàng, hóa đơn, nghiệm thu, chiết khấu) lấy làm giá trị ban đầu. */
-export const navStore: { go?: (screen: string, kind?: 'Sales' | 'Purchase') => void; setupTab?: string; kind?: 'Sales' | 'Purchase'; ledger?: { accountId: string; from: string; to: string }; receipt?: { partnerId: string; settleJournalLineId: string; amount: string } } = {}
+export const navStore: { go?: (screen: string, kind?: 'Sales' | 'Purchase', intent?: NavIntent) => void; intent?: NavIntent; intentDest?: string; setupTab?: string; kind?: 'Sales' | 'Purchase'; ledger?: { accountId: string; from: string; to: string }; receipt?: { partnerId: string; settleJournalLineId: string; amount: string } } = {}
 
 export function useCompanyName() {
   const [name, setName] = useState('')
