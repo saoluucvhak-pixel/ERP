@@ -251,6 +251,15 @@ public class TradeTests
         var overridden = await fx.Inv.CreateAsync(fx.H.Approver, For("KH02", "0000078") with { PartnerOverrideReason = "Khách đổi pháp nhân, có công văn 12/2026" });
         Assert.Equal(fx.H.Partner["KH02"], overridden.PartnerId);
         Assert.Contains(await fx.S.Db.AuditLogs.AsNoTracking().ToListAsync(), a => a.Action == "invoice.partner_override" && a.EntityId == overridden.Id.ToString());
+        Assert.Equal(InvoiceStatus.Posted, (await fx.Inv.PostAsync(fx.H.Preparer, overridden.Id)).Status);   // ngoại lệ đã có lý do: ghi sổ không bị chặn lại
+
+        // Đối tượng của phiếu nhập nháp bị đổi SAU khi lập hóa đơn thường (không có ngoại lệ): ghi sổ phải phát hiện.
+        var receipt = await DraftReceiptAsync(fx, 10, D(3, 15), fx.Add);
+        var purchase = await fx.Inv.CreateAsync(fx.H.Preparer, Purchase(fx, "0000601", new InvoiceLineInput(50_000, receipt.Id, 1, VatRate: 10)));
+        var tracked = await fx.S.Db.StockDocuments.SingleAsync(x => x.Id == receipt.Id);
+        tracked.PartnerId = fx.H.Partner["KH01"];
+        await fx.S.Db.SaveChangesAsync();
+        Assert.Equal(ErrorCodes.PartnerMismatch, await CodeOf(() => fx.Inv.PostAsync(fx.H.Approver, purchase.Id)));
     }
 
     [Fact]

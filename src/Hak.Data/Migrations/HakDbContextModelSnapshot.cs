@@ -7258,6 +7258,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
+                    b.Property<string>("PartnerOverrideReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("partner_override_reason");
+
                     b.Property<int?>("PaymentDiscountDays")
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_days");

@@ -78,6 +78,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             foreach (var l in input.Lines)
                 inv.Lines.Add(await BuildLineAsync(ctx, inv, l, ++n, curDp, funcDp, input.PartnerOverrideReason, partnerOverrides));
             await CheckTotalsAgainstSourcesAsync(ctx.CompanyId, inv);
+            if (partnerOverrides.Count > 0) inv.PartnerOverrideReason = input.PartnerOverrideReason!.Trim();
             db.CommercialInvoices.Add(inv);
             await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.create", "invoice", inv.Id.ToString(),
                 new { inv.Number, inv.Kind, inv.InvoiceSeries, inv.InvoiceNo, total = inv.Lines.Sum(x => x.FunctionalAmount + x.VatAmount) });
@@ -478,6 +479,9 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         if (inv.Kind == InvoiceKind.Sales && doc.Status != StockDocumentStatus.Posted || doc.Status is StockDocumentStatus.Reversed or StockDocumentStatus.Cancelled)
             throw new DomainException(ErrorCodes.InvalidStateTransition, $"Dòng {l.LineNo}: phiếu {doc.Number} ở trạng thái {doc.Status}.");
         var sl = doc.Lines.Single(x => x.LineNo == l.StockLineNo);
+        // Đối tượng của phiếu có thể bị sửa (phiếu nhập nháp) sau khi lập hóa đơn: lệch đối tượng chỉ qua được khi hóa đơn đã được lập với ngoại lệ có lý do.
+        if (doc.PartnerId is { } docPartner && docPartner != inv.PartnerId && string.IsNullOrWhiteSpace(inv.PartnerOverrideReason))
+            throw new DomainException(ErrorCodes.PartnerMismatch, $"Dòng {l.LineNo}: phiếu {doc.Number} thuộc đối tượng khác với đối tượng của hóa đơn.");
         await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, l.StockQuantity!.Value, inv.Id);
         if (l.Basis == PricingBasis.Bdmt && await ActiveBdmtAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo) != l.BasisQuantity)
             throw new DomainException(ErrorCodes.MeasurementPending,

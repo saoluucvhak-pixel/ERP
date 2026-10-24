@@ -33,6 +33,8 @@ public sealed class CommercialInvoice
     public InvoiceKind Kind { get; set; }
     public InvoicePurpose Purpose { get; set; } = InvoicePurpose.Normal;
     public Guid? AdjustsInvoiceId { get; set; }
+    /// <summary>Lý do cố ý lập hóa đơn từ phiếu kho của đối tượng khác (người lập có quyền invoice.partner_override); null = không có ngoại lệ. Kiểm lại lúc ghi sổ.</summary>
+    public string? PartnerOverrideReason { get; set; }
     /// <summary>Internal document number (HDM/HDB…); the legal invoice identity is Series + InvoiceNo.</summary>
     public string Number { get; set; } = "";
     public string InvoiceSeries { get; set; } = "";
