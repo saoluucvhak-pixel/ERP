@@ -211,14 +211,18 @@ function Users({ me, reload }: { me: Me; reload: number }) {
   )
 }
 
+interface AutoStatus { enabled: boolean; reason: string; time: string; copyPath: string | null; keepDays: number; nextRunLocal: string | null; lastSuccessUtc: string | null; lastFile: string | null
+  lastCopyOk: boolean | null; lastError: string | null; latestBackupUtc: string | null; latestFile: string | null; stale: boolean; count: number }
+
 function Backups() {
+  const [auto, setAuto] = useState<AutoStatus | null>(null)
   const [list, setList] = useState<BackupInfo[]>([])
   const [pass, setPass] = useState('')
   const [note, setNote] = useState('')
   const [result, setResult] = useState<Verification | null>(null)
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
-  const load = useCallback(() => run(async () => setList(await get<BackupInfo[]>('/admin/backups'))), [run])
+  const load = useCallback(() => run(async () => { setList(await get<BackupInfo[]>('/admin/backups')); setAuto(await get<AutoStatus>('/admin/backups/auto-status')) }), [run])
   useEffect(() => { load() }, [load])
   const check = (fileName: string, restore: boolean) => {
     const p = prompt(`Mật khẩu của bản sao lưu ${fileName}:`)
@@ -228,6 +232,12 @@ function Backups() {
     <section className="panel">
       <h3>Sao lưu / khôi phục (mã hóa AES-256)</h3>
       <p className="muted">Bản sao lưu chứa toàn bộ dữ liệu mọi công ty, mã hóa bằng mật khẩu sao lưu — <strong>mất mật khẩu là mất bản sao lưu</strong>; lưu mật khẩu tách riêng. Khôi phục không ghi đè dữ liệu đang chạy: hệ thống giải mã, kiểm tra toàn vẹn và chuỗi nhật ký rồi tạo file riêng để người vận hành chuyển sang.</p>
+      {auto && (auto.enabled
+        ? <div className={`msg ${auto.lastError ? 'error' : 'ok'}`}>Sao lưu tự động: <strong>bật</strong>, mỗi ngày lúc {auto.time}{auto.copyPath ? `, chép thêm sang ${auto.copyPath}` : ', CHƯA chép ra ngoài máy này (đặt Hak:AutoBackup:CopyPath)'}.
+            {auto.lastSuccessUtc ? ` Lần thành công gần nhất: ${new Date(auto.lastSuccessUtc).toLocaleString('vi-VN')} (${auto.lastFile}).` : ' Chưa chạy lần nào.'}
+            {auto.lastError && ` Lỗi: ${auto.lastError}`}</div>
+        : <div className="msg error">Sao lưu tự động: <strong>chưa bật</strong> — {auto.reason} Dữ liệu chỉ nằm trên máy này; chạy "Cai dat sao luu tu dong.cmd" trong thư mục chương trình hoặc xem docs/08.</div>)}
+      {auto?.stale && <div className="msg error">Đã quá 48 giờ không có bản sao lưu nào{auto.latestBackupUtc ? ` (gần nhất ${new Date(auto.latestBackupUtc).toLocaleString('vi-VN')})` : ''}. Bấm "Sao lưu ngay" hoặc bật sao lưu tự động.</div>}
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <div className="form-row">

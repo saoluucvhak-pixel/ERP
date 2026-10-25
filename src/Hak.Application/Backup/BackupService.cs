@@ -50,6 +50,16 @@ public sealed class BackupService(HakDbContext db, AuditService audit, IClock cl
     public async Task<BackupInfo> CreateAsync(Guid userId, string passphrase, string? note = null)
     {
         await RequireSystemAdminAsync(userId);
+        return await CreateCoreAsync(userId, passphrase, note);
+    }
+
+    /// <summary>Quản trị hệ thống đầu tiên còn hoạt động — người được ghi trong nhật ký cho sao lưu tự động theo lịch.</summary>
+    public async Task<Guid> ScheduledActorAsync()
+        => await db.Users.AsNoTracking().Where(u => u.IsActive && u.IsSystemAdmin).OrderBy(u => u.CreatedAt).Select(u => (Guid?)u.Id).FirstOrDefaultAsync()
+           ?? throw new DomainException(ErrorCodes.NotFound, "Chưa có quản trị hệ thống để ghi nhận sao lưu tự động.");
+
+    private async Task<BackupInfo> CreateCoreAsync(Guid userId, string passphrase, string? note)
+    {
         RequireSqlite();
         if (string.IsNullOrEmpty(passphrase) || passphrase.Length < options.MinPassphraseLength)
             throw new DomainException(ErrorCodes.ValidationFailed, $"Mật khẩu sao lưu phải có ít nhất {options.MinPassphraseLength} ký tự (lưu giữ riêng, mất mật khẩu là mất bản sao lưu).");

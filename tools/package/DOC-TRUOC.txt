@@ -5,7 +5,7 @@ HAK Accounting — bản chạy độc lập (chưa phải bộ cài chính th�
    (chế độ kế toán → công ty → người dùng → thiết lập → số dư đầu kỳ).
 3. Môi trường Production chỉ cho GHI SỔ khi chế độ kế toán của công ty đã được XÁC MINH với văn bản gốc.
    Để làm quen hoặc đối chiếu thử, dùng "Chay HAK - thu nghiem.cmd" (CSDL riêng, không phải sổ sách chính thức).
-4. Sao lưu: Quản trị → Sao lưu (mật khẩu sao lưu ≥ 12 ký tự, cất riêng). Nên sao lưu cuối mỗi ngày làm việc.
+4. Sao lưu: chạy "Cai dat sao luu tu dong.cmd" để tự sao lưu hằng ngày và chép ra thư mục NGOÀI máy này (ổ mạng, USB). Có thể sao lưu tay ở Quản trị → Sao lưu. Mật khẩu sao lưu ≥ 12 ký tự, cất riêng: mất mật khẩu là mất bản sao lưu.
 5. Quên mật khẩu quản trị: dừng HAK, chạy "Khoi phuc mat khau quan tri.cmd".
 6. Kiểm tra tính toàn vẹn gói: so sánh SHA256SUMS.txt (Get-FileHash trong PowerShell).
 
