@@ -107,3 +107,15 @@ Chạy riêng một mình (không cạnh tranh với bộ test): `--vouchers 500
 Kho (phiếu xuất sau N biến động, trung vị 20 phiếu gần nhất): bình quân tức thời 21 ms @1.500, 31 ms @3.000, 42 ms @4.500, 51 ms @6.000; FIFO 21 / 33 / 42 / 53 ms. **Tăng tuyến tính khoảng 7 ms mỗi 1.000 biến động** của cùng kho–vật tư vì `IssueValueAsync` đọc lại toàn bộ lịch sử.
 
 Nhận định: ghi sổ không chậm đi theo khối lượng; báo cáo tăng tuyến tính theo số dòng và vẫn dưới 1 giây ở 50.000 chứng từ. Điểm cần canh là kho: nếu một cặp kho–vật tư tích lũy trên khoảng 20.000 biến động trong cùng kỳ tính giá thì phiếu xuất vượt 0,15 giây và tới 100.000 biến động ước tính ~0,7 giây — lúc đó mới đáng làm checkpoint giá bình quân / lớp FIFO (mốc sequence, replay phần sau, vô hiệu khi backdate / đảo / điều chỉnh giá). Chưa làm vì chưa nghẽn ở quy mô doanh nghiệp vừa và nhỏ; chưa đo nhiều người dùng đồng thời và PostgreSQL ở 50.000.
+
+## Đo nhiều người dùng đồng thời — 25/10/2026 (đợt "làm tiếp")
+Công cụ: `dotnet run -c Release --project tools/Hak.Bench -- --postgres --vouchers 10000 --partners 300 --users 16 --user-vouchers 100` (tùy chọn mới `--users`, `--user-vouchers`; bộ đo SQL tắt trong pha đồng thời vì không an toàn đa luồng). PostgreSQL 16 cục bộ, máy 4 CPU của phiên làm việc, số tham khảo.
+
+| Phép đo | Kết quả |
+|---|---|
+| Ghi sổ 1 người (lập→gửi→duyệt→ghi sổ), nền 10.000 chứng từ | 24 chứng từ/giây; trung vị 40,5 ms, p95 54 ms |
+| 16 người ghi sổ đồng thời × 100 chứng từ | 1600/1600 thành công, không lỗi; 26 chứng từ/giây; trung vị 608 ms, p95 742 ms |
+| SQLite, 8 người × 50 chứng từ | 400/400 thành công, không lỗi; 79 chứng từ/giây |
+
+Nhận định: không mất chứng từ, không lỗi xung đột khi nhiều người ghi cùng lúc; tổng thông lượng PostgreSQL không tăng theo số người (ghi sổ tuần tự theo công ty bằng khóa tư vấn — đúng thiết kế để sổ cái luôn nhất quán), nên độ trễ mỗi chứng từ tăng theo số người đang chờ (16 người ≈ 0,6 giây). Với 5–10 kế toán ghi sổ cùng lúc thì độ trễ dưới ~0,4 giây. Chưa đo 50k–100k chứng từ trên PostgreSQL.
+
