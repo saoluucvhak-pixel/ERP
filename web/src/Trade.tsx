@@ -7,14 +7,14 @@ import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } f
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
-interface Invoice { id: string; rowVersion: number; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string }
+interface Invoice { id: string; rowVersion: number; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string; tradeDiscount?: string; discountKind?: string | null }
 interface SvcCand { orderId: string; orderNumber: string; orderLineNo: number; itemCode: string; itemName: string; unit: string; remaining: string; unitPrice: string; vatRate: string | null; description: string | null }
 interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string; svc?: SvcCand }
-interface LineDraft { candidate: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string; qty: string; accountId: string; description: string }
+interface LineDraft { candidate: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string; qty: string; accountId: string; description: string; discPct: string; discAmt: string }
 
 const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Posted: 'Đã ghi sổ', Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }
 const PURPOSE_VI: Record<string, string> = { Return: 'trả hàng', Discount: 'giảm giá', Increase: 'điều chỉnh tăng' }
-const empty = (): LineDraft => ({ candidate: '', basis: 'Bdmt', price: '', vat: '', qty: '', accountId: '', description: '' })
+const empty = (): LineDraft => ({ candidate: '', basis: 'Bdmt', price: '', vat: '', qty: '', accountId: '', description: '', discPct: '', discAmt: '' })
 
 /** Hóa đơn mua / bán. Dăm gỗ: đơn giá theo BDMT (lấy từ kết quả đo / chứng thư của dòng phiếu kho); giá vốn vẫn tính theo MT. */
 export function TradeView() {
@@ -73,15 +73,20 @@ export function TradeView() {
         const price = parseMoney(l.price)
         if (!price) throw new Error(`Dòng ${i + 1}: đơn giá không hợp lệ.`)
         const c = candidates.find(x => x.key === l.candidate)
-        if (c?.svc) return { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: null, vatRate: optionalRate(l.vat), description: l.description || null, orderId: c.svc.orderId, orderLineNo: c.svc.orderLineNo }
+        // Chiết khấu thương mại ghi trên hóa đơn: % hoặc số tiền (không cả hai). Để trống thì máy chủ lấy tỷ lệ của dòng đơn hàng gắn với dòng này.
+        if (l.discPct.trim() && l.discAmt.trim()) throw new Error(`Dòng ${i + 1}: chiết khấu nhập theo % hoặc theo số tiền, không nhập cả hai.`)
+        const dPct = l.discPct.trim() ? parseRate(l.discPct) : null, dAmt = l.discAmt.trim() ? parseMoney(l.discAmt) : null
+        if ((l.discPct.trim() && dPct == null) || (l.discAmt.trim() && dAmt == null)) throw new Error(`Dòng ${i + 1}: chiết khấu không hợp lệ.`)
+        const disc = { discountPercent: dPct, discountAmount: dAmt }
+        if (c?.svc) return { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: null, vatRate: optionalRate(l.vat), description: l.description || null, orderId: c.svc.orderId, orderLineNo: c.svc.orderLineNo, ...disc }
         return c
-          ? { unitPrice: price, stockDocumentId: c.docId, stockLineNo: c.lineNo, basis: l.basis, vatRate: optionalRate(l.vat), description: l.description || null }
-          : { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: l.accountId || null, vatRate: optionalRate(l.vat), description: l.description || null }
+          ? { unitPrice: price, stockDocumentId: c.docId, stockLineNo: c.lineNo, basis: l.basis, vatRate: optionalRate(l.vat), description: l.description || null, ...disc }
+          : { unitPrice: price, basis: 'Quantity', quantity: parseMoney(l.qty), accountId: l.accountId || null, vatRate: optionalRate(l.vat), description: l.description || null, ...disc }
       }),
     }
     try {
       const inv = await post<Invoice>('/invoices', body)
-      setInfo(`Đã lập ${inv.number} (Nháp): tiền hàng ${formatMoney(inv.total)}, thuế ${formatMoney(inv.vat)}. Người khác có quyền ghi sổ sẽ ghi sổ.`)
+      setInfo(`Đã lập ${inv.number} (Nháp): tiền hàng ${formatMoney(inv.total)}${inv.tradeDiscount && inv.tradeDiscount !== '0' ? ` (sau chiết khấu thương mại ${formatMoney(inv.tradeDiscount)})` : ''}, thuế ${formatMoney(inv.vat)}. Người khác có quyền ghi sổ sẽ ghi sổ.`)
       setLines([empty()])
       await load()
     } catch (e) { setError(e) }
@@ -97,6 +102,7 @@ export function TradeView() {
         { label: 'Hóa đơn nháp (từ phiếu kho / phiếu giao hàng)', journal: false, count: `${list.filter(i => i.status === 'Draft').length} hóa đơn nháp` },
         { label: 'Ghi sổ hóa đơn (Nhật ký: doanh thu / hàng tồn, thuế, công nợ)', journal: true, count: `${list.filter(i => i.status === 'Posted').length} đã ghi sổ` },
         { label: 'Theo dõi công nợ, thanh toán', journal: true, screen: 'arap', count: 'bù trừ với phiếu thu / chi' },
+        { label: 'Chiết khấu thương mại theo doanh số (cuối kỳ)', journal: true, screen: 'discounts', count: 'hóa đơn điều chỉnh giảm theo thỏa thuận' },
         { label: 'Chiết khấu thanh toán (trả / thu trong hạn)', journal: true, screen: 'paydiscount', count: 'theo điều khoản trên hóa đơn' },
         { label: 'Điều chỉnh: trả hàng, giảm giá (duyệt)', journal: true, screen: 'salesapproval', count: 'hóa đơn điều chỉnh liên kết hóa đơn gốc' },
       ]} />
@@ -117,7 +123,7 @@ export function TradeView() {
           <label style={{ flex: 1, minWidth: 200 }}>Diễn giải<input value={head.description} onChange={e => setHead(h => ({ ...h, description: e.target.value }))} /></label>
         </div>
         <table className="grid">
-          <thead><tr><th>#</th><th>Dòng phiếu kho ({kind === 'Sales' ? 'xuất chưa lập HĐ' : 'nhập chưa có HĐ'}) / dịch vụ</th><th>Tính giá theo</th><th className="num">SL (dịch vụ)</th><th>TK (dịch vụ)</th><th className="num">Đơn giá</th><th className="num">Thuế suất %</th><th>Diễn giải</th><th /></tr></thead>
+          <thead><tr><th>#</th><th>Dòng phiếu kho ({kind === 'Sales' ? 'xuất chưa lập HĐ' : 'nhập chưa có HĐ'}) / dịch vụ</th><th>Tính giá theo</th><th className="num">SL (dịch vụ)</th><th>TK (dịch vụ)</th><th className="num">Đơn giá</th><th className="num" title="Chiết khấu thương mại ghi trên hóa đơn: nhập % HOẶC số tiền. Doanh thu / thuế / công nợ tính trên tiền hàng sau chiết khấu.">CK %</th><th className="num">CK (số tiền)</th><th className="num">Thuế suất %</th><th>Diễn giải</th><th /></tr></thead>
           <tbody>{lines.map((l, i) => (
             <tr key={i}><td>{i + 1}</td>
               <td><select aria-label="Dòng phiếu kho" value={l.candidate} onChange={e => { const c = candidates.find(x => x.key === e.target.value); upd(i, c?.svc ? { candidate: e.target.value, qty: c.svc.remaining, price: c.svc.unitPrice, vat: c.svc.vatRate ?? '', description: c.svc.description ?? '' } : { candidate: e.target.value }) }} style={{ maxWidth: 420 }}>
@@ -127,6 +133,8 @@ export function TradeView() {
               <td><input className="num" aria-label="Số lượng" size={6} disabled={!!l.candidate && !candidates.find(x => x.key === l.candidate)?.svc} value={l.qty} onChange={e => upd(i, { qty: e.target.value })} /></td>
               <td>{(!l.candidate) && <AccountSelect accounts={accounts} value={l.accountId} onChange={v => upd(i, { accountId: v })} ariaLabel="TK" />}</td>
               <td><input className="num" aria-label="Đơn giá" size={10} value={l.price} onChange={e => upd(i, { price: e.target.value })} /></td>
+              <td><input className="num" aria-label="Chiết khấu %" size={4} value={l.discPct} placeholder="theo đơn" disabled={!!l.discAmt.trim()} onChange={e => upd(i, { discPct: e.target.value })} /></td>
+              <td><input className="num" aria-label="Chiết khấu số tiền" size={8} value={l.discAmt} disabled={!!l.discPct.trim()} onChange={e => upd(i, { discAmt: e.target.value })} /></td>
               <td><input className="num" aria-label="Thuế suất" size={4} value={l.vat} placeholder="KCT" onChange={e => upd(i, { vat: e.target.value })} /></td>
               <td><input aria-label="Diễn giải dòng" value={l.description} onChange={e => upd(i, { description: e.target.value })} /></td>
               <td><button aria-label="Xóa dòng" onClick={() => setLines(ls => ls.filter((_, j) => j !== i))}>✕</button></td></tr>))}
@@ -143,7 +151,7 @@ export function TradeView() {
         <table className="grid">
           <thead><tr><th>Số</th><th>Ký hiệu / Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Đối tượng</th><th className="num">Tiền hàng (VND)</th><th className="num">Thuế</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{(pinned && !list.some(x => x.id === pinned.id) ? [pinned, ...list] : list).map(i => (
-            <tr key={i.id} {...focusRowProps(i.id, openId)}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
+            <tr key={i.id} {...focusRowProps(i.id, openId)}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${i.purpose === 'Discount' && i.discountKind === 'Trade' ? 'chiết khấu thương mại' : PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
@@ -179,6 +187,7 @@ export function TradeView() {
 function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) => void }) {
   const purchase = invoice.kind === 'Purchase'
   const [purpose, setPurpose] = useState<'Return' | 'Discount' | 'Increase'>('Return')
+  const [dkind, setDkind] = useState<'Trade' | 'Allowance'>('Trade')   // chiết khấu thương mại (sau bán, đạt doanh số…) hay giảm giá hàng (sai quy cách, kém chất lượng)
   const [lineNo, setLineNo] = useState('1')
   const [qty, setQty] = useState('')
   const [amount, setAmount] = useState('')
@@ -207,8 +216,8 @@ function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) 
       ? { originalLineNo: Number.parseInt(lineNo, 10), returnReceiptId: receiptId, returnReceiptLineNo: 1, amount: null, description: null }
       : { originalLineNo: Number.parseInt(lineNo, 10), returnReceiptId: null, returnReceiptLineNo: null, amount: parseMoney(amount), description: null }
     const inv = await post<{ number: string; total: string; vat: string }>('/invoices/adjustments', {
-      originalInvoiceId: invoice.id, purpose, invoiceSeries: series, invoiceNo: no, invoiceDate: date, postingDate: date,
-      description: `${PURPOSE_VI[purpose]} theo HĐ ${invoice.invoiceSeries}/${invoice.invoiceNo}`, lines: [line],
+      originalInvoiceId: invoice.id, purpose, discountKind: purpose === 'Discount' ? dkind : null, invoiceSeries: series, invoiceNo: no, invoiceDate: date, postingDate: date,
+      description: `${purpose === 'Discount' && dkind === 'Trade' ? 'chiết khấu thương mại' : PURPOSE_VI[purpose]} theo HĐ ${invoice.invoiceSeries}/${invoice.invoiceNo}`, lines: [line],
     })
     onDone(`Đã lập ${inv.number} (nháp): ${formatMoney(inv.total)} + thuế ${formatMoney(inv.vat)}. Người khác có quyền ghi sổ sẽ ghi sổ.`)
   })
@@ -219,7 +228,8 @@ function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) 
       <ErrorBox error={error} />
       {msg && !error && <div className="msg ok">{msg}</div>}
       <div className="form-row">
-        <label>Loại<select value={purpose} onChange={e => setPurpose(e.target.value as typeof purpose)}><option value="Return">{purchase ? 'Hàng mua trả lại' : 'Hàng bán bị trả lại'}</option><option value="Discount">{purchase ? 'Giảm giá hàng mua' : 'Giảm giá / chiết khấu'}</option><option value="Increase">Điều chỉnh tăng</option></select></label>
+        <label>Loại<select value={purpose} onChange={e => setPurpose(e.target.value as typeof purpose)}><option value="Return">{purchase ? 'Hàng mua trả lại' : 'Hàng bán bị trả lại'}</option><option value="Discount">{purchase ? 'Giảm giá / chiết khấu hàng mua' : 'Giảm giá / chiết khấu hàng bán'}</option><option value="Increase">Điều chỉnh tăng</option></select></label>
+        {purpose === 'Discount' && <label>Bản chất<select value={dkind} onChange={e => setDkind(e.target.value as typeof dkind)}><option value="Trade">Chiết khấu thương mại (đạt doanh số, mua nhiều)</option><option value="Allowance">Giảm giá hàng (sai quy cách, kém chất lượng)</option></select></label>}
         <label>Dòng HĐ gốc<input className="num" size={3} value={lineNo} onChange={e => setLineNo(e.target.value)} /></label>
         <label>Ngày<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
         {purpose === 'Return' ? <>

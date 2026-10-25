@@ -407,3 +407,17 @@ Phát hiện thật: gửi duyệt hàng loạt chứng từ nhập từ hệ th
 
 **Màn hình mới:** Mua hàng → Thanh toán → khối "Kiểm soát đối chiếu" (`PurchaseControl.tsx`): chính sách dung sai có phiên bản, hóa đơn đang lệch + đối chiếu từng dòng + duyệt/thu hồi sai lệch (quyền `payment.variance`), theo dõi nhận hàng của đơn mua. Kho → tab "Giữ hàng" (`Reservations.tsx`): tồn vật lý / đang giữ / khả dụng / đang về theo vật tư, danh sách phần giữ và nhả giữ có lý do.
 Chưa có giao diện: chính sách theo nhóm vật tư; hàng chờ QC tách riêng trong tồn khả dụng.
+
+## 9ai. Làm lại chiết khấu thương mại / chiết khấu thanh toán (25/10/2026)
+Theo bài phân tích của chị: **chiết khấu thương mại (CKTM)** đổi giá hàng → giảm doanh thu / giá mua và thuế GTGT; **chiết khấu thanh toán (CKTT)** đổi giá của việc trả tiền → chi phí tài chính (bán) / thu nhập tài chính (mua), KHÔNG đổi doanh số hay thuế. Mã TK theo Thông tư 200 chỉ để minh họa; mã thật do công ty ánh xạ vai trò [CẦN XÁC MINH khi chuyển sang mã Thông tư 99].
+
+| Tình huống | Hạch toán trong HAK | Chỗ làm |
+|---|---|---|
+| CKTM **ghi trên hóa đơn** | Dòng hóa đơn có `DiscountPercent` hoặc `DiscountAmount` (không cả hai; mặc định lấy % của dòng đơn hàng gắn với dòng). `Amount` là số SAU chiết khấu → doanh thu, thuế, công nợ, giá nhập kho đều theo số này. Trả lại hàng mang theo đúng chiết khấu của dòng gốc. | Hóa đơn › cột CK % / CK số tiền; đơn hàng có `DiscountPercent` |
+| CKTM **sau bán** (đạt doanh số, thỏa thuận mới) | Hóa đơn điều chỉnh giảm (`Purpose = Discount`) có `DiscountKind = Trade`: bán — Nợ `SALES_TRADE_DISCOUNT` (521x; chưa ánh xạ thì dùng `SALES_DISCOUNT`), Nợ thuế đầu ra / Có phải thu; mua — giảm hàng tồn kho (phần còn) / giá vốn (phần đã xuất), giảm thuế đầu vào / Nợ phải trả. `DiscountKind = Allowance` là giảm giá hàng (sai quy cách) | Hóa đơn › Điều chỉnh › Bản chất |
+| CKTM **theo doanh số cuối kỳ** | Thỏa thuận có bậc (`DiscountAgreement`), tính trên doanh số chưa thuế đã ghi sổ trừ trả lại/giảm giá; bậc đạt áp cho toàn bộ doanh số. Quyết toán sinh hóa đơn điều chỉnh giảm NHÁP cho từng hóa đơn gốc (chia theo tỷ lệ doanh số, rồi theo dòng, phần dư dồn dòng/hóa đơn cuối) để thuế giảm đúng thuế suất; một thỏa thuận một lần quyết toán, hủy được khi chưa hóa đơn nào ghi sổ | Màn Chiết khấu thương mại (Bán hàng / Mua hàng) |
+| **Kết chuyển cuối kỳ** | Nợ 511 / Có 521 qua bộ quy tắc kết chuyển (mẫu gợi ý có bước 521 → 511) | Thiết lập › Hạch toán tự động |
+| CKTT | Giữ nguyên `PaymentDiscountService`: P% × tiền hàng chưa thuế (đã trừ CKTM) trong N ngày từ ngày hóa đơn, tỷ lệ theo phần còn mở; thuế giữ nguyên số trên hóa đơn | Màn Chiết khấu thanh toán |
+| Báo cáo | `DiscountReportService`: gộp → CKTM trên hóa đơn → CKTM sau bán → giảm giá → trả lại → thuần; CKTT tách riêng (không trừ vào doanh số thuần) | Màn Chiết khấu thương mại › Báo cáo |
+
+Kiểm soát: lập/sửa/quyết toán thỏa thuận cần quyền duyệt chứng từ (lập), ghi sổ hóa đơn điều chỉnh do người có quyền ghi sổ làm; chiết khấu theo thỏa thuận không phải phê duyệt từng dòng (cờ chỉ do dịch vụ đặt, API công khai không có) còn mọi chiết khấu sau bán khác vẫn qua phê duyệt khi công ty bật; tổng giảm trừ mỗi dòng gốc không vượt giá trị dòng; hóa đơn gốc còn điều chỉnh đã ghi sổ thì không đảo được. Giới hạn hiện tại: thỏa thuận chỉ tính hóa đơn tiền hạch toán (không ngoại tệ); số hóa đơn điều chỉnh quyết toán là số liên tiếp từ số đầu người dùng nhập (chiều mua: số của chứng từ NCC — hủy quyết toán để làm lại nếu lệch). Migration `Phase18Discounts` (SQLite và PostgreSQL).

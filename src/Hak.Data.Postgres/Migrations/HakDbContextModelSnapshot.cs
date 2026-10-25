@@ -7354,6 +7354,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<int?>("DiscountKind")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_kind");
+
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("date")
                         .HasColumnName("due_date");
@@ -7491,10 +7495,25 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<decimal?>("DiscountPercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("discount_percent");
+
                     b.Property<decimal>("FunctionalAmount")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)")
                         .HasColumnName("functional_amount");
+
+                    b.Property<decimal>("FunctionalDiscountAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("functional_discount_amount");
 
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid")
@@ -8056,6 +8075,218 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("debt_write_off_items");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date")
+                        .HasColumnName("from_date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("PartnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("partner_id");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date")
+                        .HasColumnName("to_date");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_agreements");
+
+                    b.HasIndex("PartnerId")
+                        .HasDatabaseName("ix_discount_agreements_partner_id");
+
+                    b.HasIndex("CompanyId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_agreements_company_id_code");
+
+                    b.HasIndex("CompanyId", "Kind", "PartnerId")
+                        .HasDatabaseName("ix_discount_agreements_company_id_kind_partner_id");
+
+                    b.ToTable("discount_agreements", t =>
+                        {
+                            t.HasCheckConstraint("ck_discount_agreements_dates", "from_date <= to_date");
+                        });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgreementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agreement_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<decimal>("EligibleSales")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("eligible_sales");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("percent");
+
+                    b.Property<DateTime?>("VoidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("voided_at");
+
+                    b.Property<Guid?>("VoidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("voided_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_agreement_runs");
+
+                    b.HasIndex("AgreementId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_agreement_runs_agreement_id")
+                        .HasFilter("voided_at IS NULL");
+
+                    b.ToTable("discount_agreement_runs");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementRunInvoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AdjustmentInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("adjustment_invoice_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("OriginalInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_invoice_id");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_agreement_run_invoices");
+
+                    b.HasIndex("AdjustmentInvoiceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_agreement_run_invoices_adjustment_invoice_id");
+
+                    b.HasIndex("OriginalInvoiceId")
+                        .HasDatabaseName("ix_discount_agreement_run_invoices_original_invoice_id");
+
+                    b.HasIndex("RunId")
+                        .HasDatabaseName("ix_discount_agreement_run_invoices_run_id");
+
+                    b.ToTable("discount_agreement_run_invoices");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgreementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agreement_id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<decimal>("Percent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("percent");
+
+                    b.Property<decimal>("Threshold")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("threshold");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_agreement_tiers");
+
+                    b.HasIndex("AgreementId", "Threshold")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_agreement_tiers_agreement_id_threshold");
+
+                    b.ToTable("discount_agreement_tiers", t =>
+                        {
+                            t.HasCheckConstraint("ck_discount_agreement_tiers_values", "threshold >= 0 AND percent > 0 AND percent <= 100");
+                        });
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8391,6 +8622,11 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text")
                         .HasColumnName("description");
+
+                    b.Property<decimal?>("DiscountPercent")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("discount_percent");
 
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uuid")
@@ -10134,6 +10370,60 @@ namespace Hak.Data.Postgres.Migrations
                         .HasConstraintName("fk_debt_write_off_items_debt_write_offs_write_off_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreement", b =>
+                {
+                    b.HasOne("Hak.Domain.Catalog.BusinessPartner", null)
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_agreements_business_partners_partner_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementRun", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreement", null)
+                        .WithMany()
+                        .HasForeignKey("AgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_agreement_runs_discount_agreements_agreement_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementRunInvoice", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_agreement_run_invoices_commercial_invoices_adjustm~");
+
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_agreement_run_invoices_commercial_invoices_origina~");
+
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreementRun", null)
+                        .WithMany("Invoices")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_agreement_run_invoices_discount_agreement_runs_run~");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementTier", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreement", null)
+                        .WithMany("Tiers")
+                        .HasForeignKey("AgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_agreement_tiers_discount_agreements_agreement_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptanceLine", b =>
                 {
                     b.HasOne("Hak.Domain.Trade.ServiceAcceptance", null)
@@ -10366,6 +10656,16 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Trade.DebtWriteOff", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreement", b =>
+                {
+                    b.Navigation("Tiers");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementRun", b =>
+                {
+                    b.Navigation("Invoices");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptance", b =>
