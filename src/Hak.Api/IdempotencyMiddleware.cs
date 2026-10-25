@@ -19,6 +19,7 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
 {
     public const string HeaderName = "Idempotency-Key";
     public const string ReusedCode = "IDEMPOTENCY_KEY_REUSED";
+    public const string LegacyCode = "IDEMPOTENCY_LEGACY_RECORD";
     private static readonly TimeSpan Retention = TimeSpan.FromDays(7);
 
     [GeneratedRegex("^[A-Za-z0-9_-]{8,100}$")]
@@ -101,12 +102,14 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
 
     /// <summary>
     /// Phản hồi đã lưu chỉ được trả khi người gọi VẪN còn quyền: còn vai trò tại công ty và còn đủ các quyền yêu cầu gốc đã đòi. Không chạy lại thao tác ghi.
-    /// Bản ghi cũ (chưa lưu quyền) chỉ kiểm được việc còn thuộc công ty.
+    /// Bản ghi trước Phase17 (RequiredPermissions = NULL) không biết quyền gốc đòi gì nên KHÔNG được phát lại payload; cũng không xóa rồi chạy lại
+    /// (thao tác có thể đã commit). Giữ bản ghi làm dấu chống ghi trùng và trả mã yêu cầu đối soát. Bản ghi mới luôn có chuỗi (rỗng nếu không đòi quyền nào).
     /// </summary>
     private static async Task AuthorizeReplayAsync(HttpContext http, IdempotencyRecord record)
     {
         var ctx = await http.SessionAsync();   // 401 nếu phiên hết hiệu lực, 403 nếu không còn vai trò nào tại công ty
-        if (string.IsNullOrEmpty(record.RequiredPermissions)) return;
+        if (record.RequiredPermissions is null)
+            throw new DomainException(LegacyCode, "Yêu cầu này đã được xử lý trước đợt nâng cấp bảo mật nên không thể phát lại kết quả. Mở danh sách để đối soát xem thao tác đã được ghi chưa; không gửi lại với cùng khóa.");
         foreach (var p in record.RequiredPermissions.Split(',', StringSplitOptions.RemoveEmptyEntries)) ctx.Require(p);
     }
 

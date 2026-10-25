@@ -33,7 +33,7 @@ public static class CycleEndpoints
         // Đường dẫn: /api/cycles/orders/{id}/flow và /api/cycles/order-worklist, đúng như OrderFlow.tsx gọi (trước đây lệch nên luôn 404);
         // test hợp đồng giao diện–API giữ hai bên khớp nhau.
         api.MapGet("/orders/{id:guid}/flow", async (HttpContext http, Guid id, OrderFlowService s) => Results.Ok(await s.FlowAsync(await http.SessionAsync(), id)));
-        api.MapGet("/order-worklist", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, OrderFlowService s) => Results.Ok(await s.WorklistAsync(await http.SessionAsync(), kind)));
+        api.MapGet("/order-worklist", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, OrderFlowService s, int? skip, int? take) => Results.Ok(await s.WorklistAsync(await http.SessionAsync(), kind, skip ?? 0, take ?? 60)));
         // Đợt 3: duyệt sai lệch đối chiếu (quyền riêng), chính sách dung sai có phiên bản, theo dõi nhận hàng của đơn mua.
         api.MapPost("/procurement/invoices/{id:guid}/approve-variance", async (HttpContext http, Guid id, ReasonRequest r, PurchaseVarianceService s) => Results.Ok(await s.ApproveAsync(await http.SessionAsync(), id, r.Reason)));
         api.MapGet("/procurement/invoices/{id:guid}/variance", async (HttpContext http, Guid id, PurchaseVarianceService s) => Results.Ok(await s.CurrentAsync(await http.SessionAsync(), id)));

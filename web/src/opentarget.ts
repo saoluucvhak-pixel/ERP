@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { navStore } from './common'
-import type { OpenType } from './quickadd'
+import type { OpenType } from './navIntents'
 
 /** Chứng từ mà danh sách việc cần làm yêu cầu mở thẳng ở màn này (đọc lúc dựng; App xóa ý định khi rời màn đích). */
 export function useOpenTarget(type: OpenType): string | undefined {

@@ -79,3 +79,25 @@ Còn mở từ đợt này: chạy `tools/migrate-fast/hak_import.mjs` trên d�
 ## Chuẩn hóa thao tác chung + dọn lint (24/10/2026)
 - `web/src/actions.ts`: một nơi cho quyền (`needs`), chống bấm đúp (`exclusive`), `withRowVersion`; `useAction().run(fn, opts)` dùng chung; kiểm thử `actions.test.ts`. Bối cảnh công ty/phiên, dedupe ghi trùng, kết quả chưa xác định vẫn nằm ở `api.ts` + `ErrorBox`.
 - Lint 54 → 25: còn lại toàn `react/only-export-components` (chỉ ảnh hưởng Fast Refresh khi dev). Giờ in dùng `<PrintedAt />` (cập nhật ở sự kiện beforeprint); các effect tải dữ liệu có chú thích `oxlint-disable-next-line … -- lý do` từng dòng, không tắt luật hàng loạt.
+
+
+## Kiểm tra 25/10/2026 (commit 8fab99d) — xử lý
+Nguồn: `BAO-CAO-LUONG-VA-HIEU-SUAT.md`, `PROMPT-NANG-CAP-ERP.md` của chị. Mỗi phát hiện có test hồi quy.
+
+| Mã | Mức | Xử lý | Test |
+|---|---|---|---|
+| F01 | P1 | `quickadd.ts` → `navIntents.ts` (không còn trùng `QuickAdd.tsx` trên Windows); test chặn trùng tên module không phân biệt hoa/thường; job CI `frontend-windows` build thật | `modulenames.test.ts` |
+| F02 | P1 | Bản ghi idempotency trước Phase17 (`RequiredPermissions = NULL`) KHÔNG phát lại payload, KHÔNG xóa rồi chạy lại: giữ làm dấu chống ghi trùng, trả 409 `IDEMPOTENCY_LEGACY_RECORD` yêu cầu đối soát. Bản ghi mới luôn có chuỗi quyền (rỗng nếu không đòi quyền) nên phát lại bình thường | `IdempotencyReplayAuthTests.LegacyRecordWithoutPermissionMetadata_…` |
+| F03 | P2 | Nội dung JSON chụp thành chuỗi một lần khi tạo thao tác; dedupe, lần gửi đầu, tự gửi lại, "thử lại an toàn" cùng một chuỗi + khóa | `api-retry.test.ts` |
+| F04 | P2 | Thay slot đơn bằng tập thao tác chưa xác định theo `opId` (`InFlight/Uncertain/Confirmed/Rejected`), lọc theo phiên + công ty; nút "Thử lại an toàn" gửi đúng thao tác của lỗi hiển thị. Chưa lưu qua tải lại trang (cần thiết kế lưu an toàn không chứa token — xem "Còn lại") | `api-retry.test.ts` |
+| F05 | P2 | `e2e/run.mjs` chạy Vite bằng Node + CLI (không `npx`), `taskkill /T` trên Windows, giữ log API/web, thoát sớm thì fail ngay, readiness kiểm HTML + proxy; `E2E_BROWSER_CHANNEL`/`E2E_BROWSER_PATH`; bỏ toàn bộ `waitForTimeout`; test đỏ giữ ảnh + log console ở `web/e2e/artifacts` | `npm run e2e` 10/10 |
+| F06 | P2 | `OrderFlowService.WorklistAsync` xếp ưu tiên trên MỌI đơn đang mở (duyệt theo lô 100) rồi mới phân trang; trả `items/total/hasMore`, tham số `skip/take`; giao diện có "Xem thêm" | `TradeTests.OrderWorklist_SortsBeforePaging_…` |
+
+**Bất biến chéo chu trình** (`tests/Hak.Integration.Tests/LedgerInvariants.cs`): sau luồng nghiệp vụ, mọi bút toán cân Nợ = Có, mỗi chứng từ đúng một bút toán, chứng từ đã ghi sổ ⇔ có bút toán, phân bổ còn hiệu lực không vượt dòng, tồn kho không âm, mỗi biến động tối đa một định giá còn hiệu lực. Đã gắn vào 7 test luồng của `TradeTests` (đơn bán → giao → hóa đơn → thu; cung ứng → thanh toán; chu trình doanh thu; đảo bị chặn; sản xuất hoàn thành; 4 trục trạng thái).
+
+**Hiệu suất** (SQLite, máy 4 CPU của phiên này, Release; số tham khảo, không so với máy Windows của chị): 10.000 chứng từ + 2.000 nhập/2.000 xuất mỗi kho: ghi sổ 75 chứng từ/giây (p95 18,7 ms); BCĐPS 138 ms; sổ chi tiết 6.667 dòng 98 ms; tuổi nợ 49 ms; phiếu xuất sau 1.000 → 4.000 biến động: 16–20 ms → 36–39 ms (tăng tuyến tính nhẹ, chưa nghẽn). Câu tốn nhất trong kho là `MAX(movement_date)` theo kho–vật tư (0,54 ms × 8.000). Thử thêm chỉ mục `(company, warehouse, item, movement_date)`: tổng thời gian 2.000 nhập + 2.000 xuất không đổi (77,8 s → 77,9 s) → **không áp dụng** (tránh tốn chi phí ghi, thêm migration). Không cần checkpoint giá bình quân/FIFO ở quy mô này; đo lại ở 50k–100k biến động trước khi quyết.
+
+**Còn lại / chưa làm (cần quyết định hoặc dữ liệu):**
+- F04 bền qua tải lại trang: cần API tra cứu theo `operationId` phía máy chủ rồi mới lưu hàng chờ (chỉ id + khóa, không token).
+- Benchmark 50k/100k chứng từ, nhiều người dùng, PostgreSQL; N+1 của `OrderFlowService.WorklistAsync` (mỗi đơn gọi `FulfilmentAsync`) — chưa đo ở >500 đơn mở.
+- Luồng chưa có test xuyên chu trình đủ 8 tình huống mỗi luồng (lỗi giữa transaction, hai người đồng thời, mất quyền…): mới có bất biến chung + các test sẵn có; BDMT theo tỷ lệ dòng gốc khi trả hàng và đảo phiếu bình quân cuối tháng sang kỳ khác vẫn là mục mở.

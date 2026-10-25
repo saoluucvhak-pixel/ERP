@@ -1,7 +1,8 @@
 // Test giao diện bằng trình duyệt thật (chạy qua `npm run e2e`): mỗi test gắn với một lỗi / yêu cầu đã sửa trong rà soát 24/10/2026.
-import test, { after, before } from 'node:test'
+import test, { after, afterEach, before } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 
 const API = process.env.E2E_API
@@ -16,8 +17,11 @@ const call = async (method, path, body, token, company) => {
 }
 
 let browser, ctx
+// Không ngủ cố định: mỗi bước chờ ĐÚNG phần tử / trạng thái mà bước sau cần (Playwright tự đợi tới hạn 30 giây rồi báo lỗi cụ thể).
+const visible = (page, selector, opts) => page.locator(selector, opts).first().waitFor({ state: 'visible' })
 before(async () => {
-  browser = await chromium.launch()
+  // E2E_BROWSER_CHANNEL (ví dụ 'chrome', 'msedge') hoặc E2E_BROWSER_PATH để dùng trình duyệt có sẵn (Windows không cài Chromium của Playwright).
+  browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL || undefined, executablePath: process.env.E2E_BROWSER_PATH || undefined })
   const login = async user => (await call('POST', '/auth/login', { userName: user, password: creds.users[user] })).token
   const preparerToken = await login('ketoan')
   const company = (await call('GET', '/me/companies', null, preparerToken))[0].id
@@ -28,14 +32,32 @@ before(async () => {
 })
 after(async () => { await browser?.close() })
 
+// Test đỏ thì giữ ảnh chụp + log console của mọi trang đang mở (e2e/artifacts, đã .gitignore) để chẩn đoán, không che lỗi.
+const opened = []
+afterEach(async t => {
+  const pages = opened.splice(0)
+  if (t.passed !== false) { await Promise.all(pages.map(p => p.page.close().catch(() => {}))); return }
+  const dir = new URL('./artifacts/', import.meta.url)
+  mkdirSync(dir, { recursive: true })
+  const stem = t.name.replace(/[^\p{L}\p{N}]+/gu, '-').slice(0, 60)
+  for (const [i, p] of pages.entries()) {
+    await p.page.screenshot({ path: fileURLToPath(new URL(`${stem}-${i}.png`, dir)), fullPage: true }).catch(() => {})
+    writeFileSync(new URL(`${stem}-${i}.log`, dir), p.log.join('\n'))
+  }
+})
+
 async function open(user) {
   const page = await browser.newPage()
+  const log = []
+  page.on('console', m => log.push(`[${m.type()}] ${m.text()}`))
+  page.on('pageerror', e => log.push(`[pageerror] ${e.message}`))
+  opened.push({ page, log })
   page.on('dialog', d => d.accept())
   await page.goto(WEB + '/')
   await page.fill('input[type=text], input:not([type])', user)
   await page.fill('input[type=password]', creds.users[user])
   await page.click('button:has-text("Đăng nhập")')
-  await page.waitForTimeout(1200)
+  await page.locator('button:has-text("DEV01"), .quick-add-btn').first().waitFor()
   const company = page.locator('button', { hasText: 'DEV01' })
   if (await company.count()) await company.first().click()
   await page.waitForSelector('.quick-add-btn')
@@ -45,13 +67,18 @@ const selected = page => page.locator('select').evaluateAll(els => els.map(e => 
 
 test('R05: Thêm nhanh mở đúng loại phiếu, kể cả khi đang ở đúng màn', async () => {
   const page = await open('ktt')
-  const quick = async label => { await page.click('.quick-add-btn'); await page.click(`.quick-add-pop >> text="${label}"`); await page.waitForTimeout(700) }
-  await quick('Chi tiền'); assert.ok((await selected(page)).includes('Phiếu chi'), 'Chi tiền phải mở Phiếu chi')
-  await quick('Thu tiền'); assert.ok((await selected(page)).includes('Phiếu thu'), 'Thu tiền (cùng màn) phải mở Phiếu thu')
-  await quick('Chi tiền'); assert.ok((await selected(page)).includes('Phiếu chi'), 'Chi tiền lần hai phải mở lại Phiếu chi')
-  await quick('Nhập kho'); assert.ok((await selected(page)).includes('Phiếu nhập'), 'Nhập kho')
-  await quick('Xuất kho'); assert.ok((await selected(page)).includes('Phiếu xuất'), 'Xuất kho')
-  await quick('Kiểm kê'); assert.match(await page.locator('button.primary').first().textContent(), /Kiểm kê/)
+  const quick = async (label, want, msg) => {
+    await page.click('.quick-add-btn'); await page.click(`.quick-add-pop >> text="${label}"`)
+    await page.waitForFunction(w => [...document.querySelectorAll('select')].some(e => e.selectedOptions[0]?.textContent === w), want, { timeout: 15000 }).catch(() => {})
+    assert.ok((await selected(page)).includes(want), msg)
+  }
+  await quick('Chi tiền', 'Phiếu chi', 'Chi tiền phải mở Phiếu chi')
+  await quick('Thu tiền', 'Phiếu thu', 'Thu tiền (cùng màn) phải mở Phiếu thu')
+  await quick('Chi tiền', 'Phiếu chi', 'Chi tiền lần hai phải mở lại Phiếu chi')
+  await quick('Nhập kho', 'Phiếu nhập', 'Nhập kho')
+  await quick('Xuất kho', 'Phiếu xuất', 'Xuất kho')
+  await page.click('.quick-add-btn'); await page.click('.quick-add-pop >> text="Kiểm kê"'); await visible(page, 'button.primary:has-text("Kiểm kê")')
+  assert.match(await page.locator('button.primary').first().textContent(), /Kiểm kê/)
   await page.close()
 })
 
@@ -62,11 +89,12 @@ test('R04: Kiểm tra chứng từ Nợ 100 / Có 90 hiện lỗi chi tiết, kh
   const errs = await call('POST', `/vouchers/${v.id}/validate`, null, ctx.preparerToken, ctx.company)
   assert.ok(errs.length > 0, 'API phải báo lỗi cân đối')
   const page = await open('ketoan')
-  await page.click('.sidebar button:has-text("Tổng hợp")'); await page.waitForTimeout(700)
-  await page.click('[role=tab]:has-text("Chứng từ kế toán")'); await page.waitForTimeout(1000)
-  await page.locator('tr', { hasText: v.number }).first().click(); await page.waitForTimeout(500)
-  await page.click('button:has-text("Kiểm tra")'); await page.waitForTimeout(1000)
+  await page.click('.sidebar button:has-text("Tổng hợp")')
+  await page.click('[role=tab]:has-text("Chứng từ kế toán")')
+  await page.locator('tr', { hasText: v.number }).first().click()
+  await page.click('button:has-text("Kiểm tra")')
   const msg = page.locator('.msg.error')
+  await msg.first().waitFor({ state: 'visible' })
   assert.ok(await msg.count() > 0, 'lỗi kiểm tra phải hiện màu lỗi')
   const text = await msg.first().textContent()
   assert.ok(text.includes(errs[0].message), `thông báo phải chứa lỗi chi tiết "${errs[0].message}", thực tế: ${text}`)
@@ -81,15 +109,15 @@ test('Worklist: người lập thấy việc duyệt bị chặn, người duy�
   const worklistRow = page => page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: v.number })
 
   const preparer = await open('ketoan')
-  await preparer.click('.sidebar button:has-text("Quản lý chu trình")'); await preparer.waitForTimeout(1200)
+  await preparer.click('.sidebar button:has-text("Quản lý chu trình")'); await worklistRow(preparer).waitFor()
   assert.match(await worklistRow(preparer).textContent(), /Cần quyền duyệt/)
   await preparer.close()
 
   const approver = await open('ktt')
-  await approver.click('.sidebar button:has-text("Quản lý chu trình")'); await approver.waitForTimeout(1200)
-  const row = worklistRow(approver)
+  await approver.click('.sidebar button:has-text("Quản lý chu trình")')
+  const row = worklistRow(approver); await row.waitFor()
   assert.match(await row.textContent(), /Làm được ngay/)
-  await row.locator('button:has-text("Mở")').click(); await approver.waitForTimeout(1500)
+  await row.locator('button:has-text("Mở")').click(); await visible(approver, '.panel strong', { hasText: v.number })
   assert.ok(await approver.locator('.panel strong', { hasText: v.number }).count() > 0, 'chi tiết phải mở đúng chứng từ ' + v.number)
   assert.ok(await approver.locator('button:has-text("Duyệt")').count() > 0, 'phải có nút Duyệt')
   await approver.close()
@@ -101,8 +129,9 @@ test('Chu trình mua / bán không lẫn: mỗi phân hệ chỉ có đơn của
       lines: [{ itemId: ctx.item('GOKEO'), quantity: '5', unitPrice: '1000', basis: 'Quantity', vatRate: null, description: null }] }, ctx.preparerToken, ctx.company)
   const page = await open('ktt')
   for (const [module, tab, mine, other] of [['Mua hàng', 'Đơn mua hàng', 'E2E đơn MUA', 'E2E đơn BÁN'], ['Bán hàng', 'Đơn bán hàng', 'E2E đơn BÁN', 'E2E đơn MUA']]) {
-    await page.click(`.sidebar button:has-text("${module}")`); await page.waitForTimeout(700)
-    await page.click(`[role=tab]:has-text("${tab}")`); await page.waitForTimeout(1000)
+    await page.click(`.sidebar button:has-text("${module}")`)
+    await page.click(`[role=tab]:has-text("${tab}")`)
+    await visible(page, 'main', { hasText: mine })
     const body = await page.locator('main').textContent()
     assert.ok(body.includes(mine), `${module}: phải thấy ${mine}`)
     assert.ok(!body.includes(other), `${module}: không được thấy ${other}`)
@@ -114,12 +143,12 @@ test('Chu trình mua / bán không lẫn: mỗi phân hệ chỉ có đơn của
 test('Worklist: đề nghị mua sắm tài sản chờ duyệt mở thẳng và tô nổi đúng dòng', async () => {
   const req = await call('POST', '/assets/requests', { class: 'FixedAsset', name: 'E2E máy xúc', department: 'Sản xuất', estimatedCost: '50000000', neededDate: '2026-12-31', reason: 'E2E' }, ctx.preparerToken, ctx.company)
   const page = await open('ktt')
-  await page.click('.sidebar button:has-text("Quản lý chu trình")'); await page.waitForTimeout(1200)
-  const row = page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: req.number })
+  await page.click('.sidebar button:has-text("Quản lý chu trình")')
+  const row = page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: req.number }); await row.waitFor()
   assert.match(await row.textContent(), /Duyệt đề nghị mua sắm tài sản/)
   assert.match(await row.textContent(), /Làm được ngay/)
-  await row.locator('button:has-text("Mở")').click(); await page.waitForTimeout(1500)
-  const focused = page.locator('tr.focus-row')
+  await row.locator('button:has-text("Mở")').click()
+  const focused = page.locator('tr.focus-row'); await focused.first().waitFor()
   assert.equal(await focused.count(), 1)
   assert.ok((await focused.textContent()).includes(req.number))
   await page.close()
@@ -130,14 +159,14 @@ test('Cảnh báo nội dung nhập dở: đổi phân hệ khi đang nhập phi
   page.removeAllListeners('dialog')
   const asked = []
   page.on('dialog', d => { asked.push(d.message()); d.dismiss() })
-  await page.click('.quick-add-btn'); await page.click('.quick-add-pop >> text="Thu tiền"'); await page.waitForTimeout(700)
+  await page.click('.quick-add-btn'); await page.click('.quick-add-pop >> text="Thu tiền"')
   await page.fill('label:has-text("Diễn giải") input', 'E2E đang nhập dở')
-  await page.click('.sidebar button:has-text("Kho")'); await page.waitForTimeout(500)
+  await page.click('.sidebar button:has-text("Kho")')
   assert.equal(asked.length, 1, 'phải hỏi trước khi rời')
   assert.match(asked[0], /chưa lưu/)
   assert.equal(await page.locator('label:has-text("Diễn giải") input').inputValue(), 'E2E đang nhập dở', 'hủy thì ở lại, giữ nội dung')
   page.removeAllListeners('dialog'); page.on('dialog', d => d.accept())
-  await page.click('.sidebar button:has-text("Kho")'); await page.waitForTimeout(700)
+  await page.click('.sidebar button:has-text("Kho")'); await page.locator('label:has-text("Diễn giải") input').waitFor({ state: 'detached' })
   assert.equal(await page.locator('label:has-text("Diễn giải") input').count(), 0, 'đồng ý thì rời màn')
   await page.close()
 })
@@ -151,18 +180,22 @@ test('data.export: người chỉ có quyền xem (kiểm toán nội bộ) khô
     const page = await browser.newPage(); page.on('dialog', d => d.accept())
     await page.goto(WEB + '/')
     await page.fill('input[type=text], input:not([type])', user); await page.fill('input[type=password]', password)
-    await page.click('button:has-text("Đăng nhập")'); await page.waitForTimeout(1200)
+    await page.click('button:has-text("Đăng nhập")')
+    await page.locator('button:has-text("DEV01"), .quick-add-btn').first().waitFor()
     const company = page.locator('button', { hasText: 'DEV01' }); if (await company.count()) await company.first().click()
-    await page.waitForSelector('.quick-add-btn'); await page.waitForTimeout(800)
-    await page.click('.sidebar button:has-text("Tổng hợp")'); await page.waitForTimeout(600)
-    await page.click('[role=tab]:has-text("Chứng từ kế toán")'); await page.waitForTimeout(1200)
+    await page.waitForSelector('.quick-add-btn')
+    await page.click('.sidebar button:has-text("Tổng hợp")')
+    await page.click('[role=tab]:has-text("Chứng từ kế toán")')
+    await visible(page, 'button:has-text("In")')   // thanh công cụ đã dựng, quyền đã nạp
     return page
   }
   const auditor = await openAs('e2eaudit', pw)
+  await auditor.waitForFunction(() => fetch('/api/me/permissions', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem('hak.token'), 'X-Company-Id': sessionStorage.getItem('hak.company') } }).then(r => r.ok))
   assert.equal(await auditor.locator('button:has-text("Xuất Excel")').count(), 0, 'kiểm toán không có data.export')
   assert.ok(await auditor.locator('button:has-text("In")').count() > 0, 'vẫn in được')
   await auditor.close()
   const chief = await openAs('ktt', creds.users.ktt)
+  await visible(chief, 'button:has-text("Xuất Excel")')
   assert.ok(await chief.locator('button:has-text("Xuất Excel")').count() > 0, 'kế toán trưởng có data.export')
   await chief.close()
 })
@@ -185,12 +218,13 @@ test('Công nợ và Chiết khấu thanh toán tách theo chiều: Bán hàng c
   const page = await open('ktt')
   const accountOptions = async () => page.locator('label:has-text("Tài khoản công nợ") select option').evaluateAll(os => os.map(o => o.textContent.trim()))
   for (const [module, tabName, want, notWant, discount] of [['Mua hàng', 'Công nợ phải trả', 'AP', 'AR', 'Chiết khấu được hưởng'], ['Bán hàng', 'Công nợ phải thu', 'AR', 'AP', 'Chiết khấu cho khách']]) {
-    await page.click(`.sidebar button:has-text("${module}")`); await page.waitForTimeout(700)
-    await page.click(`[role=tab]:has-text("${tabName}")`); await page.waitForTimeout(1200)
+    await page.click(`.sidebar button:has-text("${module}")`)
+    await page.click(`[role=tab]:has-text("${tabName}")`)
+    await page.locator('label:has-text("Tài khoản công nợ") select option').nth(1).waitFor({ state: 'attached' })   // danh mục TK đã nạp
     const opts = (await accountOptions()).join('|')
     assert.ok(opts.includes(want + ' ') || opts.includes(want + '–') || opts.includes(want), `${module}: phải có TK ${want}`)
     assert.ok(!new RegExp(`(^|\\|)${notWant}\\b`).test(opts), `${module}: không được có TK ${notWant}, thực tế: ${opts}`)
-    await page.click(`[role=tab]:has-text("${discount}")`); await page.waitForTimeout(1000)
+    await page.click(`[role=tab]:has-text("${discount}")`); await visible(page, `[role=tab][aria-selected=true]:has-text("${discount}")`)
     assert.equal(await page.locator('.toolbar button:has-text("Hóa đơn mua"), .toolbar button:has-text("Hóa đơn bán")').count(), 0, `${module}: chiết khấu không còn nút chuyển`)
   }
   await page.close()
@@ -203,12 +237,12 @@ test('Worklist: lệnh sản xuất nháp chờ ban hành mở thẳng và chọ
   const wh = (await call('GET', '/warehouses', null, ctx.preparerToken, ctx.company))[0].id
   const order = await call('POST', '/production/orders', { itemId: damsx, costObjectId: objects.find(o => o.code === 'SX-DAM').id, warehouseId: wh, plannedQuantity: '10', plannedStart: '2026-11-01', note: 'E2E lệnh sản xuất' }, ctx.preparerToken, ctx.company)
   const page = await open('ktt')
-  await page.click('.sidebar button:has-text("Quản lý chu trình")'); await page.waitForTimeout(1200)
-  const row = page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: order.number })
+  await page.click('.sidebar button:has-text("Quản lý chu trình")')
+  const row = page.locator('section[aria-label="Việc cần làm theo chứng từ"] tbody tr', { hasText: order.number }); await row.waitFor()
   assert.match(await row.textContent(), /Ban hành lệnh sản xuất/)
   assert.match(await row.textContent(), /Làm được ngay/)
-  await row.locator('button:has-text("Mở")').click(); await page.waitForTimeout(1500)
-  const selectedRow = page.locator('tr.selected')
+  await row.locator('button:has-text("Mở")').click()
+  const selectedRow = page.locator('tr.selected'); await selectedRow.first().waitFor()
   assert.equal(await selectedRow.count(), 1)
   assert.ok((await selectedRow.textContent()).includes(order.number))
   await page.close()
