@@ -107,6 +107,12 @@ Khóa trao đổi (HMAC) trong CSDL được mã hóa AES-256-GCM bằng khóa c
 - **Kiểm tra** định kỳ (hằng tháng): giải mã, kiểm SHA-256, `integrity_check`, chuỗi nhật ký kiểm toán của mọi công ty.
 - **Khôi phục**: tạo tệp `restored-*.db` bên cạnh bản sao lưu (không ghi đè CSDL đang chạy). Sau đó: dừng phần mềm → đặt `Hak:DatabasePath` tới tệp khôi phục → khởi động → kiểm tra số liệu → giữ tệp cũ ít nhất đến khi xác nhận.
 
+### Chọn nơi lưu dữ liệu và gỡ chương trình không mất dữ liệu — 26/10/2026
+- **Chọn thư mục dữ liệu:** bộ cài `HAK-Setup.exe` có trang "Thư mục lưu dữ liệu" (mặc định `%LOCALAPPDATA%\HAK`; nên chọn ổ khác ổ Windows, ví dụ `D:\HAK-DuLieu`). Lựa chọn lưu ở `%LOCALAPPDATA%\HAK\data-location.txt` (nằm ngoài thư mục chương trình); các tệp `Chay HAK*.cmd` đọc tệp này và đặt `Hak__DataRoot`. Dữ liệu nằm ở `<thư mục>\Production` (sổ chính thức) và `<thư mục>\Test` (thử nghiệm): `hak.db`, `attachments`, `backups`, `secret.key`.
+- **Đổi sau này:** tắt HAK, chạy `Doi thu muc du lieu.cmd`, nhập thư mục mới. Dữ liệu được CHÉP sang nơi mới (robocopy) và GIỮ NGUYÊN ở nơi cũ; kiểm tra xong chị tự xóa thư mục cũ.
+- **Gỡ chương trình không xóa dữ liệu:** bộ cài không có bước xóa thư mục dữ liệu; khi gỡ, hộp thoại cho biết dữ liệu còn ở đâu. Cài lại hoặc nâng cấp thì dữ liệu cũ dùng tiếp (cùng `data-location.txt`).
+- Cấu hình trực tiếp: `Hak__DataRoot` (cả bốn thứ trên) hoặc từng đường dẫn riêng `Hak:DatabasePath`, `Hak:AttachmentsPath`, `Hak:BackupPath`, `Hak:SecretKeyFile` (ghi đè). Đã thử trên Linux với thư mục có dấu cách; chưa thử trên Windows; trang chọn thư mục của Inno Setup chưa được biên dịch thử (cần Inno Setup).
+
 ### PostgreSQL (LAN)
 Chức năng sao lưu trong phần mềm trả `NOT_SUPPORTED`; dùng công cụ của PostgreSQL trên máy chủ (Task Scheduler):
 
