@@ -7,6 +7,8 @@ interface Tier { threshold: string; percent: string }
 interface Agreement { id: string; kind: string; partnerId: string; partnerCode: string; partnerName: string; code: string; name: string; fromDate: string; toDate: string; isActive: boolean; rowVersion: number
   tiers: Tier[]; runId: string | null; runAmount: string | null; progressive?: boolean }
 interface Share { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; postingDate: string; sales: string; discount: string }
+interface Statement { agreementCode: string; agreementName: string; partnerCode: string; partnerName: string; fromDate: string; toDate: string; percent: string; totalSales: string; totalDiscount: string; mode: string
+  rows: { no: number; originalSeries: string; originalNo: string; originalDate: string; sales: string; discount: string; adjustmentSeries: string | null; adjustmentNo: string | null; adjustmentDate: string | null; adjustmentVat: string }[] }
 interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[]; accrued?: string }
 interface ReportRow { partnerId: string; partnerCode: string; partnerName: string; gross: string; onInvoiceTradeDiscount: string; afterSaleTradeDiscount: string; allowance: string; returns: string; increase: string; net: string; paymentDiscount: string }
 interface Report { rows: ReportRow[]; total: ReportRow }
@@ -22,6 +24,7 @@ export function DiscountsView() {
   const { partners } = useCatalog()
   const [kind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Sales')   // chiều do phân hệ đang mở quyết định
   const sales = kind === 'Sales'
+  const [statement, setStatement] = useState<Statement | null>(null)
   const [tab, setTab] = useState<'agreements' | 'report'>('agreements')
   const [rows, setRows] = useState<Agreement[]>([])
   const [form, setForm] = useState<ReturnType<typeof blankForm> | null>(null)
@@ -138,7 +141,7 @@ export function DiscountsView() {
       </Modal>}
 
       {preview && !settle && <Modal title={`Tính chiết khấu — ${preview.a.code}`} onClose={() => setPreview(null)} busy={busy}
-        footer={<><button onClick={() => setPreview(null)}>Đóng</button>{sales && !preview.p.settled && <button disabled={busy} title="Ước tính theo doanh số đến ngày chọn; sinh chứng từ nháp Nợ giảm trừ doanh thu / Có phải trả chiết khấu" onClick={() => run(async () => {
+        footer={<><button onClick={() => setPreview(null)}>Đóng</button><button disabled={busy} title="Bảng kê các hóa đơn gốc được chiết khấu, đính kèm hóa đơn điều chỉnh / chứng từ (Mẫu 01/BK-ĐCTT)" onClick={() => run(async () => setStatement(await get<Statement>(`/discounts/agreements/${preview.a.id}/statement`)))}>Bảng kê…</button>{!preview.p.settled && <button disabled={busy} title="Ước tính theo doanh số đến ngày chọn; sinh chứng từ nháp Nợ giảm trừ doanh thu / Có phải trả chiết khấu" onClick={() => run(async () => {
             const asOf = window.prompt('Trích trước đến ngày (yyyy-mm-dd)', today() < preview.a.toDate ? today() : preview.a.toDate)
             if (!asOf) return
             const r = await post<{ adjustment: string }>(`/discounts/agreements/${preview.a.id}/accrue`, { rowVersion: preview.a.rowVersion, asOf })
@@ -154,11 +157,21 @@ export function DiscountsView() {
             {preview.p.invoices.length === 0 && <tr><td colSpan={4} className="muted">Không có hóa đơn đã ghi sổ của đối tượng này trong kỳ.</td></tr>}</tbody></table>
       </Modal>}
 
+      {statement && <Modal title={`Bảng kê chiết khấu thương mại — ${statement.agreementCode}`} onClose={() => setStatement(null)} busy={busy} footer={<button onClick={() => setStatement(null)}>Đóng</button>}>
+        <p>{statement.partnerCode} – {statement.partnerName}; kỳ {formatDate(statement.fromDate)} – {formatDate(statement.toDate)}; {statement.mode}; chiết khấu bình quân {formatMoney(statement.percent)}%. Cột theo Mẫu 01/BK-ĐCTT chính thức [CẦN XÁC MINH].</p>
+        <div className="toolbar"><ExportButton fileName={`Bang_ke_CKTM_${statement.agreementCode}`} sheet="Bảng kê CKTM" title={`Bảng kê chiết khấu thương mại – ${statement.agreementName}`} subtitle={`${statement.partnerCode} ${statement.partnerName} · ${formatDate(statement.fromDate)} – ${formatDate(statement.toDate)}`}
+          columns={[{ header: 'STT', width: 6 }, { header: 'Ký hiệu HĐ gốc', width: 14 }, { header: 'Số HĐ gốc', width: 12 }, { header: 'Ngày HĐ gốc', width: 12 }, { header: 'Doanh số chưa thuế', numeric: true, width: 18 }, { header: 'Chiết khấu', numeric: true, width: 16 }, { header: 'Ký hiệu HĐ điều chỉnh', width: 16 }, { header: 'Số HĐ điều chỉnh', width: 14 }, { header: 'Thuế điều chỉnh', numeric: true, width: 14 }]}
+          rows={statement.rows.map(r => [String(r.no), r.originalSeries, r.originalNo, formatDate(r.originalDate), r.sales, r.discount, r.adjustmentSeries ?? '', r.adjustmentNo ?? '', r.adjustmentVat])} /></div>
+        <table className="grid"><thead><tr><th>STT</th><th>HĐ gốc</th><th>Ngày</th><th className="num">Doanh số</th><th className="num">Chiết khấu</th><th>HĐ điều chỉnh</th><th className="num">Thuế điều chỉnh</th></tr></thead>
+          <tbody>{statement.rows.map(r => <tr key={r.no}><td>{r.no}</td><td>{r.originalSeries}/{r.originalNo}</td><td>{formatDate(r.originalDate)}</td><td className="num">{formatMoney(r.sales)}</td><td className="num">{formatMoney(r.discount)}</td><td>{r.adjustmentNo ? `${r.adjustmentSeries}/${r.adjustmentNo}` : '—'}</td><td className="num">{r.adjustmentNo ? formatMoney(r.adjustmentVat) : ''}</td></tr>)}
+            <tr><td colSpan={3}><b>Cộng</b></td><td className="num"><b>{formatMoney(statement.totalSales)}</b></td><td className="num"><b>{formatMoney(statement.totalDiscount)}</b></td><td colSpan={2} /></tr></tbody></table>
+      </Modal>}
+
       {settle && <Modal title={`Quyết toán ${settle.a.code}`} onClose={() => setSettle(null)} busy={busy}
         footer={<><button onClick={() => setSettle(null)}>Đóng</button><button className="primary" disabled={busy || (!settle.byVoucher && (!settle.series.trim() || !settle.no.trim()))} onClick={doSettle}>{settle.byVoucher ? 'Lập chứng từ điều chỉnh giảm (nháp)' : 'Sinh hóa đơn điều chỉnh nháp'}</button></>}>
-        {sales && <div className="form-row"><label><input type="radio" name="settleMode" checked={!settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: false })} /> Hóa đơn điều chỉnh giảm (một hóa đơn cho mỗi hóa đơn gốc)</label>
+        {<div className="form-row"><label><input type="radio" name="settleMode" checked={!settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: false })} /> Hóa đơn điều chỉnh giảm (một hóa đơn cho mỗi hóa đơn gốc)</label>
           <label><input type="radio" name="settleMode" checked={settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: true })} /> Hạch toán điều chỉnh giảm (một chứng từ kế toán, không phát hành hóa đơn; thuế GTGT không đổi)</label></div>}
-        {settle.byVoucher ? <p>Lập một chứng từ nháp: Nợ giảm trừ doanh thu (vai trò SALES_TRADE_DISCOUNT, chưa ánh xạ thì SALES_DISCOUNT) / Có phải thu của đối tượng. Chỉ dùng cho hóa đơn tiền hạch toán. [CẦN XÁC MINH xử lý thuế khi không có hóa đơn điều chỉnh]</p> : <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>}
+        {settle.byVoucher ? <p>{sales ? 'Lập một chứng từ nháp: Nợ giảm trừ doanh thu (vai trò SALES_TRADE_DISCOUNT, chưa ánh xạ thì SALES_DISCOUNT) / Có phải thu của đối tượng.' : 'Lập một chứng từ nháp: Nợ phải trả nhà cung cấp / Có giảm giá vốn hàng mua (vai trò PURCHASE_TRADE_DISCOUNT) — không định giá lại tồn kho.'} Chỉ dùng cho hóa đơn tiền hạch toán. [CẦN XÁC MINH xử lý thuế khi không có hóa đơn điều chỉnh]</p> : <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>}
         {!settle.byVoucher && <div className="form-row">
           <label>Ký hiệu HĐ<input value={settle.series} onChange={e => setSettle({ ...settle, series: e.target.value })} /></label>
           <label>Số HĐ đầu tiên<input value={settle.no} onChange={e => setSettle({ ...settle, no: e.target.value })} /></label>

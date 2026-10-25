@@ -24,6 +24,8 @@ public static class AccountRoles
         new("SALES_DISCOUNT", "Bán hàng", "Giảm giá hàng bán (và chiết khấu thương mại nếu chưa tách tài khoản riêng)"),
         new("SALES_TRADE_DISCOUNT", "Bán hàng", "Chiết khấu thương mại (giảm trừ doanh thu) — Nợ khi điều chỉnh giảm loại chiết khấu thương mại sau bán; để trống thì dùng SALES_DISCOUNT", Optional: true),
         new("REBATE_PAYABLE", "Bán hàng", "Phải trả chiết khấu thương mại theo doanh số đã trích trước (chiều bán; theo đối tượng) — Có khi trích trước, Nợ khi quyết toán bù trừ công nợ hoặc hoàn nhập", Optional: true),
+        new("PURCHASE_TRADE_DISCOUNT", "Mua hàng", "Chiết khấu thương mại được hưởng sau mua (chiều mua) — Có khi trích trước / quyết toán bằng hạch toán điều chỉnh giảm; ghi giảm giá vốn hàng mua, không định giá lại tồn kho", Optional: true),
+        new("REBATE_RECEIVABLE", "Mua hàng", "Phải thu chiết khấu thương mại của nhà cung cấp đã trích trước (chiều mua; theo đối tượng) — Nợ khi trích trước, Có khi quyết toán bù trừ công nợ", Optional: true),
         new("COGS", "Kho / giá thành", "Giá vốn: chênh lệch giá mua phần đã xuất, chênh lệch trả hàng mua, chênh lệch giá thành phần đã xuất"),
         new("ADVANCE", "Tiền", "Tạm ứng cho nhân viên (theo từng người, theo dõi từng khoản để bù trừ khi quyết toán): phải theo dõi theo đối tượng và công nợ phải thu"),
         new("CASH_SHORTAGE", "Tiền", "Tài sản thiếu chờ xử lý — đối ứng xử lý chênh lệch thiếu khi kiểm kê quỹ", Optional: true),

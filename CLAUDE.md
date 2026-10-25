@@ -139,3 +139,6 @@ Chiết khấu thanh toán: giữ cả hai cách (theo điều khoản trên hó
 ## Đã chốt 26/10/2026 (đợt pháp lý hóa đơn)
 Tham chiếu pháp lý hóa đơn điện tử = **Nghị định 254/2026/NĐ-CP + Thông tư 91/2026/TT-BTC (từ 01/07/2026)** (docs/12 đầu + mục 9, docs/07 L-09; nội dung còn nguồn thứ cấp, chờ chị đọc bản gốc). Cờ khai bổ sung kỳ gốc: `TaxDiffType.SupplementalFilingNeeded` (hóa đơn điều chỉnh từ 01/07/2026 đổi thuế của kỳ gốc đã nộp tờ khai). Mô hình không còn loại Hủy (`ErrorNoticeKind` chỉ Explain/Adjust/Replace; `EInvoiceDocStatus` không còn Cancelled; `EInvoiceStatus.Cancelled` giữ cho dữ liệu nhập lịch sử).
 
+## Đợt 26/10/2026 (cuối) — chiều mua, 01/TB-RSĐT, bảng kê
+Trích trước / quyết toán chứng từ chiết khấu thương mại cho cả chiều mua (`RebateAccountsAsync` trong `DiscountAgreementService`; vai trò `REBATE_RECEIVABLE`, `PURCHASE_TRADE_DISCOUNT`; ghi giảm giá vốn, không định giá lại tồn kho). Thông báo của cơ quan thuế 01/TB-RSĐT (`EInvoiceRiskNoticeService`, migration `Phase25RiskNotices`, mục kiểm đóng kỳ `EINVOICE_RISK_NOTICE`). Bảng kê hóa đơn gốc ↔ điều chỉnh `StatementAsync` (cột chưa phải mẫu 01/BK-ĐCTT chính thức). Việc mở: MỘT hóa đơn điều chỉnh gộp nhiều hóa đơn gốc; đọc văn bản gốc Nghị định 254 / Thông tư 91.
+

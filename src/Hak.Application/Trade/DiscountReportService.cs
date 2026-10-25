@@ -43,12 +43,11 @@ public sealed class DiscountReportService(HakDbContext db)
             }
         }
         // Chiết khấu thương mại quyết toán bằng hạch toán điều chỉnh giảm (không có hóa đơn điều chỉnh): chứng từ đã ghi sổ trong kỳ, tính vào cột "CK thương mại sau bán".
-        if (kind == InvoiceKind.Sales)
         {
             var byVoucher = await (from r in db.DiscountAgreementRuns.AsNoTracking()
                                    join ag in db.DiscountAgreements.AsNoTracking() on r.AgreementId equals ag.Id
                                    join v in db.Vouchers.AsNoTracking() on r.VoucherId equals v.Id
-                                   where r.CompanyId == ctx.CompanyId && r.VoidedAt == null && v.Status == VoucherStatus.Posted && v.PostingDate >= fromDate && v.PostingDate <= toDate
+                                   where r.CompanyId == ctx.CompanyId && ag.Kind == kind && r.VoidedAt == null && v.Status == VoucherStatus.Posted && v.PostingDate >= fromDate && v.PostingDate <= toDate
                                    select new { ag.PartnerId, r.Amount }).ToListAsync();
             foreach (var x in byVoucher) Row(x.PartnerId)[2] += x.Amount;
         }

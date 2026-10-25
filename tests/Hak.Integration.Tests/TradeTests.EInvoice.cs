@@ -293,6 +293,44 @@ public partial class TradeTests
     }
 
     [Fact]
+    public async Task EInvoice_TaxAuthorityRiskNotice_IsRecorded_Matched_Responded_AndRemindsAtPeriodClose()
+    {
+        var (fx, _, svc, notice) = await EInvoiceSetupAsync(); using var _fx = fx;
+        var risk = new EInvoiceRiskNoticeService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        var doc = await IssuedSaleAsync(fx, svc);
+        var journals = await fx.S.Db.JournalEntries.CountAsync();
+        var doc1 = await svc.ViewAsync(fx.H.Auditor, doc.Id);
+
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => risk.CreateAsync(fx.H.Auditor, "01/TB-RSDT-1", D(3, 10), D(3, 11), D(3, 20), "Rủi ro", [new RiskNoticeLineInput(doc1.Series!, doc1.Number!, D(3, 3), "Sai thuế suất")])));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => risk.CreateAsync(fx.H.Approver, "01/TB-RSDT-1", D(3, 10), D(3, 11), D(3, 5), "Rủi ro", [new RiskNoticeLineInput(doc1.Series!, doc1.Number!, D(3, 3), "x")])));   // hạn trước ngày nhận
+        var n = await risk.CreateAsync(fx.H.Approver, "01/TB-RSDT-1", D(3, 10), D(3, 11), D(3, 20), "Hóa đơn có dấu hiệu sai thuế suất", [new RiskNoticeLineInput(doc1.Series!, doc1.Number!, D(3, 3), "Sai thuế suất"), new RiskNoticeLineInput("1C26TXX", "9999999", null, "Không có trong HAK")]);
+        Assert.StartsWith("TBRS2026-", n.Number);
+        Assert.True(n.Lines.Single(l => l.InvoiceNo == doc1.Number).MatchedInHak); Assert.False(n.Lines.Single(l => l.InvoiceNo == "9999999").MatchedInHak);                                   // tự ghép hóa đơn phát hành từ HAK
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => risk.CreateAsync(fx.H.Approver, "01/TB-RSDT-1", D(3, 10), D(3, 11), null, "Trùng", [new RiskNoticeLineInput("A", "1", null, "x")])));
+
+        var listed = Assert.Single(await risk.ListAsync(fx.H.Auditor, D(3, 25)));
+        Assert.Equal((true, "Received"), (listed.Overdue, listed.Status));                                           // quá hạn 20/3 chưa phản hồi
+        var check = new Hak.Application.Setup.PeriodCloseChecklistService(fx.S.Db, fx.S.Stock, fx.S.Settlement, fx.S.Assets, fx.S.Loans, fx.Inv, fx.S.Setup, new VatOffsetService(fx.S.Db, fx.S.Engine));
+        var march = await fx.S.Db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.PeriodNo == 3);
+        Assert.Equal("Confirm", (await check.ForPeriodAsync(fx.H.Auditor, march.Id)).Items.Single(i => i.Code == "EINVOICE_RISK_NOTICE").Severity);
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => risk.RespondAsync(fx.H.Approver, n.Id, n.RowVersion, "  ", null)));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => risk.CloseAsync(fx.H.Approver, n.Id, n.RowVersion)));        // chưa phản hồi
+        var explain = await notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Explain, "Giải trình", [new NoticeLineInput(doc.Id, "Thuế suất đúng theo hợp đồng")]);
+        var resp = await risk.RespondAsync(fx.H.Approver, n.Id, n.RowVersion, "Đã giải trình, đính kèm hợp đồng", explain.Id);
+        Assert.Equal(("Responded", explain.Number), (resp.Status, resp.ResponseNoticeNumber));
+        var closed = await risk.CloseAsync(fx.H.Approver, n.Id, resp.RowVersion);
+        Assert.Equal("Closed", closed.Status);
+        Assert.DoesNotContain((await check.ForPeriodAsync(fx.H.Auditor, march.Id)).Items, i => i.Code == "EINVOICE_RISK_NOTICE");
+
+        // Chỉ ghi nhận: hóa đơn và sổ không đổi.
+        var doc2 = await svc.ViewAsync(fx.H.Auditor, doc.Id);
+        Assert.Equal((doc1.Status, doc1.Series, doc1.Number), (doc2.Status, doc2.Series, doc2.Number));
+        Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+    }
+
+    [Fact]
     public async Task EInvoice_BackgroundWorker_PicksUpDueItemsOnly_AndSettlesThemUnderTheRequestersRights()
     {
         var (fx, sim, svc, _) = await EInvoiceSetupAsync(); using var _fx = fx;

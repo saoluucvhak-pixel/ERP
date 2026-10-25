@@ -29,6 +29,7 @@ public static class DiscountEndpoints
                                   : await s.SettleAsync(await http.SessionAsync(), id, r.RowVersion, r.InvoiceSeries, r.FirstInvoiceNo, r.InvoiceDate, r.PostingDate);
             return Results.Ok(new { run.Id, run.Amount, run.Percent, run.EligibleSales });
         });
+        api.MapGet("/agreements/{id:guid}/statement", async (HttpContext http, Guid id, DiscountAgreementService s) => Results.Ok(await s.StatementAsync(await http.SessionAsync(), id)));
         api.MapPost("/agreements/{id:guid}/accrue", async (HttpContext http, Guid id, AgreementAccrueRequest r, DiscountAgreementService s) =>
         { var x = await s.AccrueAsync(await http.SessionAsync(), id, r.RowVersion, r.AsOf); return Results.Ok(new { x.Id, x.Estimated, x.Adjustment, x.VoucherId }); });
         api.MapPost("/agreements/{id:guid}/void-run", async (HttpContext http, Guid id, ReasonRequest r, DiscountAgreementService s) => { await s.VoidRunAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
