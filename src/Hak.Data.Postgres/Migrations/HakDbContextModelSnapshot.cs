@@ -8421,6 +8421,56 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("debt_write_off_items");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAccrual", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Adjustment")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("adjustment");
+
+                    b.Property<Guid>("AgreementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agreement_id");
+
+                    b.Property<DateOnly>("AsOf")
+                        .HasColumnType("date")
+                        .HasColumnName("as_of");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<decimal>("Estimated")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("estimated");
+
+                    b.Property<Guid>("VoucherId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("voucher_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_accruals");
+
+                    b.HasIndex("AgreementId", "AsOf")
+                        .HasDatabaseName("ix_discount_accruals_agreement_id_as_of");
+
+                    b.ToTable("discount_accruals");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8504,6 +8554,15 @@ namespace Hak.Data.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<Guid?>("AccrualReversalVoucherId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("accrual_reversal_voucher_id");
+
+                    b.Property<decimal>("AccruedAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("accrued_amount");
 
                     b.Property<Guid>("AgreementId")
                         .HasColumnType("uuid")
@@ -10749,6 +10808,16 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_debt_write_off_items_debt_write_offs_write_off_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAccrual", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreement", null)
+                        .WithMany()
+                        .HasForeignKey("AgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_accruals_discount_agreements_agreement_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreement", b =>

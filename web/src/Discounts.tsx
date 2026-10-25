@@ -7,7 +7,7 @@ interface Tier { threshold: string; percent: string }
 interface Agreement { id: string; kind: string; partnerId: string; partnerCode: string; partnerName: string; code: string; name: string; fromDate: string; toDate: string; isActive: boolean; rowVersion: number
   tiers: Tier[]; runId: string | null; runAmount: string | null; progressive?: boolean }
 interface Share { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; postingDate: string; sales: string; discount: string }
-interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[] }
+interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[]; accrued?: string }
 interface ReportRow { partnerId: string; partnerCode: string; partnerName: string; gross: string; onInvoiceTradeDiscount: string; afterSaleTradeDiscount: string; allowance: string; returns: string; increase: string; net: string; paymentDiscount: string }
 interface Report { rows: ReportRow[]; total: ReportRow }
 
@@ -138,10 +138,16 @@ export function DiscountsView() {
       </Modal>}
 
       {preview && !settle && <Modal title={`Tính chiết khấu — ${preview.a.code}`} onClose={() => setPreview(null)} busy={busy}
-        footer={<><button onClick={() => setPreview(null)}>Đóng</button>{!preview.p.settled && Number(preview.p.amount) > 0 &&
+        footer={<><button onClick={() => setPreview(null)}>Đóng</button>{sales && !preview.p.settled && <button disabled={busy} title="Ước tính theo doanh số đến ngày chọn; sinh chứng từ nháp Nợ giảm trừ doanh thu / Có phải trả chiết khấu" onClick={() => run(async () => {
+            const asOf = window.prompt('Trích trước đến ngày (yyyy-mm-dd)', today() < preview.a.toDate ? today() : preview.a.toDate)
+            if (!asOf) return
+            const r = await post<{ adjustment: string }>(`/discounts/agreements/${preview.a.id}/accrue`, { rowVersion: preview.a.rowVersion, asOf })
+            setInfo(`Đã lập chứng từ trích trước ${formatMoney(r.adjustment)} (nháp) — duyệt và ghi sổ ở màn Chứng từ.`); setPreview(null); await load()
+          })}>Trích trước…</button>}{!preview.p.settled && Number(preview.p.amount) > 0 &&
           <button className="primary" disabled={busy} onClick={() => setSettle({ a: preview.a, series: '', no: '', byVoucher: false, invoiceDate: preview.a.toDate > today() ? preview.a.toDate : today(), postingDate: preview.a.toDate > today() ? preview.a.toDate : today() })}>Quyết toán…</button>}</>}>
         <p>Doanh số đủ điều kiện <b>{formatMoney(preview.p.eligibleSales)}</b> → bậc <b>{formatMoney(preview.p.percent)}%</b> → chiết khấu <b>{formatMoney(preview.p.amount)}</b>.
           {preview.p.nextThreshold && <> Còn {formatMoney(String(Number(preview.p.nextThreshold) - Number(preview.p.eligibleSales)))} nữa để lên bậc {formatMoney(preview.p.nextPercent)}%.</>}
+          {Number(preview.p.accrued ?? 0) > 0 && <> Đã trích trước (ghi sổ) <b>{formatMoney(preview.p.accrued!)}</b> — quyết toán sẽ bù trừ, không giảm doanh thu hai lần.</>}
           {preview.p.settled && <> <b>Đã quyết toán.</b></>}</p>
         <table className="grid"><thead><tr><th>Hóa đơn</th><th>Ngày</th><th className="num">Doanh số</th><th className="num">Chiết khấu chia</th></tr></thead>
           <tbody>{preview.p.invoices.map(s => <tr key={s.invoiceId}><td>{s.invoiceSeries}/{s.invoiceNo}<div className="muted">{s.number}</div></td><td>{formatDate(s.postingDate)}</td><td className="num">{formatMoney(s.sales)}</td><td className="num">{formatMoney(s.discount)}</td></tr>)}

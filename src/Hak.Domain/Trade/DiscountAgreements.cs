@@ -53,6 +53,9 @@ public sealed class DiscountAgreementRun
     public Guid? VoidedBy { get; set; }
     /// <summary>Quyết toán bằng hạch toán điều chỉnh giảm (không phát hành hóa đơn điều chỉnh): chứng từ kế toán sinh ra; null = quyết toán bằng hóa đơn điều chỉnh.</summary>
     public Guid? VoucherId { get; set; }
+    /// <summary>Số đã trích trước (ghi sổ) tại thời điểm quyết toán; quyết toán bằng chứng từ bù trừ số này, bằng hóa đơn điều chỉnh thì có chứng từ hoàn nhập <see cref="AccrualReversalVoucherId"/>.</summary>
+    public decimal AccruedAmount { get; set; }
+    public Guid? AccrualReversalVoucherId { get; set; }
     public List<DiscountAgreementRunInvoice> Invoices { get; set; } = [];
 }
 
@@ -66,3 +69,21 @@ public sealed class DiscountAgreementRunInvoice
     public Guid AdjustmentInvoiceId { get; set; }
     public decimal Amount { get; set; }
 }
+
+/// <summary>
+/// Trích trước chiết khấu thương mại theo doanh số (chiều bán): ước tính theo doanh số đến ngày <see cref="AsOf"/> với bậc đang đạt; mỗi lần trích là một chứng từ điều chỉnh
+/// (Nợ giảm trừ doanh thu / Có phải trả chiết khấu, âm = hoàn nhập). Tổng đã trích = tổng <see cref="Adjustment"/> của các chứng từ đã ghi sổ.
+/// </summary>
+public sealed class DiscountAccrual
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid AgreementId { get; set; }
+    public DateOnly AsOf { get; set; }
+    public decimal Estimated { get; set; }
+    public decimal Adjustment { get; set; }
+    public Guid VoucherId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public Guid CreatedBy { get; set; }
+}
+
