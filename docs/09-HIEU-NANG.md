@@ -88,3 +88,22 @@ Ghi chú về khóa ghi theo công ty: khóa hiện tại bảo vệ đồng th�
 Độ dốc (thời gian tăng thêm cho mỗi 1.000 biến động lịch sử): SQLite ~10 → ~3,5 ms; PostgreSQL ~6 → ~2 ms. Ngoại suy tuyến tính: ở 100.000 biến động trên một vật tư–kho, mỗi dòng xuất khoảng 0,4 s (SQLite) / 0,2 s (PostgreSQL) thay vì ~1 s / ~0,6 s. Trên PostgreSQL cùng máy, phần lớn thời gian là chi phí cố định mỗi phiếu nên cải thiện tổng thể không rõ.
 
 **Còn lại (chưa làm):** vẫn nạp toàn bộ lịch sử (không phải chỉ tổng) của (kho, vật tư) cho mỗi dòng xuất; muốn phẳng hẳn cần bảng số dư lũy kế (cần migration). Chưa đo: BCĐPS với hàng chục nghìn nhóm (đối tượng × tài khoản), Tổng quan, nhập danh mục 20.000 dòng, mở rộng lên 100.000 dòng sổ cái / 100.000 dòng kho.
+
+## Đo bổ sung 25/10/2026 (SQLite, Release, máy 4 CPU của phiên làm việc; số tham khảo, không so với máy Windows)
+
+Chạy riêng một mình (không cạnh tranh với bộ test): `--vouchers 50000 --partners 1000 --stock 3000 --profile`, cuối đo có 50.000 chứng từ, 100.000 dòng sổ cái, CSDL 440 MB.
+
+| Phép đo | 10.000 chứng từ | 50.000 chứng từ |
+|---|---:|---:|
+| Ghi sổ đủ 4 bước | 75/giây, p95 18,7 ms | 73/giây, p95 20,0 ms |
+| BCĐPS cả năm | 138 ms | 683 ms |
+| Sổ chi tiết TK phải thu cả năm | 98 ms (6.667 dòng) | 642 ms (33.334 dòng) |
+| Sổ chi tiết 1 đối tượng | 9 ms | 35 ms |
+| Sổ Nhật ký chung 1 tháng | 23 ms | 156 ms |
+| Tuổi nợ mọi TK công nợ | 49 ms | 224 ms |
+| Đối chiếu sổ chi tiết công nợ ↔ sổ cái | 180 ms | 787 ms |
+| Kiểm tra chuỗi nhật ký kiểm toán | 0,56 s | 2,8 s |
+
+Kho (phiếu xuất sau N biến động, trung vị 20 phiếu gần nhất): bình quân tức thời 21 ms @1.500, 31 ms @3.000, 42 ms @4.500, 51 ms @6.000; FIFO 21 / 33 / 42 / 53 ms. **Tăng tuyến tính khoảng 7 ms mỗi 1.000 biến động** của cùng kho–vật tư vì `IssueValueAsync` đọc lại toàn bộ lịch sử.
+
+Nhận định: ghi sổ không chậm đi theo khối lượng; báo cáo tăng tuyến tính theo số dòng và vẫn dưới 1 giây ở 50.000 chứng từ. Điểm cần canh là kho: nếu một cặp kho–vật tư tích lũy trên khoảng 20.000 biến động trong cùng kỳ tính giá thì phiếu xuất vượt 0,15 giây và tới 100.000 biến động ước tính ~0,7 giây — lúc đó mới đáng làm checkpoint giá bình quân / lớp FIFO (mốc sequence, replay phần sau, vô hiệu khi backdate / đảo / điều chỉnh giá). Chưa làm vì chưa nghẽn ở quy mô doanh nghiệp vừa và nhỏ; chưa đo nhiều người dùng đồng thời và PostgreSQL ở 50.000.

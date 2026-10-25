@@ -110,3 +110,4 @@ Nguồn: `BAO-CAO-LUONG-VA-HIEU-SUAT.md`, `PROMPT-NANG-CAP-ERP.md` của chị. 
 - **Chiết khấu:** thỏa thuận theo doanh số tính cả hóa đơn ngoại tệ.
 - **Test luồng:** hóa đơn thay thế khi hóa đơn gốc chưa đảo được (còn điều chỉnh đã ghi sổ) ⇒ phát hành rồi nhưng chưa ghi sổ, không có nửa bút toán, đối soát nhắc đảo, sửa xong thì ghi sổ lại.
 - **PostgreSQL:** chạy trọn bộ test tích hợp trên `main` sau #53: 365/365.
+- **Hiệu suất 50.000 chứng từ** (docs/09 mục "Đo bổ sung 25/10/2026"): ghi sổ 73/giây ổn định, báo cáo dưới 1 giây, phiếu xuất tăng ~7 ms mỗi 1.000 biến động cùng kho–vật tư ⇒ checkpoint kho chỉ đáng làm khi một cặp kho–vật tư vượt ~20.000 biến động/kỳ. Chưa đo nhiều người dùng và PostgreSQL ở quy mô này.
