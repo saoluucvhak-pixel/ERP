@@ -1985,6 +1985,32 @@ public class TradeTests
         Assert.Equal((60m, 55m, 5m, 0m), (after.Arrived, after.Accepted, after.Rejected, after.PostedToStock));   // the 5 rejected still count as arrived
     }
 
+    [Fact]
+    public async Task OrderWorklist_SortsBeforePaging_OldOrdersAreNotDroppedByARecencyCut()
+    {
+        // Kiểm tra 25/10/2026 (F06): trước đây lấy "N đơn mới nhất" rồi mới xếp ưu tiên nên đơn cũ (lẽ ra lên đầu) biến mất khi có nhiều đơn.
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var flow = new Hak.Application.Cycles.OrderFlowService(s.Db, Orders(fx), h.Clock);
+        var orders = Orders(fx);
+        var made = new List<Hak.Domain.Trade.TradeOrder>();
+        for (var day = 1; day <= 5; day++)
+            made.Add(await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, day), $"Đơn ngày {day}", [new OrderLineInput(fx.Add, 1, 100_000)])));
+
+        var page1 = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales, skip: 0, take: 2);
+        var page2 = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales, skip: 2, take: 2);
+        var page3 = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales, skip: 4, take: 2);
+        Assert.Equal((5, true, true, false), (page1.Total, page1.HasMore, page2.HasMore, page3.HasMore));
+        // Đơn cũ nhất (tuổi lớn nhất) đứng đầu dù chỉ lấy 2 dòng; ba trang không trùng, không sót.
+        Assert.Equal(made[0].Id, page1.Items[0].OrderId);
+        var all = page1.Items.Concat(page2.Items).Concat(page3.Items).Select(r => r.OrderId).ToList();
+        Assert.Equal(made.Select(o => o.Id).OrderBy(x => x), all.OrderBy(x => x));
+        Assert.Equal(5, all.Distinct().Count());
+        // Chiều mua không thấy đơn bán.
+        Assert.Empty((await flow.WorklistAsync(h.Auditor, InvoiceKind.Purchase)).Items);
+    }
+
     // ------------------------------------------------------------------ Đợt 4: hồ sơ chu trình và bốn trục trạng thái
 
     [Fact]
@@ -2041,10 +2067,10 @@ public class TradeTests
         Assert.Equal(("Full", "CLOSE"), (State(f6, "Payment"), f6.Next!.Code));
 
         // The worklist lists open orders with their next action; a finished-and-closed order drops out.
-        var work = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales);
+        var work = (await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales)).Items;
         Assert.Equal(("CLOSE", order.Number), (Assert.Single(work, w => w.OrderId == order.Id).ActionCode, order.Number));
         await orders.CloseAsync(h.Preparer, order.Id, "Hoàn tất");
-        Assert.DoesNotContain(await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales), w => w.OrderId == order.Id);
+        Assert.DoesNotContain((await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales)).Items, w => w.OrderId == order.Id);
         Assert.Equal("Closed", State(await flow.FlowAsync(h.Auditor, order.Id), "Approval"));
     }
 

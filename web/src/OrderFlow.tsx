@@ -51,8 +51,15 @@ export function OrderFlowPanel({ orderId, onClose }: { orderId: string; onClose:
 /** Việc cần làm theo đơn: mỗi đơn chưa xong một dòng với hành động kế tiếp, người phụ trách, hạn; đơn quá hạn lên đầu. */
 export function OrderWorklist({ kind, onOpen }: { kind: 'Sales' | 'Purchase'; onOpen: (orderId: string) => void }) {
   const [rows, setRows] = useState<WorkRow[] | null>(null)
-  const { error, run } = useAction()
-  useEffect(() => { run(async () => setRows(await get<WorkRow[]>(`/cycles/order-worklist?kind=${kind}`))) }, [kind, run])
+  const [more, setMore] = useState({ total: 0, hasMore: false })
+  const { busy, error, run } = useAction()
+  const PAGE = 60
+  const load = (skip: number) => run(async () => {
+    const page = await get<{ items: WorkRow[]; total: number; hasMore: boolean }>(`/cycles/order-worklist?kind=${kind}&skip=${skip}&take=${PAGE}`)
+    setRows(prev => skip === 0 ? page.items : [...(prev ?? []), ...page.items]); setMore({ total: page.total, hasMore: page.hasMore })
+  })
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- tải lại từ đầu khi đổi chiều mua/bán; `load` chỉ đọc kind
+  useEffect(() => { load(0) }, [kind])
   return (
     <div className="panel">
       <strong>Việc cần làm theo đơn</strong>
@@ -66,6 +73,7 @@ export function OrderWorklist({ kind, onOpen }: { kind: 'Sales' | 'Purchase'; on
           {rows && rows.length === 0 && <tr><td colSpan={7} className="muted">Không có đơn nào đang chờ xử lý.</td></tr>}
         </tbody>
       </table>
+      {rows && more.total > 0 && <p className="muted">Hiện {rows.length}/{more.total} đơn còn việc.{more.hasMore && <> <button disabled={busy} onClick={() => load(rows.length)}>Xem thêm</button></>}</p>}
     </div>
   )
 }

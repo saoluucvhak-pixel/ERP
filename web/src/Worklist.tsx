@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { get } from './api'
 import { navStore } from './common'
 import { formatDate } from './money'
-import type { OpenType } from './quickadd'
+import type { OpenType } from './navIntents'
 
 interface Task {
   screen: string; kind: 'Sales' | 'Purchase' | null; entityType: OpenType; entityId: string; number: string; title: string; action: string

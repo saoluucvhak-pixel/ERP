@@ -289,7 +289,7 @@ public class ApiTests
         Assert.Equal(1, (int)upper["total"]!);
 
         // Hồ sơ chu trình đơn hàng: đúng đường dẫn giao diện gọi. Đơn không tồn tại → lỗi nghiệp vụ NOT_FOUND (có mã), không phải 404 vì sai route.
-        Assert.NotNull((await Json(await ktt.GetAsync("/api/cycles/order-worklist?kind=Sales"))).AsArray());
+        Assert.NotNull((await Json(await ktt.GetAsync("/api/cycles/order-worklist?kind=Sales")))["items"]!.AsArray());
         var noOrder = await ktt.GetAsync($"/api/cycles/orders/{Guid.NewGuid()}/flow");
         Assert.Equal(HttpStatusCode.NotFound, noOrder.StatusCode);
         Assert.Equal("NOT_FOUND", (string)JsonNode.Parse(await noOrder.Content.ReadAsStringAsync())!["code"]!);

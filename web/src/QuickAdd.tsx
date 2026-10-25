@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { navStore } from './common'
-import { QUICK_GROUPS } from './quickadd'
+import { QUICK_GROUPS } from './navIntents'
 
 /** Nút "Thêm nhanh" ở đầu thanh bên: bảng lối tắt tới màn hình lập chứng từ của từng phân hệ. */
 export function QuickAdd() {
