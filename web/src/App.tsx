@@ -28,6 +28,7 @@ const EquityView = lazy(() => import('./Equity').then(m => ({ default: m.EquityV
 const SalesApprovalsView = lazy(() => import('./SalesApprovals').then(m => ({ default: m.SalesApprovalsView })))
 const ServiceAcceptancesView = lazy(() => import('./ServiceAcceptances').then(m => ({ default: m.ServiceAcceptancesView })))
 const SpecialJournalsView = lazy(() => import('./SpecialJournals').then(m => ({ default: m.SpecialJournalsView })))
+const DiscountsView = lazy(() => import('./Discounts').then(m => ({ default: m.DiscountsView })))
 const PaymentDiscountView = lazy(() => import('./PaymentDiscount').then(m => ({ default: m.PaymentDiscountView })))
 const GroupsView = lazy(() => import('./Groups').then(m => ({ default: m.GroupsView })))
 const PayrollView = lazy(() => import('./Payroll').then(m => ({ default: m.PayrollView })))
@@ -66,6 +67,7 @@ const SCREENS = [
   { key: 'equity', label: 'Vốn góp, cổ tức', el: () => <EquityView /> },
   { key: 'salesapproval', label: 'Phê duyệt bán hàng', el: () => <SalesApprovalsView /> },
   { key: 'services', label: 'Nghiệm thu dịch vụ', el: () => <ServiceAcceptancesView /> },
+  { key: 'discounts', label: 'Chiết khấu thương mại', el: () => <DiscountsView /> },
   { key: 'paydiscount', label: 'Chiết khấu thanh toán', el: () => <PaymentDiscountView /> },
   { key: 'groups', label: 'Nhóm danh mục', el: () => <GroupsView /> },
   { key: 'bank', label: 'Ngân hàng', el: () => <BankingView /> },
@@ -105,6 +107,7 @@ const LAUNCHER = [
   { key: 'equity', group: 'Tài chính, thanh toán', label: 'Vốn góp, cổ tức' },
   { key: 'salesapproval', group: 'Chu trình doanh thu', label: 'Phê duyệt bán hàng' },
   { key: 'services', group: 'Chu trình doanh thu', label: 'Nghiệm thu dịch vụ' },
+  { key: 'discounts', group: 'Chu trình doanh thu', label: 'Chiết khấu thương mại' },
   { key: 'paydiscount', group: 'Chu trình doanh thu', label: 'Chiết khấu thanh toán' },
   { key: 'groups', group: 'Danh mục và hệ thống', label: 'Nhóm danh mục' },
   { key: 'bank', group: 'Tài chính, thanh toán', label: 'Ngân hàng' },
@@ -130,11 +133,11 @@ const SCREEN_LABELS: Record<string, string> = Object.fromEntries(SCREENS.map(s =
  * nhãn tab nói rõ mua hay bán và số việc chờ chỉ tính chiều của phân hệ đó.
  */
 const KIND_OF_MODULE: Record<string, 'Purchase' | 'Sales'> = { purchase: 'Purchase', sales: 'Sales' }
-const KINDED_SCREENS = new Set(['orders', 'trade', 'services'])
+const KINDED_SCREENS = new Set(['orders', 'trade', 'services'])   // 'discounts' và 'paydiscount' cũng theo chiều của phân hệ nhưng không có số việc chờ riêng
 const workKey = (moduleKey: string, screen: string) => (KIND_OF_MODULE[moduleKey] && KINDED_SCREENS.has(screen) ? `${screen}:${KIND_OF_MODULE[moduleKey]}` : screen)
 const KIND_LABELS: Record<string, Record<string, string>> = {
-  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua', arap: 'Công nợ phải trả', paydiscount: 'Chiết khấu được hưởng' },
-  sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán', arap: 'Công nợ phải thu', paydiscount: 'Chiết khấu cho khách' },
+  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua', arap: 'Công nợ phải trả', discounts: 'CK thương mại được hưởng', paydiscount: 'CK thanh toán được hưởng' },
+  sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán', arap: 'Công nợ phải thu', discounts: 'CK thương mại cho khách', paydiscount: 'CK thanh toán cho khách' },
 }
 const tabLabel = (moduleKey: string, screen: string) => KIND_LABELS[moduleKey]?.[screen] ?? SCREEN_LABELS[screen]
 

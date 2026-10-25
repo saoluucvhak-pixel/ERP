@@ -55,7 +55,7 @@ public sealed class SalesOrderCheckService(HakDbContext db, SettlementService se
                 if (drynessPct.TryGetValue(l.ItemId, out var pct)) basisQty = qty * pct / 100m;
                 else if (!estimateNotes.Contains("MT")) estimateNotes.Add("MT");
             }
-            return Math.Round(basisQty * l.UnitPrice * (1 + (l.VatRate ?? 0) / 100m), 0, MidpointRounding.AwayFromZero);
+            return Math.Round(basisQty * l.UnitPrice * (100 - (l.DiscountPercent ?? 0)) / 100m * (1 + (l.VatRate ?? 0) / 100m), 0, MidpointRounding.AwayFromZero);   // giá trị đơn sau chiết khấu thương mại
         }
         var value = order.Lines.Sum(l => Money(l, l.Quantity));
         decimal balance = 0, overdue = 0, deliveredNotInvoiced = 0, commitments = 0;

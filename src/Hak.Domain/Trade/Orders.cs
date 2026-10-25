@@ -79,6 +79,8 @@ public sealed class TradeOrderLine
     public PricingBasis Basis { get; set; } = PricingBasis.Quantity;
     /// <summary>Agreed price per basis unit, in the order currency.</summary>
     public decimal UnitPrice { get; set; }
+    /// <summary>Chiết khấu thương mại đã thỏa thuận trên dòng đơn (% trên tiền hàng); null = không có. Hóa đơn lập từ đơn mang theo tỷ lệ này.</summary>
+    public decimal? DiscountPercent { get; set; }
     public decimal? VatRate { get; set; }
     public string? Description { get; set; }
 }
