@@ -13,7 +13,7 @@ const STATUS_VI: Record<string, string> = { Issuing: 'Đang chờ nhà cung cấ
 const RELATION_VI: Record<string, string> = { Original: 'Hóa đơn gốc', Replacement: 'Thay thế', Adjustment: 'Điều chỉnh' }
 const NATURE_VI: Record<string, string> = { Increase: 'tăng', Decrease: 'giảm', Information: 'thông tin', None: '' }
 const SUGGESTION_VI: Record<string, string> = { AdjustmentNotBooked: 'Điều chỉnh chưa ghi sổ', ReplacementNotBooked: 'Thay thế chưa ghi sổ', ReplacedOriginalStillActive: 'Hóa đơn gốc bị thay còn hiệu lực', OriginalNotBooked: 'Thiếu hóa đơn gốc' }
-const KIND_VI: Record<string, string> = { Explain: 'Giải trình', Cancel: 'Hủy', Adjust: 'Điều chỉnh', Replace: 'Thay thế' }
+const KIND_VI: Record<string, string> = { Explain: 'Giải trình', Cancel: 'Đề nghị hủy', Adjust: 'Điều chỉnh', Replace: 'Thay thế' }
 const NOTICE_STATUS_VI: Record<string, string> = { Draft: 'Nháp', Sent: 'Đã gửi', Accepted: 'Cơ quan thuế tiếp nhận', Rejected: 'Cơ quan thuế không tiếp nhận' }
 
 /**
@@ -108,7 +108,7 @@ export function EInvoiceView() {
           <td style={{ whiteSpace: 'normal' }}>{n.lines.map(l => <div key={l.documentId}>{l.series}/{l.number}: <span className="muted">{l.errorDescription}</span></div>)}</td>
           <td style={{ whiteSpace: 'normal' }}>{n.reason}</td><td>{NOTICE_STATUS_VI[n.status]}{n.response && <div className="muted">{n.response}</div>}</td>
           <td>{n.status === 'Draft' && <button className="primary" disabled={busy || !status?.configured} onClick={() => sendNotice(n)}>Gửi cơ quan thuế</button>}</td></tr>)}
-          {notices.length === 0 && <tr><td colSpan={6} className="muted">Chưa có thông báo sai sót. Thông báo không phát sinh bút toán; loại “Hủy” được tiếp nhận sẽ đánh dấu hóa đơn đã hủy và đối soát sẽ nhắc đảo bút toán.</td></tr>}</tbody>
+          {notices.length === 0 && <tr><td colSpan={6} className="muted">Chưa có thông báo sai sót. Thông báo chỉ đính kèm hóa đơn cần sửa: không thay đổi hóa đơn, không phát sinh bút toán; muốn đổi số liệu thì lập hóa đơn điều chỉnh hoặc thay thế.</td></tr>}</tbody>
       </table></div>}
 
       {draft && <Modal title={`Hóa đơn điều chỉnh nháp — ${draft.s.label}`} onClose={() => setDraft(null)} busy={busy}

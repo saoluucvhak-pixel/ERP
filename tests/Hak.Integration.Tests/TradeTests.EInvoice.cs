@@ -211,7 +211,7 @@ public partial class TradeTests
     }
 
     [Fact]
-    public async Task EInvoice_ErrorNotice_AndInformationAdjustment_WriteNothingToTheLedger()
+    public async Task EInvoice_ErrorNotice_OnlyAttachesTheInvoice_AndInformationAdjustment_WritesNothingToTheLedger()
     {
         var (fx, sim, svc, notice) = await EInvoiceSetupAsync(); using var _fx = fx;
         var doc = await IssuedSaleAsync(fx, svc);
@@ -222,20 +222,21 @@ public partial class TradeTests
         Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
         Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => svc.AdjustInformationAsync(fx.H.Approver, Guid.NewGuid(), "x", [new InformationChange("a", "b", "c")])));
 
-        // Thông báo sai sót cần quyền riêng; số cấp theo bộ mã; cơ quan thuế tiếp nhận loại Hủy ⇒ hóa đơn Cancelled nhưng sổ KHÔNG tự đảo.
+        // Thông báo sai sót cần quyền riêng; số cấp theo bộ mã. Thông báo CHỈ đính kèm hóa đơn cần sửa: dù cơ quan thuế tiếp nhận, hóa đơn và sổ không đổi.
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => notice.CreateAsync(fx.H.Preparer, ErrorNoticeKind.Cancel, "Lập nhầm", [new NoticeLineInput(doc.Id, "Lập nhầm")])));
-        var n = await notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Cancel, "Hóa đơn lập nhầm đối tượng", [new NoticeLineInput(doc.Id, "Sai người mua")]);
+        var n = await notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Cancel, "Sai tên người mua", [new NoticeLineInput(doc.Id, "Sai tên người mua")]);
         Assert.StartsWith("TBSS2026-", n.Number);
         Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Cancel, "Trùng", [new NoticeLineInput(doc.Id, "Trùng")])));
+        var before = await fx.S.Db.EInvoiceDocuments.AsNoTracking().SingleAsync(d => d.Id == doc.Id);
         var sent = await notice.SendAsync(fx.H.Approver, n.Id, n.RowVersion);
         Assert.Equal("Accepted", sent.Status);
-        Assert.Equal("Cancelled", (await svc.ViewAsync(fx.H.Auditor, doc.Id)).Status);
+        var after = await fx.S.Db.EInvoiceDocuments.AsNoTracking().SingleAsync(d => d.Id == doc.Id);
+        Assert.Equal((before.Status, before.Series, before.Number, before.XmlSha256, before.RowVersion), (after.Status, after.Series, after.Number, after.XmlSha256, after.RowVersion));   // hóa đơn không đổi gì
+        Assert.Equal(EInvoiceDocStatus.Issued, after.Status);
         Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => notice.SendAsync(fx.H.Approver, n.Id, sent.RowVersion)));
-
-        // Đối soát thấy hóa đơn đã hủy trên hệ thống HĐĐT mà sổ còn ghi: yêu cầu kế toán đảo.
         var rec = await new VatService(fx.S.Db, fx.S.Audit, fx.H.Clock).ReconcileAsync(fx.H.Auditor, D(3, 1), D(3, 31));
-        Assert.Equal(new[] { TaxDiffType.CancelledButRecorded }, rec.Differences.Select(d => d.Type));
+        Assert.Empty(rec.Differences);                                                  // đối soát không đổi vì hóa đơn không đổi
         await LedgerInvariants.AssertAsync(fx.S.Db);
     }
 
