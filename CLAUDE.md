@@ -142,3 +142,6 @@ Tham chiếu pháp lý hóa đơn điện tử = **Nghị định 254/2026/NĐ-C
 ## Đợt 26/10/2026 (cuối) — chiều mua, 01/TB-RSĐT, bảng kê
 Trích trước / quyết toán chứng từ chiết khấu thương mại cho cả chiều mua (`RebateAccountsAsync` trong `DiscountAgreementService`; vai trò `REBATE_RECEIVABLE`, `PURCHASE_TRADE_DISCOUNT`; ghi giảm giá vốn, không định giá lại tồn kho). Thông báo của cơ quan thuế 01/TB-RSĐT (`EInvoiceRiskNoticeService`, migration `Phase25RiskNotices`, mục kiểm đóng kỳ `EINVOICE_RISK_NOTICE`). Bảng kê hóa đơn gốc ↔ điều chỉnh `StatementAsync` (cột chưa phải mẫu 01/BK-ĐCTT chính thức). Việc mở: MỘT hóa đơn điều chỉnh gộp nhiều hóa đơn gốc; đọc văn bản gốc Nghị định 254 / Thông tư 91.
 
+## Sao lưu tự động (26/10/2026)
+`AutoBackupWorker` (Hak.Api) sao lưu hằng ngày chế độ SQLite: tạo → kiểm tra toàn vẹn → chép `CopyPath` ngoài máy → dọn (giữ ≥ 7 bản). Cấu hình `Hak:AutoBackup:*` + biến `HAK_BACKUP_PASSPHRASE` (không ghi vào tệp). `GET /api/admin/backups/auto-status`; Quản trị → Sao lưu hiện tình trạng và cảnh báo quá 48 giờ; `tools/package/Cai dat sao luu tu dong.cmd`. docs/08 mục 5. Chưa: giao diện cấu hình trong phần mềm (hiện đặt bằng biến môi trường), sao lưu tự động cho PostgreSQL (dùng pg_dump).
+
