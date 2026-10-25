@@ -1,6 +1,6 @@
 # 12 — Giải pháp nâng cấp phân hệ Hóa đơn điện tử (HĐĐT) — v0.1 (25/10/2026)
 
-Trạng thái: **THIẾT KẾ để duyệt**, chưa lập trình. Mọi điều khoản pháp lý trong tài liệu là bản em hiểu từ văn bản gốc và **phải được kế toán trưởng đối chiếu** trước khi cấu hình (nguyên tắc dự án: không đưa quy định chưa xác minh vào hệ thống). Chỗ chưa chắc ghi **[CẦN XÁC MINH]**.
+Trạng thái: **ĐÃ CÀI ĐẶT phần không phụ thuộc nhà cung cấp** (25/10/2026, mục 8) — phần ký số / gọi API thật chờ chị chọn nhà cung cấp. Mọi điều khoản pháp lý trong tài liệu là bản em hiểu từ văn bản gốc và **phải được kế toán trưởng đối chiếu** trước khi cấu hình (nguyên tắc dự án: không đưa quy định chưa xác minh vào hệ thống). Chỗ chưa chắc ghi **[CẦN XÁC MINH]**.
 
 Khung pháp lý cần đối chiếu: Nghị định 123/2020/NĐ-CP (hóa đơn, chứng từ; xử lý sai sót ở Điều 19), Thông tư 78/2021/TT-BTC (hướng dẫn; ghi chú: yêu cầu ghi "TT-CP", đúng là **TT-BTC**), và các văn bản sửa đổi, thay thế ban hành sau đó (như Nghị định 70/2025/NĐ-CP, Thông tư 32/2025/TT-BTC **[CẦN XÁC MINH hiệu lực và nội dung]**). Tài liệu viết theo cấu trúc nên khi quy định đổi, chỉ đổi bảng cấu hình ở mục 6.
 
@@ -229,3 +229,25 @@ Kết quả đối soát là **dữ liệu dẫn xuất**, không có số dư r
 4. Phân quyền người phát hành và người ký thông báo sai sót.
 
 Đề xuất làm trước (nhỏ, không phụ thuộc nhà cung cấp): bảng `einvoice_documents`, máy trạng thái, loại hóa đơn *điều chỉnh thông tin* và *thay thế*, thông báo sai sót, đối soát X1–X8 trên dữ liệu đã nhập. Phần ký số và gọi API làm sau khi chọn nhà cung cấp.
+
+
+---
+
+## 8. Đã cài đặt trong HAK (25/10/2026)
+
+| Hạng mục thiết kế | Cài đặt | Chỗ xem |
+|---|---|---|
+| Cổng nhà cung cấp (`IEInvoiceProvider`) | `NullEInvoiceProvider` (mặc định, KHÔNG phát hành được), `SimulatedEInvoiceProvider` (chỉ Development / Test; chặn ở Production), chống trùng theo khóa như nhà cung cấp thật. Cấu hình `Hak:EInvoice:Provider` = `None` hoặc `Simulated`, `Hak:EInvoice:TemplateCode` | `src/Hak.Application/EInvoice/EInvoiceProvider.cs`, `Program.cs` |
+| Dữ liệu | `einvoice_documents`, `einvoice_outbox`, `einvoice_messages` (chỉ-thêm), `einvoice_error_notices` + dòng; `commercial_invoices.replaces_invoice_id`; migration `Phase19EInvoiceIssue` (SQLite + PostgreSQL) | `src/Hak.Domain/Tax/EInvoiceIssue.cs` |
+| Máy trạng thái | `Issuing → Issued hoặc Rejected`, `Issued → Replaced hoặc Cancelled`; hóa đơn đã Issued bất biến (interceptor: số, ký hiệu, ngày ký, mã CQT, XML, băm) | `LedgerImmutabilityInterceptor.cs` |
+| Phát hành gốc / điều chỉnh / thay thế | `EInvoiceIssueService`: hàng đợi cùng giao dịch → gọi nhà cung cấp NGOÀI giao dịch → giao dịch A lưu kết quả (không mất) → giao dịch B ghi sổ bằng số thật; lỗi ghi sổ lưu ở `PostError`, **Phát hành lại** sẽ ghi sổ lại. Lỗi mạng giữ trong hàng đợi, gửi lại cùng khóa. Từ chối giữ nguyên hóa đơn nháp, phát hành lại dùng khóa mới | `EInvoiceIssueService.cs` |
+| Hóa đơn chờ phát hành | `InvoiceInput.AwaitIssue`: ký hiệu tạm `CHO-PHAT-HANH`, **không ghi sổ được bằng số tạm** (chặn đi vòng) | `InvoiceService.cs` |
+| Thay thế | `CreateReplacementDraftAsync` sao chép dòng + thay đổi giá / thuế / chiết khấu / đối tượng; `ReplacesInvoiceId` không bị tính trùng số lượng phiếu kho; khi cơ quan thuế chấp nhận, `PostAsync` **đảo hóa đơn gốc rồi ghi hóa đơn mới trong cùng giao dịch**; bị từ chối thì gốc và sổ không đổi | cùng trên + test `EInvoice_Replacement…` |
+| Điều chỉnh thông tin | Chỉ phát hành văn bản liên kết hóa đơn gốc, không bút toán | `AdjustInformationAsync` |
+| Hóa đơn phát hành ngoài HAK | `RegisterExternalAsync` ghi nhận làm gốc cho điều chỉnh / thay thế | cùng trên |
+| Thông báo sai sót 04/SS | `EInvoiceNoticeService`: số `TBSS` theo bộ mã, gửi qua nhà cung cấp; loại Hủy được tiếp nhận ⇒ hóa đơn Cancelled, đối soát nhắc đảo (không tự đảo) | `EInvoiceNoticeService.cs` |
+| Đối soát | Hóa đơn gốc / thay thế được chấp nhận tự điền nguồn 1 (`EInvoiceRecord`), gốc bị thay → trạng thái Replaced; dùng lại `VatService.ReconcileAsync` (đã có X1–X5, X8). Mục bảng kiểm đóng kỳ **EINVOICE_PENDING** (chặn khóa kỳ khi còn hóa đơn chờ / từ chối / chưa ghi sổ) | `PeriodCloseChecklistService.cs` |
+| Giao diện | Màn **Hóa đơn điện tử** (Bán hàng): hàng đợi, phát hành lại, điều chỉnh thông tin, thông báo sai sót; màn Hóa đơn: ô “Lấy số từ nhà cung cấp”, nút Phát hành HĐĐT, Thay thế | `web/src/Einvoice.tsx`, `Trade.tsx` |
+| Quyền | `einvoice.issue` (kế toán trưởng, kế toán tổng hợp), `einvoice.notice` (kế toán trưởng) | `Security.cs`, `PermissionCatalog.cs` |
+
+**Chưa làm (cần quyết định hoặc nhà cung cấp):** adapter nhà cung cấp thật và ký số; webhook / polling trạng thái từ cơ quan thuế; lược đồ XML chính thức (hiện là cấu trúc nội bộ, nhà cung cấp chuyển đổi) [CẦN XÁC MINH]; hóa đơn điều chỉnh không được đưa vào bản ghi đối soát (đối soát hiện chỉ ghép hóa đơn thường); nhận điều chỉnh / thay thế từ nhà cung cấp cho hóa đơn MUA tự gợi ý bút toán; trigger PostgreSQL cho bất biến (hiện chỉ lớp EF); tự động gửi lại theo lịch (có `ProcessPending` chạy tay, chưa có dịch vụ nền); danh mục ca được phép điều chỉnh / thay thế / thông báo 04 theo quy định (hiện không chặn theo ca, kế toán trưởng quyết).

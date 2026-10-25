@@ -249,7 +249,7 @@ test('Hóa đơn điện tử: màn hình báo nhà cung cấp giả lập; form
   await visible(page, 'h2:has-text("Hóa đơn điện tử")')
   await visible(page, '.msg:has-text("GIẢ LẬP")')
   await visible(page, 'td.muted:has-text("Chưa có hóa đơn phát hành từ HAK")')
-  await page.click('[role=tab]:has-text("Thông báo sai sót")')
+  await page.click('.toolbar button:has-text("Thông báo sai sót")')
   await visible(page, 'td.muted:has-text("Chưa có thông báo sai sót")')
   await page.click('[role=tab]:has-text("Hóa đơn bán")')
   const box = page.locator('label:has-text("Lấy số từ nhà cung cấp HĐĐT") input[type=checkbox]')
