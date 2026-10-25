@@ -20,6 +20,8 @@ using Hak.Domain.Vouchers;
 var vouchers = IntArg("--vouchers", 20_000);
 var partnerCount = IntArg("--partners", 500);
 var stockMovements = IntArg("--stock", 0);   // số lần nhập (mỗi lần nhập kèm một lần xuất) trên MỖI kho đo; 0 = bỏ qua phần kho
+var users = IntArg("--users", 0);                 // số người dùng ghi sổ ĐỒNG THỜI (0 = bỏ qua); mỗi người --user-vouchers chứng từ
+var userVouchers = IntArg("--user-vouchers", 100);
 var postgres = args.Contains("--postgres");
 var keep = args.Contains("--keep");
 int IntArg(string name, int fallback) { var i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? int.Parse(args[i + 1]) : fallback; }
@@ -43,7 +45,12 @@ else
 }
 var profiler = new SqlProfiler();
 var tx = new TxProfiler();
-HakDbContext NewDb() => new(postgres ? HakDb.PostgresOptions(pgConn, profiler, tx) : HakDb.SqliteOptions(dbPath, profiler, tx));
+var concurrentPhase = false;   // bộ đo SqlProfiler / TxProfiler không an toàn đa luồng: tắt khi nhiều người ghi đồng thời
+HakDbContext NewDb()
+{
+    Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor[] extra = concurrentPhase ? [] : [profiler, tx];
+    return new(postgres ? HakDb.PostgresOptions(pgConn, extra) : HakDb.SqliteOptions(dbPath, extra));
+}
 void PgAdmin(string sql)
 {
     using var c = new Npgsql.NpgsqlConnection(new Npgsql.NpgsqlConnectionStringBuilder(pgServer) { Database = "postgres", Pooling = false }.ConnectionString);
@@ -124,6 +131,36 @@ try
     sw.Stop();
     perVoucher.Sort();
     results.Add(("Ghi sổ (lập→gửi→duyệt→ghi sổ)", $"{vouchers / sw.Elapsed.TotalSeconds:N0} chứng từ/giây; trung vị {perVoucher[perVoucher.Count / 2]:N1} ms, p95 {perVoucher[(int)(perVoucher.Count * 0.95)]:N1} ms, p99 {perVoucher[(int)(perVoucher.Count * 0.99)]:N1} ms"));
+
+    // ---- nhiều người dùng đồng thời: mỗi người một chuỗi lập→gửi→duyệt→ghi sổ độc lập, đếm lỗi theo loại ----
+    if (users > 0)
+    {
+        var errors = new System.Collections.Concurrent.ConcurrentDictionary<string, int>();
+        var okCount = 0;
+        var perUser = new System.Collections.Concurrent.ConcurrentBag<double>();
+        concurrentPhase = true;
+        var swUsers = Stopwatch.StartNew();
+        await Task.WhenAll(Enumerable.Range(0, users).Select(u => Task.Run(async () =>
+        {
+            var r = new Random(1000 + u);
+            for (var n = 0; n < userVouchers; n++)
+            {
+                var date = new DateOnly(2026, 6, 1).AddDays(r.Next(0, 28));
+                var amount = r.Next(1, 5_000) * 1_000m;
+                var t = Stopwatch.GetTimestamp();
+                try
+                {
+                    await PostAsync(new(VoucherTypes.General, date, date, $"Đồng thời U{u}", [new(acc["EXP"], Side.Debit, amount), new(acc["CASH"], Side.Credit, amount)]));
+                    Interlocked.Increment(ref okCount); perUser.Add(Stopwatch.GetElapsedTime(t).TotalMilliseconds);
+                }
+                catch (Exception ex) { errors.AddOrUpdate(ex.GetType().Name + ": " + (ex.Message.Length > 70 ? ex.Message[..70] : ex.Message), 1, (_, c) => c + 1); }
+            }
+        })));
+        swUsers.Stop(); concurrentPhase = false;
+        var lat = perUser.OrderBy(x => x).ToList();
+        results.Add(($"Ghi sổ đồng thời {users} người × {userVouchers} chứng từ", $"{okCount}/{users * userVouchers} thành công trong {swUsers.Elapsed.TotalSeconds:N1} s = {okCount / swUsers.Elapsed.TotalSeconds:N0} chứng từ/giây; "
+            + (lat.Count > 0 ? $"trung vị {lat[lat.Count / 2]:N0} ms, p95 {lat[(int)(lat.Count * 0.95)]:N0} ms; " : "") + (errors.IsEmpty ? "không lỗi" : "lỗi: " + string.Join(" | ", errors.Select(e => $"{e.Value}× {e.Key}")))));
+    }
 
     // One DbContext per step, as the API does per HTTP request.
     async Task PostAsync(VoucherInput input)

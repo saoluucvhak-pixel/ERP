@@ -111,3 +111,8 @@ Nguồn: `BAO-CAO-LUONG-VA-HIEU-SUAT.md`, `PROMPT-NANG-CAP-ERP.md` của chị. 
 - **Test luồng:** hóa đơn thay thế khi hóa đơn gốc chưa đảo được (còn điều chỉnh đã ghi sổ) ⇒ phát hành rồi nhưng chưa ghi sổ, không có nửa bút toán, đối soát nhắc đảo, sửa xong thì ghi sổ lại.
 - **PostgreSQL:** chạy trọn bộ test tích hợp trên `main` sau #53: 365/365.
 - **Hiệu suất 50.000 chứng từ** (docs/09 mục "Đo bổ sung 25/10/2026"): ghi sổ 73/giây ổn định, báo cáo dưới 1 giây, phiếu xuất tăng ~7 ms mỗi 1.000 biến động cùng kho–vật tư ⇒ checkpoint kho chỉ đáng làm khi một cặp kho–vật tư vượt ~20.000 biến động/kỳ. Chưa đo nhiều người dùng và PostgreSQL ở quy mô này.
+
+### Bổ sung 25/10/2026 (làm tiếp)
+- Test xuyên chu trình thêm (`TradeTests.CrossCycle.cs`, 6 tình huống, đạt trên SQLite và PostgreSQL): hai người ghi sổ cùng hóa đơn mua → một bút toán; phiên bản cũ bị từ chối và không ghi gì; mất quyền (lập / kiểm toán không ghi sổ, không đảo); lỗi giữa giao dịch ghi sổ (lệch giá chưa xác nhận) → hoàn tác toàn bộ; hủy tranh với ghi sổ → một trạng thái nhất quán; đảo hai lần bị chặn, số dư về 0. Sau mỗi tình huống chạy `LedgerInvariants`.
+- Đo nhiều người dùng đồng thời trên PostgreSQL: xem docs/09.
+
