@@ -3,7 +3,7 @@ namespace Hak.Domain.Trade;
 /// <summary>
 /// Thỏa thuận chiết khấu thương mại theo doanh số (chiết khấu cuối kỳ / rebate), cho một đối tượng trong một khoảng ngày. Chiều bán: khách đạt doanh số thì được giảm;
 /// chiều mua: nhà cung cấp giảm cho công ty khi mua đạt mức. Doanh số tính theo tiền hàng chưa thuế của hóa đơn thường đã ghi sổ trong khoảng ngày, trừ hàng trả lại / giảm giá
-/// đã ghi sổ. Bậc chiết khấu áp cho TOÀN BỘ doanh số trong kỳ (không lũy tiến từng phần). Quyết toán sinh hóa đơn điều chỉnh giảm (nháp) chia theo từng hóa đơn gốc để thuế GTGT
+/// đã ghi sổ. Mặc định bậc chiết khấu áp cho TOÀN BỘ doanh số trong kỳ (hồi tố); có thể chọn lũy tiến từng phần (Progressive). Quyết toán sinh hóa đơn điều chỉnh giảm (nháp) chia theo từng hóa đơn gốc để thuế GTGT
 /// giảm đúng thuế suất của từng dòng.
 /// </summary>
 public sealed class DiscountAgreement
@@ -17,6 +17,8 @@ public sealed class DiscountAgreement
     public DateOnly FromDate { get; set; }
     public DateOnly ToDate { get; set; }
     public bool IsActive { get; set; } = true;
+    /// <summary>false = hồi tố: bậc đạt áp cho TOÀN BỘ doanh số; true = lũy tiến từng phần: mỗi phần doanh số thuộc một bậc nhận tỷ lệ của bậc đó (bậc k phủ [ngưỡng k; ngưỡng k+1), không hở không chồng).</summary>
+    public bool Progressive { get; set; }
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
     public long RowVersion { get; set; }
