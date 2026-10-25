@@ -17,9 +17,9 @@ public sealed record NoticeView(Guid Id, string Number, string Kind, string Stat
     long RowVersion, IReadOnlyList<NoticeLineView> Lines);
 
 /// <summary>
-/// Thông báo sai sót hóa đơn điện tử (Mẫu 04/SS-HĐĐT) [CẦN XÁC MINH các trường hợp áp dụng và mẫu]. KHÔNG phát sinh bút toán. Lập (nháp) → gửi qua nhà cung cấp → cơ quan thuế
-/// tiếp nhận / không tiếp nhận. Loại "Hủy" được tiếp nhận ⇒ hóa đơn chuyển Cancelled; nếu hóa đơn ERP tương ứng còn hiệu lực thì đối soát báo "đã hủy trên hệ thống HĐĐT nhưng vẫn ghi sổ"
-/// để kế toán đảo — hệ thống không tự đảo bút toán.
+/// Thông báo sai sót hóa đơn điện tử (Mẫu 04/SS-HĐĐT) [CẦN XÁC MINH mẫu]. Chị xác nhận 25/10: thông báo CHỈ ĐÍNH KÈM danh sách hóa đơn cần sửa, KHÔNG thay đổi hóa đơn
+/// (trạng thái, số liệu) và không phát sinh bút toán. Lập (nháp) → gửi qua nhà cung cấp → cơ quan thuế tiếp nhận / không tiếp nhận; kết quả chỉ được ghi lại. Muốn đổi số liệu
+/// thì lập hóa đơn điều chỉnh hoặc thay thế.
 /// </summary>
 public sealed class EInvoiceNoticeService(HakDbContext db, EInvoiceIssueService issue, IEInvoiceProvider provider, AuditService audit, IClock clock)
 {
@@ -83,12 +83,6 @@ public sealed class EInvoiceNoticeService(HakDbContext db, EInvoiceIssueService 
             cur.Status = result.Accepted ? ErrorNoticeStatus.Accepted : ErrorNoticeStatus.Rejected; cur.ProviderRef = result.ProviderRef; cur.Response = result.Message;
             cur.SentAt = clock.UtcNow; cur.RespondedAt = clock.UtcNow; cur.RowVersion++;
             db.EInvoiceMessages.Add(new EInvoiceMessage { Id = Ids.New(), CompanyId = ctx.CompanyId, NoticeId = cur.Id, Direction = "IN", Kind = result.Accepted ? "NoticeAccepted" : "NoticeRejected", Code = result.ProviderRef, Detail = result.Message, At = clock.UtcNow });
-            if (result.Accepted && cur.Kind == ErrorNoticeKind.Cancel)
-                foreach (var line in cur.Lines)
-                {
-                    var d = await db.EInvoiceDocuments.FirstAsync(x => x.Id == line.DocumentId);
-                    if (d.Status == EInvoiceDocStatus.Issued) await issue.CancelDocumentAsync(ctx, d, cur.Id.ToString("N"));
-                }
             await audit.AppendAsync(ctx.CompanyId, ctx, "einvoice.notice.send", "einvoice_notice", cur.Id.ToString(), new { cur.Number, result.Accepted, result.Message }, cur.RowVersion);
             await db.SaveChangesAsync();
         });

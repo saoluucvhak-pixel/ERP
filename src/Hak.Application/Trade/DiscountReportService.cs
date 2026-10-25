@@ -42,6 +42,16 @@ public sealed class DiscountReportService(HakDbContext db)
                 case InvoicePurpose.Discount: if (i.DiscountKind == DiscountKind.Trade) r[2] += net; else r[3] += net; break;
             }
         }
+        // Chiết khấu thương mại quyết toán bằng hạch toán điều chỉnh giảm (không có hóa đơn điều chỉnh): chứng từ đã ghi sổ trong kỳ, tính vào cột "CK thương mại sau bán".
+        if (kind == InvoiceKind.Sales)
+        {
+            var byVoucher = await (from r in db.DiscountAgreementRuns.AsNoTracking()
+                                   join ag in db.DiscountAgreements.AsNoTracking() on r.AgreementId equals ag.Id
+                                   join v in db.Vouchers.AsNoTracking() on r.VoucherId equals v.Id
+                                   where r.CompanyId == ctx.CompanyId && r.VoidedAt == null && v.Status == VoucherStatus.Posted && v.PostingDate >= fromDate && v.PostingDate <= toDate
+                                   select new { ag.PartnerId, r.Amount }).ToListAsync();
+            foreach (var x in byVoucher) Row(x.PartnerId)[2] += x.Amount;
+        }
         // Chiết khấu thanh toán: dòng tài khoản vai trò PAYMENT_DISCOUNT_* của chứng từ nguồn HAK.PAYDISC đã ghi sổ, theo đối tượng của hóa đơn nguồn.
         var role = kind == InvoiceKind.Purchase ? "PAYMENT_DISCOUNT_INCOME" : "PAYMENT_DISCOUNT_EXPENSE";
         var account = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.RoleCode == role).Select(m => (Guid?)m.AccountId).FirstOrDefaultAsync();
@@ -52,6 +62,9 @@ public sealed class DiscountReportService(HakDbContext db)
                               where v.CompanyId == ctx.CompanyId && v.SourceSystem == PaymentDiscountService.Source && v.Status == VoucherStatus.Posted
                                     && v.PostingDate >= fromDate && v.PostingDate <= toDate && l.AccountId == acct && l.SettleJournalLineId == null
                               select new { v.SourceId, l.Amount }).ToListAsync();
+            // Chiết khấu độc lập (nguồn PARTNER:…) tính theo đối tượng ghi trong nguồn.
+            foreach (var x in rows)
+                if (PaymentDiscountService.TryParsePartnerSource(x.SourceId, out var ppid, out _) && (await db.BusinessPartners.AsNoTracking().AnyAsync(p => p.Id == ppid && p.CompanyId == ctx.CompanyId))) Row(ppid)[6] += x.Amount;
             var invIds = rows.Select(x => Guid.TryParse(x.SourceId, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
             var owners = await db.CommercialInvoices.AsNoTracking().Where(i => invIds.Contains(i.Id) && i.Kind == kind).Select(i => new { i.Id, i.PartnerId }).ToDictionaryAsync(i => i.Id.ToString(), i => i.PartnerId);
             foreach (var x in rows.Where(x => x.SourceId is not null && owners.ContainsKey(x.SourceId))) Row(owners[x.SourceId!])[6] += x.Amount;

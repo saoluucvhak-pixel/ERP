@@ -49,6 +49,8 @@ public sealed class DiscountAgreementRun
     public Guid CreatedBy { get; set; }
     public DateTime? VoidedAt { get; set; }
     public Guid? VoidedBy { get; set; }
+    /// <summary>Quyết toán bằng hạch toán điều chỉnh giảm (không phát hành hóa đơn điều chỉnh): chứng từ kế toán sinh ra; null = quyết toán bằng hóa đơn điều chỉnh.</summary>
+    public Guid? VoucherId { get; set; }
     public List<DiscountAgreementRunInvoice> Invoices { get; set; } = [];
 }
 

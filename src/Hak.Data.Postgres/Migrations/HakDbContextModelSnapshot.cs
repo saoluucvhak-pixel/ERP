@@ -8540,6 +8540,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("voided_by");
 
+                    b.Property<Guid?>("VoucherId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("voucher_id");
+
                     b.HasKey("Id")
                         .HasName("pk_discount_agreement_runs");
 

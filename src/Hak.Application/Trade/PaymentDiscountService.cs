@@ -26,6 +26,58 @@ public sealed class PaymentDiscountService(HakDbContext db, AccountingEngine eng
 {
     public const string Source = "HAK.PAYDISC";
 
+    /// <summary>
+    /// Chiết khấu thanh toán ĐỘC LẬP (chị chốt 25/10): không xuất hóa đơn nên không ghép với hóa đơn — chỉ là một dòng trong bút toán thanh toán riêng của đối tượng.
+    /// Nguồn = "PARTNER:{đối tượng}#manual:{số chiết khấu}".
+    /// </summary>
+    internal static bool TryParsePartnerSource(string? sourceId, out Guid partnerId, out decimal discount)
+    {
+        partnerId = default; discount = 0;
+        if (sourceId is null || !sourceId.StartsWith("PARTNER:", StringComparison.Ordinal)) return false;
+        var cut = sourceId.IndexOf("#manual:", StringComparison.Ordinal);
+        return cut > 8 && Guid.TryParse(sourceId[8..cut], out partnerId)
+            && decimal.TryParse(sourceId[(cut + 8)..], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out discount);
+    }
+
+    /// <summary>Khoản phải thu / phải trả còn mở (tiền hạch toán) của đối tượng — chọn khoản để thanh toán kèm chiết khấu.</summary>
+    public async Task<IReadOnlyList<OpenItem>> OpenItemsAsync(SessionContext ctx, InvoiceKind kind, Guid partnerId, DateOnly asOf)
+    {
+        ctx.Require(Permissions.ReportView);
+        var role = kind == InvoiceKind.Purchase ? "AP_TRADE" : "AR_TRADE";
+        var map = await db.AccountRoleMappings.AsNoTracking().FirstOrDefaultAsync(m => m.CompanyId == ctx.CompanyId && m.RoleCode == role);
+        if (map is null) return [];
+        return (await new SettlementService(db, audit, clock).OpenItemsAsync(ctx, map.AccountId, partnerId, asOf)).Where(o => o.Open > 0 && o.ForeignCurrency is null).ToList();
+    }
+
+    /// <summary>Lập chứng từ nháp: bù trừ khoản mở đã chọn, tiền thực trả/thu = khoản mở − chiết khấu, phần chiết khấu vào PAYMENT_DISCOUNT_*. Không cần hóa đơn, không cần điều khoản.</summary>
+    public async Task<Voucher> CreateStandaloneVoucherAsync(SessionContext ctx, InvoiceKind kind, Guid partnerId, Guid settleJournalLineId, Guid cashAccountId, DateOnly date, decimal discount)
+    {
+        ctx.Require(Permissions.VoucherCreate); ctx.Require(Permissions.CashDocument);
+        return await db.InTransactionAsync(async () =>
+        {
+            var item = (await OpenItemsAsync(ctx, kind, partnerId, date)).FirstOrDefault(o => o.JournalLineId == settleJournalLineId)
+                       ?? throw new DomainException(ErrorCodes.ValidationFailed, "Khoản công nợ không còn mở hoặc không thuộc đối tượng này.");
+            if (discount <= 0 || discount >= item.Open || discount != MoneyMath.Round(discount, 0))
+                throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu phải là số nguyên đồng, lớn hơn 0 và nhỏ hơn số công nợ còn mở.");
+            var cash = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == cashAccountId && a.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.AccountNotFound, "Tài khoản tiền không tồn tại.");
+            if (cash.CashKind is not (CashKind.Cash or CashKind.Bank)) throw new DomainException(ErrorCodes.ValidationFailed, $"TK {cash.Code} không phải tài khoản tiền.");
+            var purchase = kind == InvoiceKind.Purchase;
+            var role = purchase ? "PAYMENT_DISCOUNT_INCOME" : "PAYMENT_DISCOUNT_EXPENSE";
+            var map = await db.AccountRoleMappings.AsNoTracking().FirstOrDefaultAsync(m => m.CompanyId == ctx.CompanyId && m.RoleCode == role)
+                      ?? throw new DomainException(ErrorCodes.RuleRoleUnmapped, $"Chưa ánh xạ vai trò tài khoản {role}.");
+            var desc = $"{(purchase ? "Trả" : "Thu")} tiền {item.VoucherNumber} có chiết khấu thanh toán";
+            var lines = purchase
+                ? new List<VoucherLineInput> { new(item.AccountId, Side.Debit, item.Open, partnerId, Description: desc, SettleJournalLineId: item.JournalLineId), new(cash.Id, Side.Credit, item.Open - discount, Description: desc) }
+                : new List<VoucherLineInput> { new(cash.Id, Side.Debit, item.Open - discount, Description: desc), new(item.AccountId, Side.Credit, item.Open, partnerId, Description: desc, SettleJournalLineId: item.JournalLineId) };
+            lines.Add(new VoucherLineInput(map.AccountId, purchase ? Side.Credit : Side.Debit, discount, Description: "Chiết khấu thanh toán"));
+            var v = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, date, date, desc, lines, SourceSystem: Source,
+                SourceId: $"PARTNER:{partnerId}#manual:{discount.ToString(System.Globalization.CultureInfo.InvariantCulture)}"));
+            await audit.AppendAsync(ctx.CompanyId, ctx, "payment_discount.standalone", "partner", partnerId.ToString(), new { item.VoucherNumber, item.Open, discount, voucher = v.Number });
+            await db.SaveChangesAsync();
+            return v;
+        });
+    }
+
     public async Task<IReadOnlyList<DiscountCandidate>> CandidatesAsync(SessionContext ctx, InvoiceKind kind, DateOnly asOf)
     {
         ctx.Require(Permissions.ReportView);
@@ -73,6 +125,20 @@ public sealed class PaymentDiscountService(HakDbContext db, AccountingEngine eng
     internal static async Task CheckVoucherAsync(HakDbContext db, Voucher v, List<ValidationError> errors)
     {
         void Fail(string message) => errors.Add(new(ErrorCodes.ValidationFailed, message));
+        if (v.SourceId is not null && v.SourceId.StartsWith("PARTNER:", StringComparison.Ordinal))
+        {
+            if (!TryParsePartnerSource(v.SourceId, out var pid, out var d)) { Fail("Nguồn chứng từ chiết khấu thanh toán không hợp lệ."); return; }
+            var settleLines = v.Lines.Where(l => l.SettleJournalLineId is not null).ToList();
+            if (settleLines.Count != 1 || settleLines[0].PartnerId != pid) { Fail("Chứng từ chiết khấu thanh toán phải có đúng một dòng bù trừ công nợ của đối tượng."); return; }
+            var sl = settleLines[0];
+            if (d <= 0 || d >= sl.Amount) Fail("Chiết khấu phải lớn hơn 0 và nhỏ hơn số công nợ thanh toán.");
+            var discountRoles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == v.CompanyId && (m.RoleCode == "PAYMENT_DISCOUNT_INCOME" || m.RoleCode == "PAYMENT_DISCOUNT_EXPENSE")).Select(m => m.AccountId).ToListAsync();
+            var dl = v.Lines.Where(l => l != sl && l.SettleJournalLineId is null && l.PartnerId is null && discountRoles.Contains(l.AccountId)).ToList();
+            if (dl.Count != 1 || dl[0].Amount != d) Fail($"Số chiết khấu không khớp số đã nhập ({d}).");
+            var cashTotal = v.Lines.Where(l => l != sl && !dl.Contains(l)).Sum(l => l.Amount);
+            if (cashTotal != sl.Amount - d) Fail($"Số tiền thực trả/thu {cashTotal} không khớp (phải bằng số công nợ {sl.Amount} trừ chiết khấu {d}).");
+            return;
+        }
         if (!Guid.TryParse(v.SourceId, out var invoiceId)) { Fail("Chứng từ chiết khấu thanh toán thiếu hóa đơn nguồn."); return; }
         var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == v.CompanyId);
         if (inv is null || inv.Status != InvoiceStatus.Posted || inv.Purpose != InvoicePurpose.Normal || inv.PaymentDiscountPercent is null || inv.PaymentDiscountDays is null)

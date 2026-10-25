@@ -450,11 +450,4 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         db.EInvoiceImportBatches.Add(batch);
         db.EInvoiceStatusChanges.Add(new EInvoiceStatusChange { Id = Ids.New(), EInvoiceId = rec.Id, NewStatus = status, ImportBatchId = batch.Id, At = clock.UtcNow });
     }
-
-    /// <summary>Dùng cho thông báo sai sót: đổi trạng thái hóa đơn đã phát hành thành Hủy và ghi trạng thái vào bản ghi đối soát.</summary>
-    internal async Task CancelDocumentAsync(SessionContext ctx, EInvoiceDocument d, string sourceKey)
-    {
-        d.Status = EInvoiceDocStatus.Cancelled; d.RowVersion++;
-        await MarkRecordStatusAsync(ctx, d, EInvoiceStatus.Cancelled, sourceKey);
-    }
 }

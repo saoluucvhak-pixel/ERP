@@ -11,7 +11,7 @@ public enum EInvoiceDocStatus
     Rejected = 3,
     /// <summary>Đã bị hóa đơn thay thế.</summary>
     Replaced = 4,
-    /// <summary>Đã hủy qua thông báo sai sót được cơ quan thuế tiếp nhận.</summary>
+    /// <summary>Dành cho hủy hóa đơn theo quy trình riêng (chưa dùng): thông báo sai sót 04/SS KHÔNG đổi trạng thái hóa đơn.</summary>
     Cancelled = 5,
 }
 
@@ -96,8 +96,7 @@ public enum ErrorNoticeKind { Explain = 1, Cancel = 2, Adjust = 3, Replace = 4 }
 public enum ErrorNoticeStatus { Draft = 1, Sent = 2, Accepted = 3, Rejected = 4 }
 
 /// <summary>
-/// Thông báo sai sót (Mẫu 04/SS-HĐĐT): danh sách hóa đơn có sai sót kèm lý do. Không phát sinh bút toán; nếu được tiếp nhận với loại Hủy
-/// thì hóa đơn chuyển Cancelled và đối soát sẽ yêu cầu đảo bút toán còn hiệu lực.
+/// Thông báo sai sót (Mẫu 04/SS-HĐĐT): danh sách hóa đơn có sai sót kèm lý do, chỉ ĐÍNH KÈM hóa đơn cần sửa. Không thay đổi hóa đơn, không phát sinh bút toán.
 /// </summary>
 public sealed class EInvoiceErrorNotice
 {

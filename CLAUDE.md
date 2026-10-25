@@ -129,3 +129,6 @@ Phát hành từ ERP qua cổng `IEInvoiceProvider` (mặc định `None` = khô
 - 20/10 đợt 27: báo cáo dịch vụ (ServiceReportService), lịch nghiệm thu theo hợp đồng (ContractServicePlanService), mốc + chấm giờ (ServiceProgressService) — docs/10 mục 9ab.
 
 - 20/10 đợt 28: sổ nhật ký đặc biệt + xử lý bút toán trùng (rút tiền, hoàn ứng mua vật tư: mỗi bút toán một sổ chính — chị chốt ưu tiên tiền mặt: thu tiền → chi tiền → bán hàng → mua hàng, sổ khác đánh dấu trùng không cộng; SpecialJournalService, Domain/Ledger/SpecialJournals.cs) — docs/10 mục 9ac.
+
+## Đã chốt 25/10/2026 (đợt 2 — luật của chị về hóa đơn / chiết khấu)
+Thông báo 04/SS chỉ đính kèm hóa đơn cần sửa, không đổi hóa đơn; hóa đơn điều chỉnh điều chỉnh số liệu của hóa đơn gốc (danh sách hiện "sau điều chỉnh"); chiết khấu thanh toán không xuất hóa đơn nên KHÔNG ghép với hóa đơn (chế độ độc lập: chọn đối tượng + khoản công nợ mở, nguồn `PARTNER:{đối tượng}#manual:{số}`, `POST /payment-discounts/standalone`); chiết khấu thương mại bắt buộc là hóa đơn điều chỉnh HOẶC hạch toán điều chỉnh giảm (`SettleByVoucherAsync`, `DiscountAgreementRun.VoucherId`, migration `Phase21DiscountRunVoucher`) — chi tiết docs/10 mục 9ai.

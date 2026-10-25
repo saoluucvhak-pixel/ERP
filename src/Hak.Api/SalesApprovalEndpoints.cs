@@ -25,6 +25,8 @@ public static class SalesApprovalEndpoints
     }
 }
 
+public sealed record StandalonePaymentDiscountRequest(Hak.Domain.Trade.InvoiceKind Kind, Guid PartnerId, Guid SettleJournalLineId, Guid CashAccountId, DateOnly Date, decimal Discount);
+
 public sealed record PaymentDiscountVoucherRequest(Guid CashAccountId, DateOnly Date);
 
 public static class PaymentDiscountEndpoints
@@ -33,6 +35,10 @@ public static class PaymentDiscountEndpoints
     {
         var api = app.MapGroup("/api/payment-discounts");
         api.MapGet("", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly asOf, PaymentDiscountService s) => Results.Ok(await s.CandidatesAsync(await http.SessionAsync(), kind, asOf)));
+        // Chiết khấu thanh toán độc lập: không gắn hóa đơn.
+        api.MapGet("/open-items", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, Guid partnerId, DateOnly asOf, PaymentDiscountService s) => Results.Ok(await s.OpenItemsAsync(await http.SessionAsync(), kind, partnerId, asOf)));
+        api.MapPost("/standalone", async (HttpContext http, StandalonePaymentDiscountRequest r, PaymentDiscountService s) =>
+        { var v = await s.CreateStandaloneVoucherAsync(await http.SessionAsync(), r.Kind, r.PartnerId, r.SettleJournalLineId, r.CashAccountId, r.Date, r.Discount); return Results.Ok(new { v.Id, v.Number }); });
         api.MapPost("/{invoiceId:guid}/voucher", async (HttpContext http, Guid invoiceId, PaymentDiscountVoucherRequest r, PaymentDiscountService s) =>
         { var v = await s.CreateVoucherAsync(await http.SessionAsync(), invoiceId, r.CashAccountId, r.Date); return Results.Ok(new { v.Id, v.Number }); });
     }

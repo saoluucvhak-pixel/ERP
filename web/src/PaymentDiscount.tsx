@@ -1,22 +1,25 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, ExportButton, FlowStrip, Modal, useAction, useCatalog, navStore } from './common'
+import { AccountSelect, ErrorBox, ExportButton, FlowStrip, Modal, PartnerSelect, useAction, useCatalog, navStore } from './common'
 import { addMoney, formatDate, formatMoney, today } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
 
+interface OpenRow { journalLineId: string; voucherNumber: string; postingDate: string; open: string; description: string | null }
 interface Cand { invoiceId: string; invoiceNumber: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; partnerCode: string; partnerName: string; percent: string; days: number; deadline: string; daysLeft: number
   expired: boolean; open: string; discount: string; cashToPay: string; voucherNumber: string | null; voucherPending: boolean }
 
 /** Chiết khấu thanh toán: hóa đơn còn trong hạn hưởng, số chiết khấu và số tiền thực trả / thực thu; lập chứng từ nháp thanh toán có chiết khấu. */
 export function PaymentDiscountView() {
-  const { accounts } = useCatalog()
+  const { accounts, partners } = useCatalog()
   const [kind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Purchase')   // chiều do phân hệ đang mở quyết định
   const [asOf, setAsOf] = useState(today())
   const [rows, setRows] = useState<Cand[]>([])
   const [f, pf, cf] = useFilterState('paydiscount')
   const [dlg, setDlg] = useState<{ c: Cand; cash: string; date: string } | null>(null)
   const [info, setInfo] = useState('')
+  // Chiết khấu thanh toán độc lập: không xuất hóa đơn nên không ghép với hóa đơn — chọn khoản công nợ còn mở của đối tượng.
+  const [solo, setSolo] = useState<{ partner: string; items: OpenRow[]; item: string; cash: string; date: string; discount: string } | null>(null)
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setRows(await get<Cand[]>(`/payment-discounts?kind=${kind}&asOf=${asOf}`))), [run, kind, asOf])
   useEffect(() => { load() }, [load])
@@ -26,6 +29,7 @@ export function PaymentDiscountView() {
     <>
       <div className="toolbar"><h2>{purchase ? 'Chiết khấu thanh toán được hưởng (hóa đơn mua)' : 'Chiết khấu thanh toán cho khách (hóa đơn bán)'}</h2>
         <label>Tính đến ngày<input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
+        <button onClick={() => setSolo({ partner: '', items: [], item: '', cash: '', date: asOf, discount: '' })}>Chiết khấu không theo hóa đơn…</button>
         <ExportButton fileName={`Chiet_khau_thanh_toan_${kind}_${asOf}`} sheet="Chiết khấu thanh toán" disabled={shown.length === 0}
           columns={[{ header: 'Hóa đơn', width: 18 }, { header: 'Ngày HĐ', width: 12 }, { header: 'Đối tượng', width: 30 }, { header: 'Hạn hưởng', width: 12 }, { header: 'Còn mở', numeric: true, width: 16 }, { header: 'Chiết khấu', numeric: true, width: 14 }, { header: purchase ? 'Thực trả' : 'Thực thu', numeric: true, width: 16 }]}
           rows={shown.map(r => [`${r.invoiceSeries}/${r.invoiceNo}`, r.invoiceDate, `${r.partnerCode} – ${r.partnerName}`, r.deadline, r.open, r.discount, r.cashToPay])} /></div>
@@ -50,6 +54,23 @@ export function PaymentDiscountView() {
           {shown.length === 0 && <tr><td colSpan={8} className="muted">Không có hóa đơn có chiết khấu thanh toán đang mở. Điều khoản ghi ở hóa đơn (CK thanh toán % / trong N ngày) hoặc điền sẵn theo đối tượng ở Danh mục.</td></tr>}</tbody>
       </table></div>
       <p className="muted">Chiết khấu = P% × tiền hàng chưa thuế (theo phần còn mở); thuế GTGT giữ nguyên số trên hóa đơn [CẦN XÁC MINH cách xử lý theo quy định thuế]. Cần ánh xạ vai trò PAYMENT_DISCOUNT_INCOME (mua) / PAYMENT_DISCOUNT_EXPENSE (bán).</p>
+
+      {solo && <Modal title={`${purchase ? 'Trả' : 'Thu'} tiền có chiết khấu — không theo hóa đơn`} onClose={() => setSolo(null)} busy={busy}
+        footer={<><button onClick={() => setSolo(null)}>Đóng</button><button className="primary" disabled={busy || !solo.item || !solo.cash || !solo.discount} onClick={() => run(async () => {
+          const v = await post<{ number: string }>('/payment-discounts/standalone', { kind, partnerId: solo.partner, settleJournalLineId: solo.item, cashAccountId: solo.cash, date: solo.date, discount: solo.discount })
+          setSolo(null); setInfo(`Đã lập chứng từ ${v.number} (nháp) — duyệt và ghi sổ ở màn Chứng từ.`)
+        })}>Lập chứng từ</button></>}>
+        <p>Chiết khấu thanh toán không xuất hóa đơn nên không ghép với hóa đơn: chỉ là một dòng trong bút toán thanh toán riêng, bù trừ khoản công nợ còn mở bạn chọn.</p>
+        <div className="form-row"><label>Đối tượng<PartnerSelect partners={partners} value={solo.partner} onChange={id => run(async () => {
+          const items = id ? await get<OpenRow[]>(`/payment-discounts/open-items?kind=${kind}&partnerId=${id}&asOf=${solo.date}`) : []
+          setSolo({ ...solo, partner: id, items, item: '' })
+        })} /></label></div>
+        <div className="form-row"><label>Khoản công nợ còn mở<select value={solo.item} onChange={e => setSolo({ ...solo, item: e.target.value })}><option value="">— chọn —</option>
+          {solo.items.map(o => <option key={o.journalLineId} value={o.journalLineId}>{o.voucherNumber} · {formatDate(o.postingDate)} · còn {formatMoney(o.open)}</option>)}</select></label>
+          <label>Chiết khấu (đồng)<input inputMode="numeric" value={solo.discount} onChange={e => setSolo({ ...solo, discount: e.target.value.replace(/[^0-9]/g, '') })} /></label></div>
+        <div className="form-row"><label>Tài khoản tiền<AccountSelect accounts={accounts} value={solo.cash} onChange={id => setSolo({ ...solo, cash: id })} filter={a => a.cashKind === 'Cash' || a.cashKind === 'Bank'} /></label>
+          <label>Ngày<input type="date" value={solo.date} onChange={e => setSolo({ ...solo, date: e.target.value })} /></label></div>
+      </Modal>}
 
       {dlg && <Modal title={`${purchase ? 'Trả' : 'Thu'} tiền có chiết khấu — ${dlg.c.invoiceSeries}/${dlg.c.invoiceNo}`} onClose={() => setDlg(null)} busy={busy}
         footer={<><button onClick={() => setDlg(null)}>Đóng</button><button className="primary" disabled={busy || !dlg.cash} onClick={() => run(async () => {
