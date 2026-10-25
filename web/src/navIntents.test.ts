@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { QUICK_GROUPS } from './quickadd.ts'
+import { QUICK_GROUPS } from './navIntents.ts'
 
 const all = QUICK_GROUPS.flatMap(g => g.items)
 const find = (label: string) => all.find(i => i.label === label)!

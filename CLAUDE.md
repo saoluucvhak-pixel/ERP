@@ -77,6 +77,9 @@ Ghi sổ ACID; sổ cái/sổ kho/phân bổ/kết quả đo bất biến (inter
 - Worklist hiện danh sách "người có thể làm" cho mỗi việc.
 - Ẩn nút Xuất Excel khi thiếu quyền `data.export`.
 
+## Kiểm tra 25/10/2026 (commit 8fab99d) — đã xử lý F01–F06, xem `docs/audit/BUG_REGISTER.md`
+Tên module không được trùng khi bỏ hoa/thường (`modulenames.test.ts`); replay bản ghi idempotency cũ trả 409 `IDEMPOTENCY_LEGACY_RECORD`; thao tác ghi chụp JSON một lần (`api.ts` WriteOp) và hàng chờ chưa xác định theo opId; e2e không dùng sleep, có `E2E_BROWSER_CHANNEL/PATH`; `/api/cycles/order-worklist` trả `{items,total,hasMore}`; `LedgerInvariants.AssertAsync` gắn vào test luồng. Đo hiệu suất: chưa nghẽn ở 10k chứng từ / 4k biến động kho (chỉ mục kho thử rồi gỡ vì không hiệu quả). Chưa: F04 bền qua tải lại, benchmark 50k–100k/nhiều người dùng, test xuyên chu trình đủ 8 tình huống mỗi luồng.
+
 ## Chiết khấu (làm lại 25/10/2026, docs/10 mục 9ai)
 CKTM đổi giá hàng (giảm doanh thu/giá mua và thuế), CKTT đổi giá của việc trả tiền (chi phí/thu nhập tài chính, không đổi doanh số/thuế). Dòng hóa đơn có chiết khấu trên hóa đơn (`DiscountPercent`/`DiscountAmount`, `Amount` là số sau chiết khấu); hóa đơn điều chỉnh giảm có `DiscountKind` (Trade → vai trò `SALES_TRADE_DISCOUNT`, chưa ánh xạ thì `SALES_DISCOUNT`); thỏa thuận chiết khấu theo doanh số `DiscountAgreementService` (quyết toán sinh hóa đơn điều chỉnh nháp theo từng hóa đơn gốc; cờ `UnderAgreement` bỏ phê duyệt từng dòng CHỈ do dịch vụ đặt — endpoint dùng `AdjustmentRequest`, không bind thẳng `AdjustmentInput`); báo cáo `DiscountReportService`; màn "Chiết khấu thương mại" ở Bán hàng / Mua hàng. Migration `Phase18Discounts`.
 

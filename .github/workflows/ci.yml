@@ -80,6 +80,23 @@ jobs:
         timeout-minutes: 10
       - run: npm test
       - run: npm run build
+  # Windows phân giải tên tệp không phân biệt hoa/thường: build tại đây bắt lỗi trùng tên module (QuickAdd.tsx / quickadd.ts) mà Linux không thấy.
+  frontend-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
   # Test giao diện bằng trình duyệt thật (Playwright) trên API + dữ liệu thử: Thêm nhanh, Kiểm tra chứng từ, Worklist, tách chu trình mua / bán.
   e2e:
     runs-on: ubuntu-latest

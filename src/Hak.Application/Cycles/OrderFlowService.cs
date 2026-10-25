@@ -20,6 +20,9 @@ public sealed record FlowNextAction(string Code, string Label, string Screen, Gu
 public sealed record OrderFlow(Guid OrderId, string Number, string Kind, string Status, Guid PartnerId, string PartnerName, IReadOnlyList<FlowAxis> Axes,
     IReadOnlyList<FlowDocument> Documents, FlowNextAction? Next);
 
+/// <param name="Total">Tổng số đơn còn việc (trước phân trang).</param>
+public sealed record WorklistPage(IReadOnlyList<WorklistRow> Items, int Total, bool HasMore);
+
 public sealed record WorklistRow(Guid OrderId, string Number, string Kind, string PartnerName, string ActionCode, string Action, string Screen, Guid OwnerId, string OwnerName,
     DateOnly? Due, int AgeDays, bool Overdue);
 
@@ -39,24 +42,36 @@ public sealed class OrderFlowService(HakDbContext db, OrderService orders, ICloc
         return await BuildAsync(ctx, order, names, withDocuments: true);
     }
 
-    /// <summary>Việc cần làm theo đơn: mỗi đơn chưa xong một dòng kèm hành động kế tiếp, người phụ trách và hạn; đơn quá hạn xếp trước.</summary>
-    public async Task<IReadOnlyList<WorklistRow>> WorklistAsync(SessionContext ctx, InvoiceKind kind, int take = 60)
+    /// <summary>
+    /// Việc cần làm theo đơn: mỗi đơn chưa xong một dòng kèm hành động kế tiếp, người phụ trách và hạn; đơn quá hạn xếp trước.
+    /// Ưu tiên (quá hạn / hạn / tuổi) tính trên MỌI đơn đang mở rồi mới phân trang — không cắt "N đơn mới nhất" trước, nếu không đơn cũ quá hạn biến mất khỏi danh sách.
+    /// Duyệt theo lô để không nạp cả tập vào bộ nhớ một lần.
+    /// </summary>
+    public async Task<WorklistPage> WorklistAsync(SessionContext ctx, InvoiceKind kind, int skip = 0, int take = 60)
     {
         ctx.Require(Permissions.ReportView);
-        var list = await db.TradeOrders.AsNoTracking().Include(o => o.Lines)
-            .Where(o => o.CompanyId == ctx.CompanyId && o.Kind == kind && (o.Status == OrderStatus.Draft || o.Status == OrderStatus.Confirmed))
-            .OrderByDescending(o => o.OrderDate).ThenByDescending(o => o.Number).Take(Math.Clamp(take, 1, 100)).ToListAsync();
-        var names = await UserNamesAsync(ctx.CompanyId, list.SelectMany(o => new[] { o.CreatedBy, o.ConfirmedBy ?? o.CreatedBy }));
+        skip = Math.Max(0, skip); take = Math.Clamp(take, 1, 200);
         var today = DateOnly.FromDateTime(clock.UtcNow);
         var rows = new List<WorklistRow>();
-        foreach (var o in list)
+        const int batch = 100;
+        for (var offset = 0; ; offset += batch)
         {
-            var flow = await BuildAsync(ctx, o, names, withDocuments: false);
-            if (flow.Next is not { } n) continue;
-            rows.Add(new WorklistRow(o.Id, o.Number, kind.ToString(), flow.PartnerName, n.Code, n.Label, n.Screen, n.OwnerId, n.OwnerName, n.Due,
-                Math.Max(0, today.DayNumber - o.OrderDate.DayNumber), n.Due is { } d && d < today));
+            var list = await db.TradeOrders.AsNoTracking().Include(o => o.Lines)
+                .Where(o => o.CompanyId == ctx.CompanyId && o.Kind == kind && (o.Status == OrderStatus.Draft || o.Status == OrderStatus.Confirmed))
+                .OrderByDescending(o => o.OrderDate).ThenByDescending(o => o.Number).ThenBy(o => o.Id).Skip(offset).Take(batch).ToListAsync();
+            if (list.Count == 0) break;
+            var names = await UserNamesAsync(ctx.CompanyId, list.SelectMany(o => new[] { o.CreatedBy, o.ConfirmedBy ?? o.CreatedBy }));
+            foreach (var o in list)
+            {
+                var flow = await BuildAsync(ctx, o, names, withDocuments: false);
+                if (flow.Next is not { } n) continue;
+                rows.Add(new WorklistRow(o.Id, o.Number, kind.ToString(), flow.PartnerName, n.Code, n.Label, n.Screen, n.OwnerId, n.OwnerName, n.Due,
+                    Math.Max(0, today.DayNumber - o.OrderDate.DayNumber), n.Due is { } d && d < today));
+            }
+            if (list.Count < batch) break;
         }
-        return rows.OrderByDescending(r => r.Overdue).ThenBy(r => r.Due ?? DateOnly.MaxValue).ThenByDescending(r => r.AgeDays).ToList();
+        var ordered = rows.OrderByDescending(r => r.Overdue).ThenBy(r => r.Due ?? DateOnly.MaxValue).ThenByDescending(r => r.AgeDays).ThenBy(r => r.Number, StringComparer.Ordinal).ThenBy(r => r.OrderId).ToList();
+        return new WorklistPage(ordered.Skip(skip).Take(take).ToList(), ordered.Count, skip + take < ordered.Count);
     }
 
     private async Task<OrderFlow> BuildAsync(SessionContext ctx, TradeOrder order, IReadOnlyDictionary<Guid, string> names, bool withDocuments)

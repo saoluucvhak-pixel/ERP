@@ -51,7 +51,7 @@ public sealed class DomainExceptionMiddleware(RequestDelegate next, ILogger<Doma
                 ErrorCodes.Forbidden => StatusCodes.Status403Forbidden,
                 ErrorCodes.NotFound => StatusCodes.Status404NotFound,
                 ErrorCodes.ConcurrencyConflict or ErrorCodes.AlreadyPosted or ErrorCodes.DuplicateSource
-                    or ErrorCodes.PackageReplayed or ErrorCodes.DuplicateCode => StatusCodes.Status409Conflict,
+                    or ErrorCodes.PackageReplayed or ErrorCodes.DuplicateCode or IdempotencyMiddleware.LegacyCode => StatusCodes.Status409Conflict,
                 _ => StatusCodes.Status422UnprocessableEntity,
             };
             await ctx.Response.WriteAsJsonAsync(new { code = ex.Code, message = ex.Message, errors = ex.Errors });
