@@ -335,10 +335,12 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
 
     /// <summary>Thông tin thương mại của đối tượng theo tệp phân tích ERP: địa chỉ, điện thoại, email, hạn mức tín dụng, điều kiện thanh toán.</summary>
     public async Task<BusinessPartner> UpdatePartnerCommercialAsync(SessionContext ctx, Guid partnerId, string? address, string? phone, string? email,
-        decimal? creditLimit, int? paymentTermsDays, decimal? paymentDiscountPercent = null, int? paymentDiscountDays = null)
+        decimal? creditLimit, int? paymentTermsDays, decimal? paymentDiscountPercent = null, int? paymentDiscountDays = null, string? paymentDiscountOptions = null)
     {
         ctx.Require(Permissions.CatalogManage);
         ValidateCommercial(creditLimit, paymentTermsDays, paymentDiscountPercent, paymentDiscountDays);
+        paymentDiscountOptions = string.IsNullOrWhiteSpace(paymentDiscountOptions) ? null : paymentDiscountOptions.Trim();
+        _ = Hak.Domain.Trade.PaymentTerms.From(paymentDiscountPercent, paymentDiscountDays, paymentDiscountOptions);
         return await db.InTransactionAsync(async () =>
         {
             var p = await db.BusinessPartners.FirstOrDefaultAsync(x => x.Id == partnerId && x.CompanyId == ctx.CompanyId)
@@ -346,7 +348,7 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
             static string? T(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
             var old = new { p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays };
             p.Address = T(address); p.Phone = T(phone); p.Email = T(email); p.CreditLimit = creditLimit; p.PaymentTermsDays = paymentTermsDays;
-            p.PaymentDiscountPercent = paymentDiscountPercent; p.PaymentDiscountDays = paymentDiscountDays;
+            p.PaymentDiscountPercent = paymentDiscountPercent; p.PaymentDiscountDays = paymentDiscountDays; p.PaymentDiscountOptions = paymentDiscountOptions;
             p.RowVersion++;
             await audit.AppendAsync(ctx.CompanyId, ctx, "partner.update_commercial", "business_partner", p.Id.ToString(),
                 new { old, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays }, p.RowVersion);
@@ -355,7 +357,7 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
         });
     }
 
-    private static void ValidateCommercial(decimal? creditLimit, int? paymentTermsDays, decimal? paymentDiscountPercent, int? paymentDiscountDays)
+    private static void ValidateCommercial(decimal? creditLimit, int? paymentTermsDays, decimal? paymentDiscountPercent, int? paymentDiscountDays, string? paymentDiscountOptions = null)
     {
         if ((paymentDiscountPercent is null) != (paymentDiscountDays is null)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán phải nhập đủ cả tỷ lệ % và số ngày.");
         if (paymentDiscountPercent is { } dp && (dp <= 0 || dp > 100 || paymentDiscountDays is < 1 or > 365)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán: tỷ lệ lớn hơn 0 đến 100%, số ngày từ 1 đến 365.");
@@ -368,11 +370,13 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
     /// người dùng đã xem (expectedRowVersion) — không để lưu một nửa như hai lệnh PUT riêng.
     /// </summary>
     public async Task<BusinessPartner> UpdatePartnerFullAsync(SessionContext ctx, Guid partnerId, long expectedRowVersion, string name, string? taxCode, bool isActive,
-        string? address, string? phone, string? email, decimal? creditLimit, int? paymentTermsDays, decimal? paymentDiscountPercent, int? paymentDiscountDays)
+        string? address, string? phone, string? email, decimal? creditLimit, int? paymentTermsDays, decimal? paymentDiscountPercent, int? paymentDiscountDays, string? paymentDiscountOptions = null)
     {
         ctx.Require(Permissions.CatalogManage);
         if (string.IsNullOrWhiteSpace(name)) throw new DomainException(ErrorCodes.ValidationFailed, "Tên đối tượng bắt buộc.");
         ValidateCommercial(creditLimit, paymentTermsDays, paymentDiscountPercent, paymentDiscountDays);
+        paymentDiscountOptions = string.IsNullOrWhiteSpace(paymentDiscountOptions) ? null : paymentDiscountOptions.Trim();
+        _ = Hak.Domain.Trade.PaymentTerms.From(paymentDiscountPercent, paymentDiscountDays, paymentDiscountOptions);
         return await db.InTransactionAsync(async () =>
         {
             var p = await db.BusinessPartners.FirstOrDefaultAsync(x => x.Id == partnerId && x.CompanyId == ctx.CompanyId)
@@ -383,7 +387,7 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
             var old = new { p.Name, p.TaxCode, p.IsActive, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays, p.PaymentDiscountPercent, p.PaymentDiscountDays };
             p.Name = name.Trim(); p.TaxCode = T(taxCode); p.IsActive = isActive;
             p.Address = T(address); p.Phone = T(phone); p.Email = T(email); p.CreditLimit = creditLimit; p.PaymentTermsDays = paymentTermsDays;
-            p.PaymentDiscountPercent = paymentDiscountPercent; p.PaymentDiscountDays = paymentDiscountDays;
+            p.PaymentDiscountPercent = paymentDiscountPercent; p.PaymentDiscountDays = paymentDiscountDays; p.PaymentDiscountOptions = paymentDiscountOptions;
             p.RowVersion++;
             await audit.AppendAsync(ctx.CompanyId, ctx, "partner.update_full", "business_partner", p.Id.ToString(),
                 new { old, p.Name, p.TaxCode, p.IsActive, p.Address, p.Phone, p.Email, p.CreditLimit, p.PaymentTermsDays, p.PaymentDiscountPercent, p.PaymentDiscountDays }, p.RowVersion);

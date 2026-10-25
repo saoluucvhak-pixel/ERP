@@ -1,3 +1,4 @@
+using Hak.Application.Fx;
 using Hak.Domain.Production;
 using Hak.Domain.Catalog;
 using Hak.Application.Accounting;
@@ -1255,6 +1256,150 @@ public partial class TradeTests
         Assert.Equal(2m, (await fx.S.Db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == inv.Id)).PaymentDiscountPercent);
     }
 
+    private static async Task MapPaymentDiscountExpenseAsync(Fx fx)
+    {
+        fx.H.Acc["FINEXP"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "FINEXP", "Chi phí tài chính (thử)")).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "PAYMENT_DISCOUNT_EXPENSE", "FINEXP");
+    }
+
+    [Fact]
+    public async Task PaymentDiscount_MultiTier_GraceDays_AndVatInclusiveBase()
+    {
+        using var fx = await SetupAsync();
+        var pd = new PaymentDiscountService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        await MapPaymentDiscountExpenseAsync(fx);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        // 3/5 và 2/10, thêm 1 ngày dung sai: hạn bậc 3% = 9/3, hạn bậc 2% = 14/3.
+        await fx.S.Setup.UpdatePartnerCommercialAsync(fx.H.Admin, fx.H.Partner["KH01"], null, null, null, null, 30, 2m, 10, "tier=3:5;grace=1");
+        var inv = await PostedSaleAsync(fx, "0000701", 10, D(3, 3), price: 100_000);                         // 1.000.000 + VAT 100.000
+        Assert.Equal("tier=3:5;grace=1", inv.PaymentDiscountOptions);
+
+        var c8 = Assert.Single(await pd.CandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 8)));
+        Assert.Equal((3m, 5, D(3, 9), 30_000m, false), (c8.Percent, c8.Days, c8.Deadline, c8.Discount, c8.Expired));
+        var c9 = Assert.Single(await pd.CandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 9)));
+        Assert.Equal((3m, 30_000m), (c9.Percent, c9.Discount));                                                 // ngày cuối của dung sai vẫn bậc 3%
+        var c10 = Assert.Single(await pd.CandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 10)));
+        Assert.Equal((2m, 10, D(3, 14), 20_000m), (c10.Percent, c10.Days, c10.Deadline, c10.Discount));          // rơi xuống bậc 2%
+        Assert.True(Assert.Single(await pd.CandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 15))).Expired);
+
+        var v = await pd.CreateVoucherAsync(fx.H.Preparer, inv.Id, fx.A("CASH"), D(3, 9));
+        await PostVoucherAsync(fx, v.Id);
+        Assert.Equal(30_000m, await fx.Bal("FINEXP"));
+        Assert.Equal(0m, await fx.Bal("AR", fx.H.Partner["KH01"]));
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+
+        // Cơ sở gồm thuế: 2% × 1.100.000 = 22.000, thuế GTGT trên hóa đơn vẫn 100.000.
+        await fx.S.Setup.UpdatePartnerCommercialAsync(fx.H.Admin, fx.H.Partner["KH02"], null, null, null, null, 30, 2m, 10, "base=incl");
+        var inv2 = await PostedSaleAsync(fx, "0000702", 10, D(3, 3), price: 100_000, partner: fx.H.Partner["KH02"]);
+        var c = Assert.Single((await pd.CandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 5))).Where(x => x.PartnerCode == "KH02"));
+        Assert.Equal(22_000m, c.Discount);
+        Assert.Equal(100_000m, inv2.Lines.Sum(l => l.VatAmount));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.Setup.UpdatePartnerCommercialAsync(fx.H.Admin, fx.H.Partner["KH02"], null, null, null, null, 30, 2m, 10, "tier=2:15")));   // bậc xa hơn phải thấp hơn
+    }
+
+    [Fact]
+    public async Task PaymentDiscount_OneVoucherForSeveralInvoices_DiscountPerInvoice_LateOrTermlessOnlySettle()
+    {
+        using var fx = await SetupAsync();
+        var pd = new PaymentDiscountService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        await MapPaymentDiscountExpenseAsync(fx);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        var a = await PostedSaleAsync(fx, "0000711", 10, D(3, 3), price: 100_000);                               // không điều khoản: 1.100.000
+        await fx.S.Setup.UpdatePartnerCommercialAsync(fx.H.Admin, fx.H.Partner["KH01"], null, null, null, null, 30, 2m, 10);
+        var c = await PostedSaleAsync(fx, "0000713", 10, D(3, 3), price: 100_000);                               // 2/10, hạn 13/3 → thanh toán 20/3 là quá hạn
+        var b = await PostedSaleAsync(fx, "0000712", 10, D(3, 12), price: 100_000);                              // 2/10, hạn 22/3 → CK 20.000
+        var ids = new List<Guid> { a.Id, b.Id, c.Id };
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateMultiVoucherAsync(fx.H.Preparer, InvoiceKind.Sales, fx.H.Partner["KH01"], [a.Id], fx.A("CASH"), D(3, 20))));   // cần ≥ 2 hóa đơn
+        var v = await pd.CreateMultiVoucherAsync(fx.H.Preparer, InvoiceKind.Sales, fx.H.Partner["KH01"], ids, fx.A("CASH"), D(3, 20));
+        await PostVoucherAsync(fx, v.Id);
+        Assert.Equal(20_000m, await fx.Bal("FINEXP"));                                                          // chỉ hóa đơn b
+        Assert.Equal(3_300_000m - 20_000m, await fx.Bal("CASH"));                                               // thu đủ ba hóa đơn trừ chiết khấu
+        Assert.Equal(0m, await fx.Bal("AR", fx.H.Partner["KH01"]));
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+
+        // Chứng từ gộp bị sửa số chiết khấu ngoài dịch vụ → không ghi sổ được.
+        var d = await PostedSaleAsync(fx, "0000721", 10, D(3, 21), price: 100_000);
+        var e = await PostedSaleAsync(fx, "0000722", 10, D(3, 21), price: 100_000);
+        var v2 = await pd.CreateMultiVoucherAsync(fx.H.Preparer, InvoiceKind.Sales, fx.H.Partner["KH01"], [d.Id, e.Id], fx.A("CASH"), D(3, 22));
+        await fx.S.Db.VoucherLines.Where(l => l.VoucherId == v2.Id && l.AccountId == fx.A("FINEXP")).ExecuteUpdateAsync(x => x.SetProperty(l => l.Amount, 1m));
+        fx.S.Db.ChangeTracker.Clear();
+        await Assert.ThrowsAnyAsync<DomainException>(() => PostVoucherAsync(fx, v2.Id));
+    }
+
+    [Fact]
+    public async Task PaymentDiscount_ForeignCurrencyInvoice_DiscountInUsd_RealisedGainOnlyOnTheCashPart()
+    {
+        using var fx = await SetupAsync();
+        await MapPaymentDiscountExpenseAsync(fx);
+        fx.H.Acc["FXGAIN"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "FXGAIN", "Lãi tỷ giá đã thực hiện (thử)")).Id;
+        fx.H.Acc["FXLOSS"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "FXLOSS", "Lỗ tỷ giá đã thực hiện (thử)")).Id;
+        fx.H.Acc["BANKUSD"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "BANKUSD", "Tiền gửi USD (thử)", cashKind: CashKind.Bank)).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "FX_REALIZED_GAIN", "FXGAIN");
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "FX_REALIZED_LOSS", "FXLOSS");
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        var issue = await PostedIssueAsync(fx, 10, D(3, 3), fx.Add);
+        var created = await fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26TXK", "0000801", D(3, 3), D(3, 3), "Bán USD",
+            [new InvoiceLineInput(100, issue.Id, 1, VatRate: 0)], Currency: "USD", ExchangeRate: 25_000, PaymentDiscountPercent: 2, PaymentDiscountDays: 10));
+        await fx.Inv.PostAsync(fx.H.Approver, created.Id);                                                        // 1.000 USD = 25.000.000
+        var item = Assert.Single(await fx.S.Settlement.OpenItemsAsync(fx.H.Auditor, fx.A("AR"), fx.H.Partner["KH01"], D(3, 10)));
+
+        // Quá hạn (ngày 14/3 > hạn 13/3): từ chối. Không đủ điều khoản không có ApplyDiscount thì thu bình thường.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.FxPayments.CreateDraftAsync(fx.H.Preparer,
+            new FxPaymentInput(D(3, 14), fx.A("BANKUSD"), 25_200, "Thu muộn", [new FxSettleItem(item.JournalLineId, 1_000, ApplyDiscount: true)]))));
+
+        var input = new FxPaymentInput(D(3, 10), fx.A("BANKUSD"), 25_200, "Thu KH01 có chiết khấu", [new FxSettleItem(item.JournalLineId, 1_000, ApplyDiscount: true)]);
+        var preview = await fx.S.FxPayments.PreviewAsync(fx.H.Preparer, input);
+        Assert.Equal((980m, 20m, 500_000m, 196_000m), (preview.ForeignTotal, preview.DiscountForeign, preview.DiscountBook, preview.Difference));
+        var v = await fx.S.FxPayments.CreateDraftAsync(fx.H.Preparer, input);
+        await PostVoucherAsync(fx, v.Id);
+        Assert.Equal(0m, await fx.Bal("AR", fx.H.Partner["KH01"]));
+        Assert.Equal(500_000m, await fx.Bal("FINEXP"));                                                          // 20 USD × 25.000 theo giá trị ghi sổ của hóa đơn
+        Assert.Equal(24_696_000m, await fx.Bal("BANKUSD"));                                                      // 980 USD × 25.200
+        Assert.Equal(-196_000m, await fx.Bal("FXGAIN"));                                                         // chênh lệch tỷ giá chỉ trên phần tiền thực thu
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+    }
+
+    [Fact]
+    public async Task PaymentDiscountReports_MissedSuspectDaysAndEffect()
+    {
+        using var fx = await SetupAsync();
+        var pd = new PaymentDiscountService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        var rep = new PaymentDiscountReportService(fx.S.Db, fx.S.Ledger, fx.S.Audit, fx.H.Clock);
+        await MapPaymentDiscountExpenseAsync(fx);
+        await PostedReceiptAsync(fx, 200, 10_000_000, D(3, 1), fx.Add);
+        InvoiceInput Sale(string no, StockDocument issue) => new(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26TBB", no, D(3, 3), D(3, 3), "Bán", [new InvoiceLineInput(100_000, issue.Id, 1, VatRate: 10)],
+            DueDate: D(4, 2), PaymentDiscountPercent: 2, PaymentDiscountDays: 10);
+        var i1 = await fx.Inv.PostAsync(fx.H.Approver, (await fx.Inv.CreateAsync(fx.H.Preparer, Sale("0000901", await PostedIssueAsync(fx, 10, D(3, 3), fx.Add)))).Id);
+        var i2 = await fx.Inv.PostAsync(fx.H.Approver, (await fx.Inv.CreateAsync(fx.H.Preparer, Sale("0000902", await PostedIssueAsync(fx, 10, D(3, 3), fx.Add)))).Id);
+        var i3 = await fx.Inv.PostAsync(fx.H.Approver, (await fx.Inv.CreateAsync(fx.H.Preparer, Sale("0000903", await PostedIssueAsync(fx, 10, D(3, 3), fx.Add)))).Id);
+
+        // i1 hưởng chiết khấu đúng hạn (10/3): CK 20.000, tiền 1.080.000, sớm 23 ngày so với hạn 2/4.
+        var v = await pd.CreateVoucherAsync(fx.H.Preparer, i1.Id, fx.A("CASH"), D(3, 10));
+        await PostVoucherAsync(fx, v.Id);
+        // i2: khách chỉ trả 1.078.000 trong khi công nợ 1.100.000 (tự trừ 2%) — còn dư 22.000.
+        var open2 = (await fx.S.Settlement.OpenItemsAsync(fx.H.Auditor, fx.A("AR"), fx.H.Partner["KH01"], D(3, 20))).Single(o => o.VoucherId == i2.VoucherId);
+        await fx.H.PostedAsync(fx.S, new VoucherInput(VoucherTypes.General, D(3, 12), D(3, 12), "Thu thiếu", [new(fx.A("CASH"), Side.Debit, 1_078_000), new(fx.A("AR"), Side.Credit, 1_078_000, fx.H.Partner["KH01"], SettleJournalLineId: open2.JournalLineId)]));
+
+        var missed = await rep.MissedAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 20));                          // hạn hưởng 13/3 đã qua
+        var m = Assert.Single(missed.Where(x => x.InvoiceId == i3.Id));
+        Assert.Equal((20_000m, 1_100_000m, 7), (m.LostDiscount, m.Open, m.DaysOver));
+        Assert.DoesNotContain(missed, x => x.InvoiceId == i1.Id);                                                // đã thanh toán, không còn nợ
+        Assert.Empty(await rep.MissedAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 12)));                          // chưa qua hạn
+
+        var suspect = Assert.Single(await rep.SuspectDeductionsAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 20)));
+        Assert.Equal((i2.Id, 22_000m, 2m), (suspect.InvoiceId, suspect.Open, suspect.OpenPercent));
+
+        var effect = await rep.EffectAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 1), D(3, 31));
+        var row = Assert.Single(effect.Rows);
+        Assert.Equal((20_000m, 1_080_000m, 23, 29.39m), (row.Discount, row.Cash, row.DaysEarly, row.AnnualRatePercent));
+        Assert.Equal(29.39m, effect.WeightedAnnualRatePercent);
+
+        var days = await rep.DaysAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 1), D(3, 31));
+        var march = Assert.Single(days);
+        Assert.Equal(3_300_000m, march.Turnover);
+        Assert.True(march.Days > 0);
+    }
+
     [Fact]
     public async Task PaymentDiscount_Standalone_NotTiedToAnInvoice_IsASeparateEntry()
     {
@@ -2354,6 +2499,67 @@ public partial class TradeTests
         var run = await eng.SettleAsync(fx.H.Preparer, prog.Id, again.RowVersion, "1C26TBB", "0000510", D(4, 1), D(4, 1));
         Assert.Equal(4_500m, run.Amount);
         Assert.Equal(4_500m, (await fx.S.Db.CommercialInvoiceLines.AsNoTracking().Where(l => fx.S.Db.CommercialInvoices.Any(i => i.Id == l.InvoiceId && i.Purpose == InvoicePurpose.Discount)).ToListAsync()).Sum(l => l.FunctionalAmount));
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+    }
+
+    [Fact]
+    public async Task DiscountAgreement_Accrual_ThenSettleByEntry_OffsetsThePayable_AndDoesNotReduceRevenueTwice()
+    {
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        await PostedSaleAsync(fx, "0000601", 10, D(3, 3), price: 25_000);                                // 250.000
+        var agreements = new DiscountAgreementService(fx.S.Db, fx.Inv, fx.S.Audit, fx.H.Clock, fx.S.Engine);
+        var agr = await agreements.CreateAsync(fx.H.Approver, new AgreementInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "CK-TT", "Trích trước", D(3, 1), D(3, 31),
+            [new AgreementTierInput(0, 1), new AgreementTierInput(100_000, 2), new AgreementTierInput(200_000, 3)]));
+        Assert.Equal(ErrorCodes.RuleRoleUnmapped, await CodeOf(() => agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 10))));       // chưa ánh xạ REBATE_PAYABLE
+        fx.H.Acc["REBPAY"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "REBPAY", "Phải trả chiết khấu (thử)")).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "REBATE_PAYABLE", "REBPAY");
+
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(4, 10))));      // ngoài kỳ
+        var a1 = await agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 10));
+        Assert.Equal((7_500m, 7_500m), (a1.Estimated, a1.Adjustment));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 11))));   // còn nháp chưa ghi sổ
+        await PostVoucherAsync(fx, a1.VoucherId);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 11))));      // không đổi gì
+
+        await PostedSaleAsync(fx, "0000602", 10, D(3, 20), price: 25_000);                               // doanh số 500.000 → 3% = 15.000
+        var a2 = await agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 25));
+        Assert.Equal((15_000m, 7_500m), (a2.Estimated, a2.Adjustment));
+        await PostVoucherAsync(fx, a2.VoucherId);
+        Assert.Equal(15_000m, await fx.Bal("SALESDISC"));
+        Assert.Equal(-15_000m, await fx.Bal("REBPAY", fx.H.Partner["KH01"]));
+        Assert.Equal(550_000m, await fx.Bal("AR", fx.H.Partner["KH01"]));                                // trích trước chưa đụng công nợ
+
+        var run = await agreements.SettleByVoucherAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(4, 1));
+        Assert.Equal((15_000m, 15_000m), (run.Amount, run.AccruedAmount));
+        await PostVoucherAsync(fx, run.VoucherId!.Value);
+        Assert.Equal(0m, await fx.Bal("REBPAY", fx.H.Partner["KH01"]));                                  // bù trừ hết
+        Assert.Equal(535_000m, await fx.Bal("AR", fx.H.Partner["KH01"]));                                // công nợ giảm đúng 15.000
+        Assert.Equal(15_000m, await fx.Bal("SALESDISC"));                                                // giảm trừ doanh thu vẫn 15.000, không gấp đôi
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+    }
+
+    [Fact]
+    public async Task DiscountAgreement_Accrual_ThenSettleByAdjustmentInvoices_ReversesTheAccrual()
+    {
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        await PostedSaleAsync(fx, "0000611", 10, D(3, 3), price: 25_000);                                // 250.000 → 3% = 7.500
+        var agreements = new DiscountAgreementService(fx.S.Db, fx.Inv, fx.S.Audit, fx.H.Clock, fx.S.Engine);
+        var agr = await agreements.CreateAsync(fx.H.Approver, new AgreementInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "CK-HN", "Hoàn nhập", D(3, 1), D(3, 31),
+            [new AgreementTierInput(0, 1), new AgreementTierInput(100_000, 2), new AgreementTierInput(200_000, 3)]));
+        fx.H.Acc["REBPAY"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "REBPAY", "Phải trả chiết khấu (thử)")).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "REBATE_PAYABLE", "REBPAY");
+        var a1 = await agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 31));
+        await PostVoucherAsync(fx, a1.VoucherId);
+
+        var run = await agreements.SettleAsync(fx.H.Preparer, agr.Id, agr.RowVersion, "1C26TBB", "0000620", D(4, 1), D(4, 1));
+        Assert.Equal((7_500m, 7_500m), (run.Amount, run.AccruedAmount));
+        Assert.NotNull(run.AccrualReversalVoucherId);
+        await PostVoucherAsync(fx, run.AccrualReversalVoucherId!.Value);
+        foreach (var d in await fx.S.Db.CommercialInvoices.Where(i => i.Purpose == InvoicePurpose.Discount && i.Status == InvoiceStatus.Draft).ToListAsync()) await fx.Inv.PostAsync(fx.H.Approver, d.Id);
+        Assert.Equal(0m, await fx.Bal("REBPAY", fx.H.Partner["KH01"]));
+        Assert.Equal(7_500m, await fx.Bal("SALESDISC"));                                                 // 7.500 trích trước − 7.500 hoàn nhập + 7.500 hóa đơn điều chỉnh
         await LedgerInvariants.AssertAsync(fx.S.Db);
     }
 

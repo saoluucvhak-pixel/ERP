@@ -29,7 +29,9 @@ public sealed record InvoiceInput(InvoiceKind Kind, Guid PartnerId, string Invoi
     /// <summary>Hóa đơn sẽ lấy ký hiệu và số từ nhà cung cấp hóa đơn điện tử khi phát hành (không nhập tay): lưu số tạm cho tới lúc phát hành.</summary>
     bool AwaitIssue = false,
     /// <summary>Hóa đơn thay thế: hóa đơn bán gốc đã ghi sổ bị thay. Khi hóa đơn này ghi sổ, hóa đơn gốc được đảo trong cùng giao dịch; số lượng nguồn của hóa đơn gốc không bị tính hai lần.</summary>
-    Guid? ReplacesInvoiceId = null);
+    Guid? ReplacesInvoiceId = null,
+    /// <summary>Phần mở rộng điều khoản chiết khấu thanh toán (cơ sở tính, dung sai ngày, bậc phụ); để trống thì kế thừa đối tượng khi cũng kế thừa tỷ lệ/số ngày.</summary>
+    string? PaymentDiscountOptions = null);
 
 public sealed record PriceDifferenceWarning(int LineNo, string ReceiptNumber, decimal ReceiptValue, decimal InvoiceValue, decimal Difference,
     decimal ReceiptQuantity, decimal QuantityInStock, decimal InventoryPart, decimal CogsPart, string Method);
@@ -78,14 +80,17 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.PostingDate && f.EndDate >= input.PostingDate)
                      ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate.Vn()}.");
             // Chiết khấu thanh toán: lấy điều khoản nhập tay, nếu để trống thì điền sẵn theo đối tượng.
-            var partnerTerms = await db.BusinessPartners.AsNoTracking().Where(p => p.Id == input.PartnerId).Select(p => new { p.PaymentDiscountPercent, p.PaymentDiscountDays }).FirstAsync();
+            var partnerTerms = await db.BusinessPartners.AsNoTracking().Where(p => p.Id == input.PartnerId).Select(p => new { p.PaymentDiscountPercent, p.PaymentDiscountDays, p.PaymentDiscountOptions }).FirstAsync();
+            var inheritsTerms = input.PaymentDiscountPercent is null && input.PaymentDiscountDays is null;
+            var discOptions = string.IsNullOrWhiteSpace(input.PaymentDiscountOptions) ? (inheritsTerms ? partnerTerms.PaymentDiscountOptions : null) : input.PaymentDiscountOptions.Trim();
             var discPct = input.PaymentDiscountPercent ?? (input.PaymentDiscountDays is null ? partnerTerms.PaymentDiscountPercent : null);
             var discDays = input.PaymentDiscountDays ?? (input.PaymentDiscountPercent is null ? partnerTerms.PaymentDiscountDays : null);
             if ((discPct is null) != (discDays is null)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán phải nhập đủ cả tỷ lệ % và số ngày.");
             if (discPct is { } dp0 && (dp0 <= 0 || dp0 > 100 || discDays is < 1 or > 365)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán: tỷ lệ lớn hơn 0 đến 100%, số ngày từ 1 đến 365.");
+            _ = PaymentTerms.From(discPct, discDays, discOptions);   // kiểm tra hợp lệ (bậc, cơ sở, dung sai)
             var inv = new CommercialInvoice
             {
-                PaymentDiscountPercent = discPct, PaymentDiscountDays = discDays, ReplacesInvoiceId = input.ReplacesInvoiceId,
+                PaymentDiscountPercent = discPct, PaymentDiscountDays = discDays, PaymentDiscountOptions = discOptions, ReplacesInvoiceId = input.ReplacesInvoiceId,
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind,
                 InvoiceSeries = input.AwaitIssue ? AwaitingSeries : input.InvoiceSeries.Trim(), InvoiceNo = input.AwaitIssue ? "CHO-" + Ids.New().ToString("N")[..12] : input.InvoiceNo.Trim(),
                 InvoiceDate = input.InvoiceDate, PostingDate = input.PostingDate, DueDate = input.DueDate, PartnerId = input.PartnerId,

@@ -187,3 +187,21 @@ Các UAT-01…07, 10, 12, 13 đã có hoặc tương đương test tự động 
 6. Quan điểm thuế về CKTT (VAT không đổi, chi phí/thu nhập tài chính hợp lệ, hồ sơ cần có) — chị xác minh.
 7. Xử lý khách tự khấu trừ sai và phí ngân hàng: ai duyệt, hạn mức tự xử lý.
 8. Có cần các báo cáo còn thiếu (RPT-03, 04, 06, 07)?
+
+## 10. Cập nhật theo quyết định của chị 26/10/2026 (đã cài đặt)
+| Quyết định của chị | Đã làm |
+|---|---|
+| Giữ cả hai cách (theo điều khoản trên hóa đơn và độc lập không theo hóa đơn) | Giữ nguyên |
+| Cơ sở tính tùy biến | Tùy chọn `base=incl` / `excl` (snapshot trên hóa đơn, mặc định kế thừa từ đối tượng); gồm thuế thì CK = P% × (tiền hàng + thuế), **thuế GTGT trên hóa đơn không đổi**; hóa đơn ngoại tệ chỉ hỗ trợ chưa thuế |
+| Ngày xét điều kiện = ngày tiền về ngân hàng | Nhãn trên giao diện là "Ngày tiền về ngân hàng"; chứng từ ghi theo ngày đó; không dời hạn khi trùng ngày nghỉ (chị không yêu cầu) |
+| Nhiều bậc | `tier=P:N` (vd `tier=3:5` cùng bậc chính 2/10): bậc tỷ lệ cao nhất còn hạn; bậc xa hơn phải thấp hơn |
+| Dung sai | **Dung sai ngày** `grace=N` (0–10 ngày, cộng vào mọi hạn). **Dung sai số tiền: KHÔNG làm** — trái nguyên tắc chị chốt "không tự coi phần thiếu là chiết khấu" |
+| Hóa đơn ngoại tệ | Màn Thu/chi ngoại tệ có ô "Áp chiết khấu thanh toán": CK tính bằng nguyên tệ, tiền thực thu = nguyên tệ − CK, dòng CK ghi theo giá trị ghi sổ của hóa đơn nên chênh lệch tỷ giá chỉ phát sinh trên phần tiền thực; ghi sổ kiểm tra lại |
+| Một chứng từ cho nhiều hóa đơn | `POST /payment-discounts/multi` + nút "Thanh toán gộp" (chọn ≥ 2 hóa đơn cùng đối tượng): CK tính riêng từng hóa đơn; hóa đơn quá hạn / không điều khoản chỉ bù trừ |
+| Khách tự khấu trừ sai, phí ngân hàng: không tự coi là chiết khấu | Giữ nguyên; báo cáo "khoản dư nhỏ nghi khấu trừ" chỉ gợi ý đối chiếu |
+| Báo cáo tham khảo Odoo / MISA | 4 báo cáo ở nút "Báo cáo": chiết khấu đã mất (RPT-03), khoản dư nghi khấu trừ sai (RPT-04), DSO/DPO theo tháng (RPT-06), hiệu quả dòng tiền / chi phí tín dụng quy năm (RPT-07) |
+| Tài khoản phải trả rebate: 338 hoặc 138 | Vai trò `REBATE_PAYABLE` (do công ty ánh xạ; bên bán dùng nhóm 338 "phải trả khác"; **bên mua 138 chưa làm** — trích trước chỉ chiều bán); không seed mã |
+| Thuế: không xuất hóa đơn nên không ảnh hưởng | CKTT không đổi doanh thu / giá mua / thuế GTGT (đúng thiết kế) |
+
+Migration `Phase24PaymentDiscountOptions`. Chuỗi tùy chọn: `base=incl;grace=1;tier=3:5` (nhập ở Danh mục đối tượng, cột tùy chọn chiết khấu thanh toán; hóa đơn lập mới sao chép).
+

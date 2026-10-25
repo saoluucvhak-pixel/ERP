@@ -1943,6 +1943,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_days");
 
+                    b.Property<string>("PaymentDiscountOptions")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payment_discount_options");
+
                     b.Property<long?>("PaymentDiscountPercent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_percent");
@@ -7616,6 +7620,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_days");
 
+                    b.Property<string>("PaymentDiscountOptions")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payment_discount_options");
+
                     b.Property<long?>("PaymentDiscountPercent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_percent");
@@ -8272,6 +8280,54 @@ namespace Hak.Data.Migrations
                     b.ToTable("debt_write_off_items");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAccrual", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("Adjustment")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("adjustment");
+
+                    b.Property<Guid>("AgreementId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agreement_id");
+
+                    b.Property<DateOnly>("AsOf")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("as_of");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<long>("Estimated")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("estimated");
+
+                    b.Property<Guid>("VoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("voucher_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_accruals");
+
+                    b.HasIndex("AgreementId", "AsOf")
+                        .HasDatabaseName("ix_discount_accruals_agreement_id_as_of");
+
+                    b.ToTable("discount_accruals");
+                });
+
             modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8355,6 +8411,14 @@ namespace Hak.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
+
+                    b.Property<Guid?>("AccrualReversalVoucherId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("accrual_reversal_voucher_id");
+
+                    b.Property<long>("AccruedAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("accrued_amount");
 
                     b.Property<Guid>("AgreementId")
                         .HasColumnType("TEXT")
@@ -10606,6 +10670,16 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_debt_write_off_items_debt_write_offs_write_off_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountAccrual", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreement", null)
+                        .WithMany()
+                        .HasForeignKey("AgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_accruals_discount_agreements_agreement_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreement", b =>

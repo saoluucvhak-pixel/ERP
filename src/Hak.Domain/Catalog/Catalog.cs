@@ -75,6 +75,8 @@ public sealed class BusinessPartner
     /// <summary>Điều khoản chiết khấu thanh toán mặc định của đối tượng (điền sẵn khi lập hóa đơn): P% nếu trả trong N ngày.</summary>
     public decimal? PaymentDiscountPercent { get; set; }
     public int? PaymentDiscountDays { get; set; }
+    /// <summary>Phần mở rộng của điều khoản chiết khấu thanh toán: cơ sở tính, dung sai ngày, bậc phụ (xem <c>PaymentTerms</c>), ví dụ <c>base=incl;grace=1;tier=3:5</c>.</summary>
+    public string? PaymentDiscountOptions { get; set; }
     public PartnerRoles Roles { get; set; }
     public SupplierStatus SupplierStatus { get; set; } = SupplierStatus.Approved;
     public string? SupplierStatusReason { get; set; }

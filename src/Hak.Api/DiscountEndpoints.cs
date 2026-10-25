@@ -5,6 +5,7 @@ namespace Hak.Api;
 
 public sealed record AgreementRequest(InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers, bool Progressive = false);
 public sealed record AgreementUpdateRequest(long RowVersion, InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers, bool Progressive = false);
+public sealed record AgreementAccrueRequest(long RowVersion, DateOnly AsOf);
 public sealed record AgreementActiveRequest(long RowVersion, bool Active);
 public sealed record AgreementSettleRequest(long RowVersion, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate, bool ByVoucher = false);
 
@@ -28,6 +29,8 @@ public static class DiscountEndpoints
                                   : await s.SettleAsync(await http.SessionAsync(), id, r.RowVersion, r.InvoiceSeries, r.FirstInvoiceNo, r.InvoiceDate, r.PostingDate);
             return Results.Ok(new { run.Id, run.Amount, run.Percent, run.EligibleSales });
         });
+        api.MapPost("/agreements/{id:guid}/accrue", async (HttpContext http, Guid id, AgreementAccrueRequest r, DiscountAgreementService s) =>
+        { var x = await s.AccrueAsync(await http.SessionAsync(), id, r.RowVersion, r.AsOf); return Results.Ok(new { x.Id, x.Estimated, x.Adjustment, x.VoucherId }); });
         api.MapPost("/agreements/{id:guid}/void-run", async (HttpContext http, Guid id, ReasonRequest r, DiscountAgreementService s) => { await s.VoidRunAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
         api.MapGet("/report", async (HttpContext http, InvoiceKind kind, DateOnly from, DateOnly to, DiscountReportService s) => Results.Ok(await s.ReportAsync(await http.SessionAsync(), kind, from, to)));
     }

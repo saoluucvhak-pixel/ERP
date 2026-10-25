@@ -56,6 +56,8 @@ public sealed class CommercialInvoice
     /// <summary>Chiết khấu thanh toán: trả đủ trong N ngày kể từ ngày hóa đơn thì được giảm P% tiền hàng (chưa thuế). Điều khoản ghi lúc lập hóa đơn.</summary>
     public decimal? PaymentDiscountPercent { get; set; }
     public int? PaymentDiscountDays { get; set; }
+    /// <summary>Snapshot phần mở rộng điều khoản (cơ sở tính, dung sai, bậc phụ) lúc lập hóa đơn.</summary>
+    public string? PaymentDiscountOptions { get; set; }
     public Guid PartnerId { get; set; }
     /// <summary>ISO currency of the prices; functional currency when null.</summary>
     public string? Currency { get; set; }

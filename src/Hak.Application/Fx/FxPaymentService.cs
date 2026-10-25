@@ -12,14 +12,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Application.Fx;
 
-public sealed record FxSettleItem(Guid JournalLineId, decimal ForeignAmount);
+/// <summary>ApplyDiscount: hưởng/cấp chiết khấu thanh toán theo điều khoản của hóa đơn gốc (tính theo nguyên tệ của hóa đơn, bậc và hạn theo ngày thanh toán).</summary>
+public sealed record FxSettleItem(Guid JournalLineId, decimal ForeignAmount, bool ApplyDiscount = false);
 
 /// <summary>Receipt from a customer / payment to a supplier of foreign-currency invoices through a cash or bank account.</summary>
 public sealed record FxPaymentInput(DateOnly Date, Guid CashAccountId, decimal PaymentRate, string Description, IReadOnlyList<FxSettleItem> Items);
 
 /// <summary>Difference: + realised FX gain, − realised FX loss.</summary>
 public sealed record FxPaymentPreview(string Currency, decimal ForeignTotal, decimal CashAmount, decimal BookAmount, decimal Difference,
-    IReadOnlyList<VoucherLineInput> Lines);
+    IReadOnlyList<VoucherLineInput> Lines, decimal DiscountForeign = 0, decimal DiscountBook = 0);
 
 /// <summary>
 /// Thu/chi ngoại tệ theo hóa đơn. Builds the voucher: the cash/bank line at the payment rate, one settling line per invoice at
@@ -43,7 +44,9 @@ public sealed class FxPaymentService(HakDbContext db, AccountingEngine engine, A
     public async Task<Voucher> CreateDraftAsync(SessionContext ctx, FxPaymentInput input)
     {
         var preview = await BuildAsync(ctx, input);
-        return await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, input.Date, input.Date, input.Description.Trim(), preview.Lines));
+        // Có chiết khấu: nguồn riêng để ghi sổ kiểm tra lại điều khoản / hạn / số tiền (PaymentDiscountService.CheckVoucherAsync) và khóa sửa tay.
+        return await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, input.Date, input.Date, input.Description.Trim(), preview.Lines,
+            SourceSystem: preview.DiscountForeign > 0 ? Hak.Application.Trade.PaymentDiscountService.Source : null, SourceId: preview.DiscountForeign > 0 ? "FX:" + Ids.New().ToString("N") : null));
     }
 
     private async Task<FxPaymentPreview> BuildAsync(SessionContext ctx, FxPaymentInput input)
@@ -53,6 +56,8 @@ public sealed class FxPaymentService(HakDbContext db, AccountingEngine engine, A
         if (input.Items.Count == 0) throw new DomainException(ErrorCodes.VoucherNoLines, "Chọn ít nhất một hóa đơn ngoại tệ cần thanh toán.");
         if (input.Items.Select(i => i.JournalLineId).Distinct().Count() != input.Items.Count)
             throw new DomainException(ErrorCodes.ValidationFailed, "Mỗi hóa đơn chỉ chọn một lần.");
+        if (input.Items.Any(i => i.ApplyDiscount) && !input.Items.All(i => i.ApplyDiscount))
+            throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán: hoặc áp cho mọi hóa đơn trong chứng từ, hoặc không hóa đơn nào (tách chứng từ).");
         if (input.PaymentRate <= 0) throw new DomainException(ErrorCodes.AmountNotPositive, "Tỷ giá thanh toán phải lớn hơn 0.");
 
         var settlement = new SettlementService(db, audit, clock);
@@ -74,7 +79,7 @@ public sealed class FxPaymentService(HakDbContext db, AccountingEngine engine, A
 
         var currency = first.ForeignCurrency;
         var lines = new List<VoucherLineInput>();
-        decimal bookTotal = 0;
+        decimal bookTotal = 0, discountForeign = 0, discountBook = 0;
         var settleSide = first.Side == Side.Debit ? Side.Credit : Side.Debit;
         foreach (var item in input.Items)
         {
@@ -86,8 +91,14 @@ public sealed class FxPaymentService(HakDbContext db, AccountingEngine engine, A
             lines.Add(new VoucherLineInput(t.AccountId, settleSide, book, t.PartnerId, currency, item.ForeignAmount, rate,
                 $"Thanh toán {item.ForeignAmount} {currency} – {t.Description}", SettleJournalLineId: t.Id));
             bookTotal += book;
+            if (item.ApplyDiscount)
+            {
+                var d = await Hak.Application.Trade.PaymentDiscountService.ForeignDiscountAsync(db, ctx.CompanyId, t, item.ForeignAmount, input.Date);
+                discountForeign += d;
+                discountBook += MoneyMath.Convert(d, rate, dp);              // ghi theo giá trị ghi sổ của hóa đơn: chênh lệch tỷ giá chỉ phát sinh ở phần tiền thực trả/thu
+            }
         }
-        var foreignTotal = input.Items.Sum(i => i.ForeignAmount);
+        var foreignTotal = input.Items.Sum(i => i.ForeignAmount) - discountForeign;           // tiền thực chuyển bằng nguyên tệ
         decimal cashAmount, cashRate;
         if (first.Side == Side.Credit)
         {
@@ -106,6 +117,13 @@ public sealed class FxPaymentService(HakDbContext db, AccountingEngine engine, A
             cashRate = input.PaymentRate;
         }
         lines.Insert(0, new VoucherLineInput(cash.Id, first.Side, cashAmount, null, currency, foreignTotal, cashRate, input.Description.Trim()));
+        if (discountForeign > 0)
+        {
+            var dRole = first.Side == Side.Credit ? "PAYMENT_DISCOUNT_INCOME" : "PAYMENT_DISCOUNT_EXPENSE";
+            var dAcc = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.RoleCode == dRole).Select(m => (Guid?)m.AccountId).FirstOrDefaultAsync()
+                       ?? throw new DomainException(ErrorCodes.RuleRoleUnmapped, $"Chưa ánh xạ vai trò tài khoản {dRole}.");
+            lines.Add(new VoucherLineInput(dAcc, first.Side, discountBook, null, Description: $"Chiết khấu thanh toán {discountForeign} {currency}"));
+        }
 
         var signed = lines.Sum(l => (int)l.Side * l.Amount);
         if (signed != 0)
@@ -118,7 +136,7 @@ public sealed class FxPaymentService(HakDbContext db, AccountingEngine engine, A
                 signed > 0 ? "Lãi chênh lệch tỷ giá đã thực hiện" : "Lỗ chênh lệch tỷ giá đã thực hiện"));
         }
         // Difference: + realised gain, − realised loss (receipt above book or payment below book is a gain).
-        return new FxPaymentPreview(currency, foreignTotal, cashAmount, bookTotal, signed, lines);
+        return new FxPaymentPreview(currency, foreignTotal, cashAmount, bookTotal, signed, lines, discountForeign, discountBook);
     }
 
     /// <summary>Foreign and functional-currency balance of a cash account in one currency up to and including <paramref name="date"/>.</summary>
