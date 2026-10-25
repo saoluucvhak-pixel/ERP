@@ -1,3 +1,4 @@
+using Hak.Application.Accounting;
 using Hak.Application.Audit;
 using Hak.Application.Common;
 using Hak.Application.Security;
@@ -5,6 +6,7 @@ using Hak.Data;
 using Hak.Domain.Common;
 using Hak.Domain.Security;
 using Hak.Domain.Trade;
+using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Application.Trade;
@@ -27,7 +29,7 @@ public sealed record AgreementPreview(Guid AgreementId, decimal EligibleSales, d
 /// để thuế GTGT giảm đúng thuế suất của dòng; ghi sổ hóa đơn do người có quyền ghi sổ làm như mọi điều chỉnh khác (bên bán: Nợ chiết khấu thương mại; bên mua: giảm hàng tồn kho / giá vốn).
 /// Mỗi thỏa thuận chỉ có một lần quyết toán còn hiệu lực. Lập / sửa thỏa thuận là hành vi của người có thẩm quyền duyệt nên cần quyền duyệt chứng từ.
 /// </summary>
-public sealed class DiscountAgreementService(HakDbContext db, InvoiceService invoices, AuditService audit, IClock clock)
+public sealed class DiscountAgreementService(HakDbContext db, InvoiceService invoices, AuditService audit, IClock clock, AccountingEngine? engine = null)
 {
     private static string Norm(string s) => s.Trim();
 
@@ -262,6 +264,46 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         });
     }
 
+    public const string VoucherSource = "HAK.TRADEDISC";
+
+    /// <summary>
+    /// Quyết toán bằng HẠCH TOÁN ĐIỀU CHỈNH GIẢM (thay cho hóa đơn điều chỉnh — người dùng chọn một trong hai): một chứng từ nháp Nợ giảm trừ doanh thu (SALES_TRADE_DISCOUNT, chưa ánh xạ thì
+    /// SALES_DISCOUNT) / Có phải thu của đối tượng, không đụng hóa đơn gốc và không đổi thuế GTGT [CẦN XÁC MINH cách xử lý thuế khi không có hóa đơn điều chỉnh]. Chỉ chiều bán, hóa đơn tiền hạch toán.
+    /// </summary>
+    public async Task<DiscountAgreementRun> SettleByVoucherAsync(SessionContext ctx, Guid id, long expectedRowVersion, DateOnly postingDate)
+    {
+        ctx.Require(Permissions.VoucherCreate);
+        if (engine is null) throw new InvalidOperationException("Thiếu AccountingEngine.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var a = await LoadAsync(ctx, id);
+            RowVersionCheck.Require(a.RowVersion, expectedRowVersion, $"Thỏa thuận {a.Code}");
+            if (a.Kind != InvoiceKind.Sales) throw new DomainException(ErrorCodes.ValidationFailed, "Quyết toán bằng hạch toán điều chỉnh giảm hiện chỉ có ở chiều bán hàng; chiều mua dùng hóa đơn điều chỉnh của nhà cung cấp.");
+            if (!a.IsActive) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Thỏa thuận {a.Code} đã ngừng áp dụng.");
+            if (postingDate < a.ToDate) throw new DomainException(ErrorCodes.ValidationFailed, $"Chỉ quyết toán sau khi hết kỳ thỏa thuận ({a.ToDate.Vn()}).");
+            if (await db.DiscountAgreementRuns.AnyAsync(r => r.AgreementId == id && r.VoidedAt == null))
+                throw new DomainException(ErrorCodes.DuplicateSource, $"Thỏa thuận {a.Code} đã quyết toán; hủy lần quyết toán cũ nếu cần làm lại.");
+            var plan = await PlanAsync(ctx, a);
+            if (plan.Shares.Any(s => s.Invoice.Currency != null)) throw new DomainException(ErrorCodes.ValidationFailed, "Thỏa thuận có hóa đơn ngoại tệ: quyết toán bằng hóa đơn điều chỉnh (hạch toán điều chỉnh giảm chỉ dùng cho hóa đơn tiền hạch toán).");
+            if (plan.Amount <= 0) throw new DomainException(ErrorCodes.ValidationFailed, plan.Percent == 0
+                ? $"Doanh số {plan.Eligible.Vn(0)} chưa đạt bậc chiết khấu nào của thỏa thuận {a.Code}." : "Không có số chiết khấu phát sinh.");
+            var roles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && (m.RoleCode == "SALES_TRADE_DISCOUNT" || m.RoleCode == "SALES_DISCOUNT" || m.RoleCode == "AR_TRADE"))
+                .ToDictionaryAsync(m => m.RoleCode, m => m.AccountId);
+            var discountAccount = roles.TryGetValue("SALES_TRADE_DISCOUNT", out var t) ? t : roles.TryGetValue("SALES_DISCOUNT", out var sd) ? sd
+                : throw new DomainException(ErrorCodes.RuleRoleUnmapped, "Chưa ánh xạ vai trò tài khoản SALES_TRADE_DISCOUNT (hoặc SALES_DISCOUNT).");
+            var ar = roles.TryGetValue("AR_TRADE", out var arId) ? arId : throw new DomainException(ErrorCodes.RuleRoleUnmapped, "Chưa ánh xạ vai trò tài khoản AR_TRADE.");
+            var run = new DiscountAgreementRun { Id = Ids.New(), CompanyId = ctx.CompanyId, AgreementId = a.Id, EligibleSales = plan.Eligible, Percent = plan.Percent, Amount = plan.Amount, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            var desc = $"Chiết khấu thương mại theo thỏa thuận {a.Code} ({a.FromDate.Vn()} – {a.ToDate.Vn()}), đạt {plan.Percent}% — hạch toán điều chỉnh giảm";
+            var v = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, postingDate, postingDate, desc,
+                [new(discountAccount, Side.Debit, plan.Amount, Description: desc), new(ar, Side.Credit, plan.Amount, a.PartnerId, Description: desc)], SourceSystem: VoucherSource, SourceId: run.Id.ToString()));
+            run.VoucherId = v.Id;
+            db.DiscountAgreementRuns.Add(run);
+            await audit.AppendAsync(ctx.CompanyId, ctx, "discount_agreement.settle", "discount_agreement", a.Id.ToString(), new { a.Code, run.EligibleSales, run.Percent, run.Amount, mode = "voucher", voucher = v.Number });
+            await db.SaveChangesAsync();
+            return run;
+        });
+    }
+
     /// <summary>Hủy lần quyết toán để làm lại: hủy các hóa đơn điều chỉnh nháp đã sinh; từ chối nếu có hóa đơn đã ghi sổ (phải đảo hóa đơn đó trước).</summary>
     public async Task VoidRunAsync(SessionContext ctx, Guid agreementId, string reason)
     {
@@ -271,6 +313,12 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         {
             var run = await db.DiscountAgreementRuns.Include(r => r.Invoices).FirstOrDefaultAsync(r => r.AgreementId == agreementId && r.CompanyId == ctx.CompanyId && r.VoidedAt == null)
                       ?? throw new DomainException(ErrorCodes.NotFound, "Thỏa thuận chưa quyết toán.");
+            if (run.VoucherId is { } vid)
+            {
+                var vch = await db.Vouchers.AsNoTracking().FirstAsync(x => x.Id == vid);
+                if (vch.Status is VoucherStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Đã ghi sổ chứng từ {vch.Number}; đảo chứng từ này trước khi hủy quyết toán.");
+                if (vch.Status is not (VoucherStatus.Cancelled or VoucherStatus.Reversed)) await engine!.CancelAsync(ctx, vid, $"Hủy quyết toán chiết khấu: {reason.Trim()}");
+            }
             var ids = run.Invoices.Select(i => i.AdjustmentInvoiceId).ToList();
             var posted = await db.CommercialInvoices.AsNoTracking().Where(i => ids.Contains(i.Id) && i.Status == InvoiceStatus.Posted).Select(i => i.Number).ToListAsync();
             if (posted.Count > 0) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Đã ghi sổ hóa đơn điều chỉnh {string.Join(", ", posted)}; đảo các hóa đơn này trước khi hủy quyết toán.");

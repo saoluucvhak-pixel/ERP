@@ -42,6 +42,16 @@ public sealed class DiscountReportService(HakDbContext db)
                 case InvoicePurpose.Discount: if (i.DiscountKind == DiscountKind.Trade) r[2] += net; else r[3] += net; break;
             }
         }
+        // Chiết khấu thương mại quyết toán bằng hạch toán điều chỉnh giảm (không có hóa đơn điều chỉnh): chứng từ đã ghi sổ trong kỳ, tính vào cột "CK thương mại sau bán".
+        if (kind == InvoiceKind.Sales)
+        {
+            var byVoucher = await (from r in db.DiscountAgreementRuns.AsNoTracking()
+                                   join ag in db.DiscountAgreements.AsNoTracking() on r.AgreementId equals ag.Id
+                                   join v in db.Vouchers.AsNoTracking() on r.VoucherId equals v.Id
+                                   where r.CompanyId == ctx.CompanyId && r.VoidedAt == null && v.Status == VoucherStatus.Posted && v.PostingDate >= fromDate && v.PostingDate <= toDate
+                                   select new { ag.PartnerId, r.Amount }).ToListAsync();
+            foreach (var x in byVoucher) Row(x.PartnerId)[2] += x.Amount;
+        }
         // Chiết khấu thanh toán: dòng tài khoản vai trò PAYMENT_DISCOUNT_* của chứng từ nguồn HAK.PAYDISC đã ghi sổ, theo đối tượng của hóa đơn nguồn.
         var role = kind == InvoiceKind.Purchase ? "PAYMENT_DISCOUNT_INCOME" : "PAYMENT_DISCOUNT_EXPENSE";
         var account = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId && m.RoleCode == role).Select(m => (Guid?)m.AccountId).FirstOrDefaultAsync();

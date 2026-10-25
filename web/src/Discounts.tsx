@@ -26,7 +26,7 @@ export function DiscountsView() {
   const [rows, setRows] = useState<Agreement[]>([])
   const [form, setForm] = useState<ReturnType<typeof blankForm> | null>(null)
   const [preview, setPreview] = useState<{ a: Agreement; p: Preview } | null>(null)
-  const [settle, setSettle] = useState<{ a: Agreement; series: string; no: string; invoiceDate: string; postingDate: string } | null>(null)
+  const [settle, setSettle] = useState<{ a: Agreement; series: string; no: string; invoiceDate: string; postingDate: string; byVoucher: boolean } | null>(null)
   const [from, setFrom] = useState(yearStart())
   const [to, setTo] = useState(today())
   const [report, setReport] = useState<Report | null>(null)
@@ -54,9 +54,10 @@ export function DiscountsView() {
   const open = (a: Agreement) => run(async () => setPreview({ a, p: await get<Preview>(`/discounts/agreements/${a.id}/preview`) }))
   const doSettle = () => run(async () => {
     if (!settle) return
-    const r = await post<{ amount: string; percent: string }>(`/discounts/agreements/${settle.a.id}/settle`, { rowVersion: settle.a.rowVersion, invoiceSeries: settle.series, firstInvoiceNo: settle.no, invoiceDate: settle.invoiceDate, postingDate: settle.postingDate })
+    const r = await post<{ amount: string; percent: string }>(`/discounts/agreements/${settle.a.id}/settle`, { rowVersion: settle.a.rowVersion, invoiceSeries: settle.series, firstInvoiceNo: settle.no, invoiceDate: settle.invoiceDate, postingDate: settle.postingDate, byVoucher: settle.byVoucher })
     setSettle(null); setPreview(null)
-    setInfo(`Đã quyết toán ${settle.a.code}: chiết khấu ${r.percent}% = ${formatMoney(r.amount)}. Các hóa đơn điều chỉnh nháp ở màn Hóa đơn — người có quyền ghi sổ ghi sổ từng hóa đơn.`)
+    setInfo(settle.byVoucher ? `Đã quyết toán ${settle.a.code}: chiết khấu ${r.percent}% = ${formatMoney(r.amount)}. Chứng từ điều chỉnh giảm (nháp) ở màn Chứng từ — duyệt và ghi sổ ở đó.`
+      : `Đã quyết toán ${settle.a.code}: chiết khấu ${r.percent}% = ${formatMoney(r.amount)}. Các hóa đơn điều chỉnh nháp ở màn Hóa đơn — người có quyền ghi sổ ghi sổ từng hóa đơn.`)
     await load()
   })
   const voidRun = (a: Agreement) => run(async () => {
@@ -137,7 +138,7 @@ export function DiscountsView() {
 
       {preview && !settle && <Modal title={`Tính chiết khấu — ${preview.a.code}`} onClose={() => setPreview(null)} busy={busy}
         footer={<><button onClick={() => setPreview(null)}>Đóng</button>{!preview.p.settled && Number(preview.p.amount) > 0 &&
-          <button className="primary" disabled={busy} onClick={() => setSettle({ a: preview.a, series: '', no: '', invoiceDate: preview.a.toDate > today() ? preview.a.toDate : today(), postingDate: preview.a.toDate > today() ? preview.a.toDate : today() })}>Quyết toán…</button>}</>}>
+          <button className="primary" disabled={busy} onClick={() => setSettle({ a: preview.a, series: '', no: '', byVoucher: false, invoiceDate: preview.a.toDate > today() ? preview.a.toDate : today(), postingDate: preview.a.toDate > today() ? preview.a.toDate : today() })}>Quyết toán…</button>}</>}>
         <p>Doanh số đủ điều kiện <b>{formatMoney(preview.p.eligibleSales)}</b> → bậc <b>{formatMoney(preview.p.percent)}%</b> → chiết khấu <b>{formatMoney(preview.p.amount)}</b>.
           {preview.p.nextThreshold && <> Còn {formatMoney(String(Number(preview.p.nextThreshold) - Number(preview.p.eligibleSales)))} nữa để lên bậc {formatMoney(preview.p.nextPercent)}%.</>}
           {preview.p.settled && <> <b>Đã quyết toán.</b></>}</p>
@@ -147,14 +148,17 @@ export function DiscountsView() {
       </Modal>}
 
       {settle && <Modal title={`Quyết toán ${settle.a.code}`} onClose={() => setSettle(null)} busy={busy}
-        footer={<><button onClick={() => setSettle(null)}>Đóng</button><button className="primary" disabled={busy || !settle.series.trim() || !settle.no.trim()} onClick={doSettle}>Sinh hóa đơn điều chỉnh nháp</button></>}>
-        <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>
-        <div className="form-row">
+        footer={<><button onClick={() => setSettle(null)}>Đóng</button><button className="primary" disabled={busy || (!settle.byVoucher && (!settle.series.trim() || !settle.no.trim()))} onClick={doSettle}>{settle.byVoucher ? 'Lập chứng từ điều chỉnh giảm (nháp)' : 'Sinh hóa đơn điều chỉnh nháp'}</button></>}>
+        {sales && <div className="form-row"><label><input type="radio" name="settleMode" checked={!settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: false })} /> Hóa đơn điều chỉnh giảm (một hóa đơn cho mỗi hóa đơn gốc)</label>
+          <label><input type="radio" name="settleMode" checked={settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: true })} /> Hạch toán điều chỉnh giảm (một chứng từ kế toán, không phát hành hóa đơn; thuế GTGT không đổi)</label></div>}
+        {settle.byVoucher ? <p>Lập một chứng từ nháp: Nợ giảm trừ doanh thu (vai trò SALES_TRADE_DISCOUNT, chưa ánh xạ thì SALES_DISCOUNT) / Có phải thu của đối tượng. Chỉ dùng cho hóa đơn tiền hạch toán. [CẦN XÁC MINH xử lý thuế khi không có hóa đơn điều chỉnh]</p> : <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>}
+        {!settle.byVoucher && <div className="form-row">
           <label>Ký hiệu HĐ<input value={settle.series} onChange={e => setSettle({ ...settle, series: e.target.value })} /></label>
           <label>Số HĐ đầu tiên<input value={settle.no} onChange={e => setSettle({ ...settle, no: e.target.value })} /></label>
           <label>Ngày hóa đơn<input type="date" value={settle.invoiceDate} onChange={e => setSettle({ ...settle, invoiceDate: e.target.value })} /></label>
           <label>Ngày hạch toán<input type="date" value={settle.postingDate} onChange={e => setSettle({ ...settle, postingDate: e.target.value })} /></label>
-        </div>
+        </div>}
+        {settle.byVoucher && <div className="form-row"><label>Ngày hạch toán<input type="date" value={settle.postingDate} onChange={e => setSettle({ ...settle, postingDate: e.target.value })} /></label></div>}
       </Modal>}
     </>
   )

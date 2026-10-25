@@ -2284,6 +2284,39 @@ public partial class TradeTests
     }
 
     [Fact]
+    public async Task DiscountAgreement_SettledByAdjustingEntry_NoAdjustmentInvoice_ReducesRevenueAndReceivable()
+    {
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 200, 10_000_000, D(3, 1), fx.Add);
+        var a = await PostedSaleAsync(fx, "0000421", 10, D(3, 3));
+        await PostedSaleAsync(fx, "0000422", 20, D(3, 5));
+        var agreements = new DiscountAgreementService(fx.S.Db, fx.Inv, fx.S.Audit, fx.H.Clock, fx.S.Engine);
+        var agr = await agreements.CreateAsync(fx.H.Approver, new AgreementInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "CK-Q1", "CK tháng 3", D(3, 1), D(3, 31), [new AgreementTierInput(2_000_000, 2)]));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => agreements.SettleByVoucherAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 15))));      // chưa hết kỳ
+        var before = await fx.S.Db.CommercialInvoices.AsNoTracking().CountAsync();
+        var run = await agreements.SettleByVoucherAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(4, 1));
+        Assert.Equal(60_000m, run.Amount);
+        Assert.Equal(before, await fx.S.Db.CommercialInvoices.AsNoTracking().CountAsync());                                                              // không sinh hóa đơn điều chỉnh
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => agreements.SettleByVoucherAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(4, 1))));
+        var rep0 = await new DiscountReportService(fx.S.Db).ReportAsync(fx.H.Auditor, InvoiceKind.Sales, D(1, 1), D(12, 31));
+        Assert.Equal(0m, rep0.Total.AfterSaleTradeDiscount);                                                                                             // nháp chưa tính
+
+        // Hủy khi còn nháp rồi làm lại; ghi sổ chứng từ.
+        await agreements.VoidRunAsync(fx.H.Preparer, agr.Id, "Làm lại");
+        Assert.Equal(VoucherStatus.Cancelled, (await fx.S.Db.Vouchers.AsNoTracking().FirstAsync(v => v.Id == run.VoucherId)).Status);
+        var run2 = await agreements.SettleByVoucherAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(4, 1));
+        await PostVoucherAsync(fx, run2.VoucherId!.Value);
+        Assert.Equal(3_300_000m - 60_000m, await fx.Bal("AR", fx.H.Partner["KH01"]));
+        Assert.Equal(60_000m, await fx.Bal("SALESDISC"));
+        Assert.Equal(-300_000m, await fx.Bal("VATOUT"));                                                                                                 // thuế không đổi
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => agreements.VoidRunAsync(fx.H.Preparer, agr.Id, "Đã ghi sổ")));
+        var rep = await new DiscountReportService(fx.S.Db).ReportAsync(fx.H.Auditor, InvoiceKind.Sales, D(1, 1), D(12, 31));
+        Assert.Equal(60_000m, rep.Total.AfterSaleTradeDiscount);
+        Assert.Equal(a.Status, (await fx.S.Db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == a.Id)).Status);
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+    }
+
+    [Fact]
     public async Task DiscountAgreement_BelowTheFirstTier_CannotBeSettled_AndAPurchaseRebateReducesStockAndPayable()
     {
         using var fx = await SetupAsync();

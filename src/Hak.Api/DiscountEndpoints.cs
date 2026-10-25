@@ -6,7 +6,7 @@ namespace Hak.Api;
 public sealed record AgreementRequest(InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers);
 public sealed record AgreementUpdateRequest(long RowVersion, InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers);
 public sealed record AgreementActiveRequest(long RowVersion, bool Active);
-public sealed record AgreementSettleRequest(long RowVersion, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate);
+public sealed record AgreementSettleRequest(long RowVersion, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate, bool ByVoucher = false);
 
 /// <summary>Chiết khấu thương mại theo doanh số (thỏa thuận, quyết toán cuối kỳ) và báo cáo chiết khấu.</summary>
 public static class DiscountEndpoints
@@ -24,7 +24,8 @@ public static class DiscountEndpoints
         api.MapGet("/agreements/{id:guid}/preview", async (HttpContext http, Guid id, DiscountAgreementService s) => Results.Ok(await s.PreviewAsync(await http.SessionAsync(), id)));
         api.MapPost("/agreements/{id:guid}/settle", async (HttpContext http, Guid id, AgreementSettleRequest r, DiscountAgreementService s) =>
         {
-            var run = await s.SettleAsync(await http.SessionAsync(), id, r.RowVersion, r.InvoiceSeries, r.FirstInvoiceNo, r.InvoiceDate, r.PostingDate);
+            var run = r.ByVoucher ? await s.SettleByVoucherAsync(await http.SessionAsync(), id, r.RowVersion, r.PostingDate)
+                                  : await s.SettleAsync(await http.SessionAsync(), id, r.RowVersion, r.InvoiceSeries, r.FirstInvoiceNo, r.InvoiceDate, r.PostingDate);
             return Results.Ok(new { run.Id, run.Amount, run.Percent, run.EligibleSales });
         });
         api.MapPost("/agreements/{id:guid}/void-run", async (HttpContext http, Guid id, ReasonRequest r, DiscountAgreementService s) => { await s.VoidRunAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });
