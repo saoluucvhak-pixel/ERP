@@ -138,7 +138,7 @@ export function DiscountsView() {
       </Modal>}
 
       {preview && !settle && <Modal title={`Tính chiết khấu — ${preview.a.code}`} onClose={() => setPreview(null)} busy={busy}
-        footer={<><button onClick={() => setPreview(null)}>Đóng</button>{sales && !preview.p.settled && <button disabled={busy} title="Ước tính theo doanh số đến ngày chọn; sinh chứng từ nháp Nợ giảm trừ doanh thu / Có phải trả chiết khấu" onClick={() => run(async () => {
+        footer={<><button onClick={() => setPreview(null)}>Đóng</button>{!preview.p.settled && <button disabled={busy} title="Ước tính theo doanh số đến ngày chọn; sinh chứng từ nháp Nợ giảm trừ doanh thu / Có phải trả chiết khấu" onClick={() => run(async () => {
             const asOf = window.prompt('Trích trước đến ngày (yyyy-mm-dd)', today() < preview.a.toDate ? today() : preview.a.toDate)
             if (!asOf) return
             const r = await post<{ adjustment: string }>(`/discounts/agreements/${preview.a.id}/accrue`, { rowVersion: preview.a.rowVersion, asOf })
@@ -156,9 +156,9 @@ export function DiscountsView() {
 
       {settle && <Modal title={`Quyết toán ${settle.a.code}`} onClose={() => setSettle(null)} busy={busy}
         footer={<><button onClick={() => setSettle(null)}>Đóng</button><button className="primary" disabled={busy || (!settle.byVoucher && (!settle.series.trim() || !settle.no.trim()))} onClick={doSettle}>{settle.byVoucher ? 'Lập chứng từ điều chỉnh giảm (nháp)' : 'Sinh hóa đơn điều chỉnh nháp'}</button></>}>
-        {sales && <div className="form-row"><label><input type="radio" name="settleMode" checked={!settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: false })} /> Hóa đơn điều chỉnh giảm (một hóa đơn cho mỗi hóa đơn gốc)</label>
+        {<div className="form-row"><label><input type="radio" name="settleMode" checked={!settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: false })} /> Hóa đơn điều chỉnh giảm (một hóa đơn cho mỗi hóa đơn gốc)</label>
           <label><input type="radio" name="settleMode" checked={settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: true })} /> Hạch toán điều chỉnh giảm (một chứng từ kế toán, không phát hành hóa đơn; thuế GTGT không đổi)</label></div>}
-        {settle.byVoucher ? <p>Lập một chứng từ nháp: Nợ giảm trừ doanh thu (vai trò SALES_TRADE_DISCOUNT, chưa ánh xạ thì SALES_DISCOUNT) / Có phải thu của đối tượng. Chỉ dùng cho hóa đơn tiền hạch toán. [CẦN XÁC MINH xử lý thuế khi không có hóa đơn điều chỉnh]</p> : <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>}
+        {settle.byVoucher ? <p>{sales ? 'Lập một chứng từ nháp: Nợ giảm trừ doanh thu (vai trò SALES_TRADE_DISCOUNT, chưa ánh xạ thì SALES_DISCOUNT) / Có phải thu của đối tượng.' : 'Lập một chứng từ nháp: Nợ phải trả nhà cung cấp / Có giảm giá vốn hàng mua (vai trò PURCHASE_TRADE_DISCOUNT) — không định giá lại tồn kho.'} Chỉ dùng cho hóa đơn tiền hạch toán. [CẦN XÁC MINH xử lý thuế khi không có hóa đơn điều chỉnh]</p> : <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>}
         {!settle.byVoucher && <div className="form-row">
           <label>Ký hiệu HĐ<input value={settle.series} onChange={e => setSettle({ ...settle, series: e.target.value })} /></label>
           <label>Số HĐ đầu tiên<input value={settle.no} onChange={e => setSettle({ ...settle, no: e.target.value })} /></label>

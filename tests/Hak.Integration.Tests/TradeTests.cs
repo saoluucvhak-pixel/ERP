@@ -2587,6 +2587,37 @@ public partial class TradeTests
     }
 
     [Fact]
+    public async Task DiscountAgreement_PurchaseSide_AccrualToReceivable_ThenSettleByEntry_ReducesPayableAndCost()
+    {
+        using var fx = await SetupAsync();
+        await PostedPurchaseOfAdditiveAsync(fx);                                                          // 5.000.000 + VAT 500.000, NCC01, 3/3
+        var agreements = new DiscountAgreementService(fx.S.Db, fx.Inv, fx.S.Audit, fx.H.Clock, fx.S.Engine);
+        var agr = await agreements.CreateAsync(fx.H.Approver, new AgreementInput(InvoiceKind.Purchase, fx.H.Partner["NCC01"], "CK-MUA", "Rebate mua Q1", D(3, 1), D(3, 31), [new AgreementTierInput(0, 2)]));
+        Assert.Equal(ErrorCodes.RuleRoleUnmapped, await CodeOf(() => agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 31))));
+        fx.H.Acc["REBREC"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "REBREC", "Phải thu chiết khấu NCC (thử)")).Id;
+        fx.H.Acc["PURDISC"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "PURDISC", "Giảm giá vốn hàng mua (thử)")).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "REBATE_RECEIVABLE", "REBREC");
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "PURCHASE_TRADE_DISCOUNT", "PURDISC");
+
+        var a1 = await agreements.AccrueAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(3, 31));
+        Assert.Equal(100_000m, a1.Adjustment);                                                            // 2% × 5.000.000
+        await PostVoucherAsync(fx, a1.VoucherId);
+        Assert.Equal(100_000m, await fx.Bal("REBREC", fx.H.Partner["NCC01"]));                           // phải thu chiết khấu của NCC (Nợ)
+        Assert.Equal(-100_000m, await fx.Bal("PURDISC"));                                                 // giảm giá vốn (Có)
+        Assert.Equal(-5_500_000m, await fx.Bal("AP", fx.H.Partner["NCC01"]));                            // chưa đụng công nợ
+
+        var run = await agreements.SettleByVoucherAsync(fx.H.Preparer, agr.Id, agr.RowVersion, D(4, 1));
+        Assert.Equal((100_000m, 100_000m), (run.Amount, run.AccruedAmount));
+        await PostVoucherAsync(fx, run.VoucherId!.Value);
+        Assert.Equal(0m, await fx.Bal("REBREC", fx.H.Partner["NCC01"]));
+        Assert.Equal(-5_400_000m, await fx.Bal("AP", fx.H.Partner["NCC01"]));                            // phải trả giảm đúng 100.000
+        Assert.Equal(-100_000m, await fx.Bal("PURDISC"));                                                 // không ghi giảm giá vốn hai lần
+        var rep = await new DiscountReportService(fx.S.Db).ReportAsync(fx.H.Auditor, InvoiceKind.Purchase, D(1, 1), D(12, 31));
+        Assert.Equal(100_000m, rep.Total.AfterSaleTradeDiscount);
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+    }
+
+    [Fact]
     public async Task DiscountAgreement_BelowTheFirstTier_CannotBeSettled_AndAPurchaseRebateReducesStockAndPayable()
     {
         using var fx = await SetupAsync();
