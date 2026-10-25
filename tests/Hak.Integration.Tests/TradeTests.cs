@@ -1360,6 +1360,47 @@ public partial class TradeTests
     }
 
     [Fact]
+    public async Task PaymentDiscountReports_MissedSuspectDaysAndEffect()
+    {
+        using var fx = await SetupAsync();
+        var pd = new PaymentDiscountService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        var rep = new PaymentDiscountReportService(fx.S.Db, fx.S.Ledger, fx.S.Audit, fx.H.Clock);
+        await MapPaymentDiscountExpenseAsync(fx);
+        await PostedReceiptAsync(fx, 200, 10_000_000, D(3, 1), fx.Add);
+        InvoiceInput Sale(string no, StockDocument issue) => new(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26TBB", no, D(3, 3), D(3, 3), "Bán", [new InvoiceLineInput(100_000, issue.Id, 1, VatRate: 10)],
+            DueDate: D(4, 2), PaymentDiscountPercent: 2, PaymentDiscountDays: 10);
+        var i1 = await fx.Inv.PostAsync(fx.H.Approver, (await fx.Inv.CreateAsync(fx.H.Preparer, Sale("0000901", await PostedIssueAsync(fx, 10, D(3, 3), fx.Add)))).Id);
+        var i2 = await fx.Inv.PostAsync(fx.H.Approver, (await fx.Inv.CreateAsync(fx.H.Preparer, Sale("0000902", await PostedIssueAsync(fx, 10, D(3, 3), fx.Add)))).Id);
+        var i3 = await fx.Inv.PostAsync(fx.H.Approver, (await fx.Inv.CreateAsync(fx.H.Preparer, Sale("0000903", await PostedIssueAsync(fx, 10, D(3, 3), fx.Add)))).Id);
+
+        // i1 hưởng chiết khấu đúng hạn (10/3): CK 20.000, tiền 1.080.000, sớm 23 ngày so với hạn 2/4.
+        var v = await pd.CreateVoucherAsync(fx.H.Preparer, i1.Id, fx.A("CASH"), D(3, 10));
+        await PostVoucherAsync(fx, v.Id);
+        // i2: khách chỉ trả 1.078.000 trong khi công nợ 1.100.000 (tự trừ 2%) — còn dư 22.000.
+        var open2 = (await fx.S.Settlement.OpenItemsAsync(fx.H.Auditor, fx.A("AR"), fx.H.Partner["KH01"], D(3, 20))).Single(o => o.VoucherId == i2.VoucherId);
+        await fx.H.PostedAsync(fx.S, new VoucherInput(VoucherTypes.General, D(3, 12), D(3, 12), "Thu thiếu", [new(fx.A("CASH"), Side.Debit, 1_078_000), new(fx.A("AR"), Side.Credit, 1_078_000, fx.H.Partner["KH01"], SettleJournalLineId: open2.JournalLineId)]));
+
+        var missed = await rep.MissedAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 20));                          // hạn hưởng 13/3 đã qua
+        var m = Assert.Single(missed.Where(x => x.InvoiceId == i3.Id));
+        Assert.Equal((20_000m, 1_100_000m, 7), (m.LostDiscount, m.Open, m.DaysOver));
+        Assert.DoesNotContain(missed, x => x.InvoiceId == i1.Id);                                                // đã thanh toán, không còn nợ
+        Assert.Empty(await rep.MissedAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 12)));                          // chưa qua hạn
+
+        var suspect = Assert.Single(await rep.SuspectDeductionsAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 20)));
+        Assert.Equal((i2.Id, 22_000m, 2m), (suspect.InvoiceId, suspect.Open, suspect.OpenPercent));
+
+        var effect = await rep.EffectAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 1), D(3, 31));
+        var row = Assert.Single(effect.Rows);
+        Assert.Equal((20_000m, 1_080_000m, 23, 29.39m), (row.Discount, row.Cash, row.DaysEarly, row.AnnualRatePercent));
+        Assert.Equal(29.39m, effect.WeightedAnnualRatePercent);
+
+        var days = await rep.DaysAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 1), D(3, 31));
+        var march = Assert.Single(days);
+        Assert.Equal(3_300_000m, march.Turnover);
+        Assert.True(march.Days > 0);
+    }
+
+    [Fact]
     public async Task PaymentDiscount_Standalone_NotTiedToAnInvoice_IsASeparateEntry()
     {
         using var fx = await SetupAsync();

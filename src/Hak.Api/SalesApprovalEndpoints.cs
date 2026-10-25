@@ -39,6 +39,11 @@ public static class PaymentDiscountEndpoints
         api.MapGet("", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly asOf, PaymentDiscountService s) => Results.Ok(await s.CandidatesAsync(await http.SessionAsync(), kind, asOf)));
         // Chiết khấu thanh toán độc lập: không gắn hóa đơn.
         api.MapGet("/open-items", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, Guid partnerId, DateOnly asOf, PaymentDiscountService s) => Results.Ok(await s.OpenItemsAsync(await http.SessionAsync(), kind, partnerId, asOf)));
+        // Báo cáo chiết khấu thanh toán: đã mất (quá hạn còn nợ), khoản dư nghi khấu trừ sai, DSO/DPO theo tháng, hiệu quả dòng tiền.
+        api.MapGet("/reports/missed", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly asOf, PaymentDiscountReportService s) => Results.Ok(await s.MissedAsync(await http.SessionAsync(), kind, asOf)));
+        api.MapGet("/reports/suspect", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly asOf, decimal? maxPercent, PaymentDiscountReportService s) => Results.Ok(await s.SuspectDeductionsAsync(await http.SessionAsync(), kind, asOf, maxPercent ?? 5m)));
+        api.MapGet("/reports/days", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly from, DateOnly to, PaymentDiscountReportService s) => Results.Ok(await s.DaysAsync(await http.SessionAsync(), kind, from, to)));
+        api.MapGet("/reports/effect", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly from, DateOnly to, PaymentDiscountReportService s) => Results.Ok(await s.EffectAsync(await http.SessionAsync(), kind, from, to)));
         api.MapPost("/multi", async (HttpContext http, MultiPaymentDiscountRequest r, PaymentDiscountService s) =>
         { var v = await s.CreateMultiVoucherAsync(await http.SessionAsync(), r.Kind, r.PartnerId, r.InvoiceIds, r.CashAccountId, r.Date); return Results.Ok(new { v.Id, v.Number }); });
         api.MapPost("/standalone", async (HttpContext http, StandalonePaymentDiscountRequest r, PaymentDiscountService s) =>

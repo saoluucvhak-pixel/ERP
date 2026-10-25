@@ -4,6 +4,7 @@ import { AccountSelect, ErrorBox, ExportButton, FlowStrip, Modal, PartnerSelect,
 import { addMoney, formatDate, formatMoney, today } from './money'
 import { matchesQuery } from './filter'
 import { SmartFilter, useFilterState } from './SmartFilter'
+import { PaymentDiscountReports } from './PaymentDiscountReports'
 
 interface OpenRow { journalLineId: string; voucherNumber: string; postingDate: string; open: string; description: string | null }
 interface Cand { invoiceId: string; invoiceNumber: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; partnerCode: string; partnerName: string; percent: string; days: number; deadline: string; daysLeft: number
@@ -18,6 +19,7 @@ export function PaymentDiscountView() {
   const [f, pf, cf] = useFilterState('paydiscount')
   const [dlg, setDlg] = useState<{ c: Cand; cash: string; date: string } | null>(null)
   const [info, setInfo] = useState('')
+  const [showReports, setShowReports] = useState(false)
   const [picked, setPicked] = useState<string[]>([])                       // hóa đơn chọn để thanh toán gộp một chứng từ
   const [multi, setMulti] = useState<{ ids: string[]; partner: string; cash: string; date: string } | null>(null)
   // Chiết khấu thanh toán độc lập: không xuất hóa đơn nên không ghép với hóa đơn — chọn khoản công nợ còn mở của đối tượng.
@@ -31,6 +33,7 @@ export function PaymentDiscountView() {
     <>
       <div className="toolbar"><h2>{purchase ? 'Chiết khấu thanh toán được hưởng (hóa đơn mua)' : 'Chiết khấu thanh toán cho khách (hóa đơn bán)'}</h2>
         <label>Tính đến ngày<input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
+        <button onClick={() => setShowReports(x => !x)}>{showReports ? 'Ẩn báo cáo' : 'Báo cáo'}</button>
         <button disabled={picked.length < 2} title="Chọn từ 2 hóa đơn của cùng một đối tượng; chiết khấu tính riêng từng hóa đơn" onClick={() => {
           const sel = rows.filter(r => picked.includes(r.invoiceId))
           if (new Set(sel.map(r => r.partnerCode)).size !== 1) { setInfo('Chỉ gộp các hóa đơn của cùng một đối tượng.'); return }
@@ -46,6 +49,7 @@ export function PaymentDiscountView() {
         { label: purchase ? 'Chứng từ trả tiền có chiết khấu' : 'Chứng từ thu tiền có chiết khấu', journal: true, screen: 'vouchers', count: `${rows.filter(r => r.voucherPending).length} chờ ghi sổ` },
         { label: 'Quá hạn: thanh toán như thường', journal: false, count: `${rows.filter(r => r.expired).length} hóa đơn` },
       ]} />
+      {showReports && <PaymentDiscountReports kind={kind} />}
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
       <SmartFilter label="Chiết khấu thanh toán" state={f} patch={pf} clear={cf} shown={shown.length} total={rows.length} placeholder="Tìm hóa đơn, đối tượng, số tiền"
