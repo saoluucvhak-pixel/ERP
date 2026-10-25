@@ -40,6 +40,8 @@ public sealed class CommercialInvoice
     public InvoiceKind Kind { get; set; }
     public InvoicePurpose Purpose { get; set; } = InvoicePurpose.Normal;
     public Guid? AdjustsInvoiceId { get; set; }
+    /// <summary>Hóa đơn thay thế: hóa đơn gốc bị thay (đã ghi sổ). Khi hóa đơn này ghi sổ, hóa đơn gốc được đảo trong cùng giao dịch.</summary>
+    public Guid? ReplacesInvoiceId { get; set; }
     /// <summary>Chỉ dùng khi Purpose = Discount: chiết khấu thương mại hay giảm giá hàng bán. Null = giảm giá hàng bán (bản ghi cũ).</summary>
     public DiscountKind? DiscountKind { get; set; }
     /// <summary>Lý do cố ý lập hóa đơn từ phiếu kho của đối tượng khác (người lập có quyền invoice.partner_override); null = không có ngoại lệ. Kiểm lại lúc ghi sổ.</summary>

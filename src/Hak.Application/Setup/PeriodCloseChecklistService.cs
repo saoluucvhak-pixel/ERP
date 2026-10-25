@@ -108,6 +108,14 @@ public sealed class PeriodCloseChecklistService(HakDbContext db, StockService st
             }
         }
         catch (DomainException) { /* chưa ánh xạ vai trò thuế: công ty không dùng khấu trừ GTGT tự động */ }
+        // Hóa đơn điện tử phát hành từ HAK trong kỳ: còn chờ nhà cung cấp, bị từ chối, hoặc đã phát hành nhưng chưa ghi sổ được thì kỳ không đóng được (sổ và hệ thống HĐĐT sẽ lệch).
+        if (await db.EInvoiceDocuments.AnyAsync(d => d.CompanyId == cid && d.InvoiceId != null))
+        {
+            var stuck = await db.EInvoiceDocuments.CountAsync(d => d.CompanyId == cid && d.InvoiceId != null && d.IssueDate >= periodStart && d.IssueDate <= periodEnd
+                && (d.Status == Hak.Domain.Tax.EInvoiceDocStatus.Issuing || d.Status == Hak.Domain.Tax.EInvoiceDocStatus.Rejected || d.PostError != null));
+            Add("EINVOICE_PENDING", Sev(stuck > 0, "Blocking"), "Hóa đơn điện tử đã xử lý xong (không chờ, không bị từ chối, đã ghi sổ)", stuck, null,
+                stuck == 0 ? "" : $"{stuck} hóa đơn điện tử của kỳ còn chờ nhà cung cấp, bị từ chối hoặc đã phát hành nhưng chưa ghi sổ: xử lý ở màn Hóa đơn điện tử.", "einvoice");
+        }
         var hasClosingRules = await db.ClosingRuleSets.AnyAsync(r => r.CompanyId == cid && r.Status == Hak.Domain.Rules.RuleStatus.Active && r.EffectiveFrom <= periodEnd && (r.EffectiveTo == null || r.EffectiveTo >= periodEnd));
         if (hasClosingRules)
         {

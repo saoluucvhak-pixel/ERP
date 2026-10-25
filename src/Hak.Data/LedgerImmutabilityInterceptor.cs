@@ -125,6 +125,23 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                     when entry.State is EntityState.Modified or EntityState.Deleted:
                     throw Immutable("Dữ liệu hóa đơn điện tử đã nhập là chứng cứ gốc, không được sửa/xóa.");
 
+                case Domain.Tax.EInvoiceMessage or Domain.Tax.EInvoiceOutboxItem when entry.State == EntityState.Deleted:
+                case Domain.Tax.EInvoiceMessage when entry.State == EntityState.Modified:
+                    throw Immutable("Nhật ký thông điệp và hàng đợi hóa đơn điện tử là chứng cứ: chỉ thêm, không sửa hoặc xóa.");
+
+                case Domain.Tax.EInvoiceDocument when entry.State == EntityState.Deleted:
+                    throw Immutable("Hóa đơn điện tử đã phát hành không được xóa; dùng thông báo sai sót / hóa đơn điều chỉnh, thay thế.");
+
+                case Domain.Tax.EInvoiceDocument when entry.State == EntityState.Modified
+                    && (Domain.Tax.EInvoiceDocStatus)entry.OriginalValues[nameof(Domain.Tax.EInvoiceDocument.Status)]! is not (Domain.Tax.EInvoiceDocStatus.Issuing or Domain.Tax.EInvoiceDocStatus.Rejected):
+                    // Đã phát hành: số, ký hiệu, ngày ký, mã cơ quan thuế, XML và băm không đổi; chỉ trạng thái (→ Thay thế / Hủy) và ghi chú lỗi ghi sổ được đổi.
+                    foreach (var prop in new[] { nameof(Domain.Tax.EInvoiceDocument.Series), nameof(Domain.Tax.EInvoiceDocument.Number), nameof(Domain.Tax.EInvoiceDocument.SignedAt),
+                                 nameof(Domain.Tax.EInvoiceDocument.TaxAuthorityCode), nameof(Domain.Tax.EInvoiceDocument.XmlContent), nameof(Domain.Tax.EInvoiceDocument.XmlSha256),
+                                 nameof(Domain.Tax.EInvoiceDocument.InvoiceId), nameof(Domain.Tax.EInvoiceDocument.IssueDate) })
+                        if (!Equals(entry.OriginalValues[prop], entry.CurrentValues[prop]))
+                            throw Immutable("Số, ký hiệu, ngày ký, mã cơ quan thuế và XML của hóa đơn điện tử đã phát hành không được sửa.");
+                    break;
+
                 case Domain.Tax.TaxDeclaration when entry.State == EntityState.Deleted:
                 case Domain.Tax.TaxDeclaration when entry.State == EntityState.Modified
                                                     && (Domain.Tax.DeclarationStatus)entry.OriginalValues[nameof(Domain.Tax.TaxDeclaration.Status)]! == Domain.Tax.DeclarationStatus.Filed:

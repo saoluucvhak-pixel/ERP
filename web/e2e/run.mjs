@@ -52,7 +52,7 @@ const waitFor = async (url, what, child, ok, ms = 120000) => {
   die(`${what} không lên sau ${ms / 1000}s`)
 }
 
-const api = start('api', 'dotnet', ['run', '--no-build', '-c', config, '--project', path.resolve(web, '../src/Hak.Api'), '--urls', `http://127.0.0.1:${apiPort}`, '--Hak:Environment=Development', `--Hak:DatabasePath=${db}`])
+const api = start('api', 'dotnet', ['run', '--no-build', '-c', config, '--project', path.resolve(web, '../src/Hak.Api'), '--urls', `http://127.0.0.1:${apiPort}`, '--Hak:Environment=Development', '--Hak:EInvoice:Provider=Simulated', `--Hak:DatabasePath=${db}`])
 api.name = 'api'
 await waitFor(`http://127.0.0.1:${apiPort}/api/health`, 'API', api, r => r.ok)
 const seed = spawnSync(process.execPath, ['scripts/dev-seed.mjs'], { cwd: web, env: { ...process.env, HAK_API: `http://127.0.0.1:${apiPort}/api` }, encoding: 'utf8' })

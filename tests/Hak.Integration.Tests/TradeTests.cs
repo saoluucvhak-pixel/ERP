@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Integration.Tests;
 
-public class TradeTests
+public partial class TradeTests
 {
     private static async Task<string> CodeOf(Func<Task> act) => (await Assert.ThrowsAsync<DomainException>(act)).Code;
     private static DateOnly D(int m, int d) => new(2026, m, d);

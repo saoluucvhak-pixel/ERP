@@ -6881,6 +6881,229 @@ namespace Hak.Data.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invoice_id");
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("issue_date");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
+                    b.Property<int>("Nature")
+                        .HasColumnType("integer")
+                        .HasColumnName("nature");
+
+                    b.Property<string>("Number")
+                        .HasColumnType("text")
+                        .HasColumnName("number");
+
+                    b.Property<string>("PostError")
+                        .HasColumnType("text")
+                        .HasColumnName("post_error");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderRef")
+                        .HasColumnType("text")
+                        .HasColumnName("provider_ref");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid?>("RelatedDocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("related_document_id");
+
+                    b.Property<int>("Relation")
+                        .HasColumnType("integer")
+                        .HasColumnName("relation");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<string>("Series")
+                        .HasColumnType("text")
+                        .HasColumnName("series");
+
+                    b.Property<DateTime?>("SignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("signed_at");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TaxAuthorityCode")
+                        .HasColumnType("text")
+                        .HasColumnName("tax_authority_code");
+
+                    b.Property<string>("TemplateCode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("template_code");
+
+                    b.Property<string>("XmlContent")
+                        .HasColumnType("text")
+                        .HasColumnName("xml_content");
+
+                    b.Property<string>("XmlSha256")
+                        .HasColumnType("text")
+                        .HasColumnName("xml_sha256");
+
+                    b.HasKey("Id")
+                        .HasName("pk_e_invoice_documents");
+
+                    b.HasIndex("CompanyId", "InvoiceId")
+                        .HasDatabaseName("ix_e_invoice_documents_company_id_invoice_id");
+
+                    b.HasIndex("CompanyId", "Status")
+                        .HasDatabaseName("ix_e_invoice_documents_company_id_status");
+
+                    b.HasIndex("CompanyId", "Series", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_e_invoice_documents_company_id_series_number")
+                        .HasFilter("series IS NOT NULL AND number IS NOT NULL");
+
+                    b.ToTable("e_invoice_documents");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceErrorNotice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("number");
+
+                    b.Property<string>("ProviderRef")
+                        .HasColumnType("text")
+                        .HasColumnName("provider_ref");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("responded_at");
+
+                    b.Property<string>("Response")
+                        .HasColumnType("text")
+                        .HasColumnName("response");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_e_invoice_error_notices");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_e_invoice_error_notices_company_id_number");
+
+                    b.ToTable("e_invoice_error_notices");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceErrorNoticeLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("ErrorDescription")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("error_description");
+
+                    b.Property<Guid>("NoticeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notice_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_e_invoice_error_notice_lines");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("ix_e_invoice_error_notice_lines_document_id");
+
+                    b.HasIndex("NoticeId")
+                        .HasDatabaseName("ix_e_invoice_error_notice_lines_notice_id");
+
+                    b.ToTable("e_invoice_error_notice_lines");
+                });
+
             modelBuilder.Entity("Hak.Domain.Tax.EInvoiceImportBatch", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6926,6 +7149,125 @@ namespace Hak.Data.Postgres.Migrations
                         .HasDatabaseName("ix_e_invoice_import_batches_company_id_source_sha256");
 
                     b.ToTable("e_invoice_import_batches");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("Code")
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("direction");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("NoticeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notice_id");
+
+                    b.Property<string>("PayloadSha256")
+                        .HasColumnType("text")
+                        .HasColumnName("payload_sha256");
+
+                    b.HasKey("Id")
+                        .HasName("pk_e_invoice_messages");
+
+                    b.HasIndex("CompanyId", "DocumentId", "At")
+                        .HasDatabaseName("ix_e_invoice_messages_company_id_document_id_at");
+
+                    b.ToTable("e_invoice_messages");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceOutboxItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("operation");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer")
+                        .HasColumnName("state");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_e_invoice_outbox");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("ix_e_invoice_outbox_document_id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_e_invoice_outbox_idempotency_key");
+
+                    b.HasIndex("CompanyId", "State", "NextAttemptAt")
+                        .HasDatabaseName("ix_e_invoice_outbox_company_id_state_next_attempt_at");
+
+                    b.ToTable("e_invoice_outbox");
                 });
 
             modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRateLine", b =>
@@ -7422,6 +7764,10 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<int>("Purpose")
                         .HasColumnType("integer")
                         .HasColumnName("purpose");
+
+                    b.Property<Guid?>("ReplacesInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("replaces_invoice_id");
 
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
@@ -10207,6 +10553,33 @@ namespace Hak.Data.Postgres.Migrations
                         .HasConstraintName("fk_settlement_allocations_business_partners_partner_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceErrorNoticeLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Tax.EInvoiceDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_e_invoice_error_notice_lines_e_invoice_documents_document_id");
+
+                    b.HasOne("Hak.Domain.Tax.EInvoiceErrorNotice", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("NoticeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_e_invoice_error_notice_lines_e_invoice_error_notices_notice~");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceOutboxItem", b =>
+                {
+                    b.HasOne("Hak.Domain.Tax.EInvoiceDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_e_invoice_outbox_e_invoice_documents_document_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRateLine", b =>
                 {
                     b.HasOne("Hak.Domain.Tax.EInvoiceRecord", null)
@@ -10624,6 +10997,11 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Security.Role", b =>
                 {
                     b.Navigation("Permissions");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceErrorNotice", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRecord", b =>

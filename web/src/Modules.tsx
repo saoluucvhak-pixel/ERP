@@ -44,7 +44,7 @@ export const MODULES: AppModule[] = [
     catalogs: [{ label: 'Nhà cung cấp', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup', tab: 'stock' }, CAT_SETUP],
   },
   {
-    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'services', 'trade', 'arap', 'salesapproval', 'discounts', 'paydiscount'], title: 'NGHIỆP VỤ BÁN HÀNG',
+    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'services', 'trade', 'arap', 'einvoice', 'salesapproval', 'discounts', 'paydiscount'], title: 'NGHIỆP VỤ BÁN HÀNG',
     flow: [
       { label: 'Hợp đồng bán', icon: '📑', screen: 'contracts' }, { label: 'Đơn bán, kiểm tra tín dụng', icon: '📝', screen: 'orders' }, { label: 'Lệnh bán hàng', icon: '📋', screen: 'revenue' }, { label: 'Giao hàng, xuất kho', icon: '🚚', screen: 'revenue' },
       { label: 'Nghiệm thu dịch vụ', icon: '🧾', screen: 'services' }, { label: 'Hóa đơn bán', icon: '📄', screen: 'trade' }, { label: 'Trả hàng, giảm giá (duyệt)', icon: '↩️', screen: 'salesapproval' }, { label: 'Theo dõi phải thu', icon: '🧮', screen: 'arap' }, { label: 'Thu tiền', icon: '💵', screen: 'revenue' }, { label: 'Xóa nợ khó đòi (duyệt)', icon: '🧾', screen: 'salesapproval' },

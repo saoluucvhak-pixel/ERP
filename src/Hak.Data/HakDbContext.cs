@@ -91,6 +91,11 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<CommercialInvoiceLine> CommercialInvoiceLines => Set<CommercialInvoiceLine>();
     public DbSet<TradeOrder> TradeOrders => Set<TradeOrder>();
     public DbSet<TradeOrderLine> TradeOrderLines => Set<TradeOrderLine>();
+    public DbSet<EInvoiceDocument> EInvoiceDocuments => Set<EInvoiceDocument>();
+    public DbSet<EInvoiceOutboxItem> EInvoiceOutbox => Set<EInvoiceOutboxItem>();
+    public DbSet<EInvoiceMessage> EInvoiceMessages => Set<EInvoiceMessage>();
+    public DbSet<EInvoiceErrorNotice> EInvoiceErrorNotices => Set<EInvoiceErrorNotice>();
+    public DbSet<EInvoiceErrorNoticeLine> EInvoiceErrorNoticeLines => Set<EInvoiceErrorNoticeLine>();
     public DbSet<DiscountAgreement> DiscountAgreements => Set<DiscountAgreement>();
     public DbSet<DiscountAgreementTier> DiscountAgreementTiers => Set<DiscountAgreementTier>();
     public DbSet<DiscountAgreementRun> DiscountAgreementRuns => Set<DiscountAgreementRun>();
@@ -486,6 +491,27 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
             e.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("ck_trade_order_lines_quantity", "quantity > 0 AND unit_price >= 0"));
         });
+        b.Entity<EInvoiceDocument>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.InvoiceId });
+            e.HasIndex(x => new { x.CompanyId, x.Series, x.Number }).IsUnique().HasFilter("series IS NOT NULL AND number IS NOT NULL");
+            e.HasIndex(x => new { x.CompanyId, x.Status });
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<EInvoiceOutboxItem>(e =>
+        {
+            e.HasIndex(x => x.IdempotencyKey).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.State, x.NextAttemptAt });
+            e.HasOne<EInvoiceDocument>().WithMany().HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<EInvoiceMessage>(e => e.HasIndex(x => new { x.CompanyId, x.DocumentId, x.At }));
+        b.Entity<EInvoiceErrorNotice>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.NoticeId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<EInvoiceErrorNoticeLine>(e => e.HasOne<EInvoiceDocument>().WithMany().HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Restrict));
         b.Entity<DiscountAgreement>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.Code }).IsUnique();

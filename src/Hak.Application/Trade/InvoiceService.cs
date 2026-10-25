@@ -25,7 +25,11 @@ public sealed record InvoiceInput(InvoiceKind Kind, Guid PartnerId, string Invoi
     string Description, IReadOnlyList<InvoiceLineInput> Lines, DateOnly? DueDate = null, string? Currency = null, decimal? ExchangeRate = null,
     decimal? PaymentDiscountPercent = null, int? PaymentDiscountDays = null,
     /// <summary>Lý do cố ý lập hóa đơn từ phiếu kho của đối tượng khác; chỉ có tác dụng với người có quyền invoice.partner_override và được ghi nhật ký.</summary>
-    string? PartnerOverrideReason = null);
+    string? PartnerOverrideReason = null,
+    /// <summary>Hóa đơn sẽ lấy ký hiệu và số từ nhà cung cấp hóa đơn điện tử khi phát hành (không nhập tay): lưu số tạm cho tới lúc phát hành.</summary>
+    bool AwaitIssue = false,
+    /// <summary>Hóa đơn thay thế: hóa đơn bán gốc đã ghi sổ bị thay. Khi hóa đơn này ghi sổ, hóa đơn gốc được đảo trong cùng giao dịch; số lượng nguồn của hóa đơn gốc không bị tính hai lần.</summary>
+    Guid? ReplacesInvoiceId = null);
 
 public sealed record PriceDifferenceWarning(int LineNo, string ReceiptNumber, decimal ReceiptValue, decimal InvoiceValue, decimal Difference,
     decimal ReceiptQuantity, decimal QuantityInStock, decimal InventoryPart, decimal CogsPart, string Method);
@@ -43,21 +47,33 @@ public sealed record UninvoicedLine(Guid StockDocumentId, string StockDocumentNu
 public sealed partial class InvoiceService(HakDbContext db, AccountingEngine engine, StockService stock, AuditService audit, IClock clock)
 {
     public const string Source = "HAK.INVOICE";
+    /// <summary>Ký hiệu tạm của hóa đơn chờ phát hành điện tử; được thay bằng ký hiệu và số thật của nhà cung cấp khi phát hành.</summary>
+    public const string AwaitingSeries = "CHO-PHAT-HANH";
 
     public async Task<CommercialInvoice> CreateAsync(SessionContext ctx, InvoiceInput input)
     {
         ctx.Require(Permissions.InvoiceDocument);
         if (input.Lines.Count == 0) throw new DomainException(ErrorCodes.VoucherNoLines, "Hóa đơn chưa có dòng.");
-        if (string.IsNullOrWhiteSpace(input.InvoiceNo) || string.IsNullOrWhiteSpace(input.InvoiceSeries))
+        if (!input.AwaitIssue && (string.IsNullOrWhiteSpace(input.InvoiceNo) || string.IsNullOrWhiteSpace(input.InvoiceSeries)))
             throw new DomainException(ErrorCodes.ValidationFailed, "Phải nhập ký hiệu và số hóa đơn.");
         if (string.IsNullOrWhiteSpace(input.Description)) throw new DomainException(ErrorCodes.ValidationFailed, "Diễn giải bắt buộc.");
+        if (input.AwaitIssue && input.Kind != InvoiceKind.Sales) throw new DomainException(ErrorCodes.ValidationFailed, "Chỉ hóa đơn bán do công ty phát hành; hóa đơn mua nhận từ nhà cung cấp.");
         return await db.InTransactionAsync(async () =>
         {
+            if (input.ReplacesInvoiceId is { } replaced)
+            {
+                var orig = await db.CommercialInvoices.AsNoTracking().FirstOrDefaultAsync(i => i.Id == replaced && i.CompanyId == ctx.CompanyId)
+                           ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn bị thay thế không tồn tại.");
+                if (orig.Kind != input.Kind || orig.Purpose != InvoicePurpose.Normal || orig.Status != InvoiceStatus.Posted)
+                    throw new DomainException(ErrorCodes.ValidationFailed, "Chỉ thay thế hóa đơn thường cùng chiều đã ghi sổ.");
+                if (await db.CommercialInvoices.AnyAsync(i => i.ReplacesInvoiceId == replaced && i.Status == InvoiceStatus.Draft))
+                    throw new DomainException(ErrorCodes.DuplicateSource, $"Hóa đơn {orig.Number} đã có hóa đơn thay thế đang chờ; hủy bản đó trước.");
+            }
             if (!await db.BusinessPartners.AnyAsync(p => p.Id == input.PartnerId && p.CompanyId == ctx.CompanyId))
                 throw new DomainException(ErrorCodes.PartnerWrongCompany, "Đối tượng không thuộc công ty.");
             var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
             var (currency, rate, curDp, funcDp) = await CurrencyAsync(company, input.Currency, input.ExchangeRate);
-            await CheckDuplicateAsync(ctx.CompanyId, input.Kind, input.PartnerId, input.InvoiceSeries.Trim(), input.InvoiceNo.Trim(), null);
+            if (!input.AwaitIssue) await CheckDuplicateAsync(ctx.CompanyId, input.Kind, input.PartnerId, input.InvoiceSeries.Trim(), input.InvoiceNo.Trim(), null);
 
             var fy = await db.FiscalYears.AsNoTracking().FirstOrDefaultAsync(f => f.CompanyId == ctx.CompanyId && f.StartDate <= input.PostingDate && f.EndDate >= input.PostingDate)
                      ?? throw new DomainException(ErrorCodes.FiscalYearNotFound, $"Không có năm tài chính chứa ngày {input.PostingDate.Vn()}.");
@@ -69,8 +85,9 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             if (discPct is { } dp0 && (dp0 <= 0 || dp0 > 100 || discDays is < 1 or > 365)) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán: tỷ lệ lớn hơn 0 đến 100%, số ngày từ 1 đến 365.");
             var inv = new CommercialInvoice
             {
-                PaymentDiscountPercent = discPct, PaymentDiscountDays = discDays,
-                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, InvoiceSeries = input.InvoiceSeries.Trim(), InvoiceNo = input.InvoiceNo.Trim(),
+                PaymentDiscountPercent = discPct, PaymentDiscountDays = discDays, ReplacesInvoiceId = input.ReplacesInvoiceId,
+                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind,
+                InvoiceSeries = input.AwaitIssue ? AwaitingSeries : input.InvoiceSeries.Trim(), InvoiceNo = input.AwaitIssue ? "CHO-" + Ids.New().ToString("N")[..12] : input.InvoiceNo.Trim(),
                 InvoiceDate = input.InvoiceDate, PostingDate = input.PostingDate, DueDate = input.DueDate, PartnerId = input.PartnerId,
                 Currency = currency, ExchangeRate = rate, Description = input.Description.Trim(), CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
             };
@@ -135,8 +152,15 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
             if (company.RequireDistinctApprover && inv.CreatedBy == ctx.UserId)
                 throw new DomainException(ErrorCodes.SodViolation, "Người ghi sổ hóa đơn không được trùng người lập.");
+            if (inv.InvoiceSeries == AwaitingSeries)
+                throw new DomainException(ErrorCodes.ValidationFailed, $"Hóa đơn {inv.Number} đang chờ phát hành điện tử: ký hiệu và số do nhà cung cấp cấp khi phát hành. Dùng Phát hành hóa đơn điện tử, không ghi sổ với số tạm.");
             await CheckDuplicateAsync(ctx.CompanyId, inv.Kind, inv.PartnerId, inv.InvoiceSeries, inv.InvoiceNo, inv.Id);
             if (inv.Purpose != InvoicePurpose.Normal) return await PostAdjustmentCoreAsync(ctx, inv);
+            if (inv.ReplacesInvoiceId is { } replaced)
+            {
+                // Thay thế: đảo hóa đơn gốc ngay trước khi ghi sổ hóa đơn mới, cùng một giao dịch. Nếu bước nào lỗi (kỳ khóa, còn điều chỉnh…) thì cả hai đều không đổi.
+                await ReverseAsync(ctx, replaced, inv.PostingDate, $"Thay thế bằng hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}");
+            }
             var warnings = await PriceDifferencesAsync(ctx, inv.Id);
             if (warnings.Count > 0 && !acknowledgePriceDifferences)
                 throw new DomainException(ErrorCodes.PriceDifference,
@@ -403,9 +427,9 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 ctx.Require(Permissions.InvoicePartnerOverride);
                 partnerOverrides.Add(doc.Number);
             }
-            line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(ctx.CompanyId, doc.Id, sl.LineNo, null);
+            line.StockQuantity = l.StockQuantity ?? sl.Quantity - await InvoicedQuantityAsync(ctx.CompanyId, doc.Id, sl.LineNo, null, inv.ReplacesInvoiceId);
             if (line.StockQuantity <= 0) throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {lineNo}: phiếu {doc.Number} dòng {sl.LineNo} đã lập hóa đơn đủ.");
-            await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null);
+            await CheckRemainingAsync(ctx.CompanyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, line.StockQuantity.Value, null, inv.ReplacesInvoiceId);
 
             if (l.Basis == PricingBasis.Bdmt)
             {
@@ -439,7 +463,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             if (service is not null)
             {
                 line.ItemId = service.Id;
-                await ServiceAcceptanceService.CheckInvoiceAgainstAcceptanceAsync(db, svcOrder!.Id, l.OrderLineNo!.Value, svcOrder.Number, q, null);
+                await ServiceAcceptanceService.CheckInvoiceAgainstAcceptanceAsync(db, svcOrder!.Id, l.OrderLineNo!.Value, svcOrder.Number, q, inv.ReplacesInvoiceId);
             }
             if (l.OrderId is { } oid)
             {
@@ -499,14 +523,14 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             var itemId = g.First().ItemId!.Value;
             if (!await db.Items.AnyAsync(i => i.Id == itemId && i.IsService)) continue;
             var number = await db.TradeOrders.AsNoTracking().Where(o => o.Id == g.Key.OrderId).Select(o => o.Number).FirstAsync();
-            await ServiceAcceptanceService.CheckInvoiceAgainstAcceptanceAsync(db, g.Key.OrderId, g.Key.LineNo, number, g.Sum(x => x.BasisQuantity), inv.Id);
+            await ServiceAcceptanceService.CheckInvoiceAgainstAcceptanceAsync(db, g.Key.OrderId, g.Key.LineNo, number, g.Sum(x => x.BasisQuantity), inv.ReplacesInvoiceId ?? inv.Id);
         }
         foreach (var g in inv.Lines.Where(x => x.StockDocumentId is not null && x.StockLineNo is not null)
                      .GroupBy(x => (Doc: x.StockDocumentId!.Value, LineNo: x.StockLineNo!.Value)).Where(g => g.Count() > 1))
         {
             var doc = await db.StockDocuments.AsNoTracking().Include(d => d.Lines).FirstAsync(d => d.Id == g.Key.Doc);
             var sl = doc.Lines.Single(x => x.LineNo == g.Key.LineNo);
-            await CheckRemainingAsync(companyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, g.Sum(x => x.StockQuantity ?? 0), inv.Id);
+            await CheckRemainingAsync(companyId, doc.Id, doc.Number, sl.LineNo, sl.Quantity, g.Sum(x => x.StockQuantity ?? 0), inv.Id, inv.ReplacesInvoiceId);
         }
     }
 
@@ -534,20 +558,22 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
         _ = ctx;
     }
 
-    private async Task CheckRemainingAsync(Guid companyId, Guid docId, string docNumber, int lineNo, decimal lineQty, decimal wanted, Guid? excludeInvoice)
+    private async Task CheckRemainingAsync(Guid companyId, Guid docId, string docNumber, int lineNo, decimal lineQty, decimal wanted, Guid? excludeInvoice, Guid? alsoExclude = null)
     {
-        var used = await InvoicedQuantityAsync(companyId, docId, lineNo, excludeInvoice);
+        var used = await InvoicedQuantityAsync(companyId, docId, lineNo, excludeInvoice, alsoExclude);
         if (used + wanted > lineQty)
             throw new DomainException(ErrorCodes.OverInvoiced, $"Phiếu {docNumber} dòng {lineNo}: đã lập hóa đơn {used}, thêm {wanted} vượt số lượng {lineQty}.");
     }
 
     /// <summary>Quantity of a stock line already on Draft or Posted invoices (cancelled/reversed invoices release it).</summary>
-    private async Task<decimal> InvoicedQuantityAsync(Guid companyId, Guid docId, int lineNo, Guid? excludeInvoice)
+    private async Task<decimal> InvoicedQuantityAsync(Guid companyId, Guid docId, int lineNo, Guid? excludeInvoice, Guid? alsoExclude = null)
     {
         var rows = await (from l in db.CommercialInvoiceLines
                           join i in db.CommercialInvoices on l.InvoiceId equals i.Id
                           where l.CompanyId == companyId && l.StockDocumentId == docId && l.StockLineNo == lineNo
                                 && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted) && i.Id != excludeInvoice
+                                && i.Id != alsoExclude                                                     // hóa đơn đang bị thay thế không tính hai lần cùng hóa đơn thay thế
+                                && !db.CommercialInvoices.Any(r => r.ReplacesInvoiceId == i.Id && r.Status == InvoiceStatus.Draft && r.Id != excludeInvoice)
                           select l.StockQuantity).ToListAsync();
         var pending = db.CommercialInvoiceLines.Local.Where(l => l.StockDocumentId == docId && l.StockLineNo == lineNo && db.Entry(l).State == EntityState.Added && l.InvoiceId != excludeInvoice)
             .Sum(l => l.StockQuantity ?? 0);

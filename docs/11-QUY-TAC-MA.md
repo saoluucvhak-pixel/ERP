@@ -98,6 +98,7 @@ Quy ước chung: chữ hoa không dấu, chữ số và dấu `-`, tối đa 20
 | `YCTH` | Yêu cầu trả hàng bán | `YCTH` |
 | `YCGG` | Yêu cầu giảm giá hàng bán | `YCGG` |
 | `XND` | Phiếu xóa nợ khó đòi | `XND` |
+| `TBSS` | Thông báo sai sót hóa đơn điện tử (Mẫu 04/SS-HĐĐT) | `TBSS` |
 | `SI` | Chứng từ ghi sổ hóa đơn bán | `SI` |
 
 **Kho**
