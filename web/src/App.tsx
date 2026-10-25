@@ -28,6 +28,7 @@ const EquityView = lazy(() => import('./Equity').then(m => ({ default: m.EquityV
 const SalesApprovalsView = lazy(() => import('./SalesApprovals').then(m => ({ default: m.SalesApprovalsView })))
 const ServiceAcceptancesView = lazy(() => import('./ServiceAcceptances').then(m => ({ default: m.ServiceAcceptancesView })))
 const SpecialJournalsView = lazy(() => import('./SpecialJournals').then(m => ({ default: m.SpecialJournalsView })))
+const EInvoiceView = lazy(() => import('./Einvoice').then(m => ({ default: m.EInvoiceView })))
 const DiscountsView = lazy(() => import('./Discounts').then(m => ({ default: m.DiscountsView })))
 const PaymentDiscountView = lazy(() => import('./PaymentDiscount').then(m => ({ default: m.PaymentDiscountView })))
 const GroupsView = lazy(() => import('./Groups').then(m => ({ default: m.GroupsView })))
@@ -67,6 +68,7 @@ const SCREENS = [
   { key: 'equity', label: 'Vốn góp, cổ tức', el: () => <EquityView /> },
   { key: 'salesapproval', label: 'Phê duyệt bán hàng', el: () => <SalesApprovalsView /> },
   { key: 'services', label: 'Nghiệm thu dịch vụ', el: () => <ServiceAcceptancesView /> },
+  { key: 'einvoice', label: 'Hóa đơn điện tử', el: () => <EInvoiceView /> },
   { key: 'discounts', label: 'Chiết khấu thương mại', el: () => <DiscountsView /> },
   { key: 'paydiscount', label: 'Chiết khấu thanh toán', el: () => <PaymentDiscountView /> },
   { key: 'groups', label: 'Nhóm danh mục', el: () => <GroupsView /> },
@@ -107,6 +109,7 @@ const LAUNCHER = [
   { key: 'equity', group: 'Tài chính, thanh toán', label: 'Vốn góp, cổ tức' },
   { key: 'salesapproval', group: 'Chu trình doanh thu', label: 'Phê duyệt bán hàng' },
   { key: 'services', group: 'Chu trình doanh thu', label: 'Nghiệm thu dịch vụ' },
+  { key: 'einvoice', group: 'Chu trình doanh thu', label: 'Hóa đơn điện tử' },
   { key: 'discounts', group: 'Chu trình doanh thu', label: 'Chiết khấu thương mại' },
   { key: 'paydiscount', group: 'Chu trình doanh thu', label: 'Chiết khấu thanh toán' },
   { key: 'groups', group: 'Danh mục và hệ thống', label: 'Nhóm danh mục' },

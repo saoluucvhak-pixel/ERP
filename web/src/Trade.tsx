@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
+import { AccountSelect, ErrorBox, Modal, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
 import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget, focusRowProps } from './opentarget'
 import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
-interface Invoice { id: string; rowVersion: number; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string; tradeDiscount?: string; discountKind?: string | null }
+interface Invoice { id: string; rowVersion: number; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string; tradeDiscount?: string; discountKind?: string | null; lines?: { lineNo: number; unitPrice: string }[] }
 interface SvcCand { orderId: string; orderNumber: string; orderLineNo: number; itemCode: string; itemName: string; unit: string; remaining: string; unitPrice: string; vatRate: string | null; description: string | null }
 interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string; svc?: SvcCand }
 interface LineDraft { candidate: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string; qty: string; accountId: string; description: string; discPct: string; discAmt: string }
@@ -28,6 +28,9 @@ export function TradeView() {
   useUnsavedWhenChanged([head, lines])
   const [info, setInfo] = useState('')
   const [adjusting, setAdjusting] = useState<Invoice | null>(null)
+  const [einv, setEinv] = useState(false)        // đã cấu hình nhà cung cấp hóa đơn điện tử: hiện nút Phát hành / Thay thế
+  const [awaitIssue, setAwaitIssue] = useState(false)
+  const [replacing, setReplacing] = useState<{ inv: Invoice; reason: string; prices: Record<number, string> } | null>(null)
   const openId = useOpenTarget('invoice')
   const [pinned, setPinned] = useState<Invoice | null>(null)
   useEffect(() => { if (openId) get<Invoice>(`/invoices/${openId}`).then(setPinned).catch(() => { /* không còn / không có quyền */ }) }, [openId])
@@ -58,6 +61,7 @@ export function TradeView() {
   }
   useEffect(() => { load() }, [load])
 
+  useEffect(() => { if (kind === 'Sales') get<{ configured: boolean }>('/einvoice/status').then(s => setEinv(s.configured)).catch(() => setEinv(false)) }, [kind])
   const upd = (i: number, p: Partial<LineDraft>) => setLines(ls => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
 
   const save = () => run(async () => {
@@ -66,7 +70,7 @@ export function TradeView() {
     const discPct = head.discPct.trim() ? parseRate(head.discPct) : null
     if (head.discPct.trim() && discPct == null) throw new Error('Tỷ lệ chiết khấu thanh toán không hợp lệ.')
     const body = {
-      kind, partnerId: head.partnerId, invoiceSeries: head.series, invoiceNo: head.no, invoiceDate: head.invoiceDate, postingDate: head.postingDate,
+      kind, partnerId: head.partnerId, awaitIssue: kind === 'Sales' && einv && awaitIssue, invoiceSeries: awaitIssue ? '' : head.series, invoiceNo: awaitIssue ? '' : head.no, invoiceDate: head.invoiceDate, postingDate: head.postingDate,
       dueDate: head.dueDate || null, currency: head.currency || null, exchangeRate: rate, description: head.description,
       paymentDiscountPercent: discPct, paymentDiscountDays: head.discDays.trim() ? Number(head.discDays) : null,
       lines: lines.map((l, i) => {
@@ -111,8 +115,9 @@ export function TradeView() {
       <div className="panel">
         <div className="form-row">
           <label>{kind === 'Sales' ? 'Khách hàng' : 'Nhà cung cấp'}<PartnerSelect partners={partners} value={head.partnerId} onChange={v => setHead(h => ({ ...h, partnerId: v }))} /></label>
-          <label>Ký hiệu HĐ<input value={head.series} onChange={e => setHead(h => ({ ...h, series: e.target.value }))} /></label>
-          <label>Số HĐ<input value={head.no} onChange={e => setHead(h => ({ ...h, no: e.target.value }))} /></label>
+          {kind === 'Sales' && einv && <label title="Ký hiệu và số hóa đơn do nhà cung cấp hóa đơn điện tử cấp khi bấm Phát hành; hóa đơn tự ghi sổ sau khi cơ quan thuế chấp nhận."><input type="checkbox" checked={awaitIssue} onChange={e => setAwaitIssue(e.target.checked)} /> Lấy số từ nhà cung cấp HĐĐT</label>}
+          <label>Ký hiệu HĐ<input value={head.series} disabled={awaitIssue} onChange={e => setHead(h => ({ ...h, series: e.target.value }))} /></label>
+          <label>Số HĐ<input value={head.no} disabled={awaitIssue} onChange={e => setHead(h => ({ ...h, no: e.target.value }))} /></label>
           <label>Ngày hóa đơn<input type="date" value={head.invoiceDate} onChange={e => setHead(h => ({ ...h, invoiceDate: e.target.value }))} /></label>
           <label>Ngày hạch toán<input type="date" value={head.postingDate} onChange={e => setHead(h => ({ ...h, postingDate: e.target.value }))} /></label>
           <label>Hạn thanh toán<input type="date" value={head.dueDate} onChange={e => setHead(h => ({ ...h, dueDate: e.target.value }))} /></label>
@@ -146,6 +151,18 @@ export function TradeView() {
           <span className="muted">Thành tiền = BDMT (hoặc số lượng) × đơn giá; BDMT lấy từ kết quả đo/chứng thư hiệu lực của dòng phiếu kho.</span>
         </div>
       </div>
+      {replacing && <Modal title={`Hóa đơn thay thế cho ${replacing.inv.invoiceSeries}/${replacing.inv.invoiceNo}`} onClose={() => setReplacing(null)} busy={busy}
+        footer={<><button onClick={() => setReplacing(null)}>Đóng</button><button className="primary" disabled={busy || !replacing.reason.trim()} onClick={() => run(async () => {
+          const changes = Object.entries(replacing.prices).filter(([, v]) => v.trim()).map(([lineNo, v]) => { const p = parseMoney(v); if (p == null) throw new Error(`Dòng ${lineNo}: đơn giá không hợp lệ.`); return { lineNo: Number(lineNo), unitPrice: p } })
+          const r = await post<{ number: string }>(`/einvoice/invoices/${replacing.inv.id}/replacement`, { reason: replacing.reason, changes })
+          setReplacing(null); setInfo(`Đã lập hóa đơn thay thế ${r.number} (nháp). Bấm “Phát hành HĐĐT”: khi cơ quan thuế chấp nhận, hóa đơn cũ được đảo và hóa đơn mới ghi sổ cùng lúc.`); await load()
+        })}>Lập hóa đơn thay thế</button></>}>
+        <div className="form-row"><label style={{ flex: 1, minWidth: 260 }}>Lý do thay thế<input value={replacing.reason} onChange={e => setReplacing({ ...replacing, reason: e.target.value })} placeholder="Sai đơn giá…" /></label></div>
+        <p className="muted">Để trống = giữ nguyên dòng của hóa đơn gốc. Nhập đơn giá mới ở dòng cần sửa. Hóa đơn gốc vẫn có hiệu lực cho tới khi hóa đơn thay thế được cơ quan thuế chấp nhận.</p>
+        <table className="grid"><thead><tr><th>Dòng</th><th className="num">Đơn giá cũ</th><th className="num">Đơn giá mới</th></tr></thead>
+          <tbody>{(replacing.inv.lines ?? []).map(l => <tr key={l.lineNo}><td>{l.lineNo}</td><td className="num">{formatMoney(l.unitPrice)}</td>
+            <td><input className="num" aria-label={`Đơn giá mới dòng ${l.lineNo}`} value={replacing.prices[l.lineNo] ?? ''} onChange={e => setReplacing({ ...replacing, prices: { ...replacing.prices, [l.lineNo]: e.target.value } })} /></td></tr>)}</tbody></table>
+      </Modal>}
       {adjusting && <Adjust invoice={adjusting} onDone={msg => { setAdjusting(null); if (msg) setInfo(msg); load() }} />}
       <div className="scroll">
         <table className="grid">
@@ -155,7 +172,12 @@ export function TradeView() {
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
-                {i.status === 'Draft' && <button className="primary" disabled={busy} onClick={() => act(async () => {
+                {i.status === 'Draft' && kind === 'Sales' && einv && <button className="primary" disabled={busy} onClick={() => run(async () => {
+                  const d = await post<{ status: string; series: string | null; number: string | null; postError: string | null; lastError: string | null }>(`/einvoice/invoices/${i.id}/issue?rowVersion=${i.rowVersion}`)
+                  setInfo(d.status === 'Issued' ? `Đã phát hành ${d.series}/${d.number}${d.postError ? ` nhưng chưa ghi sổ: ${d.postError}` : ' và ghi sổ.'}` : d.status === 'Rejected' ? `Bị từ chối: ${d.lastError}` : 'Đang chờ nhà cung cấp — theo dõi ở màn Hóa đơn điện tử.')
+                  await load()
+                })}>Phát hành HĐĐT</button>}
+                {i.status === 'Draft' && !i.invoiceSeries.startsWith('CHO-PHAT-HANH') && <button className="primary" disabled={busy} onClick={() => act(async () => {
                   // Purchase invoices against receipts already posted at another value: show the split and require confirmation.
                   const diffs = await get<{ lineNo: number; receiptNumber: string; difference: string; inventoryPart: string; cogsPart: string; quantityInStock: string; receiptQuantity: string }[]>(`/invoices/${i.id}/price-differences`)
                   if (diffs.length > 0) {
@@ -166,6 +188,7 @@ export function TradeView() {
                 }, `Đã ghi sổ ${i.number}.`)}>Ghi sổ</button>}
                 {i.status === 'Draft' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy:'); if (reason) act(() => post(`/invoices/${i.id}/cancel?rowVersion=${i.rowVersion}`, { reason }), `Đã hủy ${i.number}.`) }}>Hủy</button>}
                 {i.status === 'Posted' && i.purpose === 'Normal' && <button onClick={() => setAdjusting(i)}>Điều chỉnh</button>}
+                {i.status === 'Posted' && i.purpose === 'Normal' && kind === 'Sales' && einv && <button onClick={() => setReplacing({ inv: i, reason: '', prices: {} })}>Thay thế</button>}
                 {i.status === 'Posted' && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo hóa đơn:'); if (!reason) return
                   const d = prompt('Ngày đảo (yyyy-mm-dd):', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse?rowVersion=${i.rowVersion}`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`)

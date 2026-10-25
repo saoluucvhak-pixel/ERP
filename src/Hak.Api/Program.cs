@@ -55,6 +55,16 @@ var attachmentsRoot = builder.Configuration["Hak:AttachmentsPath"]
 builder.Services.AddSingleton(new Hak.Application.Attachments.AttachmentStore(attachmentsRoot));
 builder.Services.AddHakApplicationServices();   // ServiceRegistration.cs
 builder.Services.AddSingleton(runtime);
+// Hóa đơn điện tử (docs/12): mặc định KHÔNG có nhà cung cấp (không phát hành được). "Simulated" chỉ bật được ở Development / Test và giả lập toàn bộ (không ký số thật).
+var einvoiceProvider = builder.Configuration["Hak:EInvoice:Provider"] ?? "None";
+if (einvoiceProvider.Equals("Simulated", StringComparison.OrdinalIgnoreCase))
+{
+    if (runtime.IsProduction) throw new InvalidOperationException("Hak:EInvoice:Provider=Simulated chỉ dùng ở Development / Test, không dùng cho hóa đơn thật.");
+    builder.Services.AddSingleton<Hak.Application.EInvoice.IEInvoiceProvider, Hak.Application.EInvoice.SimulatedEInvoiceProvider>();
+}
+else if (einvoiceProvider.Equals("None", StringComparison.OrdinalIgnoreCase)) builder.Services.AddSingleton<Hak.Application.EInvoice.IEInvoiceProvider, Hak.Application.EInvoice.NullEInvoiceProvider>();
+else throw new InvalidOperationException($"Hak:EInvoice:Provider '{einvoiceProvider}' chưa có bộ chuyển đổi (None | Simulated).");
+builder.Services.AddSingleton(new Hak.Application.EInvoice.EInvoiceOptions(builder.Configuration["Hak:EInvoice:TemplateCode"] ?? "1"));
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton(new Hak.Application.Backup.BackupOptions
 {
@@ -170,6 +180,7 @@ app.MapSalesApprovalEndpoints();
 app.MapServiceAcceptanceEndpoints();
 app.MapPaymentDiscountEndpoints();
 app.MapDiscountEndpoints();
+app.MapEInvoiceEndpoints();
 app.MapEquityEndpoints();
 app.MapFxEndpoints();
 app.MapLoanEndpoints();

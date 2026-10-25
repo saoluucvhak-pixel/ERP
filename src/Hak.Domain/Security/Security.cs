@@ -135,6 +135,10 @@ public static class Permissions
     public const string BankReconcile = "bank.reconcile";
     public const string StockDocument = "stock.document";
     public const string InvoiceDocument = "invoice.document";
+    /// <summary>Phát hành hóa đơn điện tử qua nhà cung cấp (ký số, gửi cơ quan thuế), phát hành thay thế / điều chỉnh, gửi lại hàng đợi.</summary>
+    public const string EInvoiceIssue = "einvoice.issue";
+    /// <summary>Lập và gửi thông báo sai sót hóa đơn điện tử (Mẫu 04/SS-HĐĐT) cho cơ quan thuế.</summary>
+    public const string EInvoiceNotice = "einvoice.notice";
     /// <summary>Create, activate and dispose fixed assets / tools (thẻ TSCĐ, CCDC).</summary>
     public const string AssetManage = "asset.manage";
     /// <summary>Create and activate loan contracts, link drawdowns/repayments, change rates.</summary>

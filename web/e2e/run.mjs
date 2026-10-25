@@ -23,7 +23,7 @@ const waitFor = async (url, what, ms = 120000) => {
   throw new Error(`${what} không lên sau ${ms / 1000}s`)
 }
 
-start('dotnet', ['run', '--no-build', '-c', config, '--project', path.resolve(web, '../src/Hak.Api'), '--urls', `http://127.0.0.1:${apiPort}`, '--Hak:Environment=Development', `--Hak:DatabasePath=${db}`])
+start('dotnet', ['run', '--no-build', '-c', config, '--project', path.resolve(web, '../src/Hak.Api'), '--urls', `http://127.0.0.1:${apiPort}`, '--Hak:Environment=Development', '--Hak:EInvoice:Provider=Simulated', `--Hak:DatabasePath=${db}`])
 await waitFor(`http://127.0.0.1:${apiPort}/api/health`, 'API')
 const seed = spawnSync('node', ['scripts/dev-seed.mjs'], { cwd: web, env: { ...process.env, HAK_API: `http://127.0.0.1:${apiPort}/api` }, encoding: 'utf8' })
 if (seed.status !== 0) { console.error(seed.stdout, seed.stderr); process.exit(1) }
