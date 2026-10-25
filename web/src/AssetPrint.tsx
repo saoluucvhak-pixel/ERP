@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { get } from './api'
-import { PrintSheet, printSheet, useCompanyName } from './common'
+import { PrintSheet, PrintedAt, printSheet, useCompanyName } from './common'
 import { formatDate, formatMoney, addMoney, amountInWords, today } from './money'
 
 export interface PrintCountLine { code: string; name: string; bookDepartment: string | null; result: 'NotCounted' | 'Found' | 'Missing' | 'Damaged'; actualDepartment: string | null; note: string | null; netBookValue: string }
@@ -31,7 +31,7 @@ export function CountPrintButton({ count }: { count: PrintCount }) {
       {count.missingNetBookValue !== '0' && <p>Giá trị còn lại tài sản không thấy bằng chữ: <i>{amountInWords(count.missingNetBookValue)}</i></p>}
       <p>Ý kiến giải quyết số chênh lệch: {count.note ?? '…………………………………………………………………………'}</p>
       <div className="signs"><div><b>Thủ kho / người giữ tài sản</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán</b><br /><i>(Ký, họ tên)</i></div><div><b>Trưởng ban kiểm kê</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu biên bản kiểm kê TSCĐ theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu biên bản kiểm kê TSCĐ theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
     </PrintSheet>}
   </>
 }
@@ -64,7 +64,7 @@ export function HandoverPrintButton({ assetId, code, name }: { assetId: string; 
       <p>Tình trạng tài sản khi bàn giao: {cur.note ?? '…………………………………………………………………………'}</p>
       <p className="muted">Bên nhận chịu trách nhiệm giữ gìn, sử dụng đúng mục đích và báo ngay khi hỏng, mất.</p>
       <div className="signs"><div><b>Bên giao</b><br /><i>(Ký, họ tên)</i></div><div><b>Bên nhận</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu biên bản giao nhận TSCĐ theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu biên bản giao nhận TSCĐ theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
     </PrintSheet>}
   </>
 }

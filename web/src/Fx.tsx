@@ -112,6 +112,7 @@ function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) 
   const { busy, error, run } = useAction()
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- đổi tài khoản/đối tượng/ngày thì xóa lựa chọn và tải lại khoản mở
     setPicked({}); setPreview(null)
     if (!accountId || !partnerId) { setItems([]); return }
     get<OpenItem[]>(`/settlement/open-items?accountId=${accountId}&partnerId=${partnerId}&asOf=${date}`)

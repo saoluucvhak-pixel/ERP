@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName, FlowStrip } from './common'
+import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, PrintedAt, printSheet, useAction, useCatalog, useCompanyName, FlowStrip } from './common'
 import { focusRowProps, useOpenTarget } from './opentarget'
 import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 import { SmartFilter, useFilterState } from './SmartFilter'
@@ -189,7 +189,7 @@ function AdvanceDetail({ view, onClose }: { view: View; onClose: () => void }) {
           <tbody>{view.lines.map(l => <tr key={l.lineNo}><td className="center">{l.lineNo}</td><td>{l.description}</td><td>{l.documentNo}{l.documentDate ? ` ${formatDate(l.documentDate)}` : ''}</td><td className="num">{formatMoney(l.amount)}</td></tr>)}</tbody>
           <tfoot><tr><td colSpan={3}><b>Cộng chi thực tế</b></td><td className="num"><b>{formatMoney(r.spentAmount ?? '0')}</b></td></tr></tfoot></table>}
         <div className="signs"><div><b>Người đề nghị</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu giấy đề nghị tạm ứng / thanh toán tạm ứng theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu giấy đề nghị tạm ứng / thanh toán tạm ứng theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
       </PrintSheet>}
     </Modal>
   )
@@ -307,7 +307,7 @@ function CashCountDetail({ view, onClose }: { view: CView; onClose: () => void }
         <p>Bằng chữ (số kiểm đếm): <i>{amountInWords(r.countedTotal)}</i></p>
         <p>Ý kiến giải quyết chênh lệch: {r.note || '…………………………………………………………………'}</p>
         <div className="signs"><div><b>Thủ quỹ</b><br /><i>(Ký, họ tên)</i>{view.createdByName && <div>{view.createdByName}</div>}</div><div><b>Kế toán</b><br /><i>(Ký, họ tên)</i>{view.confirmedByName && <div>{view.confirmedByName}</div>}</div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu 08a-TT theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu 08a-TT theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
       </PrintSheet>}
     </Modal>
   )

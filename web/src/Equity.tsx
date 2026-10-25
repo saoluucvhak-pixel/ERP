@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
-import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName, FlowStrip } from './common'
+import { AccountSelect, ErrorBox, ExportButton, Modal, PartnerSelect, PrintSheet, PrintedAt, printSheet, useAction, useCatalog, useCompanyName, FlowStrip } from './common'
 import { addMoney, formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 import { SmartFilter, useFilterState } from './SmartFilter'
 import { matchesQuery } from './filter'
@@ -219,7 +219,7 @@ function PrintDividend({ view }: { view: DView }) {
         <tbody>{view.lines.map((l, i) => <tr key={l.shareholderId}><td className="center">{i + 1}</td><td>{l.partnerName}</td><td className="num">{formatMoney(l.capitalBasis)}</td><td className="num">{l.percent == null ? '' : formatMoney(l.percent)}</td><td className="num">{formatMoney(l.gross)}</td><td className="num">{formatMoney(l.pitWithheld)}</td><td className="num">{formatMoney(l.net)}</td><td /></tr>)}</tbody>
         <tfoot><tr><td colSpan={4}><b>Cộng</b></td><td className="num"><b>{formatMoney(v.totalAmount)}</b></td><td className="num"><b>{formatMoney(v.pitTotal)}</b></td><td className="num"><b>{formatMoney(v.netTotal)}</b></td><td /></tr></tfoot></table>
       <div className="signs"><div><b>Người lập</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-      <div className="foot">Mẫu in nội bộ HAK Accounting [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
     </PrintSheet>}
   </>
 }

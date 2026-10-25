@@ -16,6 +16,7 @@ export function AssetUsagePanel({ assets, periods }: { assets: UsageAsset[]; per
   const { busy, error, run, setError } = useAction()
   const asset = assets.find(a => a.id === assetId)
   const load = useCallback(() => { if (assetId) run(async () => setRows(await get<UsageRow[]>(`/assets/${assetId}/usage`))); else setRows([]) }, [run, assetId])
+  // oxlint-disable-next-line react/set-state-in-effect -- tải sản lượng khi đổi tài sản
   useEffect(() => { load() }, [load])
   if (assets.length === 0) return null
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { get, post, session, type OpenItem, type TrialBalanceRow } from './api'
-import { AccountSelect, ErrorBox, ExportButton, navStore, PartnerSelect, PrintSheet, printSheet, TYPE_VI, useAction, useCatalog } from './common'
+import { AccountSelect, ErrorBox, ExportButton, navStore, PartnerSelect, PrintSheet, PrintedAt, printSheet, TYPE_VI, useAction, useCatalog } from './common'
 import { addMoney, amountInWords, formatDate, formatMoney, parseMoney, today } from './money'
 
 const firstOfMonth = () => today().slice(0, 8) + '01'
@@ -72,6 +72,7 @@ export function AccountLedgerView() {
     setData(await get(`/reports/account-ledger?${q}`))
   })
   // Arrived from a trial-balance row: show that account at once, then forget the request.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- chạy một lần khi mở từ dòng bảng cân đối; load đọc state mới nhất mỗi lần gọi
   useEffect(() => { if (navStore.ledger) { navStore.ledger = undefined; load() } }, [])
   return (
     <>
@@ -142,7 +143,7 @@ function DebtConfirmation({ ledger, partner, from, to, onDone }: { ledger: Ledge
       <p>Bằng chữ: <i>{amountInWords(abs)}</i></p>
       <p>Hai bên thống nhất số dư công nợ đến ngày {d(to)} như trên. Mọi chênh lệch (nếu có) xin phản hồi: ……………………………………………</p>
       <div className="signs"><div><b>Đại diện {company}</b><br /><i>(Ký, họ tên, đóng dấu)</i></div><div><b>Đại diện {partner}</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-      <div className="foot">Mẫu in nội bộ HAK Accounting. Số liệu là số đã ghi sổ, in lúc {new Date().toLocaleString('vi-VN')}.</div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting. Số liệu là số đã ghi sổ, in lúc <PrintedAt />.</div>
     </PrintSheet>
   )
 }

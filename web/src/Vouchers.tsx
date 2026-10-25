@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { get, post, put, session, type Voucher } from './api'
-import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
+import { withRowVersion } from './actions'
+import { AccountSelect, CASHFLOW_VI, ErrorBox, ExportButton, PartnerSelect, PrintSheet, PrintedAt, printSheet, StatusBar, STATUS_VI, TYPE_VI, useAction, useCatalog } from './common'
 import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget } from './opentarget'
 import { CashDocsView } from './CashDocs'
@@ -17,8 +18,8 @@ export function VouchersView() {
   const status = fs.sel.status ?? ''
   const type = fs.sel.type ?? ''
   const [search, setSearch] = useState(fs.q.trim())
-  useEffect(() => { const t = setTimeout(() => { setSearch(fs.q.trim()); setPage(0) }, 350); return () => clearTimeout(t) }, [fs.q])
   const [page, setPage] = useState(0)
+  useEffect(() => { const t = setTimeout(() => { setSearch(fs.q.trim()); setPage(0) }, 350); return () => clearTimeout(t) }, [fs.q])
   const [total, setTotal] = useState(0)
   const [list, setList] = useState<Voucher[]>([])
   const [selected, setSelected] = useState<Voucher | null>(null)
@@ -63,7 +64,7 @@ export function VouchersView() {
     for (const x of todo) {
       try {
         let rv = x.rowVersion
-        for (const s of steps) rv = (await post<Voucher>(`/vouchers/${x.id}/${s}?rowVersion=${rv}`)).rowVersion
+        for (const s of steps) rv = (await post<Voucher>(withRowVersion(`/vouchers/${x.id}/${s}`, rv))).rowVersion
         done++
       } catch (e) { failed.push(`${x.number}: ${e instanceof Error ? e.message : String(e)}`) }
     }
@@ -122,18 +123,18 @@ export function VouchersView() {
               const date = prompt('Ngày đảo (yyyy-mm-dd):', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }))
             }}>Đảo</button>}
             {(v.status === 'Draft' || v.status === 'Submitted') && <button className="danger" onClick={() => {
-              const reason = prompt('Lý do hủy:'); if (reason) act('Đã hủy', () => post(`/vouchers/${v.id}/cancel?rowVersion=${v.rowVersion}`, { reason }))
+              const reason = prompt('Lý do hủy:'); if (reason) act('Đã hủy', () => post(withRowVersion(`/vouchers/${v.id}/cancel`, v.rowVersion), { reason }))
             }}>Hủy</button>}
             {canCopyVoucher(v) && <button onClick={() => setEditing({ copyOf: v })}>Sao chép</button>}
             <button onClick={printSheet}>In chứng từ</button>
           </div>
           <StatusBar steps={VOUCHER_STEPS} current={v.status} stopped={{ Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }}>
-              {v.status === 'Draft' && <button disabled={busy} onClick={() => act('Đã gửi duyệt', () => post(`/vouchers/${v.id}/submit?rowVersion=${v.rowVersion}`))}>Gửi duyệt</button>}
-              {v.status === 'Submitted' && <button disabled={busy} onClick={() => act('Đã duyệt', () => post(`/vouchers/${v.id}/approve?rowVersion=${v.rowVersion}`))}>Duyệt</button>}
+              {v.status === 'Draft' && <button disabled={busy} onClick={() => act('Đã gửi duyệt', () => post(withRowVersion(`/vouchers/${v.id}/submit`, v.rowVersion)))}>Gửi duyệt</button>}
+              {v.status === 'Submitted' && <button disabled={busy} onClick={() => act('Đã duyệt', () => post(withRowVersion(`/vouchers/${v.id}/approve`, v.rowVersion)))}>Duyệt</button>}
               {(v.status === 'Submitted' || v.status === 'Approved') && <button onClick={() => {
-              const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(`/vouchers/${v.id}/reject?rowVersion=${v.rowVersion}`, { reason }))
+              const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(withRowVersion(`/vouchers/${v.id}/reject`, v.rowVersion), { reason }))
             }}>Trả lại</button>}
-              {v.status === 'Approved' && <button className="primary" disabled={busy} onClick={() => act('Đã ghi sổ', () => post(`/vouchers/${v.id}/post?rowVersion=${v.rowVersion}`))}>Ghi sổ</button>}
+              {v.status === 'Approved' && <button className="primary" disabled={busy} onClick={() => act('Đã ghi sổ', () => post(withRowVersion(`/vouchers/${v.id}/post`, v.rowVersion)))}>Ghi sổ</button>}
           </StatusBar>
           <LinesTable voucher={v} />
           <VoucherPrint voucher={v} />
@@ -202,7 +203,7 @@ function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
           <div><b>Người lập phiếu</b><br /><i>(Ký, họ tên)</i></div><div><b>Người {receipt ? 'nộp' : 'nhận'} tiền</b><br /><i>(Ký, họ tên)</i></div>
           {v.voucherType === 'CR' || v.voucherType === 'CP' ? <div><b>Thủ quỹ</b><br /><i>(Ký, họ tên)</i></div> : null}
         </div>
-        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu chứng từ theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+        <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu chứng từ theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
       </PrintSheet>
     )
   }
@@ -225,7 +226,7 @@ function VoucherPrint({ voucher: v }: { voucher: Voucher }) {
       </table>
       <p>Bằng chữ: <i>{amountInWords(v.totalDebit)}</i></p>
       <div className="signs"><div><b>Người lập</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu chứng từ theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu chứng từ theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
     </PrintSheet>
   )
 }
@@ -261,7 +262,7 @@ function VoucherForm({ voucher, template, onDone }: { voucher: Voucher | null; t
   useUnsavedWhenChanged([type, voucherDate, postingDate, description, lines])
   const { busy, error, setError, run } = useAction()
   const busyRef = useRef(false)
-  busyRef.current = busy   // phím tắt Ctrl+S đọc cờ này (hàm xử lý phím giữ bản save cũ), tránh gửi hai lần
+  useEffect(() => { busyRef.current = busy })   // phím tắt Ctrl+S đọc cờ này (hàm xử lý phím giữ bản save cũ), tránh gửi hai lần
 
   const parsed = lines.map(l => parseMoney(l.amount))
   const totalD = useMemo(() => addMoney(lines.map((l, i) => (l.side === 'D' ? parsed[i] ?? '0' : '0'))), [lines, parsed])

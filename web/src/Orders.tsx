@@ -40,6 +40,7 @@ export function OrdersView() {
   const [contractId, setContractId] = useState('')
   const [contractLines, setContractLines] = useState<ContractLineRef[]>([])
   const { busy, error, setError, run } = useAction()
+  // oxlint-disable-next-line react/set-state-in-effect -- đổi chiều mua/bán thì tải lại hợp đồng và xóa lựa chọn cũ
   useEffect(() => { get<ContractRef[]>(`/contracts?kind=${kind}`).then(c => setContracts(c.filter(x => x.status === 'Active' && !x.expired))).catch(() => setContracts([])); setContractId(''); setContractLines([]) }, [kind])
   useEffect(() => { get<Item[]>('/items').then(setItems).catch(() => setItems([])) }, [])
   const loadSeq = useRef(0)

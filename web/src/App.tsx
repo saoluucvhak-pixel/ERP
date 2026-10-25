@@ -140,7 +140,9 @@ const tabLabel = (moduleKey: string, screen: string) => KIND_LABELS[moduleKey]?.
 
 export default function App() {
   const [token, setToken] = useState(session.token)
-  const [companies, setCompanies] = useState<Company[] | null>(null)
+  // Danh sách công ty gắn với phiên đã tải nó: đổi phiên thì coi như chưa tải (không cần đặt lại trong effect).
+  const [loaded, setLoaded] = useState<{ token: string | null; list: Company[] } | null>(null)
+  const companies = loaded && loaded.token === token ? loaded.list : null
   const [companyId, setCompanyId] = useState(session.companyId)
   const [isSystemAdmin, setIsSystemAdmin] = useState(false)
   const [systemAdmin, setSystemAdmin] = useState(false)
@@ -148,26 +150,25 @@ export default function App() {
   const [tab, setTab] = useState<string>('flow')
   const [navSeq, setNavSeq] = useState(0)   // tăng khi phải dựng lại màn đang mở cho một ý định mới (Thêm nhanh)
   const tabRef = useRef(tab)
-  tabRef.current = tab
+  useEffect(() => { tabRef.current = tab })
   const appliedIntent = useRef('')
   const [work, setWork] = useState<Record<string, number>>({})
   const [mobile, setMobile] = useState(isMobileRoute())
   const [expired, setExpired] = useState(false)
   // A request refused as unauthenticated (session expired / revoked / server restarted) returns to the login screen instead of leaving empty lists.
-  useEffect(() => { setSessionExpiredHandler(() => { setExpired(true); setToken(null); setCompanies(null); setSystemAdmin(false) }); return () => setSessionExpiredHandler(null) }, [])
+  useEffect(() => { setSessionExpiredHandler(() => { setExpired(true); setToken(null); setLoaded(null); setSystemAdmin(false) }); return () => setSessionExpiredHandler(null) }, [])
   useEffect(() => { const h = () => setMobile(isMobileRoute()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h) }, [])
 
   useEffect(() => {
     if (!token) return
-    setCompanies(null)
-    get<Company[]>('/me/companies').then(setCompanies).catch(() => { session.setToken(null); setToken(null) })
+    get<Company[]>('/me/companies').then(list => setLoaded({ token, list })).catch(() => { session.setToken(null); setToken(null) })
     get<{ isSystemAdmin: boolean }>('/me').then(m => setIsSystemAdmin(m.isSystemAdmin)).catch(() => setIsSystemAdmin(false))
   }, [token])
 
   // Màn dùng chung giữa Mua hàng và Bán hàng (hợp đồng, đơn hàng, hóa đơn…): ở lại phân hệ đang mở nếu phân hệ đó có màn này,
   // không nhảy sang phân hệ đầu tiên chứa nó (trước đây "Hợp đồng bán" luôn nhảy vào Mua hàng).
   const moduleKeyRef = useRef(moduleKey)
-  moduleKeyRef.current = moduleKey
+  useEffect(() => { moduleKeyRef.current = moduleKey })
   // Cùng màn đang mở: đường 'dựng lại màn' bên dưới có hộp xác nhận riêng, không hỏi hai lần.
   const sameScreenNow = (key: string) => tabRef.current === key
   useEffect(() => {
@@ -217,7 +218,7 @@ export default function App() {
 
   const logout = async () => {
     try { await post('/auth/logout') } catch { /* already expired */ }
-    session.setToken(null); session.setCompany(null); setCompanyId(null); setCompanies(null); setSystemAdmin(false); setToken(null)
+    session.setToken(null); session.setCompany(null); setCompanyId(null); setLoaded(null); setSystemAdmin(false); setToken(null)
   }
   if (!token) return <Login expired={expired} onLogin={t => { session.setToken(t); setToken(t); setExpired(false) }} />
   if (companies === null) return <div className="login"><div className="panel"><span className="muted">Đang tải…</span></div></div>
@@ -258,6 +259,8 @@ export default function App() {
   }
   if (mobile) return <MobileMaintenance company={`${company.code} – ${company.name}`} onFull={() => { window.location.hash = '' }} onLogout={logout} />
   const module = MODULES.find(m => m.key === moduleKey) ?? MODULES[0]
+  // Cố ý ghi lúc render: màn dùng chung đọc chiều bán/mua ngay khi dựng (trước mọi effect).
+  // oxlint-disable-next-line react/immutability
   navStore.kind = module.key === 'purchase' ? 'Purchase' : module.key === 'sales' ? 'Sales' : undefined   // đọc khi màn dùng chung được dựng
   const moduleCount = (m: (typeof MODULES)[number]) => m.screens.reduce((n, k) => n + (work[workKey(m.key, k)] ?? 0), 0)
   const screenEl = (key: string) => SCREENS.find(s => s.key === key)?.el()

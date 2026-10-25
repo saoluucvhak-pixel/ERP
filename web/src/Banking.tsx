@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { AccountSelect, ErrorBox, ExportButton, FlowStrip, PartnerSelect, PrintSheet, printSheet, useAction, useCatalog, useCompanyName } from './common'
+import { AccountSelect, ErrorBox, ExportButton, FlowStrip, PartnerSelect, PrintSheet, PrintedAt, printSheet, useAction, useCatalog, useCompanyName } from './common'
 import { useOpenTarget, focusRowProps } from './opentarget'
 import { addMoney, amountInWords, csvCell, formatDate, formatMoney, parseMoney, today } from './money'
 import type { PartnerBank } from './BankAccounts'
@@ -159,7 +159,7 @@ function UncPrint({ orders, beneficiary, payer, partnerName, onDone }: { orders:
             </tbody>
           </table>
           <div className="signs"><div><b>Người lập</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Chủ tài khoản</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-          <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu ủy nhiệm chi của ngân hàng [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+          <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu với mẫu ủy nhiệm chi của ngân hàng [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
         </div>
       })}
     </PrintSheet>

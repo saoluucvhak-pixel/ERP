@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { get, post } from './api'
-import { ErrorBox, ExportButton, navStore, PrintSheet, printSheet, useAction, useCompanyName } from './common'
+import { ErrorBox, ExportButton, navStore, PrintSheet, PrintedAt, printSheet, useAction, useCompanyName } from './common'
 import { addMoney, amountInWords, formatMoney, parseMoney, today } from './money'
 import type { Order } from './Orders'
 
@@ -98,7 +98,7 @@ export function RevenueView() {
   const copies = (title: string, labels: string[], body: ReactNode) => (
     <>{labels.map((l, i) => <div className="copy" key={i}>
       <div><b>{company}</b></div><h1>{title}</h1><div className="center"><i>Liên {i + 1}: {l}</i></div>{body}
-      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu mẫu theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div></div>)}</>)
+      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu mẫu theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div></div>)}</>)
   const printDispatch = (d: Dispatch) => setPrint(copies('LỆNH BÁN HÀNG', ['Kho hàng (làm căn cứ xuất kho)', 'Bộ phận chuẩn bị hàng', 'Bộ phận lập hóa đơn', 'Khách hàng (thông báo chấp nhận đơn đặt hàng)'], <>
     <div className="center">Số: <b>{d.number}</b> · Ngày {d8(d.dispatchDate)} · Theo đơn đặt hàng {d.orderNumber}</div>
     <p>Khách hàng: <b>{d.partnerName}</b>{d.partnerAddress ? ` · ${d.partnerAddress}` : ''}</p><p>Nơi giao: {d.shipTo ?? '………………………………'} · Xuất từ kho: {d.warehouseCode}</p>
@@ -126,7 +126,7 @@ export function RevenueView() {
       <p>Bằng chữ: <i>{amountInWords(n.totalOpen)}</i></p>
       <p>Đề nghị quý khách thanh toán trong thời gian sớm nhất hoặc liên hệ để thống nhất kế hoạch thanh toán. Nếu số liệu có chênh lệch, xin phản hồi để đối chiếu. Nếu quý khách đã thanh toán, xin bỏ qua thông báo này.</p>
       <div className="signs"><div><b>Kế toán công nợ</b><br /><i>(Ký, họ tên)</i></div><div><b>Kế toán trưởng</b><br /><i>(Ký, họ tên)</i></div><div><b>Giám đốc</b><br /><i>(Ký, họ tên, đóng dấu)</i></div></div>
-      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu mẫu theo chế độ kế toán [CẦN XÁC MINH]. In lúc {new Date().toLocaleString('vi-VN')}.</div>
+      <div className="foot">Mẫu in nội bộ HAK Accounting — chưa đối chiếu mẫu theo chế độ kế toán [CẦN XÁC MINH]. In lúc <PrintedAt />.</div>
     </div>)
 
   // ---- reports
