@@ -155,6 +155,7 @@ public class TradeTests
 
         await fx.Inv.ReverseAsync(fx.H.Approver, discount.Id, D(3, 13), "Hủy giảm giá");           // đảo điều chỉnh trước…
         Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 14), "Đảo hóa đơn gốc")).Status);   // …rồi mới đảo được hóa đơn gốc
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -223,6 +224,7 @@ public class TradeTests
         var journals = await fx.S.Db.JournalEntries.CountAsync();
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 20), "Đảo hóa đơn mua")));
         Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -241,6 +243,7 @@ public class TradeTests
         var posted = await fx.Inv.PostAsync(fx.H.Approver, inv.Id, false, inv.RowVersion);
         Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion - 1)));
         Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion)).Status);
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -522,6 +525,7 @@ public class TradeTests
         await orders.CloseAsync(fx.H.Preparer, order.Id, "Khách không lấy phần còn lại");
         var pending = (await fx.S.Db.StockDocuments.AsNoTracking().Where(d => d.Status == StockDocumentStatus.Draft).ToListAsync()).First();
         Assert.Equal(ErrorCodes.OrderMismatch, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, pending.Id))); // closed order: drafts cannot post
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -719,6 +723,7 @@ public class TradeTests
         Assert.Equal(Hak.Domain.Banking.PaymentOrderStatus.Cancelled, (await s.Db.PaymentOrders.AsNoTracking().SingleAsync(o => o.Id == po.Id)).Status);
         Assert.Equal("NOT_ACCEPTED", (await s.PaymentAcceptances.PayableQueueAsync(h.Auditor, D(3, 31))).Single().Stage);
         await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null);   // can be accepted again after cancelling
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -977,6 +982,7 @@ public class TradeTests
         var coll = await reports.CollectionsAsync(h.Auditor, D(3, 1), D(3, 31));
         Assert.Equal((500_000m, "KH01"), (coll.Total, Assert.Single(coll.ByPartner).PartnerCode));
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.CreateDispatchAsync(h.Auditor, new(order.Id, fx.Wh, D(3, 6), null, null, [new(1, 1)]))));
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -1985,6 +1991,32 @@ public class TradeTests
         Assert.Equal((60m, 55m, 5m, 0m), (after.Arrived, after.Accepted, after.Rejected, after.PostedToStock));   // the 5 rejected still count as arrived
     }
 
+    [Fact]
+    public async Task OrderWorklist_SortsBeforePaging_OldOrdersAreNotDroppedByARecencyCut()
+    {
+        // Kiểm tra 25/10/2026 (F06): trước đây lấy "N đơn mới nhất" rồi mới xếp ưu tiên nên đơn cũ (lẽ ra lên đầu) biến mất khi có nhiều đơn.
+        using var fx = await SetupAsync();
+        var (h, s) = (fx.H, fx.S);
+        await Phase2Fixture.ConfigureAsync(h, s);
+        var flow = new Hak.Application.Cycles.OrderFlowService(s.Db, Orders(fx), h.Clock);
+        var orders = Orders(fx);
+        var made = new List<Hak.Domain.Trade.TradeOrder>();
+        for (var day = 1; day <= 5; day++)
+            made.Add(await orders.CreateAsync(h.Preparer, new OrderInput(InvoiceKind.Sales, h.Partner["KH01"], D(3, day), $"Đơn ngày {day}", [new OrderLineInput(fx.Add, 1, 100_000)])));
+
+        var page1 = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales, skip: 0, take: 2);
+        var page2 = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales, skip: 2, take: 2);
+        var page3 = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales, skip: 4, take: 2);
+        Assert.Equal((5, true, true, false), (page1.Total, page1.HasMore, page2.HasMore, page3.HasMore));
+        // Đơn cũ nhất (tuổi lớn nhất) đứng đầu dù chỉ lấy 2 dòng; ba trang không trùng, không sót.
+        Assert.Equal(made[0].Id, page1.Items[0].OrderId);
+        var all = page1.Items.Concat(page2.Items).Concat(page3.Items).Select(r => r.OrderId).ToList();
+        Assert.Equal(made.Select(o => o.Id).OrderBy(x => x), all.OrderBy(x => x));
+        Assert.Equal(5, all.Distinct().Count());
+        // Chiều mua không thấy đơn bán.
+        Assert.Empty((await flow.WorklistAsync(h.Auditor, InvoiceKind.Purchase)).Items);
+    }
+
     // ------------------------------------------------------------------ Đợt 4: hồ sơ chu trình và bốn trục trạng thái
 
     [Fact]
@@ -2041,11 +2073,12 @@ public class TradeTests
         Assert.Equal(("Full", "CLOSE"), (State(f6, "Payment"), f6.Next!.Code));
 
         // The worklist lists open orders with their next action; a finished-and-closed order drops out.
-        var work = await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales);
+        var work = (await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales)).Items;
         Assert.Equal(("CLOSE", order.Number), (Assert.Single(work, w => w.OrderId == order.Id).ActionCode, order.Number));
         await orders.CloseAsync(h.Preparer, order.Id, "Hoàn tất");
-        Assert.DoesNotContain(await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales), w => w.OrderId == order.Id);
+        Assert.DoesNotContain((await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales)).Items, w => w.OrderId == order.Id);
         Assert.Equal("Closed", State(await flow.FlowAsync(h.Auditor, order.Id), "Approval"));
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     // ------------------------------------------------------------------ Đợt 5: bảng kiểm đóng kỳ

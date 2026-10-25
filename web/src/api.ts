@@ -63,65 +63,92 @@ export const isStaleContext = (e: unknown) => e instanceof ApiError && e.code ==
 interface Ctx { token: string | null; companyId: string | null }
 const snapshot = (): Ctx => ({ token, companyId })
 const sameCtx = (c: Ctx) => c.token === token && c.companyId === companyId
-interface PendingWrite { method: string; path: string; body: unknown; key: string; ctx: Ctx }
-let pendingWrite: PendingWrite | null = null
-/** Chỉ báo có thao tác chờ khi đang ở đúng phiên/công ty đã tạo ra nó; đổi tài khoản hay công ty thì ẩn (không xóa, không gửi dưới ngữ cảnh mới). */
-export const hasPendingWrite = () => pendingWrite !== null && sameCtx(pendingWrite.ctx)
+/**
+ * Một thao tác ghi: nội dung JSON được chụp THÀNH CHUỖI một lần lúc tạo (sửa đối tượng gốc về sau không đổi được thứ đã/sẽ gửi), cùng khóa, cùng ngữ cảnh.
+ * Dedupe, lần gửi đầu, tự gửi lại và "thử lại an toàn" đều dùng đúng chuỗi + khóa này.
+ * Trạng thái: InFlight (đang gửi) → Confirmed (máy chủ nhận) | Rejected (máy chủ từ chối rõ ràng) | Uncertain (mất kết nối, chưa biết đã ghi hay chưa).
+ */
+export type OpState = 'InFlight' | 'Uncertain' | 'Confirmed' | 'Rejected'
+export interface WriteOp { readonly id: string; readonly method: string; readonly path: string; readonly bodyText: string | undefined; readonly key: string; readonly ctx: Ctx; state: OpState }
+const newOp = (method: string, path: string, body: unknown, key: string | undefined, ctx: Ctx): WriteOp => {
+  const key2 = key ?? newIdempotencyKey()
+  return { id: key2, method, path, bodyText: body === undefined ? undefined : JSON.stringify(body), key: key2, ctx, state: 'InFlight' }
+}
+/** Các thao tác chưa xác định, theo thứ tự phát sinh; mỗi thao tác một chỗ (không ghi đè nhau), lọc theo phiên + công ty khi đọc. */
+const uncertainOps = new Map<string, WriteOp>()
+/** Thao tác chưa xác định của phiên + công ty đang dùng (đổi tài khoản hay công ty thì không thấy; không xóa, không gửi dưới ngữ cảnh mới). */
+export const pendingWrites = (): readonly WriteOp[] => [...uncertainOps.values()].filter(o => sameCtx(o.ctx))
+export const hasPendingWrite = () => pendingWrites().length > 0
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 /**
- * Thao tác ghi (POST/PUT/DELETE) mang một Idempotency-Key: mất kết nối giữa chừng thì tự gửi lại tối đa 2 lần với CÙNG khóa (máy chủ trả phản hồi cũ nếu lần trước đã ghi,
- * không ghi hai lần). Vẫn không nối được thì báo "kết quả chưa xác định" và giữ yêu cầu để người dùng bấm thử lại an toàn; không bao giờ đoán là đã ghi hay chưa.
+ * Thao tác ghi (POST/PUT/DELETE) mang một Idempotency-Key: mất kết nối giữa chừng thì tự gửi lại tối đa 2 lần với CÙNG khóa và CÙNG nội dung (máy chủ trả phản hồi cũ nếu lần trước đã ghi,
+ * không ghi hai lần). Vẫn không nối được thì báo "kết quả chưa xác định" và giữ thao tác để người dùng bấm thử lại an toàn; không bao giờ đoán là đã ghi hay chưa.
  */
 export function api<T = unknown>(method: string, path: string, body?: unknown, idempotencyKey?: string, ctx: Ctx = snapshot()): Promise<T> {
   const mutating = method === 'POST' || method === 'PUT' || method === 'DELETE'
-  if (!mutating || idempotencyKey) return apiCore<T>(method, path, body, idempotencyKey, ctx)
-  // Chống bấm trùng (nhấp đúp, phím tắt lặp): yêu cầu GHI giống hệt (cùng phương thức, đường dẫn, nội dung, phiên, công ty) đang bay thì dùng chung một lần gửi
+  if (!mutating) return apiCore<T>(method, path, body, undefined, ctx)
+  const op = newOp(method, path, body, idempotencyKey, ctx)
+  if (idempotencyKey) return runOp<T>(op)
+  // Chống bấm trùng (nhấp đúp, phím tắt lặp): yêu cầu GHI giống hệt (cùng phương thức, đường dẫn, nội dung đã chụp, phiên, công ty) đang bay thì dùng chung một lần gửi
   // và một khóa — không tạo khóa mới nên không ghi hai lần. Khi lần gửi xong, thao tác y hệt lần sau là một thao tác mới.
-  const signature = `${method} ${path} ${JSON.stringify(body ?? null)} ${ctx.token ?? ''}|${ctx.companyId ?? ''}`
+  const signature = `${method} ${path} ${op.bodyText ?? ''} ${ctx.token ?? ''}|${ctx.companyId ?? ''}`
   const running = inFlightWrites.get(signature)
   if (running) return running as Promise<T>
-  const p = apiCore<T>(method, path, body, undefined, ctx).finally(() => { inFlightWrites.delete(signature) })
+  const p = runOp<T>(op).finally(() => { inFlightWrites.delete(signature) })
   inFlightWrites.set(signature, p)
   return p
 }
 const inFlightWrites = new Map<string, Promise<unknown>>()
 
-async function apiCore<T = unknown>(method: string, path: string, body: unknown, idempotencyKey: string | undefined, ctx: Ctx): Promise<T> {
-  const mutating = method === 'POST' || method === 'PUT' || method === 'DELETE'
-  const key = mutating ? (idempotencyKey ?? newIdempotencyKey()) : undefined
+async function apiCore<T = unknown>(method: string, path: string, body: unknown, _key: undefined, ctx: Ctx): Promise<T> {
+  const result = await apiOnce<T>(method, path, body === undefined ? undefined : JSON.stringify(body), undefined, ctx)
+  if (!sameCtx(ctx)) throw new ApiError(0, STALE_CODE, 'Phiên hoặc công ty đã đổi trong lúc tải; bỏ kết quả cũ.')
+  return result
+}
+
+async function runOp<T>(op: WriteOp): Promise<T> {
+  op.state = 'InFlight'
   for (let attempt = 0; ; attempt++) {
     try {
-      const result = await apiOnce<T>(method, path, body, key, ctx)
-      if (!mutating && !sameCtx(ctx)) throw new ApiError(0, STALE_CODE, 'Phiên hoặc công ty đã đổi trong lúc tải; bỏ kết quả cũ.')
-      if (pendingWrite && pendingWrite.key === key) pendingWrite = null
+      const result = await apiOnce<T>(op.method, op.path, op.bodyText, op.key, op.ctx)
+      op.state = 'Confirmed'; uncertainOps.delete(op.id)
       return result
     } catch (e) {
-      if (!(mutating && e instanceof ApiError && e.status === 0)) throw e
+      if (!(e instanceof ApiError && e.status === 0)) { op.state = 'Rejected'; uncertainOps.delete(op.id); throw e }
       if (attempt >= 2) {
-        pendingWrite = { method, path, body, key: key!, ctx }
-        throw new ApiError(0, UNCERTAIN_CODE, 'Mất kết nối khi đang ghi: thao tác CÓ THỂ đã được lưu. Bấm "Thử lại an toàn" (không ghi trùng) hoặc mở lại danh sách để kiểm tra trước khi nhập lại.')
+        op.state = 'Uncertain'; uncertainOps.set(op.id, op)
+        throw new UncertainError(op.id)
       }
       await sleep(1000 * (attempt + 1))
     }
   }
 }
 
-/** Gửi lại thao tác ghi chưa xác định với đúng khóa cũ. Trả về true nếu máy chủ xác nhận (ghi mới hoặc nhận lại phản hồi cũ). */
-export async function retryPendingWrite(): Promise<boolean> {
-  const p = pendingWrite
-  if (!p || !sameCtx(p.ctx)) return false
-  await api(p.method, p.path, p.body, p.key, p.ctx)
+/** Kết quả chưa xác định: mang `opId` để nút "Thử lại an toàn" gửi lại ĐÚNG thao tác này. */
+export class UncertainError extends ApiError {
+  readonly opId: string
+  constructor(opId: string) {
+    super(0, UNCERTAIN_CODE, 'Mất kết nối khi đang ghi: thao tác CÓ THỂ đã được lưu. Bấm "Thử lại an toàn" (không ghi trùng) hoặc mở lại danh sách để kiểm tra trước khi nhập lại.')
+    this.opId = opId
+  }
+}
+
+/** Gửi lại một thao tác chưa xác định (theo `opId`, mặc định cái cũ nhất của ngữ cảnh hiện tại) với đúng khóa + nội dung cũ. Trả về true nếu máy chủ xác nhận (ghi mới hoặc nhận lại phản hồi cũ). */
+export async function retryPendingWrite(opId?: string): Promise<boolean> {
+  const op = opId ? uncertainOps.get(opId) : pendingWrites()[0]
+  if (!op || !sameCtx(op.ctx)) return false
+  await runOp(op)
   return true
 }
 
-async function apiOnce<T = unknown>(method: string, path: string, body: unknown, key: string | undefined, ctx: Ctx): Promise<T> {
+async function apiOnce<T = unknown>(method: string, path: string, bodyText: string | undefined, key: string | undefined, ctx: Ctx): Promise<T> {
   const headers: Record<string, string> = { 'X-Device': 'web' }
   if (key) headers['Idempotency-Key'] = key
   if (ctx.token) headers.Authorization = `Bearer ${ctx.token}`
   if (ctx.companyId) headers['X-Company-Id'] = ctx.companyId
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
-  const res = await send(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
+  if (bodyText !== undefined) headers['Content-Type'] = 'application/json'
+  const res = await send(`/api${path}`, { method, headers, body: bodyText })
   if (res.status === 204) return undefined as T
   const text = await res.text()
   const data = parse(text, res.status)
