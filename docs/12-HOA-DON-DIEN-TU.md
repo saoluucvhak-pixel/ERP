@@ -2,7 +2,7 @@
 
 Trạng thái: **ĐÃ CÀI ĐẶT phần không phụ thuộc nhà cung cấp** (25/10/2026, mục 8) — phần ký số / gọi API thật chờ chị chọn nhà cung cấp. Mọi điều khoản pháp lý trong tài liệu là bản em hiểu từ văn bản gốc và **phải được kế toán trưởng đối chiếu** trước khi cấu hình (nguyên tắc dự án: không đưa quy định chưa xác minh vào hệ thống). Chỗ chưa chắc ghi **[CẦN XÁC MINH]**.
 
-Khung pháp lý cần đối chiếu: Nghị định 123/2020/NĐ-CP (hóa đơn, chứng từ; xử lý sai sót ở Điều 19), Thông tư 78/2021/TT-BTC (hướng dẫn; ghi chú: yêu cầu ghi "TT-CP", đúng là **TT-BTC**), và các văn bản sửa đổi, thay thế ban hành sau đó (như Nghị định 70/2025/NĐ-CP, Thông tư 32/2025/TT-BTC **[CẦN XÁC MINH hiệu lực và nội dung]**). Tài liệu viết theo cấu trúc nên khi quy định đổi, chỉ đổi bảng cấu hình ở mục 6.
+Khung pháp lý áp dụng (chị chốt 26/10/2026: **chuyển tham chiếu sang văn bản mới nhất**): **Nghị định 254/2026/NĐ-CP** về hóa đơn điện tử, chứng từ điện tử (ban hành 30/06/2026, hiệu lực **01/07/2026**) và **Thông tư 91/2026/TT-BTC** hướng dẫn (cùng ngày; xử lý hóa đơn có sai sót ở **Điều 10**; mẫu thông báo 04/SS-HĐĐT ở Phụ lục III). Các văn bản này thay thế Nghị định 123/2020/NĐ-CP (đã sửa bởi Nghị định 70/2025/NĐ-CP) và Thông tư 78/2021 → Thông tư 32/2025/TT-BTC **từ 01/07/2026**; các tham chiếu cũ trong tài liệu (thiết kế 25/10 viết theo Nghị định 123 / Thông tư 78) chỉ còn là lịch sử, với hóa đơn lập trước 01/07/2026 áp dụng quy định tại thời điểm lập. **Nội dung hai văn bản mới em mới đọc qua nguồn thứ cấp (mục 9) — vẫn [CẦN XÁC MINH] bằng văn bản gốc** (số điều khoản, danh mục ca được điều chỉnh / thay thế / thông báo). Tài liệu viết theo cấu trúc nên khi quy định đổi, chỉ đổi bảng cấu hình ở mục 6.
 
 ---
 
@@ -268,4 +268,9 @@ Em tra cứu trên web ngày 25/10/2026; **không đọc được văn bản g�
 | Phát hiện của cơ quan thuế | Cơ quan thuế thông báo hóa đơn có rủi ro / sai sót theo Mẫu 01/TB-RSĐT (Phụ lục IV Thông tư 91) | Chưa làm |
 
 **Việc cần chị xác minh trước khi em đổi mã:** (1) thay tham chiếu pháp lý sang Nghị định 254 / Thông tư 91; (2) quy tắc kỳ kê khai điều chỉnh (kỳ gốc nếu đổi thuế) — em đề xuất gắn cờ theo "có đổi số thuế đã kê khai ở kỳ đã nộp hay không" sau ngày 01/07/2026; (3) xác nhận bỏ hẳn loại "Hủy" khỏi mô hình.
+
+### 9.1 Đã áp dụng vào HAK (26/10/2026, theo quyết định của chị)
+1. **Tham chiếu pháp lý** chuyển sang Nghị định 254/2026 + Thông tư 91/2026 (đầu tài liệu, `docs/07` L-09).
+2. **Cờ "cần khai bổ sung kỳ gốc"** (`TaxDiffType.SupplementalFilingNeeded`, đối soát thuế GTGT): hóa đơn điều chỉnh ghi sổ **từ 01/07/2026** có tiền thuế khác 0 mà hóa đơn gốc thuộc một kỳ **đã có tờ khai GTGT trạng thái Đã nộp** và kỳ đó kết thúc trước ngày ghi sổ điều chỉnh → gợi ý lập tờ khai bổ sung cho kỳ gốc. Điều chỉnh trước 01/07/2026, hoặc kỳ gốc chưa nộp tờ khai, hoặc không đổi thuế → không cờ (kê khai ở kỳ hiện tại). Test `AdjustmentInvoice_AfterCutover_…`.
+3. **Bỏ loại "Hủy" khỏi mô hình**: `ErrorNoticeKind.Cancel` và `EInvoiceDocStatus.Cancelled` đã xóa (giá trị 2 và 5 để trống, chưa có dữ liệu thật dùng); form thông báo chỉ còn Giải trình / Điều chỉnh / Thay thế. **Giữ** `EInvoiceStatus.Cancelled` ở bản ghi nhập từ cổng thuế (`EInvoiceRecord`) vì đó là trạng thái lịch sử của hóa đơn đã hủy theo quy định cũ khi nhập tệp — không phải thao tác của HAK.
 

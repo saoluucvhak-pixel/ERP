@@ -223,10 +223,10 @@ public partial class TradeTests
         Assert.Equal(ErrorCodes.NotFound, await CodeOf(() => svc.AdjustInformationAsync(fx.H.Approver, Guid.NewGuid(), "x", [new InformationChange("a", "b", "c")])));
 
         // Thông báo sai sót cần quyền riêng; số cấp theo bộ mã. Thông báo CHỈ đính kèm hóa đơn cần sửa: dù cơ quan thuế tiếp nhận, hóa đơn và sổ không đổi.
-        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => notice.CreateAsync(fx.H.Preparer, ErrorNoticeKind.Cancel, "Lập nhầm", [new NoticeLineInput(doc.Id, "Lập nhầm")])));
-        var n = await notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Cancel, "Sai tên người mua", [new NoticeLineInput(doc.Id, "Sai tên người mua")]);
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => notice.CreateAsync(fx.H.Preparer, ErrorNoticeKind.Explain, "Lập nhầm", [new NoticeLineInput(doc.Id, "Lập nhầm")])));
+        var n = await notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Explain, "Sai tên người mua", [new NoticeLineInput(doc.Id, "Sai tên người mua")]);
         Assert.StartsWith("TBSS2026-", n.Number);
-        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Cancel, "Trùng", [new NoticeLineInput(doc.Id, "Trùng")])));
+        Assert.Equal(ErrorCodes.DuplicateSource, await CodeOf(() => notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Explain, "Trùng", [new NoticeLineInput(doc.Id, "Trùng")])));
         var before = await fx.S.Db.EInvoiceDocuments.AsNoTracking().SingleAsync(d => d.Id == doc.Id);
         var sent = await notice.SendAsync(fx.H.Approver, n.Id, n.RowVersion);
         Assert.Equal("Accepted", sent.Status);
@@ -246,7 +246,7 @@ public partial class TradeTests
         var (fx, sim, svc, notice) = await EInvoiceSetupAsync(); using var _fx = fx;
         var doc = await IssuedSaleAsync(fx, svc);
         sim.RejectNotices = true;
-        var n = await notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Cancel, "Hủy", [new NoticeLineInput(doc.Id, "Sai")]);
+        var n = await notice.CreateAsync(fx.H.Approver, ErrorNoticeKind.Explain, "Hủy", [new NoticeLineInput(doc.Id, "Sai")]);
         var sent = await notice.SendAsync(fx.H.Approver, n.Id, n.RowVersion);
         Assert.Equal(("Rejected", "Issued"), (sent.Status, (await svc.ViewAsync(fx.H.Auditor, doc.Id)).Status));
         sim.FailTransientCalls = 0;

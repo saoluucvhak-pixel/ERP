@@ -1401,6 +1401,29 @@ public partial class TradeTests
     }
 
     [Fact]
+    public async Task AdjustmentInvoice_AfterCutover_ChangingTaxOfAFiledPeriod_FlagsASupplementalFiling()
+    {
+        using var fx = await SetupAsync();
+        var vat = new Hak.Application.Tax.VatService(fx.S.Db, fx.S.Audit, fx.H.Clock);
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        var sale = await PostedSaleAsync(fx, "0001001", 10, D(3, 3), price: 100_000);                            // thuế 100.000 ở tháng 3
+        var decl = await vat.SaveDeclarationAsync(fx.H.Admin, D(3, 1), D(3, 31), [new Hak.Application.Tax.DeclarationLineInput("CT29", "Thuế GTGT đầu ra (thử)", 100_000)]);
+        // Điều chỉnh trước 01/07/2026 hoặc khi kỳ gốc chưa nộp tờ khai: kê khai ở kỳ hiện tại, không cờ.
+        var early = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(sale.Id, InvoicePurpose.Discount, "1C26TBB", "0001002", D(6, 10), D(6, 10), "Giảm giá tháng 6", [new AdjustmentLineInput(1, Amount: 100_000)]));
+        await fx.Inv.PostAsync(fx.H.Approver, early.Id);
+        Assert.DoesNotContain((await vat.ReconcileAsync(fx.H.Auditor, D(6, 1), D(6, 30))).Differences, d => d.Type == Hak.Application.Tax.TaxDiffType.SupplementalFilingNeeded);
+
+        var late = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(sale.Id, InvoicePurpose.Discount, "1C26TBB", "0001003", D(7, 10), D(7, 10), "Giảm giá tháng 7", [new AdjustmentLineInput(1, Amount: 100_000)]));
+        await fx.Inv.PostAsync(fx.H.Approver, late.Id);
+        Assert.DoesNotContain((await vat.ReconcileAsync(fx.H.Auditor, D(7, 1), D(7, 31))).Differences, d => d.Type == Hak.Application.Tax.TaxDiffType.SupplementalFilingNeeded);   // kỳ gốc chưa nộp tờ khai
+        await vat.MarkFiledAsync(fx.H.Admin, decl.Id, "TK-03/2026", D(4, 20));
+        var flag = Assert.Single((await vat.ReconcileAsync(fx.H.Auditor, D(7, 1), D(7, 31))).Differences.Where(d => d.Type == Hak.Application.Tax.TaxDiffType.SupplementalFilingNeeded));
+        Assert.Equal(late.Id, flag.InvoiceId);
+        Assert.Contains("kỳ", flag.Suggestion);
+        Assert.DoesNotContain((await vat.ReconcileAsync(fx.H.Auditor, D(6, 1), D(6, 30))).Differences, d => d.Type == Hak.Application.Tax.TaxDiffType.SupplementalFilingNeeded);   // trước 01/07/2026 theo luật cũ
+    }
+
+    [Fact]
     public async Task PaymentDiscount_Standalone_NotTiedToAnInvoice_IsASeparateEntry()
     {
         using var fx = await SetupAsync();

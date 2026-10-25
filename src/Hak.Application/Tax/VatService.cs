@@ -36,6 +36,8 @@ public enum TaxDiffType
     CancelledButRecorded = 6,
     PartnerTaxCodeMissing = 7,
     DeclarationDifference = 8,
+    /// <summary>Hóa đơn điều chỉnh (từ 01/07/2026) làm đổi số thuế của kỳ gốc ĐÃ NỘP tờ khai: phải khai bổ sung vào kỳ gốc.</summary>
+    SupplementalFilingNeeded = 9,
 }
 
 public sealed record TaxDifference(TaxDiffType Type, TaxDirection? Direction, string Key, decimal? EInvoiceAmount, decimal? BooksAmount,
@@ -225,6 +227,21 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
             diffs.Add(new(TaxDiffType.MissingEInvoice, b.Direction, label, null, b.AmountBeforeVat, null, b.VatAmount, b.VatAmount,
                 b.Direction == TaxDirection.Input ? "Sổ có hóa đơn đầu vào nhưng không có trong dữ liệu HĐĐT: tra cứu hóa đơn trên hệ thống; không khấu trừ khi chưa xác thực."
                                                   : "Sổ có doanh thu nhưng không có HĐĐT tương ứng: kiểm tra việc xuất hóa đơn.", b.InvoiceId));
+        }
+
+        // Từ 01/07/2026 (Nghị định 254/2026, Thông tư 91/2026 Điều 10 — nguồn thứ cấp, chị xác minh): hóa đơn điều chỉnh làm đổi số thuế đã kê khai thì khai bổ sung vào KỲ GỐC; không đổi số thuế thì kê khai ở kỳ hiện tại.
+        // "Kỳ đã nộp" = có tờ khai GTGT trạng thái Đã nộp chứa ngày ghi sổ hóa đơn gốc và kết thúc trước ngày ghi sổ hóa đơn điều chỉnh.
+        var adjustmentCutover = new DateOnly(2026, 7, 1);
+        var filed = await db.TaxDeclarations.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId && d.TaxType == "GTGT" && d.Status == DeclarationStatus.Filed).ToListAsync();
+        foreach (var b in books.Where(b => b.Purpose != InvoicePurpose.Normal && b.PostingDate >= from && b.PostingDate <= to && b.PostingDate >= adjustmentCutover && b.VatAmount != 0))
+        {
+            var originalDate = await db.CommercialInvoices.AsNoTracking().Where(i => i.Id == b.InvoiceId && i.AdjustsInvoiceId != null)
+                .Join(db.CommercialInvoices.AsNoTracking(), i => i.AdjustsInvoiceId, o => o.Id, (i, o) => (DateOnly?)o.PostingDate).FirstOrDefaultAsync();
+            if (originalDate is not { } od) continue;
+            var d = filed.FirstOrDefault(x => x.PeriodFrom <= od && od <= x.PeriodTo && x.PeriodTo < b.PostingDate);
+            if (d is not null)
+                diffs.Add(new(TaxDiffType.SupplementalFilingNeeded, b.Direction, $"{b.Series}/{b.InvoiceNo}", null, b.AmountBeforeVat, null, b.VatAmount, b.VatAmount,
+                    $"Hóa đơn điều chỉnh ngày {b.PostingDate.Vn()} làm đổi thuế GTGT của kỳ {d.PeriodFrom.Vn()} – {d.PeriodTo.Vn()} đã nộp tờ khai: lập tờ khai bổ sung cho kỳ gốc [CẦN XÁC MINH Điều 10 Thông tư 91/2026].", b.InvoiceId));
         }
 
         var declaration = await db.TaxDeclarations.AsNoTracking().Include(d => d.Lines)
