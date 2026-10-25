@@ -96,6 +96,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<EInvoiceMessage> EInvoiceMessages => Set<EInvoiceMessage>();
     public DbSet<EInvoiceErrorNotice> EInvoiceErrorNotices => Set<EInvoiceErrorNotice>();
     public DbSet<EInvoiceErrorNoticeLine> EInvoiceErrorNoticeLines => Set<EInvoiceErrorNoticeLine>();
+    public DbSet<EInvoiceRiskNotice> EInvoiceRiskNotices => Set<EInvoiceRiskNotice>();
+    public DbSet<EInvoiceRiskNoticeLine> EInvoiceRiskNoticeLines => Set<EInvoiceRiskNoticeLine>();
     public DbSet<DiscountAgreement> DiscountAgreements => Set<DiscountAgreement>();
     public DbSet<DiscountAgreementTier> DiscountAgreementTiers => Set<DiscountAgreementTier>();
     public DbSet<DiscountAgreementRun> DiscountAgreementRuns => Set<DiscountAgreementRun>();
@@ -509,6 +511,13 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<EInvoiceErrorNotice>(e =>
         {
             e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.NoticeId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RowVersion).IsConcurrencyToken();
+        });
+        b.Entity<EInvoiceRiskNotice>(e =>
+        {
+            e.HasIndex(x => new { x.CompanyId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.CompanyId, x.AuthorityNoticeNo }).IsUnique();
             e.HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.NoticeId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.RowVersion).IsConcurrencyToken();
         });

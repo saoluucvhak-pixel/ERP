@@ -7424,6 +7424,138 @@ namespace Hak.Data.Postgres.Migrations
                     b.ToTable("e_invoice_records");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRiskNotice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthorityNoticeNo")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("authority_notice_no");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("NoticeDate")
+                        .HasColumnType("date")
+                        .HasColumnName("notice_date");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("number");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason");
+
+                    b.Property<DateOnly>("ReceivedDate")
+                        .HasColumnType("date")
+                        .HasColumnName("received_date");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("responded_at");
+
+                    b.Property<Guid?>("RespondedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("responded_by");
+
+                    b.Property<DateOnly?>("ResponseDeadline")
+                        .HasColumnType("date")
+                        .HasColumnName("response_deadline");
+
+                    b.Property<string>("ResponseNote")
+                        .HasColumnType("text")
+                        .HasColumnName("response_note");
+
+                    b.Property<Guid?>("ResponseNoticeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("response_notice_id");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("row_version");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_e_invoice_risk_notices");
+
+                    b.HasIndex("CompanyId", "AuthorityNoticeNo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_e_invoice_risk_notices_company_id_authority_notice_no");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_e_invoice_risk_notices_company_id_number");
+
+                    b.ToTable("e_invoice_risk_notices");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRiskNoticeLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<Guid?>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("InvoiceNo")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("invoice_no");
+
+                    b.Property<string>("Issue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("issue");
+
+                    b.Property<DateOnly?>("IssueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("issue_date");
+
+                    b.Property<Guid>("NoticeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("notice_id");
+
+                    b.Property<string>("Series")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("series");
+
+                    b.HasKey("Id")
+                        .HasName("pk_e_invoice_risk_notice_lines");
+
+                    b.HasIndex("NoticeId")
+                        .HasDatabaseName("ix_e_invoice_risk_notice_lines_notice_id");
+
+                    b.ToTable("e_invoice_risk_notice_lines");
+                });
+
             modelBuilder.Entity("Hak.Domain.Tax.EInvoiceStatusChange", b =>
                 {
                     b.Property<Guid>("Id")
@@ -10675,6 +10807,16 @@ namespace Hak.Data.Postgres.Migrations
                         .HasConstraintName("fk_e_invoice_records_e_invoice_import_batches_import_batch_id");
                 });
 
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRiskNoticeLine", b =>
+                {
+                    b.HasOne("Hak.Domain.Tax.EInvoiceRiskNotice", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("NoticeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_e_invoice_risk_notice_lines_e_invoice_risk_notices_notice_id");
+                });
+
             modelBuilder.Entity("Hak.Domain.Tax.EInvoiceStatusChange", b =>
                 {
                     b.HasOne("Hak.Domain.Tax.EInvoiceRecord", null)
@@ -11092,6 +11234,11 @@ namespace Hak.Data.Postgres.Migrations
             modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRecord", b =>
                 {
                     b.Navigation("RateLines");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Tax.EInvoiceRiskNotice", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Hak.Domain.Tax.TaxDeclaration", b =>

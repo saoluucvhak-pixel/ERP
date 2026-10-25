@@ -6,6 +6,9 @@ namespace Hak.Api;
 
 public sealed record ReplacementRequest(string Reason, IReadOnlyList<ReplacementLineChange>? Changes, Guid? NewPartnerId);
 public sealed record InformationRequest(string Reason, IReadOnlyList<InformationChange> Changes);
+public sealed record RiskNoticeRequest(string AuthorityNoticeNo, DateOnly NoticeDate, DateOnly ReceivedDate, DateOnly? ResponseDeadline, string Reason, IReadOnlyList<RiskNoticeLineInput> Lines);
+public sealed record RiskNoticeRespondRequest(long RowVersion, string? Note, Guid? ResponseNoticeId);
+public sealed record RiskNoticeCloseRequest(long RowVersion);
 public sealed record NoticeRequest(ErrorNoticeKind Kind, string Reason, IReadOnlyList<NoticeLineInput> Lines);
 public sealed record NoticeSendRequest(long RowVersion);
 public sealed record InboundAdjustmentRequest(Hak.Domain.Trade.InvoicePurpose Purpose, Hak.Domain.Trade.DiscountKind? DiscountKind, DateOnly PostingDate);
@@ -36,6 +39,11 @@ public static class EInvoiceEndpoints
             var inv = await s.CreateAdjustmentDraftAsync(await http.SessionAsync(), eInvoiceId, r.Purpose, r.DiscountKind, r.PostingDate);
             return Results.Ok(new { inv.Id, inv.Number, inv.RowVersion });
         });
+        // Thông báo 01/TB-RSĐT của cơ quan thuế (nhận vào): ghi nhận, theo dõi hạn, phản hồi, đóng.
+        api.MapGet("/risk-notices", async (HttpContext http, EInvoiceRiskNoticeService s) => Results.Ok(await s.ListAsync(await http.SessionAsync())));
+        api.MapPost("/risk-notices", async (HttpContext http, RiskNoticeRequest r, EInvoiceRiskNoticeService s) => Results.Ok(await s.CreateAsync(await http.SessionAsync(), r.AuthorityNoticeNo, r.NoticeDate, r.ReceivedDate, r.ResponseDeadline, r.Reason, r.Lines)));
+        api.MapPost("/risk-notices/{id:guid}/respond", async (HttpContext http, Guid id, RiskNoticeRespondRequest r, EInvoiceRiskNoticeService s) => Results.Ok(await s.RespondAsync(await http.SessionAsync(), id, r.RowVersion, r.Note, r.ResponseNoticeId)));
+        api.MapPost("/risk-notices/{id:guid}/close", async (HttpContext http, Guid id, RiskNoticeCloseRequest r, EInvoiceRiskNoticeService s) => Results.Ok(await s.CloseAsync(await http.SessionAsync(), id, r.RowVersion)));
         api.MapGet("/notices", async (HttpContext http, EInvoiceNoticeService s) => Results.Ok(await s.ListAsync(await http.SessionAsync())));
         api.MapPost("/notices", async (HttpContext http, NoticeRequest r, EInvoiceNoticeService s) => Results.Ok(await s.CreateAsync(await http.SessionAsync(), r.Kind, r.Reason, r.Lines)));
         api.MapPost("/notices/{id:guid}/send", async (HttpContext http, Guid id, NoticeSendRequest r, EInvoiceNoticeService s) => Results.Ok(await s.SendAsync(await http.SessionAsync(), id, r.RowVersion)));

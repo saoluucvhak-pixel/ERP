@@ -1,3 +1,4 @@
+import { RiskNotices } from './RiskNotices'
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, FlowStrip, Modal, navStore, useAction } from './common'
@@ -22,7 +23,7 @@ const NOTICE_STATUS_VI: Record<string, string> = { Draft: 'Nháp', Sent: 'Đã g
  */
 export function EInvoiceView() {
   const [purchase] = useState(() => navStore.kind === 'Purchase')   // Mua hàng: chỉ phần nhận điều chỉnh / thay thế từ nhà cung cấp
-  const [tab, setTab] = useState<'docs' | 'notices' | 'inbound'>(() => (navStore.kind === 'Purchase' ? 'inbound' : 'docs'))
+  const [tab, setTab] = useState<'docs' | 'notices' | 'inbound' | 'risk'>(() => (navStore.kind === 'Purchase' ? 'inbound' : 'docs'))
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [draft, setDraft] = useState<{ s: Suggestion; purpose: string; kind: string; date: string } | null>(null)
   const [status, setStatus] = useState<{ provider: string; configured: boolean } | null>(null)
@@ -54,6 +55,7 @@ export function EInvoiceView() {
         {!purchase && <>
           <button className={tab === 'docs' ? 'primary' : ''} onClick={() => setTab('docs')}>Hàng đợi và hóa đơn đã phát hành</button>
           <button className={tab === 'notices' ? 'primary' : ''} onClick={() => setTab('notices')}>Thông báo sai sót (04/SS-HĐĐT)</button>
+          <button className={tab === 'risk' ? 'primary' : ''} onClick={() => setTab('risk')}>Thông báo của cơ quan thuế (01/TB-RSĐT)</button>
           <button disabled={busy || !status?.configured} onClick={processAll}>Gửi các lệnh đang chờ</button></>}</div>
       {purchase ? <FlowStrip steps={[
         { label: 'Nhà cung cấp phát hành điều chỉnh / thay thế (nhập tệp HĐĐT ở Thuế GTGT)', journal: false, screen: 'vat', count: `${suggestions.length} việc chờ` },
@@ -101,6 +103,8 @@ export function EInvoiceView() {
         </table></div>
         <p className="muted">Hóa đơn đã phát hành không sửa được: sai tiền / thuế / hàng hóa thì lập hóa đơn điều chỉnh hoặc thay thế (màn Hóa đơn); sai thông tin không đổi tiền thì “Điều chỉnh thông tin” (không bút toán) hoặc thông báo sai sót. Các trường hợp được phép do kế toán trưởng xác minh theo quy định hiện hành [CẦN XÁC MINH].</p>
       </>}
+
+      {tab === 'risk' && <RiskNotices configured={!!status?.configured} />}
 
       {tab === 'notices' && <div className="scroll"><table className="grid">
         <thead><tr><th>Số</th><th>Loại</th><th>Hóa đơn</th><th>Lý do</th><th>Trạng thái</th><th /></tr></thead>

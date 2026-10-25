@@ -20,6 +20,11 @@ public sealed record AgreementView(Guid Id, InvoiceKind Kind, Guid PartnerId, st
 
 public sealed record AgreementInvoiceShare(Guid InvoiceId, string Number, string InvoiceSeries, string InvoiceNo, DateOnly PostingDate, decimal Sales, decimal Discount);
 
+public sealed record AgreementStatementRow(int No, string OriginalSeries, string OriginalNo, DateOnly OriginalDate, decimal Sales, decimal Discount, string? AdjustmentSeries, string? AdjustmentNo, DateOnly? AdjustmentDate, decimal AdjustmentVat);
+
+public sealed record AgreementStatement(string AgreementCode, string AgreementName, string PartnerCode, string PartnerName, DateOnly FromDate, DateOnly ToDate, decimal Percent, decimal TotalSales, decimal TotalDiscount,
+    bool Settled, string Mode, IReadOnlyList<AgreementStatementRow> Rows);
+
 public sealed record AgreementPreview(Guid AgreementId, decimal EligibleSales, decimal Percent, decimal Amount, decimal? NextThreshold, decimal? NextPercent, bool Settled,
     IReadOnlyList<AgreementInvoiceShare> Invoices, decimal Accrued = 0);
 
@@ -232,6 +237,38 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         return new AgreementPreview(id, plan.Eligible, plan.Percent, plan.Amount, plan.NextThreshold, plan.NextPercent, settled,
             plan.Shares.Select(s => new AgreementInvoiceShare(s.Invoice.Id, s.Invoice.Number, s.Invoice.InvoiceSeries, s.Invoice.InvoiceNo, s.Invoice.PostingDate, s.Sales, s.Discount)).ToList(),
             await PostedAccrualAsync(id));
+    }
+
+    /// <summary>
+    /// Bảng kê các hóa đơn gốc được chiết khấu (dùng đính kèm hóa đơn điều chỉnh / chứng từ điều chỉnh giảm — Mẫu 01/BK-ĐCTT theo cách gọi trong Thông tư 91/2026 [CẦN XÁC MINH các cột của mẫu chính thức]).
+    /// Mỗi dòng: hóa đơn gốc (ký hiệu, số, ngày), doanh số chưa thuế, số chiết khấu chia cho hóa đơn đó và — nếu đã quyết toán bằng hóa đơn điều chỉnh — hóa đơn điều chỉnh tương ứng với tiền thuế điều chỉnh.
+    /// </summary>
+    public async Task<AgreementStatement> StatementAsync(SessionContext ctx, Guid id)
+    {
+        ctx.Require(Permissions.ReportView);
+        var a = await LoadAsync(ctx, id);
+        var plan = await PlanAsync(ctx, a);
+        var partner = await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == a.PartnerId);
+        var run = await db.DiscountAgreementRuns.AsNoTracking().Include(r => r.Invoices).FirstOrDefaultAsync(r => r.AgreementId == id && r.VoidedAt == null);
+        var adjByOriginal = new Dictionary<Guid, (string Series, string No, DateOnly Date, decimal Vat)>();
+        if (run is not null && run.Invoices.Count > 0)
+        {
+            var ids = run.Invoices.Select(i => i.AdjustmentInvoiceId).ToList();
+            var adjs = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).Where(i => ids.Contains(i.Id)).ToListAsync();
+            foreach (var ri in run.Invoices)
+            {
+                var adj = adjs.FirstOrDefault(x => x.Id == ri.AdjustmentInvoiceId);
+                if (adj is not null) adjByOriginal[ri.OriginalInvoiceId] = (adj.InvoiceSeries, adj.InvoiceNo, adj.InvoiceDate, adj.Lines.Sum(l => l.VatAmount));
+            }
+        }
+        // Sau quyết toán số liệu lấy từ lần quyết toán (ổn định); trước đó lấy theo tính toán hiện tại.
+        var rows = plan.Shares.Where(s => s.Discount > 0).Select((s, i) =>
+        {
+            adjByOriginal.TryGetValue(s.Invoice.Id, out var adj);
+            return new AgreementStatementRow(i + 1, s.Invoice.InvoiceSeries, s.Invoice.InvoiceNo, s.Invoice.InvoiceDate, s.Sales, s.Discount, adj.Series, adj.No, adj.Series is null ? null : adj.Date, adj.Vat);
+        }).ToList();
+        var mode = run is null ? "Chưa quyết toán" : run.VoucherId is not null ? "Hạch toán điều chỉnh giảm" : "Hóa đơn điều chỉnh";
+        return new AgreementStatement(a.Code, a.Name, partner.Code, partner.Name, a.FromDate, a.ToDate, plan.Percent, rows.Sum(r => r.Sales), rows.Sum(r => r.Discount), run is not null, mode, rows);
     }
 
     /// <summary>Số hóa đơn kế tiếp: số thuần thì tăng và giữ độ rộng (0001 → 0002); chuỗi khác thì thêm hậu tố thứ tự.</summary>

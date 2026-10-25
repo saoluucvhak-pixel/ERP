@@ -2577,6 +2577,10 @@ public partial class TradeTests
         await PostVoucherAsync(fx, a1.VoucherId);
 
         var run = await agreements.SettleAsync(fx.H.Preparer, agr.Id, agr.RowVersion, "1C26TBB", "0000620", D(4, 1), D(4, 1));
+        var st = await agreements.StatementAsync(fx.H.Auditor, agr.Id);                                    // bảng kê 01/BK-ĐCTT: hóa đơn gốc ↔ hóa đơn điều chỉnh
+        var row = Assert.Single(st.Rows);
+        Assert.Equal(("Hóa đơn điều chỉnh", 250_000m, 7_500m, "0000620", 750m), (st.Mode, row.Sales, row.Discount, row.AdjustmentNo, row.AdjustmentVat));
+        Assert.Equal((7_500m, 250_000m), (st.TotalDiscount, st.TotalSales));
         Assert.Equal((7_500m, 7_500m), (run.Amount, run.AccruedAmount));
         Assert.NotNull(run.AccrualReversalVoucherId);
         await PostVoucherAsync(fx, run.AccrualReversalVoucherId!.Value);

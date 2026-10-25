@@ -116,6 +116,14 @@ public sealed class PeriodCloseChecklistService(HakDbContext db, StockService st
             Add("EINVOICE_PENDING", Sev(stuck > 0, "Blocking"), "Hóa đơn điện tử đã xử lý xong (không chờ, không bị từ chối, đã ghi sổ)", stuck, null,
                 stuck == 0 ? "" : $"{stuck} hóa đơn điện tử của kỳ còn chờ nhà cung cấp, bị từ chối hoặc đã phát hành nhưng chưa ghi sổ: xử lý ở màn Hóa đơn điện tử.", "einvoice");
         }
+        // Thông báo 01/TB-RSĐT của cơ quan thuế chưa phản hồi: nhắc (không chặn cứng), quá hạn thì ghi rõ.
+        var pendingRisk = await db.EInvoiceRiskNotices.AsNoTracking().Where(n => n.CompanyId == cid && n.Status == Hak.Domain.Tax.RiskNoticeStatus.Received).Select(n => n.ResponseDeadline).ToListAsync();
+        if (pendingRisk.Count > 0)
+        {
+            var overdue = pendingRisk.Count(d => d is { } x && x < periodEnd);
+            Add("EINVOICE_RISK_NOTICE", Sev(true, "Confirm"), "Thông báo 01/TB-RSĐT của cơ quan thuế đã phản hồi", pendingRisk.Count, null,
+                $"{pendingRisk.Count} thông báo chưa phản hồi" + (overdue > 0 ? $", trong đó {overdue} thông báo có hạn phản hồi trước ngày cuối kỳ" : "") + ": xử lý ở màn Hóa đơn điện tử › Thông báo của cơ quan thuế.", "einvoice");
+        }
         var hasClosingRules = await db.ClosingRuleSets.AnyAsync(r => r.CompanyId == cid && r.Status == Hak.Domain.Rules.RuleStatus.Active && r.EffectiveFrom <= periodEnd && (r.EffectiveTo == null || r.EffectiveTo >= periodEnd));
         if (hasClosingRules)
         {

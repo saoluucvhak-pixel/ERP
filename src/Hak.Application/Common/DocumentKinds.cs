@@ -45,6 +45,7 @@ public static class DocumentKinds
         V(VoucherTypes.PurchaseInvoice, "Chứng từ ghi sổ hóa đơn mua", "Mua hàng"), V(VoucherTypes.SalesInvoice, "Chứng từ ghi sổ hóa đơn bán", "Bán hàng"),
         new("BBKN", "BBKN", "Biên bản kiểm nghiệm", "Mua hàng"),
         new("TBSS", "TBSS", "Thông báo sai sót hóa đơn điện tử (Mẫu 04/SS-HĐĐT)", "Bán hàng"),
+        new("TBRS", "TBRS", "Thông báo của cơ quan thuế về hóa đơn có rủi ro (Mẫu 01/TB-RSĐT)", "Bán hàng"),
         new("NTDV", "NTDV", "Biên bản nghiệm thu dịch vụ", "Bán hàng"), new("NTDM", "NTDM", "Biên bản nghiệm thu dịch vụ mua", "Mua hàng"),
         // Kho
         new("STK-PN", "PN", "Phiếu nhập kho", "Kho"), new("STK-PX", "PX", "Phiếu xuất kho", "Kho"), new("STK-DC", "DC", "Phiếu điều chuyển kho", "Kho"), new("STK-DP", "DP", "Phiếu đảo (kho)", "Kho"),
