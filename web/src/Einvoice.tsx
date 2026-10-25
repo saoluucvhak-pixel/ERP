@@ -144,7 +144,7 @@ export function EInvoiceView() {
           setNf(null); setTab('notices'); setInfo(`Đã lập thông báo ${n.number} (nháp). Bấm “Gửi cơ quan thuế” khi sẵn sàng.`); await load()
         })}>Lưu nháp</button></>}>
         <div className="form-row">
-          <label>Loại xử lý<select value={nf.kind} onChange={e => setNf({ ...nf, kind: e.target.value })}>{Object.entries(KIND_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          <label>Loại xử lý<select value={nf.kind} onChange={e => setNf({ ...nf, kind: e.target.value })}>{Object.entries(KIND_VI).filter(([k]) => k !== 'Cancel').map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label style={{ flex: 1, minWidth: 220 }}>Lý do chung<input value={nf.reason} onChange={e => setNf({ ...nf, reason: e.target.value })} /></label>
         </div>
         <table className="grid"><thead><tr><th /><th>Hóa đơn</th><th>Mô tả sai sót</th></tr></thead>
