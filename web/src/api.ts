@@ -27,7 +27,7 @@ export const setSessionExpiredHandler = (h: (() => void) | null) => { onExpired 
 export const session = {
   get token() { return token },
   get companyId() { return companyId },
-  setToken(t: string | null) { token = t; sessionStorageSet('hak.token', t) },
+  setToken(t: string | null) { token = t; sessionStorageSet('hak.token', t); if (t === null) { uncertainOps.clear(); sessionStorageSet(PENDING_KEY, null) } },
   setCompany(c: string | null) { companyId = c; sessionStorageSet('hak.company', c) },
 }
 
@@ -76,6 +76,30 @@ const newOp = (method: string, path: string, body: unknown, key: string | undefi
 }
 /** Các thao tác chưa xác định, theo thứ tự phát sinh; mỗi thao tác một chỗ (không ghi đè nhau), lọc theo phiên + công ty khi đọc. */
 const uncertainOps = new Map<string, WriteOp>()
+
+/**
+ * Tải lại trang không được làm mất khả năng "thử lại an toàn": thao tác chưa xác định được lưu ở sessionStorage của TAB (cùng nơi giữ token, mất khi đóng tab).
+ * Chỉ lưu id, khóa chống trùng, phương thức, đường dẫn, nội dung đã chụp và công ty — KHÔNG lưu token; khi khôi phục gắn với phiên hiện tại. Đường dẫn mang bí mật
+ * (đăng nhập, sao lưu, người dùng, khóa trao đổi) không bao giờ có khóa chống trùng nên không bao giờ nằm ở đây. Đăng xuất xóa hết.
+ */
+const PENDING_KEY = 'hak.pending'
+interface StoredOp { id: string; method: string; path: string; bodyText: string | undefined; key: string; companyId: string | null }
+export function serializePending(ops: Iterable<WriteOp>): string {
+  return JSON.stringify([...ops].map((o): StoredOp => ({ id: o.id, method: o.method, path: o.path, bodyText: o.bodyText, key: o.key, companyId: o.ctx.companyId })))
+}
+export function restorePending(json: string | null, tokenNow: string | null): WriteOp[] {
+  if (!json || !tokenNow) return []
+  try {
+    const rows = JSON.parse(json) as StoredOp[]
+    return rows.filter(r => typeof r.id === 'string' && typeof r.key === 'string' && typeof r.method === 'string' && typeof r.path === 'string')
+      .map(r => ({ id: r.id, method: r.method, path: r.path, bodyText: r.bodyText, key: r.key, ctx: { token: tokenNow, companyId: r.companyId }, state: 'Uncertain' as OpState }))
+  } catch { return [] }
+}
+const persistPending = () => {
+  sessionStorageSet(PENDING_KEY, uncertainOps.size === 0 ? null : serializePending(uncertainOps.values()))
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('hak-pending'))   // banner "thao tác chưa xác định" cập nhật
+}
+for (const o of restorePending(sessionStorageGet(PENDING_KEY), token)) uncertainOps.set(o.id, o)
 /** Thao tác chưa xác định của phiên + công ty đang dùng (đổi tài khoản hay công ty thì không thấy; không xóa, không gửi dưới ngữ cảnh mới). */
 export const pendingWrites = (): readonly WriteOp[] => [...uncertainOps.values()].filter(o => sameCtx(o.ctx))
 export const hasPendingWrite = () => pendingWrites().length > 0
@@ -112,12 +136,12 @@ async function runOp<T>(op: WriteOp): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       const result = await apiOnce<T>(op.method, op.path, op.bodyText, op.key, op.ctx)
-      op.state = 'Confirmed'; uncertainOps.delete(op.id)
+      op.state = 'Confirmed'; if (uncertainOps.delete(op.id)) persistPending()
       return result
     } catch (e) {
-      if (!(e instanceof ApiError && e.status === 0)) { op.state = 'Rejected'; uncertainOps.delete(op.id); throw e }
+      if (!(e instanceof ApiError && e.status === 0)) { op.state = 'Rejected'; if (uncertainOps.delete(op.id)) persistPending(); throw e }
       if (attempt >= 2) {
-        op.state = 'Uncertain'; uncertainOps.set(op.id, op)
+        op.state = 'Uncertain'; uncertainOps.set(op.id, op); persistPending()
         throw new UncertainError(op.id)
       }
       await sleep(1000 * (attempt + 1))

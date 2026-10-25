@@ -120,6 +120,25 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         return new ProcessResult(due.Count, issued, rejected, pending);
     }
 
+    /// <summary>Lệnh đang chờ đến hạn của MỌI công ty (dịch vụ nền): công ty, hóa đơn điện tử và người đã yêu cầu — người đó là người chịu trách nhiệm ghi sổ kết quả (quyền hiện tại của họ được kiểm lại).</summary>
+    public async Task<IReadOnlyList<(Guid CompanyId, Guid DocumentId, Guid RequestedBy)>> DueForWorkerAsync()
+    {
+        var now = clock.UtcNow;
+        var rows = await (from o in db.EInvoiceOutbox.AsNoTracking()
+                          join d in db.EInvoiceDocuments.AsNoTracking() on o.DocumentId equals d.Id
+                          where o.State == EInvoiceOutboxState.Pending && d.Status == EInvoiceDocStatus.Issuing && (o.NextAttemptAt == null || o.NextAttemptAt <= now)
+                          orderby o.CreatedAt
+                          select new { o.CompanyId, o.DocumentId, d.RequestedBy }).Take(50).ToListAsync();
+        return rows.Select(r => (r.CompanyId, r.DocumentId, r.RequestedBy)).Distinct().ToList();
+    }
+
+    /// <summary>Gửi một lệnh đang chờ (dùng cho dịch vụ nền). Lỗi nghiệp vụ không làm hỏng vòng lặp: ghi vào hóa đơn để người dùng thấy.</summary>
+    public async Task DispatchOneAsync(SessionContext ctx, Guid documentId)
+    {
+        if (!provider.Configured) return;
+        await DispatchAsync(ctx, documentId);
+    }
+
     private async Task<EInvoiceDocumentView> DispatchAsync(SessionContext ctx, Guid documentId)
     {
         var (doc, outbox, request) = await BuildRequestAsync(ctx, documentId);
@@ -398,10 +417,9 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         return (doc, outbox, request);
     }
 
-    /// <summary>Nguồn 1 của đối soát ba nguồn được điền TỰ ĐỘNG khi hóa đơn gốc / thay thế được chấp nhận (không cần nhập tệp). Hóa đơn điều chỉnh không tạo bản ghi vì đối soát hiện chỉ ghép hóa đơn thường.</summary>
+    /// <summary>Nguồn 1 của đối soát ba nguồn được điền TỰ ĐỘNG khi hóa đơn gốc / thay thế / điều chỉnh được chấp nhận (không cần nhập tệp). Hóa đơn điều chỉnh ghi số dương, trạng thái Adjustment, kèm số hóa đơn gốc.</summary>
     private async Task RecordIssuedAsync(SessionContext ctx, EInvoiceDocument d, CommercialInvoice inv)
     {
-        if (d.Relation == EInvoiceRelation.Adjustment) return;
         var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
         var own = Norm(company.TaxCode);
         if (own.Length == 0) return;
@@ -415,7 +433,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
             Id = Ids.New(), CompanyId = ctx.CompanyId, Direction = TaxDirection.Output, SellerTaxCode = own, SellerName = company.Name, BuyerTaxCode = Norm(partner.TaxCode) is { Length: > 0 } b ? b : null, BuyerName = partner.Name,
             Series = d.Series!, Number = d.Number!, IssueDate = d.IssueDate, Currency = inv.Currency, ExchangeRate = inv.ExchangeRate,
             AmountBeforeVat = lines.Sum(l => l.FunctionalAmount), VatAmount = lines.Sum(l => l.VatAmount), TotalPayment = lines.Sum(l => l.FunctionalAmount + l.VatAmount),
-            Status = d.Relation == EInvoiceRelation.Replacement ? EInvoiceStatus.Replacement : EInvoiceStatus.Original, RelatedSeries = related?.Series, RelatedNumber = related?.Number,
+            Status = d.Relation == EInvoiceRelation.Replacement ? EInvoiceStatus.Replacement : d.Relation == EInvoiceRelation.Adjustment ? EInvoiceStatus.Adjustment : EInvoiceStatus.Original, RelatedSeries = related?.Series, RelatedNumber = related?.Number,
             LookupCode = d.TaxAuthorityCode, ImportBatchId = batch.Id, ImportedAt = clock.UtcNow, ImportedBy = ctx.UserId,
         };
         rec.RateLines = lines.GroupBy(l => l.VatRate).Select(g => new EInvoiceRateLine { Id = Ids.New(), EInvoiceId = rec.Id, VatRate = g.Key, AmountBeforeVat = g.Sum(l => l.FunctionalAmount), VatAmount = g.Sum(l => l.VatAmount) }).ToList();

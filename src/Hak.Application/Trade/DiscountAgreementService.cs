@@ -22,8 +22,8 @@ public sealed record AgreementPreview(Guid AgreementId, decimal EligibleSales, d
     IReadOnlyList<AgreementInvoiceShare> Invoices);
 
 /// <summary>
-/// Chiết khấu thương mại theo doanh số cuối kỳ (rebate): thỏa thuận có bậc, tính trên doanh số hàng chưa thuế của hóa đơn thường đã ghi sổ trong khoảng ngày (hóa đơn tiền hạch toán),
-/// trừ hàng trả lại / giảm giá đã ghi sổ. Quyết toán sinh hóa đơn điều chỉnh giảm NHÁP (loại chiết khấu thương mại) cho từng hóa đơn gốc, chia theo tỷ lệ doanh số và theo từng dòng
+/// Chiết khấu thương mại theo doanh số cuối kỳ (rebate): thỏa thuận có bậc, tính trên doanh số hàng chưa thuế (tiền hạch toán) của hóa đơn thường đã ghi sổ trong khoảng ngày, trừ hàng trả lại / giảm giá đã ghi sổ.
+/// Hóa đơn ngoại tệ tính doanh số theo tiền hạch toán nhưng chiết khấu từng dòng theo tiền của hóa đơn (và tỷ giá của chính nó). Quyết toán sinh hóa đơn điều chỉnh giảm NHÁP (loại chiết khấu thương mại) cho từng hóa đơn gốc, chia theo tỷ lệ doanh số và theo từng dòng
 /// để thuế GTGT giảm đúng thuế suất của dòng; ghi sổ hóa đơn do người có quyền ghi sổ làm như mọi điều chỉnh khác (bên bán: Nợ chiết khấu thương mại; bên mua: giảm hàng tồn kho / giá vốn).
 /// Mỗi thỏa thuận chỉ có một lần quyết toán còn hiệu lực. Lập / sửa thỏa thuận là hành vi của người có thẩm quyền duyệt nên cần quyền duyệt chứng từ.
 /// </summary>
@@ -119,6 +119,7 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         });
     }
 
+    /// <summary>Lines: số chiết khấu từng dòng hóa đơn gốc theo TIỀN CỦA HÓA ĐƠN (bằng tiền hạch toán với hóa đơn trong nước); Discount: tổng quy ra tiền hạch toán.</summary>
     private sealed record Plan(DiscountAgreement Agreement, decimal Eligible, decimal Percent, decimal Amount, decimal? NextThreshold, decimal? NextPercent,
         List<(CommercialInvoice Invoice, decimal Sales, decimal Discount, List<(int LineNo, decimal Amount)> Lines)> Shares);
 
@@ -128,7 +129,7 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         var dp = await FunctionalDpAsync(ctx.CompanyId);
         var invs = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.CompanyId == ctx.CompanyId && i.Kind == a.Kind && i.PartnerId == a.PartnerId && i.Purpose == InvoicePurpose.Normal && i.Status == InvoiceStatus.Posted
-                        && i.Currency == null && i.PostingDate >= a.FromDate && i.PostingDate <= a.ToDate)
+                        && i.PostingDate >= a.FromDate && i.PostingDate <= a.ToDate)
             .OrderBy(i => i.PostingDate).ThenBy(i => i.Number).ToListAsync();
         var ids = invs.Select(i => i.Id).ToList();
         // Điều chỉnh giảm / trả hàng đã có (bỏ các hóa đơn thuộc lần quyết toán còn hiệu lực của chính thỏa thuận này để xem lại số liệu sau khi quyết toán vẫn ổn định).
@@ -137,17 +138,18 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
                          join i in db.CommercialInvoices.AsNoTracking() on l.InvoiceId equals i.Id
                          where i.CompanyId == ctx.CompanyId && i.AdjustsInvoiceId != null && ids.Contains(i.AdjustsInvoiceId.Value) && !own.Contains(i.Id)
                                && (i.Purpose == InvoicePurpose.Return || i.Purpose == InvoicePurpose.Discount) && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.Draft)
-                         select new { Orig = i.AdjustsInvoiceId!.Value, l.AdjustsLineNo, i.Status, l.FunctionalAmount }).ToListAsync();
+                         select new { Orig = i.AdjustsInvoiceId!.Value, l.AdjustsLineNo, i.Status, l.FunctionalAmount, l.Amount }).ToListAsync();
 
-        // net = doanh số tính chiết khấu (chỉ điều chỉnh đã ghi sổ); room = chỗ còn giảm được trên dòng (tính cả điều chỉnh nháp).
-        var perInvoice = new List<(CommercialInvoice Inv, List<(int LineNo, decimal Net, decimal Room)> Lines)>();
+        // net = doanh số tính chiết khấu (chỉ điều chỉnh đã ghi sổ); room = chỗ còn giảm được trên dòng (tính cả điều chỉnh nháp). Hóa đơn ngoại tệ có thêm số theo tiền hóa đơn.
+        var perInvoice = new List<(CommercialInvoice Inv, List<(int LineNo, decimal Net, decimal Room, decimal NetFx, decimal RoomFx)> Lines)>();
         foreach (var i in invs)
         {
             var lines = i.Lines.OrderBy(l => l.LineNo).Select(l =>
             {
-                var posted = adj.Where(x => x.Orig == i.Id && x.AdjustsLineNo == l.LineNo && x.Status == InvoiceStatus.Posted).Sum(x => x.FunctionalAmount);
-                var all = adj.Where(x => x.Orig == i.Id && x.AdjustsLineNo == l.LineNo).Sum(x => x.FunctionalAmount);
-                return (l.LineNo, Net: Math.Max(0, l.FunctionalAmount - posted), Room: Math.Max(0, l.FunctionalAmount - all));
+                var mine = adj.Where(x => x.Orig == i.Id && x.AdjustsLineNo == l.LineNo).ToList();
+                var posted = mine.Where(x => x.Status == InvoiceStatus.Posted);
+                return (l.LineNo, Net: Math.Max(0, l.FunctionalAmount - posted.Sum(x => x.FunctionalAmount)), Room: Math.Max(0, l.FunctionalAmount - mine.Sum(x => x.FunctionalAmount)),
+                        NetFx: Math.Max(0, l.Amount - posted.Sum(x => x.Amount)), RoomFx: Math.Max(0, l.Amount - mine.Sum(x => x.Amount)));
             }).ToList();
             perInvoice.Add((i, lines));
         }
@@ -156,17 +158,18 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         var reached = tiers.LastOrDefault(t => t.Threshold <= eligible);
         var next = tiers.FirstOrDefault(t => t.Threshold > eligible);
         var percent = reached?.Percent ?? 0;
-        var amount = MoneyMath.Round(eligible * percent / 100m, dp);
-
-        // Chia: theo hóa đơn tỷ lệ doanh số (hóa đơn cuối nhận phần dư), rồi theo dòng tỷ lệ doanh số dòng (dòng cuối nhận phần dư), mỗi dòng không vượt chỗ còn giảm được.
         var shares = new List<(CommercialInvoice, decimal, decimal, List<(int, decimal)>)>();
+
+        // Hóa đơn tiền hạch toán: chia theo tỷ lệ doanh số (hóa đơn cuối nhận phần dư) rồi theo dòng (dòng cuối nhận phần dư) để tổng đúng bằng Round(doanh số × %).
+        var domestic = perInvoice.Where(p => p.Inv.Currency == null && p.Lines.Sum(l => l.Net) > 0).ToList();
+        var domesticSales = domestic.Sum(p => p.Lines.Sum(l => l.Net));
+        var amount = MoneyMath.Round(domesticSales * percent / 100m, dp);
         var remaining = amount;
-        var active = perInvoice.Where(p => p.Lines.Sum(l => l.Net) > 0).ToList();
-        for (var k = 0; k < active.Count; k++)
+        for (var k = 0; k < domestic.Count; k++)
         {
-            var (inv, lines) = active[k];
+            var (inv, lines) = domestic[k];
             var sales = lines.Sum(l => l.Net);
-            var invAmount = k == active.Count - 1 ? remaining : Math.Min(remaining, MoneyMath.Round(amount * sales / eligible, dp));
+            var invAmount = k == domestic.Count - 1 ? remaining : Math.Min(remaining, MoneyMath.Round(amount * sales / domesticSales, dp));
             remaining -= invAmount;
             var lineShares = new List<(int, decimal)>();
             var left = invAmount;
@@ -181,7 +184,21 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
             }
             shares.Add((inv, sales, invAmount - left, lineShares));
         }
-        return new Plan(a, eligible, percent, shares.Sum(s => s.Item3), next?.Threshold, next?.Percent, shares);
+        // Hóa đơn ngoại tệ: chiết khấu từng dòng = % × tiền hàng dòng THEO TIỀN HÓA ĐƠN (tính tròn theo số lẻ của đồng tiền đó), quy ra tiền hạch toán theo tỷ giá của chính hóa đơn.
+        foreach (var (inv, lines) in perInvoice.Where(p => p.Inv.Currency != null && p.Lines.Sum(l => l.Net) > 0))
+        {
+            var curDp = await db.Currencies.Where(c => c.Code == inv.Currency).Select(c => c.DecimalPlaces).FirstAsync();
+            var lineShares = new List<(int, decimal)>(); decimal functional = 0;
+            foreach (var l in lines.Where(l => l.NetFx > 0))
+            {
+                var share = Math.Min(MoneyMath.Round(l.NetFx * percent / 100m, curDp), l.RoomFx);
+                if (share <= 0) continue;
+                lineShares.Add((l.LineNo, share));
+                functional += MoneyMath.Convert(share, inv.ExchangeRate!.Value, dp);
+            }
+            shares.Add((inv, lines.Sum(l => l.Net), functional, lineShares));
+        }
+        return new Plan(a, eligible, percent, shares.Sum(s => s.Item3), next?.Threshold, next?.Percent, shares.OrderBy(s => s.Item1.PostingDate).ThenBy(s => s.Item1.Number, StringComparer.Ordinal).ToList());
     }
 
     private async Task<DiscountAgreement> LoadAsync(SessionContext ctx, Guid id)
@@ -231,10 +248,13 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
                     $"Chiết khấu thương mại theo thỏa thuận {a.Code} ({a.FromDate.Vn()} – {a.ToDate.Vn()}), đạt {plan.Percent}%",
                     share.Lines.Select(l => new AdjustmentLineInput(l.LineNo, Amount: l.Amount, Description: $"Chiết khấu thương mại {plan.Percent}% – {a.Name}")).ToList(),
                     DiscountKind.Trade, UnderAgreement: true));
-                db.DiscountAgreementRunInvoices.Add(new DiscountAgreementRunInvoice { Id = Ids.New(), RunId = run.Id, CompanyId = ctx.CompanyId, OriginalInvoiceId = share.Invoice.Id, AdjustmentInvoiceId = inv.Id, Amount = share.Lines.Sum(l => l.Amount) });
+                db.DiscountAgreementRunInvoices.Add(new DiscountAgreementRunInvoice { Id = Ids.New(), RunId = run.Id, CompanyId = ctx.CompanyId, OriginalInvoiceId = share.Invoice.Id, AdjustmentInvoiceId = inv.Id, Amount = share.Discount });
             }
             await db.SaveChangesAsync();
-            var drift = plan.Amount - plan.Shares.Sum(s => s.Lines.Sum(l => l.Amount));
+            // Số thật của các hóa đơn điều chỉnh vừa tạo (tiền hạch toán) phải đúng bằng số đã tính; lệch nghĩa là có dòng đã giảm gần hết.
+            var createdIds = await db.DiscountAgreementRunInvoices.Where(r => r.RunId == run.Id).Select(r => r.AdjustmentInvoiceId).ToListAsync();
+            var actual = (await db.CommercialInvoiceLines.AsNoTracking().Where(l => createdIds.Contains(l.InvoiceId)).Select(l => l.FunctionalAmount).ToListAsync()).Sum();
+            var drift = plan.Amount - actual;
             if (drift != 0) throw new DomainException(ErrorCodes.ValidationFailed, $"Không chia hết số chiết khấu {plan.Amount.Vn(0)} lên các dòng hóa đơn (lệch {drift.Vn(0)}: dòng đã giảm gần hết); kiểm tra các điều chỉnh nháp đang có.");
             await audit.AppendAsync(ctx.CompanyId, ctx, "discount_agreement.settle", "discount_agreement", a.Id.ToString(), new { a.Code, run.EligibleSales, run.Percent, run.Amount, invoices = n });
             await db.SaveChangesAsync();

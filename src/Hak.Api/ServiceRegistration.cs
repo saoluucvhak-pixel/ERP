@@ -74,6 +74,7 @@ public static class ServiceRegistration
         services.AddScoped<DiscountAgreementService>();
         services.AddScoped<Hak.Application.EInvoice.EInvoiceIssueService>();
         services.AddScoped<Hak.Application.EInvoice.EInvoiceNoticeService>();
+        services.AddScoped<Hak.Application.EInvoice.EInvoiceInboundService>();
         services.AddScoped<DiscountReportService>();
         services.AddScoped<NumberingService>();
         services.AddScoped<Hak.Application.Setup.GroupService>();

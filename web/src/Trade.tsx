@@ -95,7 +95,7 @@ export function TradeView() {
       await load()
     } catch (e) { setError(e) }
   })
-  const act = (fn: () => Promise<unknown>, msg: string) => run(async () => { await fn(); setInfo(msg); await load() })
+  const act = (fn: () => Promise<unknown>, msg: string, needs?: string) => run(async () => { await fn(); setInfo(msg); await load() }, { exclusive: true, needs })
 
   return (
     <>
@@ -185,13 +185,13 @@ export function TradeView() {
                     if (!confirm(`CẢNH BÁO: giá hóa đơn khác giá trị đã nhập kho.\n\n${text}\n\nGhi sổ và điều chỉnh như trên?`)) throw new Error('Đã hủy ghi sổ: chưa xác nhận chênh lệch giá.')
                   }
                   await post(`/invoices/${i.id}/post?rowVersion=${i.rowVersion}&acknowledgePriceDifferences=${diffs.length > 0}`)
-                }, `Đã ghi sổ ${i.number}.`)}>Ghi sổ</button>}
+                }, `Đã ghi sổ ${i.number}.`, 'voucher.post')}>Ghi sổ</button>}
                 {i.status === 'Draft' && <button className="danger" onClick={() => { const reason = prompt('Lý do hủy:'); if (reason) act(() => post(`/invoices/${i.id}/cancel?rowVersion=${i.rowVersion}`, { reason }), `Đã hủy ${i.number}.`) }}>Hủy</button>}
                 {i.status === 'Posted' && i.purpose === 'Normal' && <button onClick={() => setAdjusting(i)}>Điều chỉnh</button>}
                 {i.status === 'Posted' && i.purpose === 'Normal' && kind === 'Sales' && einv && <button onClick={() => setReplacing({ inv: i, reason: '', prices: {} })}>Thay thế</button>}
                 {i.status === 'Posted' && <button className="danger" onClick={() => {
                   const reason = prompt('Lý do đảo hóa đơn:'); if (!reason) return
-                  const d = prompt('Ngày đảo (yyyy-mm-dd):', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse?rowVersion=${i.rowVersion}`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`)
+                  const d = prompt('Ngày đảo (yyyy-mm-dd):', i.postingDate); if (d) act(() => post(`/invoices/${i.id}/reverse?rowVersion=${i.rowVersion}`, { reversalDate: d, reason }), `Đã đảo ${i.number}.`, 'voucher.reverse')
                 }}>Đảo</button>}
               </td></tr>))}
             {list.length === 0 && <tr><td colSpan={9} className="muted">Chưa có hóa đơn.</td></tr>}
