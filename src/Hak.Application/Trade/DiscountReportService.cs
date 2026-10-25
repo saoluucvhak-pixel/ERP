@@ -62,10 +62,9 @@ public sealed class DiscountReportService(HakDbContext db)
                               where v.CompanyId == ctx.CompanyId && v.SourceSystem == PaymentDiscountService.Source && v.Status == VoucherStatus.Posted
                                     && v.PostingDate >= fromDate && v.PostingDate <= toDate && l.AccountId == acct && l.SettleJournalLineId == null
                               select new { v.SourceId, l.Amount }).ToListAsync();
-            var invIds = rows.Select(x => PaymentDiscountService.TryParseSource(x.SourceId, out var g, out _) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
-            var owners = await db.CommercialInvoices.AsNoTracking().Where(i => invIds.Contains(i.Id) && i.Kind == kind).Select(i => new { i.Id, i.PartnerId }).ToDictionaryAsync(i => i.Id, i => i.PartnerId);
-            foreach (var x in rows)
-                if (PaymentDiscountService.TryParseSource(x.SourceId, out var g, out _) && owners.TryGetValue(g, out var pid)) Row(pid)[6] += x.Amount;
+            var invIds = rows.Select(x => Guid.TryParse(x.SourceId, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
+            var owners = await db.CommercialInvoices.AsNoTracking().Where(i => invIds.Contains(i.Id) && i.Kind == kind).Select(i => new { i.Id, i.PartnerId }).ToDictionaryAsync(i => i.Id.ToString(), i => i.PartnerId);
+            foreach (var x in rows.Where(x => x.SourceId is not null && owners.ContainsKey(x.SourceId))) Row(owners[x.SourceId!])[6] += x.Amount;
         }
         DiscountReportRow Make(Guid id, string code, string name, decimal[] r)
         {

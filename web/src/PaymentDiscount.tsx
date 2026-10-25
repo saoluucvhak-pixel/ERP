@@ -8,8 +8,6 @@ import { SmartFilter, useFilterState } from './SmartFilter'
 interface Cand { invoiceId: string; invoiceNumber: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; partnerCode: string; partnerName: string; percent: string; days: number; deadline: string; daysLeft: number
   expired: boolean; open: string; discount: string; cashToPay: string; voucherNumber: string | null; voucherPending: boolean }
 
-const noTerms = (c: Cand) => c.days === 0 && c.percent === '0'
-
 /** Chiết khấu thanh toán: hóa đơn còn trong hạn hưởng, số chiết khấu và số tiền thực trả / thực thu; lập chứng từ nháp thanh toán có chiết khấu. */
 export function PaymentDiscountView() {
   const { accounts } = useCatalog()
@@ -17,11 +15,10 @@ export function PaymentDiscountView() {
   const [asOf, setAsOf] = useState(today())
   const [rows, setRows] = useState<Cand[]>([])
   const [f, pf, cf] = useFilterState('paydiscount')
-  const [withoutTerms, setWithoutTerms] = useState(false)
-  const [dlg, setDlg] = useState<{ c: Cand; cash: string; date: string; manual: string } | null>(null)
+  const [dlg, setDlg] = useState<{ c: Cand; cash: string; date: string } | null>(null)
   const [info, setInfo] = useState('')
   const { busy, error, run } = useAction()
-  const load = useCallback(() => run(async () => setRows(await get<Cand[]>(`/payment-discounts?kind=${kind}&asOf=${asOf}&includeNoTerms=${withoutTerms}`))), [run, kind, asOf, withoutTerms])
+  const load = useCallback(() => run(async () => setRows(await get<Cand[]>(`/payment-discounts?kind=${kind}&asOf=${asOf}`))), [run, kind, asOf])
   useEffect(() => { load() }, [load])
   const shown = rows.filter(r => (!f.chip || (f.chip === 'open' ? !r.expired : f.chip === 'soon' ? !r.expired && r.daysLeft <= 3 : r.expired)) && matchesQuery(`${r.invoiceNumber} ${r.invoiceSeries}/${r.invoiceNo} ${r.partnerCode} ${r.partnerName}`, Number(r.open), f.q))
   const purchase = kind === 'Purchase'
@@ -29,7 +26,6 @@ export function PaymentDiscountView() {
     <>
       <div className="toolbar"><h2>{purchase ? 'Chiết khấu thanh toán được hưởng (hóa đơn mua)' : 'Chiết khấu thanh toán cho khách (hóa đơn bán)'}</h2>
         <label>Tính đến ngày<input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
-        <label><input type="checkbox" checked={withoutTerms} onChange={e => setWithoutTerms(e.target.checked)} /> Cả hóa đơn không có điều khoản (nhập chiết khấu tay)</label>
         <ExportButton fileName={`Chiet_khau_thanh_toan_${kind}_${asOf}`} sheet="Chiết khấu thanh toán" disabled={shown.length === 0}
           columns={[{ header: 'Hóa đơn', width: 18 }, { header: 'Ngày HĐ', width: 12 }, { header: 'Đối tượng', width: 30 }, { header: 'Hạn hưởng', width: 12 }, { header: 'Còn mở', numeric: true, width: 16 }, { header: 'Chiết khấu', numeric: true, width: 14 }, { header: purchase ? 'Thực trả' : 'Thực thu', numeric: true, width: 16 }]}
           rows={shown.map(r => [`${r.invoiceSeries}/${r.invoiceNo}`, r.invoiceDate, `${r.partnerCode} – ${r.partnerName}`, r.deadline, r.open, r.discount, r.cashToPay])} /></div>
@@ -47,23 +43,20 @@ export function PaymentDiscountView() {
         <thead><tr><th>Hóa đơn</th><th>Đối tượng</th><th className="num">CK</th><th>Hạn hưởng</th><th className="num">Còn mở</th><th className="num">Chiết khấu</th><th className="num">{purchase ? 'Thực trả' : 'Thực thu'}</th><th /></tr></thead>
         <tbody>{shown.map(r => <tr key={r.invoiceId} style={{ opacity: r.expired ? 0.6 : undefined }}>
           <td>{r.invoiceSeries}/{r.invoiceNo}<div className="muted">{r.invoiceNumber} · {formatDate(r.invoiceDate)}</div></td><td>{r.partnerCode} – {r.partnerName}</td>
-          <td className="num">{r.days === 0 && r.percent === '0' ? 'không điều khoản' : `${formatMoney(r.percent)}% / ${r.days} ngày`}</td>
+          <td className="num">{formatMoney(r.percent)}% / {r.days} ngày</td>
           <td>{formatDate(r.deadline)}<div className="muted">{r.expired ? 'đã quá hạn' : r.daysLeft === 0 ? 'hôm nay là hạn cuối' : `còn ${r.daysLeft} ngày`}</div></td>
           <td className="num">{formatMoney(r.open)}</td><td className="num"><b>{formatMoney(r.discount)}</b></td><td className="num">{formatMoney(r.cashToPay)}</td>
-          <td>{r.voucherNumber ? `${r.voucherNumber}${r.voucherPending ? ' (chờ ghi sổ)' : ''}` : !r.expired && <button className="primary" disabled={busy} onClick={() => setDlg({ c: r, cash: '', date: asOf, manual: '' })}>{purchase ? 'Trả có chiết khấu' : 'Thu có chiết khấu'}</button>}</td></tr>)}
+          <td>{r.voucherNumber ? `${r.voucherNumber}${r.voucherPending ? ' (chờ ghi sổ)' : ''}` : !r.expired && <button className="primary" disabled={busy} onClick={() => setDlg({ c: r, cash: '', date: asOf })}>{purchase ? 'Trả có chiết khấu' : 'Thu có chiết khấu'}</button>}</td></tr>)}
           {shown.length === 0 && <tr><td colSpan={8} className="muted">Không có hóa đơn có chiết khấu thanh toán đang mở. Điều khoản ghi ở hóa đơn (CK thanh toán % / trong N ngày) hoặc điền sẵn theo đối tượng ở Danh mục.</td></tr>}</tbody>
       </table></div>
       <p className="muted">Chiết khấu = P% × tiền hàng chưa thuế (theo phần còn mở); thuế GTGT giữ nguyên số trên hóa đơn [CẦN XÁC MINH cách xử lý theo quy định thuế]. Cần ánh xạ vai trò PAYMENT_DISCOUNT_INCOME (mua) / PAYMENT_DISCOUNT_EXPENSE (bán).</p>
 
       {dlg && <Modal title={`${purchase ? 'Trả' : 'Thu'} tiền có chiết khấu — ${dlg.c.invoiceSeries}/${dlg.c.invoiceNo}`} onClose={() => setDlg(null)} busy={busy}
-        footer={<><button onClick={() => setDlg(null)}>Đóng</button><button className="primary" disabled={busy || !dlg.cash || (noTerms(dlg.c) && !dlg.manual.trim())} onClick={() => run(async () => {
-          const v = await post<{ number: string }>(`/payment-discounts/${dlg.c.invoiceId}/voucher`, { cashAccountId: dlg.cash, date: dlg.date, manualDiscount: dlg.manual.trim() ? dlg.manual.trim() : null })
+        footer={<><button onClick={() => setDlg(null)}>Đóng</button><button className="primary" disabled={busy || !dlg.cash} onClick={() => run(async () => {
+          const v = await post<{ number: string }>(`/payment-discounts/${dlg.c.invoiceId}/voucher`, { cashAccountId: dlg.cash, date: dlg.date })
           setDlg(null); setInfo(`Đã lập chứng từ ${v.number} (nháp) — duyệt và ghi sổ ở màn Chứng từ.`); await load()
         })}>Lập chứng từ</button></>}>
-        {noTerms(dlg.c)
-          ? <p>{dlg.c.partnerName}: còn mở <b>{formatMoney(dlg.c.open)}</b>. Hóa đơn không ghi điều khoản — chiết khấu thanh toán là một khoản trong bút toán thanh toán riêng, không đổi hóa đơn.</p>
-          : <p>{dlg.c.partnerName}: còn mở <b>{formatMoney(dlg.c.open)}</b>, chiết khấu <b>{formatMoney(dlg.c.discount)}</b> → {purchase ? 'trả' : 'thu'} <b>{formatMoney(dlg.c.cashToPay)}</b>. Hạn hưởng {formatDate(dlg.c.deadline)}.</p>}
-        <div className="form-row"><label>Chiết khấu nhập tay (đồng){noTerms(dlg.c) ? '' : ' — bỏ trống để tính theo điều khoản'}<input inputMode="numeric" value={dlg.manual} onChange={e => setDlg({ ...dlg, manual: e.target.value.replace(/[^0-9]/g, '') })} /></label></div>
+        <p>{dlg.c.partnerName}: còn mở <b>{formatMoney(dlg.c.open)}</b>, chiết khấu <b>{formatMoney(dlg.c.discount)}</b> → {purchase ? 'trả' : 'thu'} <b>{formatMoney(dlg.c.cashToPay)}</b>. Hạn hưởng {formatDate(dlg.c.deadline)}.</p>
         <div className="form-row"><label>Tài khoản tiền<AccountSelect accounts={accounts} value={dlg.cash} onChange={id => setDlg({ ...dlg, cash: id })} filter={a => a.cashKind === 'Cash' || a.cashKind === 'Bank'} /></label>
           <label>Ngày {purchase ? 'trả' : 'thu'}<input type="date" value={dlg.date} onChange={e => setDlg({ ...dlg, date: e.target.value })} /></label></div>
       </Modal>}
