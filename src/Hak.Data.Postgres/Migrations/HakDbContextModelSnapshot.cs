@@ -1977,6 +1977,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("payment_discount_days");
 
+                    b.Property<string>("PaymentDiscountOptions")
+                        .HasColumnType("text")
+                        .HasColumnName("payment_discount_options");
+
                     b.Property<decimal?>("PaymentDiscountPercent")
                         .HasPrecision(19, 4)
                         .HasColumnType("numeric(19,4)")
@@ -7743,6 +7747,10 @@ namespace Hak.Data.Postgres.Migrations
                     b.Property<int?>("PaymentDiscountDays")
                         .HasColumnType("integer")
                         .HasColumnName("payment_discount_days");
+
+                    b.Property<string>("PaymentDiscountOptions")
+                        .HasColumnType("text")
+                        .HasColumnName("payment_discount_options");
 
                     b.Property<decimal?>("PaymentDiscountPercent")
                         .HasPrecision(19, 4)

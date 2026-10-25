@@ -247,7 +247,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         }).ToList();
         var input = new InvoiceInput(orig.Kind, newPartnerId ?? orig.PartnerId, InvoiceService.AwaitingSeries, "", orig.InvoiceDate, orig.PostingDate,
             $"Thay thế hóa đơn {orig.InvoiceSeries}/{orig.InvoiceNo}: {reason.Trim()}", lines, orig.DueDate, orig.Currency, orig.ExchangeRate, orig.PaymentDiscountPercent, orig.PaymentDiscountDays,
-            AwaitIssue: true, ReplacesInvoiceId: orig.Id);
+            AwaitIssue: true, ReplacesInvoiceId: orig.Id, PaymentDiscountOptions: orig.PaymentDiscountOptions);
         return await invoices.CreateAsync(ctx, input);
     }
 

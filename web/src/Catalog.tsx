@@ -10,7 +10,7 @@ import { EntityGroupsButton, useGroups } from './groupLib'
 /** Danh mục đối tượng: thêm, sửa tên / mã số thuế, ngừng sử dụng (không xóa đối tượng đã phát sinh). */
 export function CatalogView() {
   const [list, setList] = useState<Partner[]>([])
-  const [edit, setEdit] = useState<Record<string, { name: string; taxCode: string; isActive: boolean; address: string; phone: string; email: string; creditLimit: string; terms: string; discPct: string; discDays: string }>>({})
+  const [edit, setEdit] = useState<Record<string, { name: string; taxCode: string; isActive: boolean; address: string; phone: string; email: string; creditLimit: string; terms: string; discPct: string; discDays: string; discOpts: string }>>({})
   const [nw, setNw] = useState({ code: '', name: '', taxCode: '', roles: 'Customer' })
   const [fs, patchFs, clearFs] = useFilterState('catalog')
   const [info, setInfo] = useState('')
@@ -20,7 +20,7 @@ export function CatalogView() {
   const load = useCallback(() => run(async () => setList(await get<Partner[]>('/partners'))), [run])
   useEffect(() => { load() }, [load])
   const val = (p: Partner) => edit[p.id] ?? { name: p.name, taxCode: p.taxCode ?? '', isActive: p.isActive, address: p.address ?? '', phone: p.phone ?? '', email: p.email ?? '',
-    creditLimit: p.creditLimit ? formatMoney(p.creditLimit) : '', terms: p.paymentTermsDays == null ? '' : String(p.paymentTermsDays), discPct: p.paymentDiscountPercent ? formatMoney(p.paymentDiscountPercent) : '', discDays: p.paymentDiscountDays == null ? '' : String(p.paymentDiscountDays) }
+    creditLimit: p.creditLimit ? formatMoney(p.creditLimit) : '', terms: p.paymentTermsDays == null ? '' : String(p.paymentTermsDays), discPct: p.paymentDiscountPercent ? formatMoney(p.paymentDiscountPercent) : '', discDays: p.paymentDiscountDays == null ? '' : String(p.paymentDiscountDays), discOpts: p.paymentDiscountOptions ?? '' }
   const set = (p: Partner, patch: Partial<ReturnType<typeof val>>) => setEdit(s => ({ ...s, [p.id]: { ...val(p), ...patch } }))
   const chipOf = (p: Partner, k: string) => k === 'customer' ? !!p.isCustomer : k === 'supplier' ? !!p.isSupplier : k === 'inactive' ? !p.isActive : k === 'nocode' ? !p.taxCode : true
   const shown = list.filter(p => (!fs.chip || chipOf(p, fs.chip)) && (!fs.sel.group || groups.inGroup(p.id, fs.sel.group)) && matchesQuery(`${p.code} ${p.name} ${p.taxCode ?? ''} ${p.address ?? ''} ${p.phone ?? ''} ${p.email ?? ''}`, p.creditLimit ? Number(p.creditLimit) : null, fs.q))
@@ -47,7 +47,7 @@ export function CatalogView() {
         <tbody>{shown.map(p => {
           const v = val(p)
           const base = { name: p.name, taxCode: p.taxCode ?? '', isActive: p.isActive, address: p.address ?? '', phone: p.phone ?? '', email: p.email ?? '',
-            creditLimit: p.creditLimit ? formatMoney(p.creditLimit) : '', terms: p.paymentTermsDays == null ? '' : String(p.paymentTermsDays), discPct: p.paymentDiscountPercent ? formatMoney(p.paymentDiscountPercent) : '', discDays: p.paymentDiscountDays == null ? '' : String(p.paymentDiscountDays) }
+            creditLimit: p.creditLimit ? formatMoney(p.creditLimit) : '', terms: p.paymentTermsDays == null ? '' : String(p.paymentTermsDays), discPct: p.paymentDiscountPercent ? formatMoney(p.paymentDiscountPercent) : '', discDays: p.paymentDiscountDays == null ? '' : String(p.paymentDiscountDays), discOpts: p.paymentDiscountOptions ?? '' }
           const dirty = (Object.keys(base) as (keyof typeof base)[]).some(k => v[k] !== base[k])
           return <tr key={p.id}><td>{p.code}</td>
             <td><input aria-label="Tên" value={v.name} onChange={e => set(p, { name: e.target.value })} style={{ minWidth: 260 }} /></td>
@@ -57,7 +57,7 @@ export function CatalogView() {
             <td><input aria-label="Email" value={v.email} onChange={e => set(p, { email: e.target.value })} /></td>
             <td><input className="num" aria-label="Hạn mức tín dụng" value={v.creditLimit} onChange={e => set(p, { creditLimit: e.target.value })} size={14} /></td>
             <td><input className="num" aria-label="Hạn thanh toán (ngày)" value={v.terms} onChange={e => set(p, { terms: e.target.value })} size={4} /></td>
-            <td><input className="num" aria-label="Chiết khấu thanh toán %" value={v.discPct} onChange={e => set(p, { discPct: e.target.value })} size={4} title="Chiết khấu thanh toán: P% nếu trả đủ trong N ngày" /> / <input className="num" aria-label="Chiết khấu thanh toán ngày" value={v.discDays} onChange={e => set(p, { discDays: e.target.value.replace(/\D/g, '') })} size={3} /></td>
+            <td><input className="num" aria-label="Chiết khấu thanh toán %" value={v.discPct} onChange={e => set(p, { discPct: e.target.value })} size={4} title="Chiết khấu thanh toán: P% nếu trả đủ trong N ngày" /> / <input className="num" aria-label="Chiết khấu thanh toán ngày" value={v.discDays} onChange={e => set(p, { discDays: e.target.value.replace(/\D/g, '') })} size={3} /> <input aria-label="Tùy chọn chiết khấu thanh toán" value={v.discOpts} onChange={e => set(p, { discOpts: e.target.value })} size={16} placeholder="base=incl;grace=1;tier=3:5" title="Tùy chọn: base=incl (cơ sở gồm thuế) hoặc excl; grace=N ngày dung sai; tier=P:N bậc phụ (vd 3:5 = 3% trong 5 ngày, có thể lặp)" /></td>
             <td><EntityGroupsButton g={groups} domain="Partner" entityId={p.id} title={p.name} onSaved={groups.reload} /></td>
             <td><input type="checkbox" aria-label="Đang dùng" checked={v.isActive} onChange={e => set(p, { isActive: e.target.checked })} /></td>
             <td><button onClick={() => setBankOf(p)} title="Số tài khoản ngân hàng nhận tiền">Ngân hàng</button>{dirty && <button className="primary" disabled={busy} onClick={() => run(async () => {
@@ -71,7 +71,7 @@ export function CatalogView() {
               if (v.discDays.trim() && discDays == null) throw new Error('Số ngày chiết khấu thanh toán phải là số (chỉ gồm chữ số).')
               if (p.rowVersion == null) throw new Error('Thiếu phiên bản đối tượng; tải lại danh sách rồi lưu lại.')
               // MỘT lệnh cập nhật hợp nhất (một giao dịch, đúng phiên bản đã xem): hoặc lưu đủ, hoặc không đổi gì.
-              await put(`/partners/${p.id}/full`, { rowVersion: p.rowVersion, name: v.name, taxCode: v.taxCode || null, isActive: v.isActive, address: v.address || null, phone: v.phone || null, email: v.email || null, creditLimit: limit, paymentTermsDays: terms, paymentDiscountPercent: disc, paymentDiscountDays: discDays }); setEdit(s => { const c = { ...s }; delete c[p.id]; return c }); setInfo(`Đã cập nhật ${p.code}.`); await load()
+              await put(`/partners/${p.id}/full`, { rowVersion: p.rowVersion, name: v.name, taxCode: v.taxCode || null, isActive: v.isActive, address: v.address || null, phone: v.phone || null, email: v.email || null, creditLimit: limit, paymentTermsDays: terms, paymentDiscountPercent: disc, paymentDiscountDays: discDays, paymentDiscountOptions: v.discOpts.trim() || null }); setEdit(s => { const c = { ...s }; delete c[p.id]; return c }); setInfo(`Đã cập nhật ${p.code}.`); await load()
             })}>Lưu</button>}</td></tr>
         })}</tbody>
       </table></div>

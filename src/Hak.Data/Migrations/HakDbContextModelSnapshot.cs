@@ -1943,6 +1943,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_days");
 
+                    b.Property<string>("PaymentDiscountOptions")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payment_discount_options");
+
                     b.Property<long?>("PaymentDiscountPercent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_percent");
@@ -7615,6 +7619,10 @@ namespace Hak.Data.Migrations
                     b.Property<int?>("PaymentDiscountDays")
                         .HasColumnType("INTEGER")
                         .HasColumnName("payment_discount_days");
+
+                    b.Property<string>("PaymentDiscountOptions")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payment_discount_options");
 
                     b.Property<long?>("PaymentDiscountPercent")
                         .HasColumnType("INTEGER")
