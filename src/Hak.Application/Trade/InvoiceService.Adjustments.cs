@@ -14,8 +14,11 @@ namespace Hak.Application.Trade;
 /// <summary>One line of a sales adjustment invoice. Return lines point at a return receipt; Discount/Increase lines carry an amount.</summary>
 public sealed record AdjustmentLineInput(int OriginalLineNo, Guid? ReturnReceiptId = null, int? ReturnReceiptLineNo = null, decimal? Amount = null, string? Description = null);
 
+/// <param name="DiscountKind">Chỉ với Purpose = Discount: chiết khấu thương mại hay giảm giá hàng bán (mặc định giảm giá hàng bán). Hai loại hạch toán vào TK khác nhau và báo cáo riêng.</param>
 public sealed record AdjustmentInput(Guid OriginalInvoiceId, InvoicePurpose Purpose, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate,
-    string Description, IReadOnlyList<AdjustmentLineInput> Lines);
+    string Description, IReadOnlyList<AdjustmentLineInput> Lines, DiscountKind? DiscountKind = null,
+    /// <summary>Chỉ do DiscountAgreementService đặt: chiết khấu theo thỏa thuận đã được người có thẩm quyền lập nên không cần phê duyệt từng dòng (xem RecheckAdjustmentLimitsAsync).</summary>
+    bool UnderAgreement = false);
 
 /// <summary>
 /// Sales adjustments (master prompt §13): returns, discounts/price reductions and increases, each linked to a posted
@@ -109,6 +112,7 @@ public sealed partial class InvoiceService
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = orig.Kind, Purpose = input.Purpose, AdjustsInvoiceId = orig.Id,
                 InvoiceSeries = input.InvoiceSeries.Trim(), InvoiceNo = input.InvoiceNo.Trim(), InvoiceDate = input.InvoiceDate, PostingDate = input.PostingDate,
                 PartnerId = orig.PartnerId, Currency = orig.Currency, ExchangeRate = orig.ExchangeRate, Description = input.Description.Trim(),
+                DiscountKind = input.Purpose == InvoicePurpose.Discount ? input.DiscountKind ?? Hak.Domain.Trade.DiscountKind.Allowance : null,
                 CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
                 Number = await NextNumberAsync(ctx.CompanyId, fy, (purchase, input.Purpose) switch
                 {
@@ -154,10 +158,15 @@ public sealed partial class InvoiceService
                     line.StockQuantity = rl.Quantity;
                     line.Basis = ol.Basis;
                     line.UnitPrice = ol.UnitPrice;
+                    // Hàng trả lại giảm doanh thu đúng bằng số đã ghi (sau chiết khấu trên hóa đơn): mang theo tỷ lệ chiết khấu của dòng gốc;
+                    // chiết khấu nhập bằng số tiền thì chia theo tỷ lệ số lượng (BDMT) trả lại.
+                    line.DiscountPercent = ol.DiscountPercent;
                     // Goods returned to a supplier are not re-measured: their BDMT is the original line's BDMT pro rata [CẦN XÁC MINH].
                     line.BasisQuantity = ol.Basis != PricingBasis.Bdmt ? rl.Quantity
                         : purchase ? (rl.Quantity == ol.StockQuantity ? ol.BasisQuantity : MoneyMath.Round(ol.BasisQuantity * rl.Quantity / ol.StockQuantity!.Value, 3))
                         : await ActiveBdmtAsync(ctx.CompanyId, receipt.Id, receipt.Number, rl.LineNo);
+                    if (ol.DiscountPercent is null && ol.DiscountAmount > 0 && ol.BasisQuantity > 0)
+                        line.DiscountAmount = line.BasisQuantity == ol.BasisQuantity ? ol.DiscountAmount : MoneyMath.Round(ol.DiscountAmount * line.BasisQuantity / ol.BasisQuantity, curDp);
                     Price(line, rate, curDp, funcDp);
                 }
                 else
@@ -176,7 +185,7 @@ public sealed partial class InvoiceService
                         var already = discounted + await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Return) + pending;
                         if (already + line.FunctionalAmount > ol.FunctionalAmount)
                             throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: tổng giảm trừ {already + line.FunctionalAmount} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
-                        if (!purchase) await RequireAdjustmentApprovalAsync(ctx, orig.Id, ol.LineNo, AdjustmentKind.Discount, discounted + pending + line.FunctionalAmount);
+                        if (!purchase && !input.UnderAgreement) await RequireAdjustmentApprovalAsync(ctx, orig.Id, ol.LineNo, AdjustmentKind.Discount, discounted + pending + line.FunctionalAmount);
                     }
                 }
                 inv.Lines.Add(line);
@@ -217,7 +226,12 @@ public sealed partial class InvoiceService
                 gl.Add(new VoucherLineInput(Role("SALES_RETURNS"), Side.Debit, l.FunctionalAmount, Description: l.Description ?? "Hàng bán bị trả lại"));
             }
             else if (inv.Purpose == InvoicePurpose.Discount)
-                gl.Add(new VoucherLineInput(Role("SALES_DISCOUNT"), Side.Debit, l.FunctionalAmount, Description: l.Description ?? "Giảm giá hàng bán"));
+            {
+                // Chiết khấu thương mại dùng TK riêng (vai trò SALES_TRADE_DISCOUNT) nếu công ty đã ánh xạ, nếu chưa thì dùng chung TK giảm giá hàng bán.
+                var trade = inv.DiscountKind == DiscountKind.Trade;
+                var account = trade && roles.TryGetValue("SALES_TRADE_DISCOUNT", out var tradeAccount) ? tradeAccount : Role("SALES_DISCOUNT");
+                gl.Add(new VoucherLineInput(account, Side.Debit, l.FunctionalAmount, Description: l.Description ?? (trade ? "Chiết khấu thương mại" : "Giảm giá hàng bán")));
+            }
             else
                 gl.Add(new VoucherLineInput(l.AccountId ?? Role("SALES_REVENUE"), Side.Credit, l.FunctionalAmount, Description: l.Description ?? "Điều chỉnh tăng"));
         }
@@ -271,7 +285,9 @@ public sealed partial class InvoiceService
                 var others = discounted + await AdjustedAmountAsync(orig.Id, g.Key, InvoicePurpose.Return, inv.Id);
                 if (others + mine > ol.FunctionalAmount)
                     throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng gốc {g.Key}: tổng giảm trừ {others + mine} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
-                if (inv.Kind == InvoiceKind.Sales) await RequireAdjustmentApprovalAsync(ctx, orig.Id, g.Key, AdjustmentKind.Discount, discounted + mine);
+                // Chiết khấu theo thỏa thuận còn hiệu lực (lần quyết toán chưa hủy) đã được duyệt ở cấp thỏa thuận; mọi chiết khấu khác vẫn phải qua phê duyệt từng dòng.
+                var underAgreement = await db.DiscountAgreementRunInvoices.AnyAsync(r => r.AdjustmentInvoiceId == inv.Id && db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.VoidedAt == null));
+                if (inv.Kind == InvoiceKind.Sales && !underAgreement) await RequireAdjustmentApprovalAsync(ctx, orig.Id, g.Key, AdjustmentKind.Discount, discounted + mine);
             }
         }
     }

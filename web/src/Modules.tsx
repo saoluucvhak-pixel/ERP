@@ -35,7 +35,7 @@ export const MODULES: AppModule[] = [
     catalogs: [{ label: 'Tài khoản ngân hàng (công ty, đối tượng)', screen: 'setup', tab: 'banks' }, CAT_PARTNERS, CAT_SETUP],
   },
   {
-    key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'contracts', 'orders', 'services', 'trade', 'arap', 'paydiscount'], title: 'NGHIỆP VỤ MUA HÀNG',
+    key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'contracts', 'orders', 'services', 'trade', 'arap', 'discounts', 'paydiscount'], title: 'NGHIỆP VỤ MUA HÀNG',
     flow: [
       { label: 'Cần đặt hàng', icon: '📋', screen: 'procurement' }, { label: 'Hợp đồng mua', icon: '📑', screen: 'contracts' }, { label: 'Đơn mua hàng', icon: '📝', screen: 'orders' }, { label: 'Nhận hàng, kiểm nghiệm, nhập kho', icon: '📦', screen: 'procurement' },
       { label: 'Nghiệm thu dịch vụ', icon: '🧾', screen: 'services' }, { label: 'Hóa đơn mua', icon: '📄', screen: 'trade' }, { label: 'Chấp nhận thanh toán', icon: '✔️', screen: 'procurement' }, { label: 'Thanh toán', icon: '💸', screen: 'procurement' }, { label: 'Công nợ phải trả', icon: '🧮', screen: 'arap' },
@@ -44,7 +44,7 @@ export const MODULES: AppModule[] = [
     catalogs: [{ label: 'Nhà cung cấp', screen: 'catalog' }, { label: 'Vật tư, hàng hóa', screen: 'setup', tab: 'stock' }, CAT_SETUP],
   },
   {
-    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'services', 'trade', 'arap', 'salesapproval', 'paydiscount'], title: 'NGHIỆP VỤ BÁN HÀNG',
+    key: 'sales', label: 'Bán hàng', icon: '🛍️', screens: ['revenue', 'contracts', 'orders', 'services', 'trade', 'arap', 'salesapproval', 'discounts', 'paydiscount'], title: 'NGHIỆP VỤ BÁN HÀNG',
     flow: [
       { label: 'Hợp đồng bán', icon: '📑', screen: 'contracts' }, { label: 'Đơn bán, kiểm tra tín dụng', icon: '📝', screen: 'orders' }, { label: 'Lệnh bán hàng', icon: '📋', screen: 'revenue' }, { label: 'Giao hàng, xuất kho', icon: '🚚', screen: 'revenue' },
       { label: 'Nghiệm thu dịch vụ', icon: '🧾', screen: 'services' }, { label: 'Hóa đơn bán', icon: '📄', screen: 'trade' }, { label: 'Trả hàng, giảm giá (duyệt)', icon: '↩️', screen: 'salesapproval' }, { label: 'Theo dõi phải thu', icon: '🧮', screen: 'arap' }, { label: 'Thu tiền', icon: '💵', screen: 'revenue' }, { label: 'Xóa nợ khó đòi (duyệt)', icon: '🧾', screen: 'salesapproval' },

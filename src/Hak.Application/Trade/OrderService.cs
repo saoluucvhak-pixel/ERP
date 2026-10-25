@@ -15,13 +15,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Application.Trade;
 
-public sealed record OrderLineInput(Guid ItemId, decimal Quantity, decimal UnitPrice, PricingBasis Basis = PricingBasis.Quantity, decimal? VatRate = null, string? Description = null);
+public sealed record OrderLineInput(Guid ItemId, decimal Quantity, decimal UnitPrice, PricingBasis Basis = PricingBasis.Quantity, decimal? VatRate = null, string? Description = null,
+    /// <summary>Chiết khấu thương mại đã thỏa thuận trên dòng đơn (% trên tiền hàng); hóa đơn lập từ đơn mang theo tỷ lệ này.</summary>
+    decimal? DiscountPercent = null);
 
 public sealed record OrderInput(InvoiceKind Kind, Guid PartnerId, DateOnly OrderDate, string Description, IReadOnlyList<OrderLineInput> Lines,
     DateOnly? ExpectedDate = null, string? ContractNo = null, string? Currency = null, decimal OverDeliveryTolerancePercent = 0, Guid? ContractId = null);
 
 public sealed record OrderLineFulfilment(int LineNo, Guid ItemId, string ItemCode, decimal Ordered, PricingBasis Basis, decimal UnitPrice,
-    decimal StockPosted, decimal StockDraft, decimal Bdmt, decimal Invoiced, decimal InvoicedAmount, decimal ReturnedQty, decimal ReturnedAmount, decimal Outstanding);
+    decimal StockPosted, decimal StockDraft, decimal Bdmt, decimal Invoiced, decimal InvoicedAmount, decimal ReturnedQty, decimal ReturnedAmount, decimal Outstanding,
+    decimal DiscountPercent = 0);
 
 public sealed record OrderInvoiceView(Guid InvoiceId, string Number, string InvoiceSeries, string InvoiceNo, InvoicePurpose Purpose, decimal Total, decimal Settled, decimal Open);
 
@@ -67,10 +70,11 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
                 if (l.Quantity <= 0 || !MoneyMath.HasAtMostDecimals(l.Quantity, MoneyMath.StorageScale)) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: số lượng không hợp lệ.");
                 if (l.UnitPrice < 0 || !MoneyMath.HasAtMostDecimals(l.UnitPrice, MoneyMath.StorageScale)) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: đơn giá không hợp lệ.");
                 if (l.Basis == PricingBasis.Bdmt && !item.TracksDryness) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: vật tư {item.Code} không theo dõi BDMT.");
+                if (l.DiscountPercent is { } dp && (dp < 0 || dp > 100 || !MoneyMath.HasAtMostDecimals(dp, 4))) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {n}: tỷ lệ chiết khấu từ 0 đến 100%, tối đa 4 chữ số thập phân.");
                 order.Lines.Add(new TradeOrderLine
                 {
                     Id = Ids.New(), OrderId = order.Id, CompanyId = ctx.CompanyId, LineNo = n, ItemId = l.ItemId, Quantity = l.Quantity, Basis = l.Basis,
-                    UnitPrice = l.UnitPrice, VatRate = l.VatRate, Description = l.Description,
+                    UnitPrice = l.UnitPrice, VatRate = l.VatRate, Description = l.Description, DiscountPercent = l.DiscountPercent is > 0 ? l.DiscountPercent : null,
                 });
             }
             db.TradeOrders.Add(order);
@@ -89,7 +93,7 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
         o.Confirm(ctx.UserId, clock.UtcNow, company.RequireDistinctApprover);
         if (o.ContractId is { } cid)
         {
-            var ls = await db.TradeOrderLines.AsNoTracking().Where(l => l.OrderId == o.Id).Select(l => new OrderLineInput(l.ItemId, l.Quantity, l.UnitPrice, l.Basis, l.VatRate, l.Description)).ToListAsync();
+            var ls = await db.TradeOrderLines.AsNoTracking().Where(l => l.OrderId == o.Id).Select(l => new OrderLineInput(l.ItemId, l.Quantity, l.UnitPrice, l.Basis, l.VatRate, l.Description, l.DiscountPercent)).ToListAsync();
             await ContractControl.ValidateCallOffAsync(db, ctx.CompanyId, cid, o.Kind, o.PartnerId, o.OrderDate, ls, o.Id);
         }
         if (o.Kind == InvoiceKind.Purchase)
@@ -167,7 +171,7 @@ public sealed class OrderService(HakDbContext db, AuditService audit, IClock clo
             return new OrderLineFulfilment(ol.LineNo, ol.ItemId, items[ol.ItemId].Code, ol.Quantity, ol.Basis, ol.UnitPrice, stockPosted,
                 stock.Where(s => s.Status == StockDocumentStatus.Draft && s.OrderLineNo == ol.LineNo).Sum(s => s.Quantity), bdmt,
                 inv.Sum(x => x.StockQuantity ?? 0), inv.Sum(x => x.FunctionalAmount), ret.Sum(r => r.StockQuantity ?? 0), ret.Sum(r => r.FunctionalAmount),
-                ol.Quantity - stockPosted);
+                ol.Quantity - stockPosted, ol.DiscountPercent ?? 0);
         }).ToList();
 
         // Invoices touching the order and how much of each is settled (paid / offset) per the AR/AP subledger.

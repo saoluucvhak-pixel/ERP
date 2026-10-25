@@ -17,7 +17,9 @@ namespace Hak.Application.Trade;
 
 public sealed record InvoiceLineInput(decimal UnitPrice, Guid? StockDocumentId = null, int? StockLineNo = null, decimal? StockQuantity = null,
     PricingBasis Basis = PricingBasis.Quantity, decimal? Quantity = null, Guid? AccountId = null, decimal? VatRate = null, string? Description = null,
-    Guid? OrderId = null, int? OrderLineNo = null);
+    Guid? OrderId = null, int? OrderLineNo = null,
+    /// <summary>Chiết khấu thương mại ghi trên hóa đơn: tỷ lệ % trên tiền hàng, HOẶC số tiền (không nhập cả hai). Để trống thì lấy tỷ lệ của dòng đơn hàng gắn với dòng này (nếu có).</summary>
+    decimal? DiscountPercent = null, decimal? DiscountAmount = null);
 
 public sealed record InvoiceInput(InvoiceKind Kind, Guid PartnerId, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate,
     string Description, IReadOnlyList<InvoiceLineInput> Lines, DateOnly? DueDate = null, string? Currency = null, decimal? ExchangeRate = null,
@@ -449,14 +451,38 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 line.OrderLineNo = l.OrderLineNo;
             }
         }
+        // Chiết khấu thương mại ghi trên hóa đơn: nhập tay (% hoặc số tiền) hoặc lấy tỷ lệ đã thỏa thuận trên dòng đơn hàng.
+        if (l.DiscountPercent is not null && l.DiscountAmount is not null)
+            throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: chiết khấu nhập theo % hoặc theo số tiền, không nhập cả hai.");
+        var pct = l.DiscountPercent;
+        if (pct is null && l.DiscountAmount is null && line.OrderId is { } discOrder && line.OrderLineNo is { } discLine)
+            pct = await db.TradeOrderLines.AsNoTracking().Where(x => x.OrderId == discOrder && x.LineNo == discLine).Select(x => x.DiscountPercent).FirstOrDefaultAsync();
+        if (pct is { } pp && (pp < 0 || pp > 100 || !MoneyMath.HasAtMostDecimals(pp, 4)))
+            throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: tỷ lệ chiết khấu từ 0 đến 100%, tối đa 4 chữ số thập phân.");
+        line.DiscountPercent = pct is > 0 ? pct : null;
+        if (l.DiscountAmount is { } da)
+        {
+            var gross = MoneyMath.Round(line.BasisQuantity * line.UnitPrice, curDp);
+            if (da < 0 || !MoneyMath.HasAtMostDecimals(da, curDp)) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: số tiền chiết khấu không hợp lệ (≥ 0, tối đa {curDp} chữ số thập phân).");
+            if (da > gross) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {lineNo}: chiết khấu {da} vượt tiền hàng {gross}.");
+            line.DiscountAmount = da;
+        }
         Price(line, inv.ExchangeRate, curDp, funcDp);
         return line;
     }
 
+    /// <summary>
+    /// Tiền hàng = BasisQuantity × UnitPrice, trừ chiết khấu thương mại ghi trên hóa đơn (% thì tính trên tiền hàng, làm tròn theo tiền hóa đơn).
+    /// <see cref="CommercialInvoiceLine.Amount"/> là số SAU chiết khấu: doanh thu, thuế GTGT, công nợ và giá nhập kho đều tính trên số này.
+    /// </summary>
     private static void Price(CommercialInvoiceLine line, decimal? rate, int curDp, int funcDp)
     {
-        line.Amount = MoneyMath.Round(line.BasisQuantity * line.UnitPrice, curDp);
+        var gross = MoneyMath.Round(line.BasisQuantity * line.UnitPrice, curDp);
+        var discount = line.DiscountPercent is { } p ? MoneyMath.Round(gross * p / 100m, curDp) : line.DiscountAmount;
+        line.DiscountAmount = discount;
+        line.Amount = gross - discount;
         line.FunctionalAmount = rate is { } r ? MoneyMath.Convert(line.Amount, r, funcDp) : line.Amount;
+        line.FunctionalDiscountAmount = discount == 0 ? 0 : rate is { } r2 ? MoneyMath.Convert(discount, r2, funcDp) : discount;
         line.VatAmount = line.VatRate is { } v ? MoneyMath.Round(line.FunctionalAmount * v / 100m, funcDp) : 0;
     }
 

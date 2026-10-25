@@ -169,6 +169,7 @@ app.MapAttachmentEndpoints();
 app.MapSalesApprovalEndpoints();
 app.MapServiceAcceptanceEndpoints();
 app.MapPaymentDiscountEndpoints();
+app.MapDiscountEndpoints();
 app.MapEquityEndpoints();
 app.MapFxEndpoints();
 app.MapLoanEndpoints();

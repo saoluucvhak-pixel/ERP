@@ -15,6 +15,7 @@ const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Active: 'Đang hiệ
 /** Mẫu gợi ý cho form bước kết chuyển. Chỉ điền sẵn form — người dùng chọn lại tài khoản theo chế độ đang áp dụng rồi mới lưu, không tự kích hoạt. */
 const TEMPLATES: { key: string; label: string; steps: { description: string; sourcePrefixes: string; target: string }[] }[] = [
   { key: 'standard', label: 'Kết chuyển xác định kết quả kinh doanh (mã TK theo hệ thống TT200 quen thuộc)', steps: [
+    { description: 'Kết chuyển các khoản giảm trừ doanh thu (chiết khấu thương mại, giảm giá, hàng bán bị trả lại) sang doanh thu', sourcePrefixes: '521', target: '511' },
     { description: 'Kết chuyển doanh thu và thu nhập', sourcePrefixes: '511,515,711', target: '911' },
     { description: 'Kết chuyển giá vốn và chi phí', sourcePrefixes: '632,635,641,642,811,821', target: '911' },
     { description: 'Kết chuyển lãi / lỗ', sourcePrefixes: '911', target: '4212' } ] },
@@ -59,6 +60,8 @@ export function AutoPosting({ go }: { go: (tab: 'roles' | 'stock' | 'approval') 
       detail: `Kho chưa chọn phương pháp: ${noMethod.map(w => w.code).join(', ')}`, fix: () => go('stock'), fixLabel: 'Chọn ở Kho & vật tư' },
     { label: 'Tài khoản mặc định khi lập thẻ CCDC / TSCĐ (tùy chọn)', ok: missingRoles(['TOOL_COST_DEFAULT', 'TOOL_EXPENSE_DEFAULT']).length === 0,
       detail: 'Chưa đặt tài khoản CCDC (242, 153…) và chi phí phân bổ mặc định — form thẻ mới sẽ để trống, chọn tay từng thẻ', fix: () => go('roles'), fixLabel: 'Gán vai trò TK' },
+    { label: 'Chiết khấu thương mại và chiết khấu thanh toán (tùy chọn)', ok: missingRoles(['SALES_TRADE_DISCOUNT', 'PAYMENT_DISCOUNT_INCOME', 'PAYMENT_DISCOUNT_EXPENSE']).length === 0,
+      detail: 'Chưa gán đủ: chiết khấu thương mại (giảm trừ doanh thu — nếu để trống dùng chung TK giảm giá hàng bán), chiết khấu thanh toán được hưởng (thu nhập tài chính) và cho khách (chi phí tài chính)', fix: () => go('roles'), fixLabel: 'Gán vai trò TK' },
     { label: 'Quy trình lập và duyệt', ok: distinct !== null, detail: '', fix: () => go('approval'), fixLabel: 'Đổi cách duyệt' },
   ]
 

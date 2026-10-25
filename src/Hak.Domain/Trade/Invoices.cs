@@ -23,6 +23,13 @@ public enum InvoicePurpose
 }
 
 /// <summary>
+/// Bản chất của hóa đơn điều chỉnh giảm (Purpose = Discount): chiết khấu thương mại (giảm giá bán cho khách mua nhiều / đạt doanh số — TK giảm trừ doanh thu chiết khấu thương mại)
+/// hay giảm giá hàng bán (hàng sai quy cách, kém chất lượng — TK giảm giá hàng bán). Hai loại cùng làm giảm doanh thu và thuế GTGT nhưng báo cáo và tài khoản tách riêng.
+/// Bản ghi cũ (null) coi là giảm giá hàng bán.
+/// </summary>
+public enum DiscountKind { Allowance = 1, Trade = 2 }
+
+/// <summary>
 /// Purchase or sales invoice (master prompt §12–13). Three dates are kept apart: invoice date (on the invoice),
 /// the receipt/delivery date (on the linked stock document) and the posting date (accounting period).
 /// </summary>
@@ -33,6 +40,8 @@ public sealed class CommercialInvoice
     public InvoiceKind Kind { get; set; }
     public InvoicePurpose Purpose { get; set; } = InvoicePurpose.Normal;
     public Guid? AdjustsInvoiceId { get; set; }
+    /// <summary>Chỉ dùng khi Purpose = Discount: chiết khấu thương mại hay giảm giá hàng bán. Null = giảm giá hàng bán (bản ghi cũ).</summary>
+    public DiscountKind? DiscountKind { get; set; }
     /// <summary>Lý do cố ý lập hóa đơn từ phiếu kho của đối tượng khác (người lập có quyền invoice.partner_override); null = không có ngoại lệ. Kiểm lại lúc ghi sổ.</summary>
     public string? PartnerOverrideReason { get; set; }
     /// <summary>Internal document number (HDM/HDB…); the legal invoice identity is Series + InvoiceNo.</summary>
@@ -81,7 +90,16 @@ public sealed class CommercialInvoiceLine
     public decimal BasisQuantity { get; set; }
     /// <summary>Price in invoice currency per basis unit.</summary>
     public decimal UnitPrice { get; set; }
-    /// <summary>Amount in invoice currency (= round(BasisQuantity × UnitPrice)).</summary>
+    /// <summary>
+    /// Chiết khấu thương mại GHI TRÊN HÓA ĐƠN: tỷ lệ % (null nếu nhập số tiền). Số tiền hàng sau chiết khấu là <see cref="Amount"/>; mọi nơi dùng Amount/FunctionalAmount
+    /// (doanh thu, thuế, công nợ, giá nhập kho) đều tính trên số đã trừ chiết khấu. Tổng trước chiết khấu = Amount + DiscountAmount.
+    /// </summary>
+    public decimal? DiscountPercent { get; set; }
+    /// <summary>Số tiền chiết khấu trên hóa đơn, theo tiền hóa đơn (0 nếu không có).</summary>
+    public decimal DiscountAmount { get; set; }
+    /// <summary>Số tiền chiết khấu trên hóa đơn, theo tiền hạch toán.</summary>
+    public decimal FunctionalDiscountAmount { get; set; }
+    /// <summary>Amount in invoice currency, AFTER the on-invoice trade discount (= round(BasisQuantity × UnitPrice) − DiscountAmount).</summary>
     public decimal Amount { get; set; }
     /// <summary>Amount in functional currency.</summary>
     public decimal FunctionalAmount { get; set; }

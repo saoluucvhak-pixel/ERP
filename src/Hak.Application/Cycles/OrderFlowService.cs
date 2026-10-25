@@ -96,7 +96,7 @@ public sealed class OrderFlowService(HakDbContext db, OrderService orders, ICloc
         FlowAxis invoicing;
         if (goods.Count == 0)
         {
-            var expected = f.Lines.Sum(l => l.Ordered * l.UnitPrice);
+            var expected = f.Lines.Sum(l => l.Ordered * l.UnitPrice * (100 - l.DiscountPercent) / 100m);   // sau chiết khấu thương mại đã thỏa thuận trên đơn
             invoicing = invoicedAmount <= 0 ? new FlowAxis("Invoicing", "None", "Chưa lập hóa đơn", "")
                 : invoicedAmount < expected ? new FlowAxis("Invoicing", "Partial", "Lập một phần", $"{invoicedAmount}/{expected}")
                 : new FlowAxis("Invoicing", "Full", "Đã lập đủ", $"{invoicedAmount}");

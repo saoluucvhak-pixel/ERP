@@ -184,7 +184,7 @@ test('Phân trang phía máy chủ: phiếu kho trả tổng số, cờ còn th�
 test('Công nợ và Chiết khấu thanh toán tách theo chiều: Bán hàng chỉ phải thu, Mua hàng chỉ phải trả, không còn nút chuyển', async () => {
   const page = await open('ktt')
   const accountOptions = async () => page.locator('label:has-text("Tài khoản công nợ") select option').evaluateAll(os => os.map(o => o.textContent.trim()))
-  for (const [module, tabName, want, notWant, discount] of [['Mua hàng', 'Công nợ phải trả', 'AP', 'AR', 'Chiết khấu được hưởng'], ['Bán hàng', 'Công nợ phải thu', 'AR', 'AP', 'Chiết khấu cho khách']]) {
+  for (const [module, tabName, want, notWant, discount] of [['Mua hàng', 'Công nợ phải trả', 'AP', 'AR', 'CK thanh toán được hưởng'], ['Bán hàng', 'Công nợ phải thu', 'AR', 'AP', 'CK thanh toán cho khách']]) {
     await page.click(`.sidebar button:has-text("${module}")`); await page.waitForTimeout(700)
     await page.click(`[role=tab]:has-text("${tabName}")`); await page.waitForTimeout(1200)
     const opts = (await accountOptions()).join('|')
@@ -211,5 +211,32 @@ test('Worklist: lệnh sản xuất nháp chờ ban hành mở thẳng và chọ
   const selectedRow = page.locator('tr.selected')
   assert.equal(await selectedRow.count(), 1)
   assert.ok((await selectedRow.textContent()).includes(order.number))
+  await page.close()
+})
+
+test('Chiết khấu thương mại: thỏa thuận theo doanh số lập ở Bán hàng, không lẫn sang Mua hàng; hóa đơn có cột chiết khấu', async () => {
+  const visible = (pg, selector, opts) => pg.locator(selector, opts).first().waitFor({ state: 'visible' })
+  const page = await open('ktt')
+  await page.click('.sidebar button:has-text("Bán hàng")')
+  await page.click('[role=tab]:has-text("CK thương mại cho khách")')
+  await visible(page, 'h2:has-text("Chiết khấu thương mại cho khách")')
+  await page.click('button:has-text("Lập thỏa thuận")')
+  const partner = page.locator('.modal label:has-text("Khách hàng") select').first()
+  await partner.selectOption(await partner.locator('option', { hasText: 'KH01' }).first().getAttribute('value'))
+  await page.fill('.modal label:has-text("Mã") input', 'E2E-CK')
+  await page.fill('.modal label:has-text("Tên") input', 'Chiết khấu E2E')
+  await page.fill('[aria-label="Doanh số từ"]', '1000000')
+  await page.fill('[aria-label="Chiết khấu %"]', '2')
+  await page.click('button.primary:has-text("Lưu")')
+  await visible(page, 'tr', { hasText: 'E2E-CK' })
+  // Bên mua không thấy thỏa thuận của chiều bán.
+  await page.click('.sidebar button:has-text("Mua hàng")')
+  await page.click('[role=tab]:has-text("CK thương mại được hưởng")')
+  await visible(page, 'h2:has-text("Chiết khấu thương mại được hưởng")')
+  await visible(page, 'td.muted:has-text("Chưa có thỏa thuận")')
+  assert.equal(await page.locator('tr', { hasText: 'E2E-CK' }).count(), 0, 'thỏa thuận chiều bán không được hiện ở Mua hàng')
+  // Hóa đơn có cột chiết khấu thương mại trên từng dòng.
+  await page.click('[role=tab]:has-text("Hóa đơn mua")')
+  await visible(page, 'th:has-text("CK %")')
   await page.close()
 })
