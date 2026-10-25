@@ -112,6 +112,18 @@ Khóa trao đổi (HMAC) trong CSDL được mã hóa AES-256-GCM bằng khóa c
 - **Đổi sau này:** tắt HAK, chạy `Doi thu muc du lieu.cmd`, nhập thư mục mới. Dữ liệu được CHÉP sang nơi mới (robocopy) và GIỮ NGUYÊN ở nơi cũ; kiểm tra xong chị tự xóa thư mục cũ.
 - **Gỡ chương trình không xóa dữ liệu:** bộ cài không có bước xóa thư mục dữ liệu; khi gỡ, hộp thoại cho biết dữ liệu còn ở đâu. Cài lại hoặc nâng cấp thì dữ liệu cũ dùng tiếp (cùng `data-location.txt`).
 - Cấu hình trực tiếp: `Hak__DataRoot` (cả bốn thứ trên) hoặc từng đường dẫn riêng `Hak:DatabasePath`, `Hak:AttachmentsPath`, `Hak:BackupPath`, `Hak:SecretKeyFile` (ghi đè). Đã thử trên Linux với thư mục có dấu cách; chưa thử trên Windows; trang chọn thư mục của Inno Setup chưa được biên dịch thử (cần Inno Setup).
+### Sao lưu tự động hằng ngày (SQLite, một máy) — 26/10/2026
+Sao lưu làm tay dễ quên và dữ liệu chỉ nằm trên một máy, nên HAK có dịch vụ nền tự sao lưu. Cách bật nhanh: chạy `Cai dat sao luu tu dong.cmd` trong thư mục chương trình (hỏi mật khẩu sao lưu ≥ 12 ký tự, giờ sao lưu, thư mục chép ra ngoài máy), rồi tắt và mở lại HAK. Hoặc đặt biến môi trường của tài khoản Windows:
+
+| Biến | Ý nghĩa | Mặc định |
+|---|---|---|
+| `Hak__AutoBackup__Enabled` | `true` để bật | tắt |
+| `HAK_BACKUP_PASSPHRASE` | Mật khẩu sao lưu (≥ 12 ký tự). **Không ghi vào tệp cấu hình** | — |
+| `Hak__AutoBackup__Time` | Giờ sao lưu HH:mm theo giờ máy | `22:00` |
+| `Hak__AutoBackup__CopyPath` | Thư mục thứ hai **ngoài máy này** (ổ mạng, USB, thư mục đồng bộ đám mây): mỗi bản được chép sang đây | không |
+| `Hak__AutoBackup__KeepDays` | Xóa bản quá số ngày này (luôn giữ ít nhất 7 bản mới nhất) | 30 |
+
+Mỗi lần chạy: tạo bản `.hakbk` mã hóa → giải mã kiểm tra toàn vẹn (cơ sở dữ liệu + chuỗi nhật ký kiểm toán; hỏng thì báo lỗi, không coi là thành công) → chép sang `CopyPath` → dọn bản cũ. Lỗi thì thử lại sau 30 phút. Quản trị → Sao lưu hiện tình trạng (bật/tắt, lần thành công gần nhất, lỗi) và cảnh báo đỏ khi quá 48 giờ chưa có bản sao lưu nào. **Bản chép ngoài máy mới bảo vệ được khi hỏng ổ cứng hoặc mất máy**; nên đặt `CopyPath`. Mật khẩu sao lưu lưu trong biến môi trường của tài khoản Windows (đọc được bởi người dùng máy đó): cất thêm bản ghi riêng, mất mật khẩu là mất bản sao lưu. Chế độ PostgreSQL không dùng dịch vụ này (dùng `pg_dump`).
 
 ### PostgreSQL (LAN)
 Chức năng sao lưu trong phần mềm trả `NOT_SUPPORTED`; dùng công cụ của PostgreSQL trên máy chủ (Task Scheduler):

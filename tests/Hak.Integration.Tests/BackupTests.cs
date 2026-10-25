@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Hak.Application.Attachments;
 using Hak.Application.Backup;
 using Hak.Data;
@@ -38,6 +39,65 @@ public class BackupTests
         var noteAt = System.Text.Encoding.UTF8.GetString(otherHeader).IndexOf("\"test\"", StringComparison.Ordinal);
         otherHeader[noteAt + 1] = (byte)'T';                // header edits break every chunk's associated data
         Assert.Equal(ErrorCodes.BackupInvalid, Assert.Throws<DomainException>(() => BackupFile.Decrypt(new MemoryStream(otherHeader), Stream.Null, Pass)).Code);
+    }
+
+    [Fact]
+    public async Task AutoBackup_RunsOnSchedule_VerifiesCopiesOffTheMachine_AndKeepsTheNewest()
+    {
+        using var h = await TestHost.CreateAsync();
+        if (h.IsPostgres) return;                                         // PostgreSQL dùng pg_dump
+        using var s = h.NewScope();
+        var dir = Path.Combine(TestHost.Root, $"auto-{Guid.NewGuid():N}");
+        var copy = Path.Combine(TestHost.Root, $"copy-{Guid.NewGuid():N}");
+        var options = new BackupOptions { Directory = dir, Iterations = 1_000 };
+        await h.PostedAsync(s, h.Sale(500_000));
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddScoped(services, _ => new BackupService(s.Db, s.Audit, h.Clock, options));
+        var provider = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(
+            Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services));
+        Microsoft.Extensions.Configuration.IConfiguration Config(bool enabled) => new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            { ["Hak:AutoBackup:Enabled"] = enabled.ToString(), ["Hak:AutoBackup:Time"] = "22:00", ["Hak:AutoBackup:CopyPath"] = copy, ["Hak:AutoBackup:KeepDays"] = "1" }).Build();
+        Hak.Api.AutoBackupWorker Worker(Hak.Api.AutoBackupStatus st, bool enabled = true) => new(provider, Config(enabled), options, st, h.Clock, Microsoft.Extensions.Logging.Abstractions.NullLogger<Hak.Api.AutoBackupWorker>.Instance);
+
+        // Chưa có mật khẩu sao lưu trong môi trường: không bật, nói rõ lý do.
+        Environment.SetEnvironmentVariable(Hak.Api.AutoBackupWorker.PassphraseVariable, null);
+        var off = new Hak.Api.AutoBackupStatus(); Worker(off).Configure();
+        Assert.False(off.Enabled); Assert.Contains("HAK_BACKUP_PASSPHRASE", off.Reason);
+        var disabled = new Hak.Api.AutoBackupStatus(); Worker(disabled, enabled: false).Configure();
+        Assert.False(disabled.Enabled);
+
+        Environment.SetEnvironmentVariable(Hak.Api.AutoBackupWorker.PassphraseVariable, Pass);
+        try
+        {
+            var st = new Hak.Api.AutoBackupStatus(); var w = Worker(st); w.Configure();
+            Assert.True(st.Enabled);
+            Assert.True(st.NextRunLocal > DateTime.Now);
+            await w.RunOnceAsync();
+            Assert.Null(st.LastError);
+            Assert.True(st.LastCopyOk);
+            Assert.NotNull(st.LastSuccessUtc);
+            var file = Assert.Single(Directory.GetFiles(dir, "*.hakbk"));
+            Assert.Equal(new FileInfo(file).Length, new FileInfo(Path.Combine(copy, st.LastFile!)).Length);   // bản chép ngoài máy giống hệt
+            Assert.True((await new BackupService(s.Db, s.Audit, h.Clock, options).VerifyAsync(h.AdminId, st.LastFile!, Pass)).IsValid);
+
+            // Dọn bản cũ: quá KeepDays vẫn giữ 7 bản mới nhất.
+            for (var i = 0; i < 9; i++)
+            {
+                var old = Path.Combine(dir, $"hak-backup-2025010{i + 1}-000000.hakbk");
+                File.Copy(file, old); File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-40));
+            }
+            h.Clock.UtcNow = h.Clock.UtcNow.AddDays(1);                        // ngày hôm sau (tên tệp theo đồng hồ nghiệp vụ)
+            await w.RunOnceAsync();
+            Assert.Null(st.LastError);
+            var kept = Directory.GetFiles(dir, "*.hakbk");
+            Assert.Equal(7, kept.Length);
+            Assert.Contains(kept, f => Path.GetFileName(f) == st.LastFile);                                    // bản mới nhất còn
+        }
+        finally { Environment.SetEnvironmentVariable(Hak.Api.AutoBackupWorker.PassphraseVariable, null); }
+
+        // Lịch: đã qua giờ thì hẹn ngày mai; chưa tới giờ thì hẹn hôm nay.
+        Assert.Equal(new DateTime(2026, 10, 26, 22, 0, 0), Hak.Api.AutoBackupWorker.NextOccurrence(new DateTime(2026, 10, 25, 23, 0, 0), new TimeOnly(22, 0)));
+        Assert.Equal(new DateTime(2026, 10, 25, 22, 0, 0), Hak.Api.AutoBackupWorker.NextOccurrence(new DateTime(2026, 10, 25, 9, 0, 0), new TimeOnly(22, 0)));
     }
 
     [Fact]

@@ -144,4 +144,6 @@ Trích trước / quyết toán chứng từ chiết khấu thương mại cho c
 
 ## Nơi lưu dữ liệu (26/10/2026)
 `Hak:DataRoot` (Program.cs `dataDir`) quyết định thư mục dữ liệu (CSDL, attachments, backups, secret.key) = `<DataRoot>\<môi trường>`; mặc định `%LOCALAPPDATA%\HAK`. Bộ cài Inno có trang chọn thư mục (HAK.iss `[Code]`), ghi `%LOCALAPPDATA%\HAK\data-location.txt`; các `.cmd` đọc tệp này; `Doi thu muc du lieu.cmd` chép dữ liệu sang nơi mới. Gỡ chương trình không xóa dữ liệu. Chưa biên dịch thử HAK.iss (cần Inno Setup trên Windows).
+## Sao lưu tự động (26/10/2026)
+`AutoBackupWorker` (Hak.Api) sao lưu hằng ngày chế độ SQLite: tạo → kiểm tra toàn vẹn → chép `CopyPath` ngoài máy → dọn (giữ ≥ 7 bản). Cấu hình `Hak:AutoBackup:*` + biến `HAK_BACKUP_PASSPHRASE` (không ghi vào tệp). `GET /api/admin/backups/auto-status`; Quản trị → Sao lưu hiện tình trạng và cảnh báo quá 48 giờ; `tools/package/Cai dat sao luu tu dong.cmd`. docs/08 mục 5. Chưa: giao diện cấu hình trong phần mềm (hiện đặt bằng biến môi trường), sao lưu tự động cho PostgreSQL (dùng pg_dump).
 

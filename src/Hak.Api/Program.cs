@@ -69,6 +69,8 @@ if (einvoiceProvider.Equals("Simulated", StringComparison.OrdinalIgnoreCase))
 else if (einvoiceProvider.Equals("None", StringComparison.OrdinalIgnoreCase)) builder.Services.AddSingleton<Hak.Application.EInvoice.IEInvoiceProvider, Hak.Application.EInvoice.NullEInvoiceProvider>();
 else throw new InvalidOperationException($"Hak:EInvoice:Provider '{einvoiceProvider}' chưa có bộ chuyển đổi (None | Simulated).");
 builder.Services.AddHostedService<EInvoiceWorker>();
+builder.Services.AddSingleton<AutoBackupStatus>();
+builder.Services.AddHostedService<AutoBackupWorker>();
 builder.Services.AddSingleton(new Hak.Application.EInvoice.EInvoiceOptions(builder.Configuration["Hak:EInvoice:TemplateCode"] ?? "1"));
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton(new Hak.Application.Backup.BackupOptions
