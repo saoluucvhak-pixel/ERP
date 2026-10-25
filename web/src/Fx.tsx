@@ -96,7 +96,7 @@ export function FxView() {
   )
 }
 
-interface Preview { currency: string; foreignTotal: string; cashAmount: string; bookAmount: string; difference: string }
+interface Preview { currency: string; foreignTotal: string; cashAmount: string; bookAmount: string; difference: string; discountForeign?: string; discountBook?: string }
 
 /** Thu/chi ngoại tệ theo hóa đơn: cash at the payment rate, invoices at their book rate, the gap as realised FX gain/loss. */
 function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) => void }) {
@@ -106,6 +106,7 @@ function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) 
   const [cashAccountId, setCashAccountId] = useState('')
   const [rate, setRate] = useState('')
   const [description, setDescription] = useState('')
+  const [applyDiscount, setApplyDiscount] = useState(false)      // hưởng/cấp chiết khấu thanh toán theo điều khoản hóa đơn (tính theo nguyên tệ)
   const [items, setItems] = useState<OpenItem[]>([])
   const [picked, setPicked] = useState<Record<string, string>>({})
   const [preview, setPreview] = useState<Preview | null>(null)
@@ -126,7 +127,7 @@ function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) 
     const list = Object.entries(picked).map(([journalLineId, v]) => {
       const amount = parseMoney(v)
       if (!amount) throw new Error('Số nguyên tệ thanh toán không hợp lệ.')
-      return { journalLineId, foreignAmount: amount }
+      return { journalLineId, foreignAmount: amount, applyDiscount }
     })
     if (list.length === 0) throw new Error('Chọn ít nhất một hóa đơn.')
     return { date, cashAccountId, paymentRate: r, description, items: list }
@@ -155,8 +156,9 @@ function FxPaymentPanel({ date, onDone }: { date: string; onDone: (msg: string) 
           <td className="num">{i.journalLineId in picked && <input inputMode="decimal" aria-label="Nguyên tệ thanh toán" value={picked[i.journalLineId]}
             onChange={e => { setPreview(null); setPicked(p => ({ ...p, [i.journalLineId]: e.target.value })) }} />}</td>
         </tr>)}</tbody></table>}
+      <label style={{ display: 'block', marginTop: 8 }}><input type="checkbox" checked={applyDiscount} onChange={e => { setPreview(null); setApplyDiscount(e.target.checked) }} /> Áp chiết khấu thanh toán theo điều khoản của hóa đơn (nguyên tệ, theo bậc và hạn tính từ ngày tiền về; áp cho mọi hóa đơn đã chọn)</label>
       {preview && <div className="msg ok">{formatMoney(preview.foreignTotal)} {preview.currency}: tiền {formatMoney(preview.cashAmount)}, giá trị ghi sổ {formatMoney(preview.bookAmount)} →
-        {preview.difference.startsWith('-') ? ' lỗ ' : ' lãi '}tỷ giá đã thực hiện {formatMoney(preview.difference.replace('-', ''))}</div>}
+        {preview.difference.startsWith('-') ? ' lỗ ' : ' lãi '}tỷ giá đã thực hiện {formatMoney(preview.difference.replace('-', ''))}{preview.discountForeign && preview.discountForeign !== '0' ? ` · chiết khấu thanh toán ${formatMoney(preview.discountForeign)} ${preview.currency} (ghi ${formatMoney(preview.discountBook ?? '0')})` : ''}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button disabled={busy || !cashAccountId || !description.trim()} onClick={() => run(async () => setPreview(await post<Preview>('/fx/payments/preview', payload())))}>Xem trước</button>
         <button className="primary" disabled={busy || !preview} onClick={() => run(async () => {

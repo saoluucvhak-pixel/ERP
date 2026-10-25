@@ -6,6 +6,7 @@ using Hak.Application.Settlement;
 using Hak.Data;
 using Hak.Domain.Catalog;
 using Hak.Domain.Common;
+using Hak.Domain.Ledger;
 using Hak.Domain.Security;
 using Hak.Domain.Trade;
 using Hak.Domain.Vouchers;
@@ -25,6 +26,26 @@ public sealed record DiscountCandidate(Guid InvoiceId, string InvoiceNumber, str
 public sealed class PaymentDiscountService(HakDbContext db, AccountingEngine engine, AuditService audit, IClock clock)
 {
     public const string Source = "HAK.PAYDISC";
+
+    /// <summary>
+    /// Chiết khấu bằng NGUYÊN TỆ của hóa đơn ngoại tệ: P% × tiền hàng (nguyên tệ, chưa thuế) × (phần thanh toán ÷ phải thu/phải trả nguyên tệ ban đầu), làm tròn theo số lẻ của đồng tiền;
+    /// bậc và hạn theo ngày thanh toán. Hóa đơn ngoại tệ chỉ hỗ trợ cơ sở chưa thuế.
+    /// </summary>
+    internal static async Task<decimal> ForeignDiscountAsync(HakDbContext db, Guid companyId, JournalLine target, decimal foreignPaid, DateOnly payDate)
+    {
+        var voucherId = await db.JournalEntries.AsNoTracking().Where(e => e.Id == target.JournalEntryId).Select(e => (Guid?)e.VoucherId).FirstOrDefaultAsync();
+        var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstOrDefaultAsync(i => i.VoucherId == voucherId && i.CompanyId == companyId);
+        if (inv is null || inv.Status != InvoiceStatus.Posted || inv.Purpose != InvoicePurpose.Normal || inv.Currency is null || target.ForeignAmount is null || target.ForeignAmount == 0)
+            throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán ngoại tệ chỉ áp cho khoản công nợ của hóa đơn ngoại tệ thường đã ghi sổ.");
+        var itemForeign = target.ForeignAmount.Value;
+        var terms = PaymentTerms.From(inv.PaymentDiscountPercent, inv.PaymentDiscountDays, inv.PaymentDiscountOptions);
+        if (!terms.HasTerms) throw new DomainException(ErrorCodes.ValidationFailed, $"Hóa đơn {inv.Number} không có điều khoản chiết khấu thanh toán.");
+        if (terms.IncludesVat) throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn ngoại tệ chỉ hỗ trợ chiết khấu thanh toán tính trên tiền hàng chưa thuế.");
+        var ap = terms.Applicable(inv.InvoiceDate, payDate) ?? throw new DomainException(ErrorCodes.ValidationFailed, $"Ngày {payDate.Vn()} quá hạn hưởng chiết khấu thanh toán của hóa đơn {inv.Number} ({terms.Last(inv.InvoiceDate).Deadline.Vn()}).");
+        var dp = await db.Currencies.Where(c => c.Code == inv.Currency).Select(c => c.DecimalPlaces).FirstAsync();
+        var goods = inv.Lines.Sum(l => l.Amount);
+        return Math.Min(MoneyMath.Round(goods * ap.Tier.Percent / 100m * (foreignPaid / itemForeign), dp), foreignPaid);
+    }
 
     /// <summary>
     /// Chiết khấu thanh toán ĐỘC LẬP (chị chốt 25/10): không xuất hóa đơn nên không ghép với hóa đơn — chỉ là một dòng trong bút toán thanh toán riêng của đối tượng.
@@ -140,6 +161,27 @@ public sealed class PaymentDiscountService(HakDbContext db, AccountingEngine eng
             if (dl.Count != 1 || dl[0].Amount != d) Fail($"Số chiết khấu không khớp số đã nhập ({d}).");
             var cashTotal = v.Lines.Where(l => l != sl && !dl.Contains(l)).Sum(l => l.Amount);
             if (cashTotal != sl.Amount - d) Fail($"Số tiền thực trả/thu {cashTotal} không khớp (phải bằng số công nợ {sl.Amount} trừ chiết khấu {d}).");
+            return;
+        }
+        if (v.SourceId is not null && v.SourceId.StartsWith("FX:", StringComparison.Ordinal))
+        {
+            // Thu/chi ngoại tệ có chiết khấu: mọi dòng bù trừ đều hưởng chiết khấu; chiết khấu tính lại theo nguyên tệ, ngày ghi sổ và điều khoản của từng hóa đơn.
+            var fxSettle = v.Lines.Where(l => l.SettleJournalLineId is not null).ToList();
+            if (fxSettle.Count == 0) { Fail("Chứng từ chiết khấu ngoại tệ thiếu dòng bù trừ công nợ."); return; }
+            var fdp = await (from c in db.Companies join cur in db.Currencies on c.FunctionalCurrency equals cur.Code where c.Id == v.CompanyId select cur.DecimalPlaces).FirstAsync();
+            decimal expForeign = 0, expBook = 0, paidForeign = 0;
+            foreach (var fs in fxSettle)
+            {
+                var target = await db.JournalLines.AsNoTracking().FirstOrDefaultAsync(j => j.Id == fs.SettleJournalLineId && j.CompanyId == v.CompanyId);
+                if (target is null || fs.ForeignAmount is not { } f || fs.ExchangeRate is not { } r) { Fail("Dòng bù trừ ngoại tệ không hợp lệ."); return; }
+                try { var d = await ForeignDiscountAsync(db, v.CompanyId, target, f, v.PostingDate); expForeign += d; expBook += MoneyMath.Convert(d, r, fdp); paidForeign += f; }
+                catch (DomainException ex) { Fail(ex.Message); return; }
+            }
+            var dRoles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == v.CompanyId && (m.RoleCode == "PAYMENT_DISCOUNT_INCOME" || m.RoleCode == "PAYMENT_DISCOUNT_EXPENSE")).Select(m => m.AccountId).ToListAsync();
+            var bookDiscount = v.Lines.Where(l => l.SettleJournalLineId is null && l.ForeignAmount is null && dRoles.Contains(l.AccountId)).Sum(l => l.Amount);
+            if (bookDiscount != expBook) Fail($"Số chiết khấu {bookDiscount} không khớp công thức ({expBook}) theo điều khoản của hóa đơn ngoại tệ.");
+            var cashForeign = v.Lines.Where(l => l.SettleJournalLineId is null && l.ForeignAmount is not null).Sum(l => l.ForeignAmount!.Value);
+            if (cashForeign != paidForeign - expForeign) Fail($"Số tiền thực trả/thu {cashForeign} (nguyên tệ) không khớp (phải bằng {paidForeign} trừ chiết khấu {expForeign}).");
             return;
         }
         var isMulti = v.SourceId is not null && v.SourceId.StartsWith("MULTI:", StringComparison.Ordinal);

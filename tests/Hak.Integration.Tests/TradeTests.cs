@@ -1,3 +1,4 @@
+using Hak.Application.Fx;
 using Hak.Domain.Production;
 using Hak.Domain.Catalog;
 using Hak.Application.Accounting;
@@ -1323,6 +1324,39 @@ public partial class TradeTests
         await fx.S.Db.VoucherLines.Where(l => l.VoucherId == v2.Id && l.AccountId == fx.A("FINEXP")).ExecuteUpdateAsync(x => x.SetProperty(l => l.Amount, 1m));
         fx.S.Db.ChangeTracker.Clear();
         await Assert.ThrowsAnyAsync<DomainException>(() => PostVoucherAsync(fx, v2.Id));
+    }
+
+    [Fact]
+    public async Task PaymentDiscount_ForeignCurrencyInvoice_DiscountInUsd_RealisedGainOnlyOnTheCashPart()
+    {
+        using var fx = await SetupAsync();
+        await MapPaymentDiscountExpenseAsync(fx);
+        fx.H.Acc["FXGAIN"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "FXGAIN", "Lãi tỷ giá đã thực hiện (thử)")).Id;
+        fx.H.Acc["FXLOSS"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "FXLOSS", "Lỗ tỷ giá đã thực hiện (thử)")).Id;
+        fx.H.Acc["BANKUSD"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "BANKUSD", "Tiền gửi USD (thử)", cashKind: CashKind.Bank)).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "FX_REALIZED_GAIN", "FXGAIN");
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "FX_REALIZED_LOSS", "FXLOSS");
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        var issue = await PostedIssueAsync(fx, 10, D(3, 3), fx.Add);
+        var created = await fx.Inv.CreateAsync(fx.H.Preparer, new InvoiceInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "1C26TXK", "0000801", D(3, 3), D(3, 3), "Bán USD",
+            [new InvoiceLineInput(100, issue.Id, 1, VatRate: 0)], Currency: "USD", ExchangeRate: 25_000, PaymentDiscountPercent: 2, PaymentDiscountDays: 10));
+        await fx.Inv.PostAsync(fx.H.Approver, created.Id);                                                        // 1.000 USD = 25.000.000
+        var item = Assert.Single(await fx.S.Settlement.OpenItemsAsync(fx.H.Auditor, fx.A("AR"), fx.H.Partner["KH01"], D(3, 10)));
+
+        // Quá hạn (ngày 14/3 > hạn 13/3): từ chối. Không đủ điều khoản không có ApplyDiscount thì thu bình thường.
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => fx.S.FxPayments.CreateDraftAsync(fx.H.Preparer,
+            new FxPaymentInput(D(3, 14), fx.A("BANKUSD"), 25_200, "Thu muộn", [new FxSettleItem(item.JournalLineId, 1_000, ApplyDiscount: true)]))));
+
+        var input = new FxPaymentInput(D(3, 10), fx.A("BANKUSD"), 25_200, "Thu KH01 có chiết khấu", [new FxSettleItem(item.JournalLineId, 1_000, ApplyDiscount: true)]);
+        var preview = await fx.S.FxPayments.PreviewAsync(fx.H.Preparer, input);
+        Assert.Equal((980m, 20m, 500_000m, 196_000m), (preview.ForeignTotal, preview.DiscountForeign, preview.DiscountBook, preview.Difference));
+        var v = await fx.S.FxPayments.CreateDraftAsync(fx.H.Preparer, input);
+        await PostVoucherAsync(fx, v.Id);
+        Assert.Equal(0m, await fx.Bal("AR", fx.H.Partner["KH01"]));
+        Assert.Equal(500_000m, await fx.Bal("FINEXP"));                                                          // 20 USD × 25.000 theo giá trị ghi sổ của hóa đơn
+        Assert.Equal(24_696_000m, await fx.Bal("BANKUSD"));                                                      // 980 USD × 25.200
+        Assert.Equal(-196_000m, await fx.Bal("FXGAIN"));                                                         // chênh lệch tỷ giá chỉ trên phần tiền thực thu
+        await LedgerInvariants.AssertAsync(fx.S.Db);
     }
 
     [Fact]
