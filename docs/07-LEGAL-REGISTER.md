@@ -12,7 +12,7 @@ Quy ước: **Đã xác minh** = đã đọc văn bản gốc và có người k
 | L-06 | Chuyển đổi đồng tiền hạch toán (TT99, tỷ giá mua bán chuyển khoản trung bình) | FX, SYS | **Đã đối chiếu bản gốc (Điều 4–6)** | Tỷ giá mua bán chuyển khoản trung bình của ngân hàng thương mại nơi doanh nghiệp thường xuyên giao dịch; BCTC công bố và kiểm toán phải trình bày bằng VND |
 | L-07 | Chế độ kế toán DNNVV (TT 133/2016 và văn bản thay thế/sửa đổi nếu có) | REG | Chưa tra cứu | |
 | L-08 | Tỷ giá áp dụng theo loại giao dịch, đánh giá lại cuối kỳ | FX | Chưa tra cứu | |
-| L-09 | Hóa đơn điện tử: cấu trúc XML, khóa trùng, thay thế/điều chỉnh | TAX | Chưa tra cứu | Nghị định về hóa đơn chứng từ hiện hành + văn bản sửa đổi |
+| L-09 | Hóa đơn điện tử: cấu trúc XML, khóa trùng, thay thế/điều chỉnh/thông báo sai sót, kê khai điều chỉnh | TAX | **Đã tra cứu thứ cấp (26/10/2026), chờ đọc văn bản gốc** | Khung áp dụng từ 01/07/2026: Nghị định 254/2026/NĐ-CP + Thông tư 91/2026/TT-BTC (Điều 10: sai sót; Phụ lục III: mẫu 04/SS-HĐĐT); thay Nghị định 123/2020 (sửa bởi 70/2025) và Thông tư 78/2021 → 32/2025. Không còn "hủy" hóa đơn có sai sót. Chi tiết docs/12 mục 9. |
 | L-10 | Luật Kế toán: kỳ kế toán năm đầu/cuối tối đa bao nhiêu tháng, lưu trữ chứng từ điện tử | SYS | Chưa tra cứu | |
 | L-11 | Phương pháp tính giá xuất kho được phép | INV | Chưa tra cứu | |
 | L-12 | Ghi nhận doanh thu (thời điểm) theo TT99/chuẩn mực | SAL | Chưa tra cứu | |

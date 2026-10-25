@@ -9,11 +9,11 @@ interface Doc { id: string; invoiceId: string | null; invoiceNumber: string | nu
 interface Suggestion { code: string; eInvoiceId: string; label: string; originalInvoiceId: string | null; originalNumber: string | null; amountBeforeVat: string; vatAmount: string; message: string }
 interface Notice { id: string; number: string; kind: string; status: string; reason: string; response: string | null; rowVersion: number; createdAt: string; lines: { documentId: string; series: string | null; number: string | null; errorDescription: string }[] }
 
-const STATUS_VI: Record<string, string> = { Issuing: 'Đang chờ nhà cung cấp', Issued: 'Đã phát hành', Rejected: 'Bị từ chối', Replaced: 'Đã bị thay thế', Cancelled: 'Đã hủy' }
+const STATUS_VI: Record<string, string> = { Issuing: 'Đang chờ nhà cung cấp', Issued: 'Đã phát hành', Rejected: 'Bị từ chối', Replaced: 'Đã bị thay thế' }
 const RELATION_VI: Record<string, string> = { Original: 'Hóa đơn gốc', Replacement: 'Thay thế', Adjustment: 'Điều chỉnh' }
 const NATURE_VI: Record<string, string> = { Increase: 'tăng', Decrease: 'giảm', Information: 'thông tin', None: '' }
 const SUGGESTION_VI: Record<string, string> = { AdjustmentNotBooked: 'Điều chỉnh chưa ghi sổ', ReplacementNotBooked: 'Thay thế chưa ghi sổ', ReplacedOriginalStillActive: 'Hóa đơn gốc bị thay còn hiệu lực', OriginalNotBooked: 'Thiếu hóa đơn gốc' }
-const KIND_VI: Record<string, string> = { Explain: 'Giải trình', Cancel: 'Đề nghị hủy', Adjust: 'Điều chỉnh', Replace: 'Thay thế' }
+const KIND_VI: Record<string, string> = { Explain: 'Giải trình', Adjust: 'Điều chỉnh', Replace: 'Thay thế' }
 const NOTICE_STATUS_VI: Record<string, string> = { Draft: 'Nháp', Sent: 'Đã gửi', Accepted: 'Cơ quan thuế tiếp nhận', Rejected: 'Cơ quan thuế không tiếp nhận' }
 
 /**
@@ -87,7 +87,7 @@ export function EInvoiceView() {
           {issued.length > 0 && <button disabled={busy} onClick={() => setNf({ kind: 'Explain', reason: '', pick: {} })}>Lập thông báo sai sót…</button>}</div>
         <div className="scroll"><table className="grid">
           <thead><tr><th>Số / ký hiệu</th><th>Hóa đơn ERP</th><th>Loại</th><th>Trạng thái</th><th>Khách hàng</th><th className="num">Tổng</th><th>Ghi chú</th><th /></tr></thead>
-          <tbody>{docs.map(d => <tr key={d.id} style={{ opacity: d.status === 'Replaced' || d.status === 'Cancelled' ? 0.55 : undefined }}>
+          <tbody>{docs.map(d => <tr key={d.id} style={{ opacity: d.status === 'Replaced' ? 0.55 : undefined }}>
             <td>{d.number ? `${d.series}/${d.number}` : <span className="muted">chưa có số</span>}<div className="muted">{formatDate(d.issueDate)}{d.taxAuthorityCode ? ` · mã CQT ${d.taxAuthorityCode.slice(0, 10)}…` : ''}</div></td>
             <td>{d.invoiceNumber ?? <span className="muted">không có bút toán</span>}</td>
             <td>{RELATION_VI[d.relation]}{d.nature !== 'None' ? ` (${NATURE_VI[d.nature]})` : ''}{d.relatedNumber ? <div className="muted">cho {d.relatedNumber}</div> : null}</td>
@@ -144,7 +144,7 @@ export function EInvoiceView() {
           setNf(null); setTab('notices'); setInfo(`Đã lập thông báo ${n.number} (nháp). Bấm “Gửi cơ quan thuế” khi sẵn sàng.`); await load()
         })}>Lưu nháp</button></>}>
         <div className="form-row">
-          <label>Loại xử lý<select value={nf.kind} onChange={e => setNf({ ...nf, kind: e.target.value })}>{Object.entries(KIND_VI).filter(([k]) => k !== 'Cancel').map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          <label>Loại xử lý<select value={nf.kind} onChange={e => setNf({ ...nf, kind: e.target.value })}>{Object.entries(KIND_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           <label style={{ flex: 1, minWidth: 220 }}>Lý do chung<input value={nf.reason} onChange={e => setNf({ ...nf, reason: e.target.value })} /></label>
         </div>
         <table className="grid"><thead><tr><th /><th>Hóa đơn</th><th>Mô tả sai sót</th></tr></thead>

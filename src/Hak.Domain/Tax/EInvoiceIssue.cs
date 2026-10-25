@@ -11,8 +11,7 @@ public enum EInvoiceDocStatus
     Rejected = 3,
     /// <summary>Đã bị hóa đơn thay thế.</summary>
     Replaced = 4,
-    /// <summary>Dành cho hủy hóa đơn theo quy trình riêng (chưa dùng): thông báo sai sót 04/SS KHÔNG đổi trạng thái hóa đơn.</summary>
-    Cancelled = 5,
+    // 5 để trống: từ 01/06/2025 không còn "hủy" hóa đơn đã lập có sai sót (Nghị định 70/2025; Nghị định 254/2026 + Thông tư 91/2026 từ 01/07/2026) — xử lý bằng thông báo, điều chỉnh hoặc thay thế.
 }
 
 public enum EInvoiceRelation { Original = 1, Replacement = 2, Adjustment = 3 }
@@ -91,7 +90,8 @@ public sealed class EInvoiceMessage
 }
 
 /// <summary>Loại xử lý ghi trong thông báo sai sót (Mẫu 04/SS-HĐĐT) [CẦN XÁC MINH các giá trị theo mẫu hiện hành].</summary>
-public enum ErrorNoticeKind { Explain = 1, Cancel = 2, Adjust = 3, Replace = 4 }
+/// <summary>Cách xử lý sai sót nêu trong thông báo 04/SS. Giá trị 2 để trống (loại "Hủy" đã bỏ khỏi mô hình — chị chốt 26/10/2026).</summary>
+public enum ErrorNoticeKind { Explain = 1, Adjust = 3, Replace = 4 }
 
 public enum ErrorNoticeStatus { Draft = 1, Sent = 2, Accepted = 3, Rejected = 4 }
 
