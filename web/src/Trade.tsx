@@ -3,7 +3,7 @@ import { get, post } from './api'
 import { AccountSelect, ErrorBox, Modal, PartnerSelect, useAction, useCatalog, FlowStrip, navStore } from './common'
 import { useUnsavedWhenChanged } from './unsaved'
 import { useOpenTarget, focusRowProps } from './opentarget'
-import { formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } from './money'
+import { addMoney, formatDate, formatMoney, optionalRate, parseMoney, parseRate, today } from './money'
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
@@ -23,6 +23,7 @@ export function TradeView() {
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [list, setList] = useState<Invoice[]>([])
   const [total, setTotal] = useState(0)
+  const [adjusted, setAdjusted] = useState<Record<string, { amount: string; vat: string }>>({})   // hóa đơn điều chỉnh đã ghi sổ điều chỉnh số liệu của hóa đơn gốc
   const [head, setHead] = useState({ partnerId: '', series: '', no: '', invoiceDate: today(), postingDate: today(), dueDate: '', currency: '', rate: '', description: '', discPct: '', discDays: '' })
   const [lines, setLines] = useState<LineDraft[]>([empty()])
   useUnsavedWhenChanged([head, lines])
@@ -39,6 +40,8 @@ export function TradeView() {
   const load = useCallback(() => run(async () => {
     const pg = await get<{ items: Invoice[]; total: number }>(`/invoices?kind=${kind}&page=1&pageSize=100`)
     setList(pg.items); setTotal(pg.total)
+    const posted = pg.items.filter(x => x.status === 'Posted' && x.purpose === 'Normal').map(x => x.id)
+    setAdjusted(posted.length ? await get<Record<string, { amount: string; vat: string }>>(`/invoices/adjusted?ids=${posted.join(',')}`) : {})
     const un = await get<Uninvoiced[]>(`/reports/uninvoiced?kind=${kind}&asOf=${today()}`)
     const c: Candidate[] = un.map(u => ({
       key: `${u.stockDocumentId}:${u.lineNo}`, docId: u.stockDocumentId, lineNo: u.lineNo, bdmt: u.bdmt,
@@ -169,7 +172,7 @@ export function TradeView() {
           <thead><tr><th>Số</th><th>Ký hiệu / Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Đối tượng</th><th className="num">Tiền hàng (VND)</th><th className="num">Thuế</th><th>Trạng thái</th><th /></tr></thead>
           <tbody>{(pinned && !list.some(x => x.id === pinned.id) ? [pinned, ...list] : list).map(i => (
             <tr key={i.id} {...focusRowProps(i.id, openId)}><td>{i.number}</td><td>{i.invoiceSeries}/{i.invoiceNo}{i.currency ? ` (${i.currency})` : ''}{i.purpose !== 'Normal' ? ` · ${i.purpose === 'Discount' && i.discountKind === 'Trade' ? 'chiết khấu thương mại' : PURPOSE_VI[i.purpose]}` : ''}</td><td>{formatDate(i.invoiceDate)}</td><td>{formatDate(i.postingDate)}</td>
-              <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}</td><td className="num">{formatMoney(i.vat)}</td>
+              <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}{adjusted[i.id] && <div className="muted" title="Sau các hóa đơn điều chỉnh đã ghi sổ; hóa đơn gốc không đổi">sau điều chỉnh {formatMoney(addMoney([i.total, adjusted[i.id].amount]))}</div>}</td><td className="num">{formatMoney(i.vat)}{adjusted[i.id] && <div className="muted">{formatMoney(addMoney([i.vat, adjusted[i.id].vat]))}</div>}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
                 {i.status === 'Draft' && kind === 'Sales' && einv && <button className="primary" disabled={busy} onClick={() => run(async () => {

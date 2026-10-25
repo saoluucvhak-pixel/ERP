@@ -63,6 +63,22 @@ public static class TradeEndpoints
             var ordered = q.OrderByDescending(i => i.PostingDate).ThenByDescending(i => i.Number);
             return await PagedAsync(http, ordered.Include(i => i.Lines), q.CountAsync(), page, pageSize, i => Dto(i));
         });
+        // Giá trị SAU điều chỉnh của hóa đơn gốc đã ghi sổ: hóa đơn điều chỉnh (đã ghi sổ) điều chỉnh số liệu của hóa đơn gốc — trả hàng / giảm giá / chiết khấu trừ, điều chỉnh tăng cộng. Hóa đơn gốc không bị sửa.
+        api.MapGet("/invoices/adjusted", async (HttpContext http, HakDbContext db, string ids) =>
+        {
+            var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);
+            var list = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Take(200).ToList();
+            var adj = await (from i in db.CommercialInvoices.AsNoTracking()
+                             join l in db.CommercialInvoiceLines.AsNoTracking() on i.Id equals l.InvoiceId
+                             where i.CompanyId == ctx.CompanyId && i.Status == InvoiceStatus.Posted && i.AdjustsInvoiceId != null && list.Contains(i.AdjustsInvoiceId.Value)
+                             select new { Orig = i.AdjustsInvoiceId!.Value, i.Purpose, l.FunctionalAmount, l.VatAmount }).ToListAsync();
+            var result = adj.GroupBy(x => x.Orig).ToDictionary(g => g.Key, g => new
+            {
+                amount = g.Sum(x => x.Purpose == InvoicePurpose.Increase ? x.FunctionalAmount : -x.FunctionalAmount),
+                vat = g.Sum(x => x.Purpose == InvoicePurpose.Increase ? x.VatAmount : -x.VatAmount),
+            });
+            return Results.Ok(result);
+        });
         api.MapPost("/invoices", async (HttpContext http, InvoiceInput r, InvoiceService s) => Results.Ok(Dto(await s.CreateAsync(await http.SessionAsync(), r))));
         api.MapGet("/invoices/{id:guid}", async (HttpContext http, Guid id, HakDbContext db) =>
         {
