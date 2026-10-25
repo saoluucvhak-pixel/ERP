@@ -48,12 +48,12 @@ export function VouchersView() {
   useEffect(() => { load() }, [load])
 
   // label có thể là hàm của kết quả fn, để thông báo cuối cùng (kể cả lỗi kiểm tra chi tiết) được đặt MỘT lần, sau khi action kết thúc.
-  const act = (label: string | ((result: any) => { text: string; bad?: boolean }), fn: () => Promise<unknown>) => run(async () => {
+  const act = (label: string | ((result: any) => { text: string; bad?: boolean }), fn: () => Promise<unknown>, needs?: string) => run(async () => {
     const result = await fn()
     const out = typeof label === 'function' ? label(result) : { text: label, bad: false }
     setInfo(out.text); setInfoBad(!!out.bad)
     await load()
-  })
+  }, { exclusive: true, needs })   // bấm đúp không gửi hai lần; thiếu quyền thì báo ngay thay vì chờ máy chủ từ chối
   // Bulk actions on the ticked vouchers: one by one in posting-date order through the same endpoints as a single voucher, so every
   // check still applies (approver ≠ preparer, open period, cash funds not negative…); failures are listed, the rest continue.
   const bulk = (label: string, from: string[], steps: string[]) => run(async () => {
@@ -120,7 +120,7 @@ export function VouchersView() {
             () => post<{ code: string; message: string; lineNo: number | null }[]>(`/vouchers/${v.id}/validate`))}>Kiểm tra</button>
             {v.status === 'Posted' && <button className="danger" onClick={() => {
               const reason = prompt('Lý do đảo bút toán:'); if (!reason) return
-              const date = prompt('Ngày đảo (yyyy-mm-dd):', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }))
+              const date = prompt('Ngày đảo (yyyy-mm-dd):', v.postingDate); if (date) act('Đã đảo bút toán', () => post(`/vouchers/${v.id}/reverse`, { reversalDate: date, reason }), 'voucher.reverse')
             }}>Đảo</button>}
             {(v.status === 'Draft' || v.status === 'Submitted') && <button className="danger" onClick={() => {
               const reason = prompt('Lý do hủy:'); if (reason) act('Đã hủy', () => post(withRowVersion(`/vouchers/${v.id}/cancel`, v.rowVersion), { reason }))
@@ -129,12 +129,12 @@ export function VouchersView() {
             <button onClick={printSheet}>In chứng từ</button>
           </div>
           <StatusBar steps={VOUCHER_STEPS} current={v.status} stopped={{ Reversed: 'Đã đảo', Cancelled: 'Đã hủy' }}>
-              {v.status === 'Draft' && <button disabled={busy} onClick={() => act('Đã gửi duyệt', () => post(withRowVersion(`/vouchers/${v.id}/submit`, v.rowVersion)))}>Gửi duyệt</button>}
-              {v.status === 'Submitted' && <button disabled={busy} onClick={() => act('Đã duyệt', () => post(withRowVersion(`/vouchers/${v.id}/approve`, v.rowVersion)))}>Duyệt</button>}
+              {v.status === 'Draft' && <button disabled={busy} onClick={() => act('Đã gửi duyệt', () => post(withRowVersion(`/vouchers/${v.id}/submit`, v.rowVersion)), 'voucher.submit')}>Gửi duyệt</button>}
+              {v.status === 'Submitted' && <button disabled={busy} onClick={() => act('Đã duyệt', () => post(withRowVersion(`/vouchers/${v.id}/approve`, v.rowVersion)), 'voucher.approve')}>Duyệt</button>}
               {(v.status === 'Submitted' || v.status === 'Approved') && <button onClick={() => {
               const reason = prompt('Lý do trả lại:'); if (reason) act('Đã trả lại', () => post(withRowVersion(`/vouchers/${v.id}/reject`, v.rowVersion), { reason }))
             }}>Trả lại</button>}
-              {v.status === 'Approved' && <button className="primary" disabled={busy} onClick={() => act('Đã ghi sổ', () => post(withRowVersion(`/vouchers/${v.id}/post`, v.rowVersion)))}>Ghi sổ</button>}
+              {v.status === 'Approved' && <button className="primary" disabled={busy} onClick={() => act('Đã ghi sổ', () => post(withRowVersion(`/vouchers/${v.id}/post`, v.rowVersion)), 'voucher.post')}>Ghi sổ</button>}
           </StatusBar>
           <LinesTable voucher={v} />
           <VoucherPrint voucher={v} />

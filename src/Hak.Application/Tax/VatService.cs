@@ -167,6 +167,30 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                         normal[0].InvoiceId, e.Id));
                 continue;
             }
+            if (st == EInvoiceStatus.Adjustment)
+            {
+                // Hóa đơn điều chỉnh: ghép với hóa đơn điều chỉnh/trả hàng/giảm giá trong sổ cùng ký hiệu + số (sổ ghi giá trị có dấu, HĐĐT ghi số dương).
+                var adjs = recs?.Where(r => r.Purpose != InvoicePurpose.Normal).ToList() ?? [];
+                foreach (var r in adjs) seenBookIds.Add(r.InvoiceId);
+                if (adjs.Count == 0)
+                {
+                    diffs.Add(new(TaxDiffType.MissingInBooks, e.Direction, label, e.AmountBeforeVat, null, e.VatAmount, null, e.VatAmount,
+                        "Có hóa đơn điều chỉnh trên hệ thống HĐĐT nhưng chưa ghi sổ điều chỉnh tương ứng: lập và ghi sổ hóa đơn điều chỉnh (trả hàng, giảm giá, điều chỉnh tăng).", EInvoiceId: e.Id));
+                    continue;
+                }
+                var a = adjs[0];
+                matched++;
+                var (aAmount, aVat) = (Math.Abs(a.AmountBeforeVat), Math.Abs(a.VatAmount));
+                if (aAmount != e.AmountBeforeVat)
+                    diffs.Add(new(TaxDiffType.AmountDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, aAmount - e.AmountBeforeVat,
+                        "Tiền hàng của hóa đơn điều chỉnh trong sổ khác HĐĐT: kiểm tra số tiền điều chỉnh từng dòng.", a.InvoiceId, e.Id));
+                if (aVat != e.VatAmount)
+                    diffs.Add(new(TaxDiffType.VatDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, aVat - e.VatAmount, "Thuế GTGT của hóa đơn điều chỉnh trong sổ khác HĐĐT.", a.InvoiceId, e.Id));
+                if (a.PostingDate < from || a.PostingDate > to)
+                    diffs.Add(new(TaxDiffType.PeriodDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, 0,
+                        $"Hóa đơn điều chỉnh lập ngày {e.IssueDate.Vn()} nhưng hạch toán ngày {a.PostingDate.Vn()}: xác định đúng kỳ kê khai [CẦN XÁC MINH quy định kê khai bổ sung].", a.InvoiceId, e.Id));
+                continue;
+            }
             if (normal.Count == 0)
             {
                 diffs.Add(new(TaxDiffType.MissingInBooks, e.Direction, label, e.AmountBeforeVat, null, e.VatAmount, null, e.VatAmount,

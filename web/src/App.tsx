@@ -4,7 +4,7 @@ import { DashboardView } from './Dashboard'
 import { HomeLauncher } from './Home'
 import { FlowTab, MODULES, moduleOfScreen } from './Modules'
 import { QuickAdd } from './QuickAdd'
-import { ErrorBox, navStore, useAction } from './common'
+import { PendingBanner, ErrorBox, navStore, useAction } from './common'
 import { confirmLeave } from './unsaved'
 import { setPermissions } from './perms'
 import { MobileMaintenance, isMobileRoute } from './MobileMaintenance'
@@ -109,7 +109,8 @@ const LAUNCHER = [
   { key: 'equity', group: 'Tài chính, thanh toán', label: 'Vốn góp, cổ tức' },
   { key: 'salesapproval', group: 'Chu trình doanh thu', label: 'Phê duyệt bán hàng' },
   { key: 'services', group: 'Chu trình doanh thu', label: 'Nghiệm thu dịch vụ' },
-  { key: 'einvoice', group: 'Chu trình doanh thu', label: 'Hóa đơn điện tử' },
+  { key: 'einvoice:Sales', screen: 'einvoice', kind: 'Sales', group: 'Chu trình doanh thu', label: 'Hóa đơn điện tử (phát hành)' },
+  { key: 'einvoice:Purchase', screen: 'einvoice', kind: 'Purchase', group: 'Chu trình cung ứng', label: 'Hóa đơn điện tử của nhà cung cấp' },
   { key: 'discounts', group: 'Chu trình doanh thu', label: 'Chiết khấu thương mại' },
   { key: 'paydiscount', group: 'Chu trình doanh thu', label: 'Chiết khấu thanh toán' },
   { key: 'groups', group: 'Danh mục và hệ thống', label: 'Nhóm danh mục' },
@@ -139,7 +140,7 @@ const KIND_OF_MODULE: Record<string, 'Purchase' | 'Sales'> = { purchase: 'Purcha
 const KINDED_SCREENS = new Set(['orders', 'trade', 'services'])   // 'discounts' và 'paydiscount' cũng theo chiều của phân hệ nhưng không có số việc chờ riêng
 const workKey = (moduleKey: string, screen: string) => (KIND_OF_MODULE[moduleKey] && KINDED_SCREENS.has(screen) ? `${screen}:${KIND_OF_MODULE[moduleKey]}` : screen)
 const KIND_LABELS: Record<string, Record<string, string>> = {
-  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua', arap: 'Công nợ phải trả', discounts: 'CK thương mại được hưởng', paydiscount: 'CK thanh toán được hưởng' },
+  purchase: { orders: 'Đơn mua hàng', trade: 'Hóa đơn mua', contracts: 'Hợp đồng mua', services: 'Nghiệm thu dịch vụ mua', arap: 'Công nợ phải trả', einvoice: 'HĐĐT nhà cung cấp', discounts: 'CK thương mại được hưởng', paydiscount: 'CK thanh toán được hưởng' },
   sales: { orders: 'Đơn bán hàng', trade: 'Hóa đơn bán', contracts: 'Hợp đồng bán', services: 'Nghiệm thu dịch vụ bán', arap: 'Công nợ phải thu', discounts: 'CK thương mại cho khách', paydiscount: 'CK thanh toán cho khách' },
 }
 const tabLabel = (moduleKey: string, screen: string) => KIND_LABELS[moduleKey]?.[screen] ?? SCREEN_LABELS[screen]
@@ -289,6 +290,7 @@ export default function App() {
             {tabLabel(module.key, k)}{work[workKey(module.key, k)] ? <span className="nav-count">{work[workKey(module.key, k)]}</span> : null}</button>)}
         </div>}
         <main className="main" key={company.id + module.key + tab + ':' + navSeq}>
+          <PendingBanner />
           <Suspense fallback={<span className="muted">Đang tải…</span>}>
             {module.screens.length === 0 ? screenEl(module.key)
               : tab === 'flow' ? <FlowTab module={module} labels={SCREEN_LABELS} counts={Object.fromEntries(module.screens.filter(k => work[workKey(module.key, k)]).map(k => [k, work[workKey(module.key, k)]]))} />

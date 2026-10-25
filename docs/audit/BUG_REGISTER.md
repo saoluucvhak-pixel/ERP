@@ -101,3 +101,13 @@ Nguồn: `BAO-CAO-LUONG-VA-HIEU-SUAT.md`, `PROMPT-NANG-CAP-ERP.md` của chị. 
 - F04 bền qua tải lại trang: cần API tra cứu theo `operationId` phía máy chủ rồi mới lưu hàng chờ (chỉ id + khóa, không token).
 - Benchmark 50k/100k chứng từ, nhiều người dùng, PostgreSQL; N+1 của `OrderFlowService.WorklistAsync` (mỗi đơn gọi `FulfilmentAsync`) — chưa đo ở >500 đơn mở.
 - Luồng chưa có test xuyên chu trình đủ 8 tình huống mỗi luồng (lỗi giữa transaction, hai người đồng thời, mất quyền…): mới có bất biến chung + các test sẵn có; BDMT theo tỷ lệ dòng gốc khi trả hàng và đảo phiếu bình quân cuối tháng sang kỳ khác vẫn là mục mở.
+
+
+## Đợt xử lý tồn đọng 25/10/2026 (sau PR #50–#53)
+- **F04 bền qua tải lại:** thao tác chưa xác định lưu ở sessionStorage của tab (id, khóa chống trùng, phương thức, đường dẫn, nội dung đã chụp, công ty — KHÔNG lưu token), khôi phục gắn với phiên hiện tại, đăng xuất xóa hết; dải nhắc `PendingBanner` ở khung chính có nút "Thử lại an toàn". Không cần API tra cứu phía máy chủ vì thử lại dùng chính khóa chống trùng cũ. Test `api-retry.test.ts`.
+- **useAction `needs` / `exclusive`:** áp cho Gửi duyệt / Duyệt / Ghi sổ / Đảo ở Chứng từ và Ghi sổ / Đảo ở Hóa đơn.
+- **Hóa đơn điện tử:** trigger bất biến SQLite + PostgreSQL, dịch vụ nền, đối soát hóa đơn điều chỉnh, hóa đơn mua từ nhà cung cấp (xem docs/12).
+- **Chiết khấu:** thỏa thuận theo doanh số tính cả hóa đơn ngoại tệ.
+- **Test luồng:** hóa đơn thay thế khi hóa đơn gốc chưa đảo được (còn điều chỉnh đã ghi sổ) ⇒ phát hành rồi nhưng chưa ghi sổ, không có nửa bút toán, đối soát nhắc đảo, sửa xong thì ghi sổ lại.
+- **PostgreSQL:** chạy trọn bộ test tích hợp trên `main` sau #53: 365/365.
+- **Hiệu suất 50.000 chứng từ** (docs/09 mục "Đo bổ sung 25/10/2026"): ghi sổ 73/giây ổn định, báo cáo dưới 1 giây, phiếu xuất tăng ~7 ms mỗi 1.000 biến động cùng kho–vật tư ⇒ checkpoint kho chỉ đáng làm khi một cặp kho–vật tư vượt ~20.000 biến động/kỳ. Chưa đo nhiều người dùng và PostgreSQL ở quy mô này.

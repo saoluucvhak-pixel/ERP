@@ -98,7 +98,7 @@ export function DiscountsView() {
               {!a.runId && <button disabled={busy} onClick={() => toggle(a)}>{a.isActive ? 'Ngừng' : 'Áp dụng lại'}</button>}</td></tr>)}
             {rows.length === 0 && <tr><td colSpan={6} className="muted">Chưa có thỏa thuận. Lập thỏa thuận với bậc doanh số và tỷ lệ; cuối kỳ bấm “Xem tính” rồi “Quyết toán”.</td></tr>}</tbody>
         </table></div>
-        <p className="muted">Doanh số = tiền hàng chưa thuế của hóa đơn thường (tiền hạch toán) đã ghi sổ trong kỳ, trừ hàng trả lại và giảm giá đã ghi sổ. Bậc đạt được áp cho TOÀN BỘ doanh số. Quyết toán sinh hóa đơn điều chỉnh giảm cho từng hóa đơn gốc để thuế GTGT giảm đúng thuế suất từng dòng; chiết khấu theo thỏa thuận không cần phê duyệt từng dòng (người lập thỏa thuận là người duyệt).</p>
+        <p className="muted">Doanh số = tiền hàng chưa thuế (quy ra tiền hạch toán) của hóa đơn thường đã ghi sổ trong kỳ, kể cả hóa đơn ngoại tệ (chiết khấu tính theo tiền và tỷ giá của hóa đơn), trừ hàng trả lại và giảm giá đã ghi sổ. Bậc đạt được áp cho TOÀN BỘ doanh số. Quyết toán sinh hóa đơn điều chỉnh giảm cho từng hóa đơn gốc để thuế GTGT giảm đúng thuế suất từng dòng; chiết khấu theo thỏa thuận không cần phê duyệt từng dòng (người lập thỏa thuận là người duyệt).</p>
       </>}
 
       {tab === 'report' && <>
@@ -143,7 +143,7 @@ export function DiscountsView() {
           {preview.p.settled && <> <b>Đã quyết toán.</b></>}</p>
         <table className="grid"><thead><tr><th>Hóa đơn</th><th>Ngày</th><th className="num">Doanh số</th><th className="num">Chiết khấu chia</th></tr></thead>
           <tbody>{preview.p.invoices.map(s => <tr key={s.invoiceId}><td>{s.invoiceSeries}/{s.invoiceNo}<div className="muted">{s.number}</div></td><td>{formatDate(s.postingDate)}</td><td className="num">{formatMoney(s.sales)}</td><td className="num">{formatMoney(s.discount)}</td></tr>)}
-            {preview.p.invoices.length === 0 && <tr><td colSpan={4} className="muted">Không có hóa đơn bán/mua hạch toán bằng tiền hạch toán trong kỳ.</td></tr>}</tbody></table>
+            {preview.p.invoices.length === 0 && <tr><td colSpan={4} className="muted">Không có hóa đơn đã ghi sổ của đối tượng này trong kỳ.</td></tr>}</tbody></table>
       </Modal>}
 
       {settle && <Modal title={`Quyết toán ${settle.a.code}`} onClose={() => setSettle(null)} busy={busy}

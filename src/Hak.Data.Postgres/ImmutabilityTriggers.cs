@@ -314,6 +314,40 @@ internal static class ImmutabilityTriggers
         yield return "DROP FUNCTION IF EXISTS hak_report_parts_frozen();";
     }
 
+    /// <summary>
+    /// Phase 20 (hóa đơn điện tử): thông điệp chỉ-thêm; hàng đợi và hóa đơn không xóa; hóa đơn đã phát hành (trạng thái khác Đang chờ=1 / Bị từ chối=3) giữ nguyên số, ký hiệu,
+    /// ngày ký, mã cơ quan thuế, XML, băm, hóa đơn ERP và ngày — chỉ trạng thái (→ Thay thế / Hủy) và ghi chú lỗi đổi được.
+    /// </summary>
+    public static IEnumerable<string> EInvoiceStatements()
+    {
+        yield return """
+            CREATE TRIGGER trg_einvoice_messages_append_only BEFORE UPDATE OR DELETE ON e_invoice_messages FOR EACH ROW EXECUTE FUNCTION hak_ledger_immutable();
+            CREATE TRIGGER trg_einvoice_outbox_no_delete BEFORE DELETE ON e_invoice_outbox FOR EACH ROW EXECUTE FUNCTION hak_ledger_immutable();
+            CREATE TRIGGER trg_einvoice_documents_no_delete BEFORE DELETE ON e_invoice_documents FOR EACH ROW EXECUTE FUNCTION hak_ledger_immutable();
+
+            CREATE OR REPLACE FUNCTION hak_einvoice_issued_frozen() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+              IF OLD.status NOT IN (1, 3) AND (
+                   OLD.series IS DISTINCT FROM NEW.series OR OLD.number IS DISTINCT FROM NEW.number OR OLD.signed_at IS DISTINCT FROM NEW.signed_at
+                   OR OLD.tax_authority_code IS DISTINCT FROM NEW.tax_authority_code OR OLD.xml_content IS DISTINCT FROM NEW.xml_content
+                   OR OLD.xml_sha256 IS DISTINCT FROM NEW.xml_sha256 OR OLD.invoice_id IS DISTINCT FROM NEW.invoice_id OR OLD.issue_date IS DISTINCT FROM NEW.issue_date) THEN
+                RAISE EXCEPTION 'LEDGER_IMMUTABLE';
+              END IF;
+              RETURN NEW;
+            END $$;
+            CREATE TRIGGER trg_einvoice_documents_issued_frozen BEFORE UPDATE ON e_invoice_documents FOR EACH ROW EXECUTE FUNCTION hak_einvoice_issued_frozen();
+            """;
+    }
+
+    public static IEnumerable<string> EInvoiceDownStatements()
+    {
+        yield return "DROP TRIGGER IF EXISTS trg_einvoice_messages_append_only ON e_invoice_messages;";
+        yield return "DROP TRIGGER IF EXISTS trg_einvoice_outbox_no_delete ON e_invoice_outbox;";
+        yield return "DROP TRIGGER IF EXISTS trg_einvoice_documents_no_delete ON e_invoice_documents;";
+        yield return "DROP TRIGGER IF EXISTS trg_einvoice_documents_issued_frozen ON e_invoice_documents;";
+        yield return "DROP FUNCTION IF EXISTS hak_einvoice_issued_frozen();";
+    }
+
     public static IEnumerable<string> DownStatements()
     {
         foreach (var t in AppendOnly) yield return $"DROP TRIGGER IF EXISTS trg_{t}_append_only ON {t};";

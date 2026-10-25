@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from './api'
-import { ErrorBox, FlowStrip, Modal, useAction } from './common'
+import { ErrorBox, FlowStrip, Modal, navStore, useAction } from './common'
 import { formatDate, formatMoney } from './money'
 
 interface Doc { id: string; invoiceId: string | null; invoiceNumber: string | null; status: string; relation: string; nature: string; series: string | null; number: string | null; issueDate: string
   taxAuthorityCode: string | null; reason: string | null; lastError: string | null; postError: string | null; attempts: number; outboxState: string | null; nextAttemptAt: string | null; rowVersion: number
   partnerName: string | null; total: string | null; relatedNumber: string | null; provider: string }
+interface Suggestion { code: string; eInvoiceId: string; label: string; originalInvoiceId: string | null; originalNumber: string | null; amountBeforeVat: string; vatAmount: string; message: string }
 interface Notice { id: string; number: string; kind: string; status: string; reason: string; response: string | null; rowVersion: number; createdAt: string; lines: { documentId: string; series: string | null; number: string | null; errorDescription: string }[] }
 
 const STATUS_VI: Record<string, string> = { Issuing: 'Đang chờ nhà cung cấp', Issued: 'Đã phát hành', Rejected: 'Bị từ chối', Replaced: 'Đã bị thay thế', Cancelled: 'Đã hủy' }
 const RELATION_VI: Record<string, string> = { Original: 'Hóa đơn gốc', Replacement: 'Thay thế', Adjustment: 'Điều chỉnh' }
 const NATURE_VI: Record<string, string> = { Increase: 'tăng', Decrease: 'giảm', Information: 'thông tin', None: '' }
+const SUGGESTION_VI: Record<string, string> = { AdjustmentNotBooked: 'Điều chỉnh chưa ghi sổ', ReplacementNotBooked: 'Thay thế chưa ghi sổ', ReplacedOriginalStillActive: 'Hóa đơn gốc bị thay còn hiệu lực', OriginalNotBooked: 'Thiếu hóa đơn gốc' }
 const KIND_VI: Record<string, string> = { Explain: 'Giải trình', Cancel: 'Hủy', Adjust: 'Điều chỉnh', Replace: 'Thay thế' }
 const NOTICE_STATUS_VI: Record<string, string> = { Draft: 'Nháp', Sent: 'Đã gửi', Accepted: 'Cơ quan thuế tiếp nhận', Rejected: 'Cơ quan thuế không tiếp nhận' }
 
@@ -19,7 +21,10 @@ const NOTICE_STATUS_VI: Record<string, string> = { Draft: 'Nháp', Sent: 'Đã g
  * điều chỉnh thông tin (không bút toán) và thông báo sai sót Mẫu 04/SS-HĐĐT. Lập hóa đơn và bấm Phát hành ở màn Hóa đơn.
  */
 export function EInvoiceView() {
-  const [tab, setTab] = useState<'docs' | 'notices'>('docs')
+  const [purchase] = useState(() => navStore.kind === 'Purchase')   // Mua hàng: chỉ phần nhận điều chỉnh / thay thế từ nhà cung cấp
+  const [tab, setTab] = useState<'docs' | 'notices' | 'inbound'>(() => (navStore.kind === 'Purchase' ? 'inbound' : 'docs'))
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [draft, setDraft] = useState<{ s: Suggestion; purpose: string; kind: string; date: string } | null>(null)
   const [status, setStatus] = useState<{ provider: string; configured: boolean } | null>(null)
   const [docs, setDocs] = useState<Doc[]>([])
   const [notices, setNotices] = useState<Notice[]>([])
@@ -30,9 +35,10 @@ export function EInvoiceView() {
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => {
     setStatus(await get('/einvoice/status'))
+    if (purchase) { setSuggestions(await get<Suggestion[]>('/einvoice/inbound-suggestions')); return }
     setDocs(await get<Doc[]>(`/einvoice/documents${attention ? '?attention=true' : ''}`))
     setNotices(await get<Notice[]>('/einvoice/notices'))
-  }), [run, attention])
+  }), [run, attention, purchase])
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- tải lại khi mở màn / đổi bộ lọc
   useEffect(() => { load() }, [attention])
   const needs = (d: Doc) => d.status === 'Issuing' || d.status === 'Rejected' || !!d.postError
@@ -44,20 +50,37 @@ export function EInvoiceView() {
 
   return (
     <>
-      <div className="toolbar"><h2>Hóa đơn điện tử</h2>
-        <button className={tab === 'docs' ? 'primary' : ''} onClick={() => setTab('docs')}>Hàng đợi và hóa đơn đã phát hành</button>
-        <button className={tab === 'notices' ? 'primary' : ''} onClick={() => setTab('notices')}>Thông báo sai sót (04/SS-HĐĐT)</button>
-        <button disabled={busy || !status?.configured} onClick={processAll}>Gửi các lệnh đang chờ</button></div>
-      <FlowStrip steps={[
+      <div className="toolbar"><h2>{purchase ? 'Hóa đơn điện tử của nhà cung cấp' : 'Hóa đơn điện tử'}</h2>
+        {!purchase && <>
+          <button className={tab === 'docs' ? 'primary' : ''} onClick={() => setTab('docs')}>Hàng đợi và hóa đơn đã phát hành</button>
+          <button className={tab === 'notices' ? 'primary' : ''} onClick={() => setTab('notices')}>Thông báo sai sót (04/SS-HĐĐT)</button>
+          <button disabled={busy || !status?.configured} onClick={processAll}>Gửi các lệnh đang chờ</button></>}</div>
+      {purchase ? <FlowStrip steps={[
+        { label: 'Nhà cung cấp phát hành điều chỉnh / thay thế (nhập tệp HĐĐT ở Thuế GTGT)', journal: false, screen: 'vat', count: `${suggestions.length} việc chờ` },
+        { label: 'Tạo hóa đơn điều chỉnh nháp mang số của nhà cung cấp', journal: false, screen: 'trade' },
+        { label: 'Ghi sổ: giảm tồn kho / giá vốn, thuế đầu vào, công nợ', journal: true, screen: 'trade' },
+      ]} /> : <FlowStrip steps={[
         { label: 'Hóa đơn nháp → Phát hành (ký số, gửi cơ quan thuế)', journal: false, screen: 'trade', count: `${docs.filter(d => d.status === 'Issuing').length} đang chờ · ${docs.filter(d => d.status === 'Rejected').length} bị từ chối` },
         { label: 'Cơ quan thuế chấp nhận → số, ký hiệu, mã được gán → ghi sổ tự động', journal: true, count: `${issued.length} đã phát hành · ${docs.filter(d => d.postError).length} chưa ghi sổ được` },
         { label: 'Sai sót: điều chỉnh / thay thế (có bút toán) hoặc thông báo 04/SS (không bút toán)', journal: false, count: `${notices.filter(n => n.status === 'Draft').length} thông báo nháp` },
         { label: 'Đối soát HĐĐT ↔ sổ ↔ tờ khai', journal: false, screen: 'vat' },
-      ]} />
+      ]} />}
       <ErrorBox error={error} />
       {info && !error && <div className="msg ok">{info}</div>}
-      {status && !status.configured && <div className="msg error" role="alert">Chưa cấu hình nhà cung cấp hóa đơn điện tử (Hak:EInvoice:Provider) nên chưa phát hành được. Có thể xem dữ liệu đã có.</div>}
-      {status?.configured && status.provider === 'SIMULATED' && <div className="msg">Đang dùng nhà cung cấp GIẢ LẬP (chỉ để thử): hóa đơn tạo ra không có giá trị pháp lý.</div>}
+      {!purchase && status && !status.configured && <div className="msg error" role="alert">Chưa cấu hình nhà cung cấp hóa đơn điện tử (Hak:EInvoice:Provider) nên chưa phát hành được. Có thể xem dữ liệu đã có.</div>}
+      {!purchase && status?.configured && status.provider === 'SIMULATED' && <div className="msg">Đang dùng nhà cung cấp GIẢ LẬP (chỉ để thử): hóa đơn tạo ra không có giá trị pháp lý.</div>}
+
+      {tab === 'inbound' && <>
+        <div className="scroll"><table className="grid">
+          <thead><tr><th>Hóa đơn của nhà cung cấp</th><th>Việc cần làm</th><th className="num">Tiền hàng</th><th className="num">Thuế</th><th>Hóa đơn gốc trong sổ</th><th /></tr></thead>
+          <tbody>{suggestions.map(x => <tr key={x.eInvoiceId}>
+            <td>{x.label}</td><td style={{ whiteSpace: 'normal', maxWidth: 420 }}><b>{SUGGESTION_VI[x.code] ?? x.code}</b><div className="muted">{x.message}</div></td>
+            <td className="num">{formatMoney(x.amountBeforeVat)}</td><td className="num">{formatMoney(x.vatAmount)}</td><td>{x.originalNumber ?? <span className="muted">chưa có</span>}</td>
+            <td>{x.code === 'AdjustmentNotBooked' && x.originalInvoiceId && <button className="primary" disabled={busy} onClick={() => setDraft({ s: x, purpose: 'Discount', kind: 'Trade', date: new Date().toISOString().slice(0, 10) })}>Tạo hóa đơn điều chỉnh nháp…</button>}</td></tr>)}
+            {suggestions.length === 0 && <tr><td colSpan={6} className="muted">Không có điều chỉnh / thay thế nào của nhà cung cấp đang chờ xử lý. Dữ liệu lấy từ hóa đơn điện tử đầu vào đã nhập (Thuế GTGT › Nhập dữ liệu HĐĐT).</td></tr>}</tbody>
+        </table></div>
+        <p className="muted">Hệ thống không tự ghi sổ: tạo hóa đơn điều chỉnh NHÁP mang đúng ký hiệu và số của nhà cung cấp; người có quyền ghi sổ kiểm tra rồi ghi sổ ở màn Hóa đơn mua. Hàng trả lại cần lập phiếu xuất trả nhà cung cấp trước.</p>
+      </>}
 
       {tab === 'docs' && <>
         <div className="toolbar"><label><input type="checkbox" checked={attention} onChange={e => setAttention(e.target.checked)} /> Chỉ hiện hóa đơn cần xử lý</label>
@@ -87,6 +110,19 @@ export function EInvoiceView() {
           <td>{n.status === 'Draft' && <button className="primary" disabled={busy || !status?.configured} onClick={() => sendNotice(n)}>Gửi cơ quan thuế</button>}</td></tr>)}
           {notices.length === 0 && <tr><td colSpan={6} className="muted">Chưa có thông báo sai sót. Thông báo không phát sinh bút toán; loại “Hủy” được tiếp nhận sẽ đánh dấu hóa đơn đã hủy và đối soát sẽ nhắc đảo bút toán.</td></tr>}</tbody>
       </table></div>}
+
+      {draft && <Modal title={`Hóa đơn điều chỉnh nháp — ${draft.s.label}`} onClose={() => setDraft(null)} busy={busy}
+        footer={<><button onClick={() => setDraft(null)}>Đóng</button><button className="primary" disabled={busy} onClick={() => run(async () => {
+          const r = await post<{ number: string }>(`/einvoice/inbound/${draft.s.eInvoiceId}/adjustment-draft`, { purpose: draft.purpose, discountKind: draft.purpose === 'Discount' ? draft.kind : null, postingDate: draft.date })
+          setDraft(null); setInfo(`Đã tạo ${r.number} (nháp). Ghi sổ ở màn Hóa đơn mua.`); await load()
+        })}>Tạo nháp</button></>}>
+        <div className="form-row">
+          <label>Loại điều chỉnh<select value={draft.purpose} onChange={e => setDraft({ ...draft, purpose: e.target.value })}><option value="Discount">Giảm (giảm giá / chiết khấu)</option><option value="Increase">Tăng</option></select></label>
+          {draft.purpose === 'Discount' && <label>Bản chất<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value })}><option value="Trade">Chiết khấu thương mại</option><option value="Allowance">Giảm giá hàng</option></select></label>}
+          <label>Ngày hạch toán<input type="date" value={draft.date} onChange={e => setDraft({ ...draft, date: e.target.value })} /></label>
+        </div>
+        <p className="muted">Số tiền {formatMoney(draft.s.amountBeforeVat)} + thuế {formatMoney(draft.s.vatAmount)} chia cho các dòng hóa đơn gốc theo tỷ lệ giá trị; thuế phải khớp thuế trên hóa đơn của nhà cung cấp.</p>
+      </Modal>}
 
       {adj && <Modal title={`Điều chỉnh thông tin — ${adj.doc.series}/${adj.doc.number}`} onClose={() => setAdj(null)} busy={busy}
         footer={<><button onClick={() => setAdj(null)}>Đóng</button><button className="primary" disabled={busy || !adj.reason.trim() || !adj.field.trim() || !adj.newV.trim()} onClick={() => run(async () => {

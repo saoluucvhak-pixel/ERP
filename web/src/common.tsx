@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { NavIntent } from './navIntents'
 import { hasPermission, usePermission } from './perms'
 import { refuseReason, type ActionOptions } from './actions'
-import { ApiError, UncertainError, UNCERTAIN_CODE, get, isStaleContext, hasPendingWrite, retryPendingWrite, session, type Account, type Partner } from './api'
+import { ApiError, UncertainError, UNCERTAIN_CODE, get, isStaleContext, hasPendingWrite, pendingWrites, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
 
@@ -177,6 +177,30 @@ export function useAction() {
     try { return await fn() } catch (e) { if (!isStaleContext(e)) setError(e); return undefined } finally { count.current--; setInFlight(n => n - 1) }
   }, [])
   return { busy: inFlight > 0, error, setError, run }
+}
+
+/**
+ * Thao tác ghi mất kết nối chưa biết đã lưu hay chưa (kể cả sau khi tải lại trang): luôn hiện một dòng nhắc kèm nút thử lại an toàn (cùng khóa chống trùng, không ghi trùng),
+ * để người dùng không phải nhập lại và vô tình tạo chứng từ thứ hai.
+ */
+export function PendingBanner() {
+  const [n, setN] = useState(() => pendingWrites().length)
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    const h = () => setN(pendingWrites().length)
+    window.addEventListener('hak-pending', h)
+    return () => window.removeEventListener('hak-pending', h)
+  }, [])
+  if (n === 0 && !msg) return null
+  return (
+    <div className={`msg ${n ? 'error' : 'ok'}`} role="alert">
+      {n > 0 ? <><strong>{n} thao tác chưa xác định</strong> (mất kết nối khi đang ghi, có thể đã được lưu). </> : null}{msg}
+      {n > 0 && <button style={{ marginLeft: 8 }} onClick={async () => {
+        try { await retryPendingWrite(); setMsg('Máy chủ đã xác nhận thao tác (không ghi trùng). Mở lại danh sách để thấy dữ liệu mới.') } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
+        setN(pendingWrites().length)
+      }}>Thử lại an toàn</button>}
+    </div>
+  )
 }
 
 /** Lỗi không bắt được khi dựng giao diện không làm trắng cả màn hình: hiện thông báo và cho tải lại. */

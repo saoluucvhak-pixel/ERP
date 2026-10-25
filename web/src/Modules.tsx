@@ -35,7 +35,7 @@ export const MODULES: AppModule[] = [
     catalogs: [{ label: 'Tài khoản ngân hàng (công ty, đối tượng)', screen: 'setup', tab: 'banks' }, CAT_PARTNERS, CAT_SETUP],
   },
   {
-    key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'contracts', 'orders', 'services', 'trade', 'arap', 'discounts', 'paydiscount'], title: 'NGHIỆP VỤ MUA HÀNG',
+    key: 'purchase', label: 'Mua hàng', icon: '🛒', screens: ['procurement', 'contracts', 'orders', 'services', 'trade', 'arap', 'einvoice', 'discounts', 'paydiscount'], title: 'NGHIỆP VỤ MUA HÀNG',
     flow: [
       { label: 'Cần đặt hàng', icon: '📋', screen: 'procurement' }, { label: 'Hợp đồng mua', icon: '📑', screen: 'contracts' }, { label: 'Đơn mua hàng', icon: '📝', screen: 'orders' }, { label: 'Nhận hàng, kiểm nghiệm, nhập kho', icon: '📦', screen: 'procurement' },
       { label: 'Nghiệm thu dịch vụ', icon: '🧾', screen: 'services' }, { label: 'Hóa đơn mua', icon: '📄', screen: 'trade' }, { label: 'Chấp nhận thanh toán', icon: '✔️', screen: 'procurement' }, { label: 'Thanh toán', icon: '💸', screen: 'procurement' }, { label: 'Công nợ phải trả', icon: '🧮', screen: 'arap' },

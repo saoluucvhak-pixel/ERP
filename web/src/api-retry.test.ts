@@ -103,3 +103,16 @@ test('thao tác bị máy chủ từ chối rõ ràng khi thử lại thì bị 
     assert.equal(api.hasPendingWrite(), false)
   } finally { globalThis.fetch = original }
 })
+
+test('F04: thao tác chưa xác định được lưu cho tab và khôi phục sau tải lại (không có token), gắn với phiên hiện tại', async () => {
+  const api = await import('./api.ts?f04-persist')
+  const op = { id: 'k1', method: 'POST', path: '/vouchers', bodyText: '{"a":1}', key: 'k1', ctx: { token: 'T-old', companyId: 'C1' }, state: 'Uncertain' as const }
+  const json = api.serializePending([op])
+  assert.ok(!json.includes('T-old'), 'không lưu token')
+  const restored = api.restorePending(json, 'T-new')
+  assert.equal(restored.length, 1)
+  assert.deepEqual([restored[0].key, restored[0].bodyText, restored[0].ctx], ['k1', '{"a":1}', { token: 'T-new', companyId: 'C1' }])
+  assert.deepEqual(api.restorePending(json, null), [], 'chưa đăng nhập thì không khôi phục')
+  assert.deepEqual(api.restorePending('không phải json', 'T'), [])
+  assert.deepEqual(api.restorePending(JSON.stringify([{ id: 1 }]), 'T'), [], 'bản ghi hỏng bị bỏ')
+})
