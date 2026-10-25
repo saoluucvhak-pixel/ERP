@@ -1243,6 +1243,19 @@ public partial class TradeTests
     }
 
     [Fact]
+    public async Task PaymentDiscount_TermsChangedOnThePartnerAfterPosting_DoNotChangeThePostedInvoice()
+    {
+        using var fx = await SetupAsync();
+        var pd = new PaymentDiscountService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        await fx.S.Setup.UpdatePartnerCommercialAsync(fx.H.Admin, fx.H.Partner["KH01"], null, null, null, null, 30, 2m, 10);   // 2/10 net 30
+        var (inv, _) = await PostedBdmtSaleAsync(fx);
+        await fx.S.Setup.UpdatePartnerCommercialAsync(fx.H.Admin, fx.H.Partner["KH01"], null, null, null, null, 30, 3m, 10);   // danh mục đổi sang 3/10 sau khi hóa đơn đã ghi sổ
+        var c = Assert.Single(await pd.CandidatesAsync(fx.H.Auditor, InvoiceKind.Sales, D(3, 20)));
+        Assert.Equal((2m, 10, 2_664_000m), (c.Percent, c.Days, c.Discount));                                                  // hóa đơn cũ vẫn 2%
+        Assert.Equal(2m, (await fx.S.Db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == inv.Id)).PaymentDiscountPercent);
+    }
+
+    [Fact]
     public async Task PaymentDiscount_Standalone_NotTiedToAnInvoice_IsASeparateEntry()
     {
         using var fx = await SetupAsync();
@@ -2308,6 +2321,39 @@ public partial class TradeTests
         var rep = await new DiscountReportService(fx.S.Db).ReportAsync(fx.H.Auditor, InvoiceKind.Sales, D(1, 1), D(12, 31));
         Assert.Equal(60_000m, rep.Total.AfterSaleTradeDiscount);
         Assert.Equal(a.Status, (await fx.S.Db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == a.Id)).Status);
+        await LedgerInvariants.AssertAsync(fx.S.Db);
+    }
+
+    [Fact]
+    public async Task DiscountAgreement_ProgressiveBands_VersusRetroactive_AndBandEdgesHaveNoGapOrOverlap()
+    {
+        using var fx = await SetupAsync();
+        await PostedReceiptAsync(fx, 100, 5_000_000, D(3, 1), fx.Add);
+        await PostedSaleAsync(fx, "0000501", 10, D(3, 3), price: 25_000);                               // 250.000 (thang đo nhỏ hơn 1.000 lần ví dụ 250 triệu)
+        var agreements = new DiscountAgreementService(fx.S.Db, fx.Inv, fx.S.Audit, fx.H.Clock);
+        var tiers = new[] { new AgreementTierInput(0, 1), new AgreementTierInput(100_000, 2), new AgreementTierInput(200_000, 3) };
+        var retro = await agreements.CreateAsync(fx.H.Approver, new AgreementInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "CK-HT", "Hồi tố", D(3, 1), D(3, 31), tiers));
+        var prog = await agreements.CreateAsync(fx.H.Approver, new AgreementInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "CK-LT", "Lũy tiến", D(3, 1), D(3, 31), tiers, Progressive: true));
+
+        var pr = await agreements.PreviewAsync(fx.H.Auditor, retro.Id);
+        var pp = await agreements.PreviewAsync(fx.H.Auditor, prog.Id);
+        Assert.Equal((250_000m, 7_500m), (pr.EligibleSales, pr.Amount));                                 // 250.000 × 3%
+        Assert.Equal((250_000m, 4_500m), (pp.EligibleSales, pp.Amount));                                 // 1.000 + 2.000 + 1.500
+        Assert.Equal(1.8m, pp.Percent);                                                                  // tỷ lệ bình quân thực tế
+        Assert.Equal(4_500m, Assert.Single(pp.Invoices).Discount);
+
+        // Biên bậc: đúng ngưỡng không nhận hai lần.
+        await agreements.UpdateAsync(fx.H.Approver, prog.Id, prog.RowVersion, new AgreementInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "CK-LT", "Lũy tiến", D(3, 1), D(3, 31),
+            [new AgreementTierInput(0, 1), new AgreementTierInput(250_000, 2)], Progressive: true));
+        Assert.Equal(2_500m, (await agreements.PreviewAsync(fx.H.Auditor, prog.Id)).Amount);            // toàn bộ 250.000 ở bậc 1; bậc 2 chưa có phần nào
+
+        // Quyết toán lũy tiến bằng chứng từ: số ghi sổ đúng số đã tính.
+        var again = await agreements.UpdateAsync(fx.H.Approver, prog.Id, (await fx.S.Db.DiscountAgreements.AsNoTracking().FirstAsync(a => a.Id == prog.Id)).RowVersion,
+            new AgreementInput(InvoiceKind.Sales, fx.H.Partner["KH01"], "CK-LT", "Lũy tiến", D(3, 1), D(3, 31), tiers, Progressive: true));
+        var eng = new DiscountAgreementService(fx.S.Db, fx.Inv, fx.S.Audit, fx.H.Clock, fx.S.Engine);
+        var run = await eng.SettleAsync(fx.H.Preparer, prog.Id, again.RowVersion, "1C26TBB", "0000510", D(4, 1), D(4, 1));
+        Assert.Equal(4_500m, run.Amount);
+        Assert.Equal(4_500m, (await fx.S.Db.CommercialInvoiceLines.AsNoTracking().Where(l => fx.S.Db.CommercialInvoices.Any(i => i.Id == l.InvoiceId && i.Purpose == InvoicePurpose.Discount)).ToListAsync()).Sum(l => l.FunctionalAmount));
         await LedgerInvariants.AssertAsync(fx.S.Db);
     }
 

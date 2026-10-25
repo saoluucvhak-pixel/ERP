@@ -13,10 +13,10 @@ namespace Hak.Application.Trade;
 
 public sealed record AgreementTierInput(decimal Threshold, decimal Percent);
 
-public sealed record AgreementInput(InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers);
+public sealed record AgreementInput(InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers, bool Progressive = false);
 
 public sealed record AgreementView(Guid Id, InvoiceKind Kind, Guid PartnerId, string PartnerCode, string PartnerName, string Code, string Name, DateOnly FromDate, DateOnly ToDate,
-    bool IsActive, long RowVersion, IReadOnlyList<AgreementTierInput> Tiers, Guid? RunId, decimal? RunAmount);
+    bool IsActive, long RowVersion, IReadOnlyList<AgreementTierInput> Tiers, Guid? RunId, decimal? RunAmount, bool Progressive = false);
 
 public sealed record AgreementInvoiceShare(Guid InvoiceId, string Number, string InvoiceSeries, string InvoiceNo, DateOnly PostingDate, decimal Sales, decimal Discount);
 
@@ -40,7 +40,7 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         var partners = await db.BusinessPartners.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToDictionaryAsync(p => p.Id);
         var runs = await db.DiscountAgreementRuns.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && r.VoidedAt == null).ToDictionaryAsync(r => r.AgreementId);
         return list.Select(a => new AgreementView(a.Id, a.Kind, a.PartnerId, partners[a.PartnerId].Code, partners[a.PartnerId].Name, a.Code, a.Name, a.FromDate, a.ToDate, a.IsActive, a.RowVersion,
-            a.Tiers.OrderBy(t => t.Threshold).Select(t => new AgreementTierInput(t.Threshold, t.Percent)).ToList(), runs.GetValueOrDefault(a.Id)?.Id, runs.GetValueOrDefault(a.Id)?.Amount)).ToList();
+            a.Tiers.OrderBy(t => t.Threshold).Select(t => new AgreementTierInput(t.Threshold, t.Percent)).ToList(), runs.GetValueOrDefault(a.Id)?.Id, runs.GetValueOrDefault(a.Id)?.Amount, a.Progressive)).ToList();
     }
 
     private async Task<int> FunctionalDpAsync(Guid companyId)
@@ -73,7 +73,7 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
             if (await db.DiscountAgreements.AnyAsync(a => a.CompanyId == ctx.CompanyId && a.Code == code)) throw new DomainException(ErrorCodes.DuplicateCode, $"Mã thỏa thuận {code} đã tồn tại.");
             var a = new DiscountAgreement
             {
-                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, PartnerId = input.PartnerId, Code = code, Name = Norm(input.Name), FromDate = input.FromDate, ToDate = input.ToDate,
+                Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = input.Kind, PartnerId = input.PartnerId, Code = code, Name = Norm(input.Name), FromDate = input.FromDate, ToDate = input.ToDate, Progressive = input.Progressive,
                 CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
             };
             foreach (var t in input.Tiers) a.Tiers.Add(new DiscountAgreementTier { Id = Ids.New(), AgreementId = a.Id, CompanyId = ctx.CompanyId, Threshold = t.Threshold, Percent = t.Percent });
@@ -96,7 +96,7 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
             if (a.Kind != input.Kind || a.PartnerId != input.PartnerId) throw new DomainException(ErrorCodes.ValidationFailed, "Không đổi chiều mua/bán hoặc đối tượng của thỏa thuận; lập thỏa thuận mới.");
             var code = Norm(input.Code);
             if (code != a.Code && await db.DiscountAgreements.AnyAsync(x => x.CompanyId == ctx.CompanyId && x.Code == code && x.Id != id)) throw new DomainException(ErrorCodes.DuplicateCode, $"Mã thỏa thuận {code} đã tồn tại.");
-            a.Code = code; a.Name = Norm(input.Name); a.FromDate = input.FromDate; a.ToDate = input.ToDate;
+            a.Code = code; a.Name = Norm(input.Name); a.FromDate = input.FromDate; a.ToDate = input.ToDate; a.Progressive = input.Progressive;
             db.DiscountAgreementTiers.RemoveRange(a.Tiers);
             var tiers = input.Tiers.Select(t => new DiscountAgreementTier { Id = Ids.New(), AgreementId = a.Id, CompanyId = ctx.CompanyId, Threshold = t.Threshold, Percent = t.Percent }).ToList();
             db.DiscountAgreementTiers.AddRange(tiers);
@@ -165,7 +165,24 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
         // Hóa đơn tiền hạch toán: chia theo tỷ lệ doanh số (hóa đơn cuối nhận phần dư) rồi theo dòng (dòng cuối nhận phần dư) để tổng đúng bằng Round(doanh số × %).
         var domestic = perInvoice.Where(p => p.Inv.Currency == null && p.Lines.Sum(l => l.Net) > 0).ToList();
         var domesticSales = domestic.Sum(p => p.Lines.Sum(l => l.Net));
-        var amount = MoneyMath.Round(domesticSales * percent / 100m, dp);
+        decimal domesticAmount = 0;
+        if (a.Progressive && perInvoice.Any(p => p.Inv.Currency != null && p.Lines.Sum(l => l.Net) > 0))
+            throw new DomainException(ErrorCodes.ValidationFailed, $"Thỏa thuận {a.Code} tính lũy tiến từng phần nhưng có hóa đơn ngoại tệ trong kỳ; dùng cách hồi tố hoặc tách riêng hóa đơn ngoại tệ.");
+        // Lũy tiến: mỗi phần doanh số nằm trong bậc [ngưỡng k; ngưỡng k+1) nhận tỷ lệ của bậc k (phần dưới ngưỡng thấp nhất không được giảm).
+        if (a.Progressive)
+        {
+            decimal raw = 0;
+            for (var k = 0; k < tiers.Count; k++)
+            {
+                var upper = k + 1 < tiers.Count ? tiers[k + 1].Threshold : decimal.MaxValue;
+                var band = Math.Min(domesticSales, upper) - tiers[k].Threshold;
+                if (band > 0) raw += band * tiers[k].Percent / 100m;
+            }
+            var progressive = MoneyMath.Round(raw, dp);
+            percent = domesticSales > 0 ? MoneyMath.Round(progressive / domesticSales * 100m, 4) : 0;   // tỷ lệ BÌNH QUÂN thực tế, chỉ để hiển thị / mô tả
+            domesticAmount = progressive;
+        }
+        var amount = a.Progressive ? domesticAmount : MoneyMath.Round(domesticSales * percent / 100m, dp);
         var remaining = amount;
         for (var k = 0; k < domestic.Count; k++)
         {

@@ -8317,6 +8317,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("partner_id");
 
+                    b.Property<bool>("Progressive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("progressive");
+
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER")

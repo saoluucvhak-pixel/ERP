@@ -3,8 +3,8 @@ using Hak.Domain.Trade;
 
 namespace Hak.Api;
 
-public sealed record AgreementRequest(InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers);
-public sealed record AgreementUpdateRequest(long RowVersion, InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers);
+public sealed record AgreementRequest(InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers, bool Progressive = false);
+public sealed record AgreementUpdateRequest(long RowVersion, InvoiceKind Kind, Guid PartnerId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, IReadOnlyList<AgreementTierInput> Tiers, bool Progressive = false);
 public sealed record AgreementActiveRequest(long RowVersion, bool Active);
 public sealed record AgreementSettleRequest(long RowVersion, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate, bool ByVoucher = false);
 
@@ -16,9 +16,9 @@ public static class DiscountEndpoints
         var api = app.MapGroup("/api/discounts");
         api.MapGet("/agreements", async (HttpContext http, InvoiceKind kind, DiscountAgreementService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), kind)));
         api.MapPost("/agreements", async (HttpContext http, AgreementRequest r, DiscountAgreementService s) =>
-            Results.Ok(new { (await s.CreateAsync(await http.SessionAsync(), new AgreementInput(r.Kind, r.PartnerId, r.Code, r.Name, r.FromDate, r.ToDate, r.Tiers))).Id }));
+            Results.Ok(new { (await s.CreateAsync(await http.SessionAsync(), new AgreementInput(r.Kind, r.PartnerId, r.Code, r.Name, r.FromDate, r.ToDate, r.Tiers, r.Progressive))).Id }));
         api.MapPut("/agreements/{id:guid}", async (HttpContext http, Guid id, AgreementUpdateRequest r, DiscountAgreementService s) =>
-            Results.Ok(new { (await s.UpdateAsync(await http.SessionAsync(), id, r.RowVersion, new AgreementInput(r.Kind, r.PartnerId, r.Code, r.Name, r.FromDate, r.ToDate, r.Tiers))).RowVersion }));
+            Results.Ok(new { (await s.UpdateAsync(await http.SessionAsync(), id, r.RowVersion, new AgreementInput(r.Kind, r.PartnerId, r.Code, r.Name, r.FromDate, r.ToDate, r.Tiers, r.Progressive))).RowVersion }));
         api.MapPost("/agreements/{id:guid}/active", async (HttpContext http, Guid id, AgreementActiveRequest r, DiscountAgreementService s) =>
             Results.Ok(new { (await s.SetActiveAsync(await http.SessionAsync(), id, r.RowVersion, r.Active)).RowVersion }));
         api.MapGet("/agreements/{id:guid}/preview", async (HttpContext http, Guid id, DiscountAgreementService s) => Results.Ok(await s.PreviewAsync(await http.SessionAsync(), id)));

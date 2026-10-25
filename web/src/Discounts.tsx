@@ -5,14 +5,14 @@ import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 
 interface Tier { threshold: string; percent: string }
 interface Agreement { id: string; kind: string; partnerId: string; partnerCode: string; partnerName: string; code: string; name: string; fromDate: string; toDate: string; isActive: boolean; rowVersion: number
-  tiers: Tier[]; runId: string | null; runAmount: string | null }
+  tiers: Tier[]; runId: string | null; runAmount: string | null; progressive?: boolean }
 interface Share { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; postingDate: string; sales: string; discount: string }
 interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[] }
 interface ReportRow { partnerId: string; partnerCode: string; partnerName: string; gross: string; onInvoiceTradeDiscount: string; afterSaleTradeDiscount: string; allowance: string; returns: string; increase: string; net: string; paymentDiscount: string }
 interface Report { rows: ReportRow[]; total: ReportRow }
 
 const yearStart = () => today().slice(0, 4) + '-01-01'
-const blankForm = () => ({ id: '', rowVersion: 0, partnerId: '', code: '', name: '', fromDate: yearStart(), toDate: today().slice(0, 4) + '-12-31', tiers: [{ threshold: '', percent: '' }] as Tier[] })
+const blankForm = () => ({ id: '', rowVersion: 0, partnerId: '', code: '', name: '', fromDate: yearStart(), toDate: today().slice(0, 4) + '-12-31', tiers: [{ threshold: '', percent: '' }] as Tier[], progressive: false })
 
 /**
  * Chiết khấu thương mại: (1) thỏa thuận theo doanh số có bậc, tính và quyết toán cuối kỳ thành hóa đơn điều chỉnh giảm nháp; (2) báo cáo phân biệt chiết khấu thương mại,
@@ -46,7 +46,7 @@ export function DiscountsView() {
   })
   const save = () => run(async () => {
     if (!form) return
-    const body = { kind, partnerId: form.partnerId, code: form.code.trim(), name: form.name.trim(), fromDate: form.fromDate, toDate: form.toDate, tiers: tiersBody(form) }
+    const body = { kind, partnerId: form.partnerId, code: form.code.trim(), name: form.name.trim(), fromDate: form.fromDate, toDate: form.toDate, tiers: tiersBody(form), progressive: form.progressive }
     if (form.id) await put(`/discounts/agreements/${form.id}`, { ...body, rowVersion: form.rowVersion })
     else await post('/discounts/agreements', body)
     setForm(null); setInfo(`Đã lưu thỏa thuận ${body.code}.`); await load()
@@ -67,7 +67,7 @@ export function DiscountsView() {
   })
   const toggle = (a: Agreement) => run(async () => { await post(`/discounts/agreements/${a.id}/active`, { rowVersion: a.rowVersion, active: !a.isActive }); await load() })
 
-  const edit = (a: Agreement) => setForm({ id: a.id, rowVersion: a.rowVersion, partnerId: a.partnerId, code: a.code, name: a.name, fromDate: a.fromDate, toDate: a.toDate, tiers: a.tiers.map(t => ({ threshold: formatMoney(t.threshold), percent: t.percent })) })
+  const edit = (a: Agreement) => setForm({ id: a.id, rowVersion: a.rowVersion, partnerId: a.partnerId, code: a.code, name: a.name, fromDate: a.fromDate, toDate: a.toDate, tiers: a.tiers.map(t => ({ threshold: formatMoney(t.threshold), percent: t.percent })), progressive: !!a.progressive })
   const updTier = (i: number, p: Partial<Tier>) => setForm(f => f && ({ ...f, tiers: f.tiers.map((t, j) => (j === i ? { ...t, ...p } : t)) }))
 
   return (
@@ -90,7 +90,7 @@ export function DiscountsView() {
           <thead><tr><th>Mã</th><th>{sales ? 'Khách hàng' : 'Nhà cung cấp'}</th><th>Kỳ áp dụng</th><th>Bậc chiết khấu (doanh số chưa thuế → %)</th><th>Quyết toán</th><th /></tr></thead>
           <tbody>{rows.map(a => <tr key={a.id} style={{ opacity: a.isActive ? undefined : 0.55 }}>
             <td>{a.code}<div className="muted">{a.name}{a.isActive ? '' : ' (ngừng)'}</div></td><td>{a.partnerCode} – {a.partnerName}</td><td>{formatDate(a.fromDate)} – {formatDate(a.toDate)}</td>
-            <td>{a.tiers.map(t => `từ ${formatMoney(t.threshold)} → ${formatMoney(t.percent)}%`).join('; ')}</td>
+            <td>{a.tiers.map(t => `từ ${formatMoney(t.threshold)} → ${formatMoney(t.percent)}%`).join('; ')}{a.progressive ? ' (lũy tiến từng phần)' : ' (hồi tố toàn bộ)'}</td>
             <td>{a.runId ? <>Đã quyết toán <b>{formatMoney(a.runAmount)}</b></> : <span className="muted">chưa</span>}</td>
             <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               <button disabled={busy} onClick={() => open(a)}>Xem tính</button>
@@ -132,6 +132,7 @@ export function DiscountsView() {
             <td><input className="num" aria-label="Doanh số từ" value={t.threshold} onChange={e => updTier(i, { threshold: e.target.value })} /></td>
             <td><input className="num" aria-label="Chiết khấu %" size={6} value={t.percent} onChange={e => updTier(i, { percent: e.target.value })} /></td>
             <td><button aria-label="Xóa bậc" disabled={form.tiers.length === 1} onClick={() => setForm({ ...form, tiers: form.tiers.filter((_, j) => j !== i) })}>✕</button></td></tr>)}</tbody></table>
+        <label><input type="checkbox" checked={form.progressive} onChange={e => setForm({ ...form, progressive: e.target.checked })} /> Lũy tiến từng phần (mỗi phần doanh số nhận tỷ lệ của bậc chứa nó); bỏ chọn = hồi tố: bậc đạt áp cho toàn bộ doanh số</label>
         <button onClick={() => setForm({ ...form, tiers: [...form.tiers, { threshold: '', percent: '' }] })}>+ Thêm bậc</button>
         <p className="muted">Bậc cao hơn không được có tỷ lệ thấp hơn bậc dưới. Đạt bậc nào thì tỷ lệ đó áp cho toàn bộ doanh số trong kỳ.</p>
       </Modal>}

@@ -8466,6 +8466,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("partner_id");
 
+                    b.Property<bool>("Progressive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("progressive");
+
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint")
