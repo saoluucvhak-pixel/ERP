@@ -25,15 +25,15 @@ public static class SalesApprovalEndpoints
     }
 }
 
-public sealed record PaymentDiscountVoucherRequest(Guid CashAccountId, DateOnly Date);
+public sealed record PaymentDiscountVoucherRequest(Guid CashAccountId, DateOnly Date, decimal? ManualDiscount = null);
 
 public static class PaymentDiscountEndpoints
 {
     public static void MapPaymentDiscountEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api/payment-discounts");
-        api.MapGet("", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly asOf, PaymentDiscountService s) => Results.Ok(await s.CandidatesAsync(await http.SessionAsync(), kind, asOf)));
+        api.MapGet("", async (HttpContext http, Hak.Domain.Trade.InvoiceKind kind, DateOnly asOf, PaymentDiscountService s, bool includeNoTerms = false) => Results.Ok(await s.CandidatesAsync(await http.SessionAsync(), kind, asOf, includeNoTerms)));
         api.MapPost("/{invoiceId:guid}/voucher", async (HttpContext http, Guid invoiceId, PaymentDiscountVoucherRequest r, PaymentDiscountService s) =>
-        { var v = await s.CreateVoucherAsync(await http.SessionAsync(), invoiceId, r.CashAccountId, r.Date); return Results.Ok(new { v.Id, v.Number }); });
+        { var v = await s.CreateVoucherAsync(await http.SessionAsync(), invoiceId, r.CashAccountId, r.Date, r.ManualDiscount); return Results.Ok(new { v.Id, v.Number }); });
     }
 }
