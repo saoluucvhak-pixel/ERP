@@ -142,3 +142,6 @@ Tham chiếu pháp lý hóa đơn điện tử = **Nghị định 254/2026/NĐ-C
 ## Đợt 26/10/2026 (cuối) — chiều mua, 01/TB-RSĐT, bảng kê
 Trích trước / quyết toán chứng từ chiết khấu thương mại cho cả chiều mua (`RebateAccountsAsync` trong `DiscountAgreementService`; vai trò `REBATE_RECEIVABLE`, `PURCHASE_TRADE_DISCOUNT`; ghi giảm giá vốn, không định giá lại tồn kho). Thông báo của cơ quan thuế 01/TB-RSĐT (`EInvoiceRiskNoticeService`, migration `Phase25RiskNotices`, mục kiểm đóng kỳ `EINVOICE_RISK_NOTICE`). Bảng kê hóa đơn gốc ↔ điều chỉnh `StatementAsync` (cột chưa phải mẫu 01/BK-ĐCTT chính thức). Việc mở: MỘT hóa đơn điều chỉnh gộp nhiều hóa đơn gốc; đọc văn bản gốc Nghị định 254 / Thông tư 91.
 
+## Nơi lưu dữ liệu (26/10/2026)
+`Hak:DataRoot` (Program.cs `dataDir`) quyết định thư mục dữ liệu (CSDL, attachments, backups, secret.key) = `<DataRoot>\<môi trường>`; mặc định `%LOCALAPPDATA%\HAK`. Bộ cài Inno có trang chọn thư mục (HAK.iss `[Code]`), ghi `%LOCALAPPDATA%\HAK\data-location.txt`; các `.cmd` đọc tệp này; `Doi thu muc du lieu.cmd` chép dữ liệu sang nơi mới. Gỡ chương trình không xóa dữ liệu. Chưa biên dịch thử HAK.iss (cần Inno Setup trên Windows).
+
