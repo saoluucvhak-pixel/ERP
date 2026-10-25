@@ -3,6 +3,8 @@ rem HAK Accounting - moi truong THU NGHIEM (Test): CSDL rieng %LOCALAPPDATA%\HAK
 rem chua xac minh. Chi dung de lam quen / doi chieu thu; so lieu o day khong phai so sach chinh thuc.
 rem Chi dung chu khong dau va xuong dong CRLF: cmd.exe doc sai tep UTF-8 / LF.
 cd /d "%~dp0"
+rem Thu muc du lieu do nguoi dung chon (file nam NGOAI thu muc chuong trinh nen go chuong trinh khong mat). Khong co file thi dung %LOCALAPPDATA%\HAK.
+if exist "%LOCALAPPDATA%\HAK\data-location.txt" set /p Hak__DataRoot=<"%LOCALAPPDATA%\HAK\data-location.txt"
 set URL=http://127.0.0.1:5081/
 rem Dang chay san thi chi mo trinh duyet, khong chay them ban thu hai.
 curl.exe -s -o nul --max-time 2 %URL%api/setup/status && goto open

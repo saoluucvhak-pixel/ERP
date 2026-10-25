@@ -28,6 +28,12 @@ var provider = builder.Configuration["Hak:Provider"] ?? "Sqlite";
 var usePostgres = provider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase) || provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase);
 if (!usePostgres && !provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException($"Hak:Provider '{provider}' không hợp lệ (Sqlite | PostgreSQL).");
+// Thư mục dữ liệu: Hak:DataRoot (chị tự chọn, ví dụ D:\HAK-DuLieu) thì dữ liệu nằm ở <DataRoot>\<môi trường>; không đặt thì %LOCALAPPDATA%\HAK\<môi trường>.
+// CSDL, ảnh đính kèm, bản sao lưu và khóa chủ (secret.key) cùng nằm ở đây; từng đường dẫn vẫn ghi đè riêng được (DatabasePath, AttachmentsPath, BackupPath, SecretKeyFile).
+// Gỡ chương trình KHÔNG xóa thư mục này.
+var dataDir = !string.IsNullOrWhiteSpace(builder.Configuration["Hak:DataRoot"])
+    ? Path.Combine(Path.GetFullPath(builder.Configuration["Hak:DataRoot"]!), runtime.Environment)
+    : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment);
 string storage;
 if (usePostgres)
 {
@@ -42,16 +48,14 @@ if (usePostgres)
 }
 else
 {
-    var dbPath = builder.Configuration["Hak:DatabasePath"]
-                 ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "hak.db");
+    var dbPath = builder.Configuration["Hak:DatabasePath"] ?? Path.Combine(dataDir, "hak.db");
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(dbPath))!);
     storage = $"SQLite {dbPath}";
     builder.Services.AddScoped(_ => new HakDbContext(HakDb.SqliteOptions(dbPath)));
 }
 
 var attachmentsRoot = builder.Configuration["Hak:AttachmentsPath"]
-                      ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(builder.Configuration["Hak:DatabasePath"]
-                          ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "hak.db"))) ?? AppContext.BaseDirectory, "attachments");
+                      ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(builder.Configuration["Hak:DatabasePath"] ?? Path.Combine(dataDir, "hak.db"))) ?? AppContext.BaseDirectory, "attachments");
 builder.Services.AddSingleton(new Hak.Application.Attachments.AttachmentStore(attachmentsRoot));
 builder.Services.AddHakApplicationServices();   // ServiceRegistration.cs
 builder.Services.AddSingleton(runtime);
@@ -69,7 +73,7 @@ builder.Services.AddSingleton(new Hak.Application.EInvoice.EInvoiceOptions(build
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton(new Hak.Application.Backup.BackupOptions
 {
-    Directory = builder.Configuration["Hak:BackupPath"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "backups"),
+    Directory = builder.Configuration["Hak:BackupPath"] ?? Path.Combine(dataDir, "backups"),
 });
 // Giới hạn tần suất đăng nhập theo IP (chặn dò mật khẩu/tên đăng nhập hàng loạt; khóa theo tài khoản vẫn giữ nguyên). 0 = tắt.
 var loginLimit = builder.Configuration.GetValue("Hak:LoginRateLimitPerMinute", 30);
@@ -88,7 +92,7 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Ad
 // cạnh thư mục dữ liệu. Phải sao lưu RIÊNG khỏi CSDL; mất khóa chủ thì phải cấp lại khóa trao đổi.
 var masterKey = runtime.Environment != "Test" || builder.Configuration["Hak:SecretKey"] is not null
     ? new MasterKey(SecretProtector.LoadOrCreateKey(builder.Configuration["Hak:SecretKey"],
-        builder.Configuration["Hak:SecretKeyFile"] ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAK", runtime.Environment, "secret.key")))
+        builder.Configuration["Hak:SecretKeyFile"] ?? Path.Combine(dataDir, "secret.key")))
     : MasterKey.None;
 builder.Services.AddSingleton(masterKey);
 
