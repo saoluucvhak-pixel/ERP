@@ -155,6 +155,7 @@ public class TradeTests
 
         await fx.Inv.ReverseAsync(fx.H.Approver, discount.Id, D(3, 13), "Hủy giảm giá");           // đảo điều chỉnh trước…
         Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 14), "Đảo hóa đơn gốc")).Status);   // …rồi mới đảo được hóa đơn gốc
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -223,6 +224,7 @@ public class TradeTests
         var journals = await fx.S.Db.JournalEntries.CountAsync();
         Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, invoice.Id, D(3, 20), "Đảo hóa đơn mua")));
         Assert.Equal(journals, await fx.S.Db.JournalEntries.CountAsync());
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -241,6 +243,7 @@ public class TradeTests
         var posted = await fx.Inv.PostAsync(fx.H.Approver, inv.Id, false, inv.RowVersion);
         Assert.Equal(ErrorCodes.ConcurrencyConflict, await CodeOf(() => fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion - 1)));
         Assert.Equal(InvoiceStatus.Reversed, (await fx.Inv.ReverseAsync(fx.H.Approver, inv.Id, D(3, 20), "Đảo", posted.RowVersion)).Status);
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -522,6 +525,7 @@ public class TradeTests
         await orders.CloseAsync(fx.H.Preparer, order.Id, "Khách không lấy phần còn lại");
         var pending = (await fx.S.Db.StockDocuments.AsNoTracking().Where(d => d.Status == StockDocumentStatus.Draft).ToListAsync()).First();
         Assert.Equal(ErrorCodes.OrderMismatch, await CodeOf(() => fx.S.Stock.PostDocumentAsync(fx.H.Approver, pending.Id))); // closed order: drafts cannot post
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -719,6 +723,7 @@ public class TradeTests
         Assert.Equal(Hak.Domain.Banking.PaymentOrderStatus.Cancelled, (await s.Db.PaymentOrders.AsNoTracking().SingleAsync(o => o.Id == po.Id)).Status);
         Assert.Equal("NOT_ACCEPTED", (await s.PaymentAcceptances.PayableQueueAsync(h.Auditor, D(3, 31))).Single().Stage);
         await s.PaymentAcceptances.AcceptAsync(h.Preparer, inv.Id, null);   // can be accepted again after cancelling
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -977,6 +982,7 @@ public class TradeTests
         var coll = await reports.CollectionsAsync(h.Auditor, D(3, 1), D(3, 31));
         Assert.Equal((500_000m, "KH01"), (coll.Total, Assert.Single(coll.ByPartner).PartnerCode));
         Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.CreateDispatchAsync(h.Auditor, new(order.Id, fx.Wh, D(3, 6), null, null, [new(1, 1)]))));
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     [Fact]
@@ -2072,6 +2078,7 @@ public class TradeTests
         await orders.CloseAsync(h.Preparer, order.Id, "Hoàn tất");
         Assert.DoesNotContain((await flow.WorklistAsync(h.Auditor, InvoiceKind.Sales)).Items, w => w.OrderId == order.Id);
         Assert.Equal("Closed", State(await flow.FlowAsync(h.Auditor, order.Id), "Approval"));
+        await LedgerInvariants.AssertAsync(fx.S.Db);   // bất biến chéo chu trình: cân Nợ/Có, một nguồn một bút toán, phân bổ không vượt, tồn không âm
     }
 
     // ------------------------------------------------------------------ Đợt 5: bảng kiểm đóng kỳ
