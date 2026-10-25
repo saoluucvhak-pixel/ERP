@@ -1243,6 +1243,30 @@ public partial class TradeTests
     }
 
     [Fact]
+    public async Task PaymentDiscount_Standalone_NotTiedToAnInvoice_IsASeparateEntry()
+    {
+        using var fx = await SetupAsync();
+        var pd = new PaymentDiscountService(fx.S.Db, fx.S.Engine, fx.S.Audit, fx.H.Clock);
+        var receipt = await DraftReceiptAsync(fx, 100, D(3, 2), fx.Add);
+        var created = await fx.Inv.CreateAsync(fx.H.Preparer, Purchase(fx, "M1", new InvoiceLineInput(50_000, receipt.Id, 1, VatRate: 10)));
+        var inv = await fx.Inv.PostAsync(fx.H.Approver, created.Id);                                                                                // phải trả 5.500.000, hóa đơn không có điều khoản
+        fx.H.Acc["FININC"] = (await fx.S.Setup.CreateAccountAsync(fx.H.Admin, "FININC", "Doanh thu tài chính (thử)")).Id;
+        await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "PAYMENT_DISCOUNT_INCOME", "FININC");
+        await fx.H.PostedAsync(fx.S, new VoucherInput(VoucherTypes.General, D(3, 1), D(3, 1), "Góp vốn", [new(fx.A("CASH"), Side.Debit, 10_000_000), new(fx.A("EQUITY"), Side.Credit, 10_000_000)]));
+        var item = Assert.Single(await pd.OpenItemsAsync(fx.H.Auditor, InvoiceKind.Purchase, fx.H.Partner["NCC01"], D(3, 10)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), 0)));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), item.Open)));
+        var v = await pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), 100_000);
+        await PostVoucherAsync(fx, v.Id);
+        Assert.Equal(0m, await fx.Bal("AP"));
+        Assert.Equal(-100_000m, await fx.Bal("FININC"));
+        var after = await fx.S.Db.CommercialInvoices.AsNoTracking().FirstAsync(x => x.Id == inv.Id);
+        Assert.Equal((inv.Status, inv.RowVersion), (after.Status, after.RowVersion));                                                               // hóa đơn không đổi
+        var rep = await new DiscountReportService(fx.S.Db).ReportAsync(fx.H.Auditor, InvoiceKind.Purchase, D(3, 1), D(3, 31));
+        Assert.Equal(100_000m, rep.Total.PaymentDiscount);
+    }
+
+    [Fact]
     public async Task ServiceItem_OrderAcceptanceInvoice_SalesAndPurchase()
     {
         using var fx = await SetupAsync();
