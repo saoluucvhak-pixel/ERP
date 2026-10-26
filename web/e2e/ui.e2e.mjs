@@ -65,6 +65,78 @@ async function open(user) {
 }
 const selected = page => page.locator('select').evaluateAll(els => els.map(e => e.selectedOptions[0]?.textContent ?? ''))
 
+test('Retry ownership: server commits, response is lost, new login and reload do not replay the old write', async () => {
+  const page = await open('ktt')
+  const nextToken = await ctx.login('ketoan')
+  let sends = 0
+  await page.route('**/api/partners', async route => {
+    if (route.request().method() !== 'POST') return route.continue()
+    sends++
+    const response = await route.fetch()
+    assert.ok(response.ok(), 'first request must actually commit in the temporary database')
+    await page.evaluate(async token => {
+      const api = await import('/src/api.ts')
+      api.session.setToken(null); api.session.setToken(token)
+    }, nextToken)
+    await route.abort('failed')
+  })
+  const code = 'E2E-OWNER-REPLAY'
+  const result = await page.evaluate(async code => {
+    const api = await import('/src/api.ts')
+    try { await api.post('/partners', { code, name: 'Temporary ownership regression' }); return 'unexpected-success' }
+    catch (e) { return e.code }
+  }, code)
+  assert.equal(result, 'NGU_CANH_DA_DOI')
+  await page.reload()
+  await page.waitForSelector('.quick-add-btn')
+  await page.getByText('Có thao tác ở phiên trước cần đối chiếu.', { exact: false }).waitFor()
+  const state = await page.evaluate(async () => {
+    const api = await import('/src/api.ts')
+    return { pending: api.pendingWrites().length, retried: await api.retryPendingWrite(), stored: sessionStorage.getItem('hak.pending') }
+  })
+  assert.deepEqual(state, { pending: 0, retried: false, stored: null })
+  assert.equal(sends, 1)
+  const partners = await call('GET', '/partners', null, nextToken, ctx.company)
+  assert.equal(partners.filter(p => p.code === code).length, 1, 'exactly one committed partner, no hidden replay')
+  await page.getByRole('button', { name: 'Đã đọc nhắc nhở', exact: true }).click()
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('hak.pending.review')), null)
+  await page.close()
+})
+
+test('Safe retry button confirms the original server result without creating a second record', async () => {
+  const page = await open('ktt')
+  const code = 'E2E-OWNER-SAFE-RETRY'
+  const keys = []
+  const loseResponse = async route => {
+    if (route.request().method() !== 'POST') return route.continue()
+    keys.push(route.request().headers()['idempotency-key'])
+    const response = await route.fetch()
+    assert.ok(response.ok())
+    await route.abort('failed')
+  }
+  await page.route('**/api/partners', loseResponse)
+  const result = await page.evaluate(async code => {
+    const api = await import('/src/api.ts')
+    try { await api.post('/partners', { code, name: 'Temporary safe retry regression' }); return 'unexpected-success' }
+    catch (e) { return e.code }
+  }, code)
+  assert.equal(result, 'KET_QUA_CHUA_XAC_DINH')
+  assert.equal(keys.length, 3)
+  assert.equal(new Set(keys).size, 1)
+  await page.unroute('**/api/partners', loseResponse)
+  const confirmation = page.waitForResponse(r => r.url().endsWith('/api/partners') && r.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Thử lại an toàn', exact: true }).click()
+  const response = await confirmation
+  assert.ok(response.ok())
+  assert.equal(response.request().headers()['idempotency-key'], keys[0])
+  await page.getByText('Máy chủ đã xác nhận thao tác', { exact: false }).waitFor()
+  const token = await page.evaluate(() => sessionStorage.getItem('hak.token'))
+  const partners = await call('GET', '/partners', null, token, ctx.company)
+  assert.equal(partners.filter(p => p.code === code).length, 1)
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('hak.pending')), null)
+  await page.close()
+})
+
 test('CKTM: Tiến độ liên kết hóa đơn vào chứng từ đã ghi và không báo hồ sơ thuế hoàn tất', async () => {
   const date = new Date().toISOString().slice(0, 10)
   const chief = await ctx.login('ktt')
@@ -101,6 +173,48 @@ test('CKTM: Tiến độ liên kết hóa đơn vào chứng từ đã ghi và k
   assert.equal(progress.postedInvoiceAmount, '20000')
   assert.equal(progress.legalInvoiceStatus, 'Missing', 'ghi sổ tay không tự xác nhận chứng cứ HĐĐT')
   assert.equal(progress.taxStatus, 'PendingInvoice')
+  await page.close()
+})
+
+test('CKTM supplementary UI creates only the difference and keeps the original run visible', async () => {
+  const date = new Date().toISOString().slice(0, 10)
+  const chief = await ctx.login('ktt')
+  const partner = await call('POST', '/partners', { code: 'AMEND28UI', name: 'Supplement UI fixture' }, chief, ctx.company)
+  const sale = async (no, amount) => {
+    const invoice = await call('POST', '/invoices', { kind: 'Sales', partnerId: partner.id, invoiceSeries: 'E2E', invoiceNo: no, invoiceDate: date, postingDate: date, description: 'Amendment UI source', lines: [{ unitPrice: amount, quantity: '1', accountId: ctx.A('SALESREV'), vatRate: '10' }] }, ctx.preparerToken, ctx.company)
+    return call('POST', `/invoices/${invoice.id}/post?rowVersion=${invoice.rowVersion}`, {}, chief, ctx.company)
+  }
+  await sale('AMEND28-A', '1000000')
+  const agreement = await call('POST', '/discounts/agreements', { kind: 'Sales', partnerId: partner.id, code: 'AMEND28UI', name: 'Supplement UI fixture', fromDate: date, toDate: date, tiers: [{ threshold: '0', percent: '2' }] }, chief, ctx.company)
+  const a = (await call('GET', '/discounts/agreements?kind=Sales', null, chief, ctx.company)).find(a => a.id === agreement.id)
+  const root = await call('POST', `/discounts/agreements/${a.id}/settle`, { rowVersion: a.rowVersion, invoiceSeries: 'E2E', firstInvoiceNo: 'AMEND28-ROOT', invoiceDate: date, postingDate: date }, ctx.preparerToken, ctx.company)
+  const rootProgress = await call('GET', `/discounts/agreements/${a.id}/lifecycle`, null, chief, ctx.company)
+  for (const row of rootProgress.invoices) {
+    const invoice = await call('GET', `/invoices/${row.id}`, null, chief, ctx.company)
+    await call('POST', `/invoices/${invoice.id}/post?rowVersion=${invoice.rowVersion}`, {}, chief, ctx.company)
+  }
+  await sale('AMEND28-B', '200000')
+  const page = await open('ktt')
+  await page.click('.sidebar button:has-text("Bán hàng")')
+  await page.getByRole('tab', { name: 'CK thương mại cho khách', exact: true }).click()
+  await page.locator('tbody tr', { hasText: 'AMEND28UI' }).getByRole('button', { name: 'Bổ sung / Thu hồi', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Bổ sung / thu hồi CKTM — AMEND28UI', exact: true })
+  await dialog.getByRole('button', { name: 'Tính lại chênh lệch', exact: true }).click()
+  await dialog.getByLabel('Lý do', { exact: true }).fill('Late invoice evidence UI28')
+  await dialog.getByLabel('Ký hiệu', { exact: true }).fill('E2E')
+  await dialog.getByLabel('Số hóa đơn đầu tiên', { exact: true }).fill('AMEND28-SUP')
+  const submitted = page.waitForResponse(r => r.url().endsWith(`/discounts/agreements/${a.id}/amend`) && r.request().method() === 'POST')
+  await dialog.getByRole('button', { name: 'Lập hóa đơn nháp theo chênh lệch', exact: true }).click()
+  const response = await submitted; assert.ok(response.ok())
+  const child = await response.json(); assert.equal(child.amount, '4000')
+  const history = await call('GET', `/discounts/agreements/${a.id}/history`, null, chief, ctx.company)
+  assert.equal(history.length, 2); assert.ok(history.some(h => h.id === root.id && h.amount === '20000'))
+  const row = dialog.locator('tbody tr', { hasText: 'Late invoice evidence UI28' })
+  await row.getByRole('button', { name: 'Tiến độ lần này', exact: true }).click()
+  const progress = page.getByRole('dialog', { name: 'Tiến độ quyết toán — AMEND28UI', exact: true })
+  await progress.waitFor(); assert.match(await progress.textContent(), /Nháp/)
+  const state = await call('GET', `/discounts/agreements/${a.id}/lifecycle?runId=${child.id}`, null, chief, ctx.company)
+  assert.equal(state.accountingStatus, 'Draft'); assert.equal(state.amount, '4000')
   await page.close()
 })
 
@@ -333,5 +447,34 @@ test('Hóa đơn điện tử: màn hình báo nhà cung cấp giả lập; form
   await page.click('[role=tab]:has-text("HĐĐT nhà cung cấp")')
   await visible(page, 'h2:has-text("Hóa đơn điện tử của nhà cung cấp")')
   await visible(page, 'td.muted:has-text("Không có điều chỉnh / thay thế nào của nhà cung cấp")')
+  await page.close()
+})
+
+test('Foreign replacement UI previews transferred foreign and book amounts before issue', async () => {
+  const date = new Date().toISOString().slice(0, 10)
+  const chief = await ctx.login('ktt')
+  const original = await call('POST', '/invoices', { kind: 'Sales', partnerId: ctx.P('KH01'), invoiceSeries: '', invoiceNo: '', awaitIssue: true, currency: 'USD', exchangeRate: '25000', invoiceDate: date, postingDate: date, description: 'FX replacement UI source', lines: [{ unitPrice: '1000', quantity: '1', accountId: ctx.A('SALESREV'), vatRate: '10' }] }, ctx.preparerToken, ctx.company)
+  const issued = await call('POST', `/einvoice/invoices/${original.id}/issue?rowVersion=${original.rowVersion}`, {}, chief, ctx.company)
+  assert.equal(issued.postError, null)
+  const items = await call('GET', `/settlement/open-items?accountId=${ctx.A('AR')}&partnerId=${ctx.P('KH01')}&asOf=${date}`, null, chief, ctx.company)
+  const posted = await call('GET', `/invoices/${original.id}`, null, chief, ctx.company)
+  const target = items.find(i => i.foreignCurrency === 'USD' && i.voucherId === posted.voucherId)
+  assert.ok(target)
+  const draft = await call('POST', '/fx/payments', { date, cashAccountId: ctx.A('BANKUSD'), paymentRate: '25200', description: 'Receipt before replacement UI', items: [{ journalLineId: target.journalLineId, foreignAmount: '400' }] }, ctx.preparerToken, ctx.company)
+  let voucher = await call('GET', `/vouchers/${draft.id}`, null, ctx.preparerToken, ctx.company)
+  voucher = await call('POST', `/vouchers/${voucher.id}/submit?rowVersion=${voucher.rowVersion}`, {}, ctx.preparerToken, ctx.company)
+  voucher = await call('POST', `/vouchers/${voucher.id}/approve?rowVersion=${voucher.rowVersion}`, {}, chief, ctx.company)
+  await call('POST', `/vouchers/${voucher.id}/post?rowVersion=${voucher.rowVersion}`, {}, chief, ctx.company)
+  const replacement = await call('POST', `/einvoice/invoices/${original.id}/replacement`, { reason: 'Price correction UI', changes: [{ lineNo: 1, unitPrice: '900' }] }, ctx.preparerToken, ctx.company)
+  const page = await open('ktt')
+  await page.click('.sidebar button:has-text("Bán hàng")')
+  await page.click('[role=tab]:has-text("Hóa đơn bán")')
+  await page.locator('tbody tr', { hasText: replacement.number }).getByRole('button', { name: 'Phân bổ thay thế', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: `Phân bổ hóa đơn thay thế — ${replacement.number}`, exact: true })
+  await dialog.waitFor()
+  const cells = await dialog.locator('tbody tr').first().locator('td').allTextContents()
+  assert.equal(cells[0], 'USD'); assert.equal(cells[1].replace(/\D/g, ''), '400')
+  assert.equal(cells[2].replace(/\D/g, ''), '10000000')
+  assert.equal((await call('GET', `/invoices/${replacement.id}`, null, chief, ctx.company)).status, 'Draft')
   await page.close()
 })

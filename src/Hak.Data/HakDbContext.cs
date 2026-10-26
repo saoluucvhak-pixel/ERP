@@ -544,7 +544,10 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         });
         b.Entity<DiscountAgreementRun>(e =>
         {
-            e.HasIndex(x => x.AgreementId).IsUnique().HasFilter("voided_at IS NULL");
+            e.HasIndex(x => x.AgreementId).IsUnique().HasFilter("voided_at IS NULL AND parent_run_id IS NULL");
+            e.HasIndex(x => x.ParentRunId).IsUnique().HasFilter("voided_at IS NULL AND parent_run_id IS NOT NULL");
+            e.HasIndex(x => new { x.AgreementId, x.Sequence }).IsUnique().HasFilter("voided_at IS NULL");
+            e.HasOne<DiscountAgreementRun>().WithMany().HasForeignKey(x => x.ParentRunId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<DiscountAgreement>().WithMany().HasForeignKey(x => x.AgreementId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Invoices).WithOne().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Restrict);
         });

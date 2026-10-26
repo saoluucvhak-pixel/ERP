@@ -210,6 +210,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
             if (inv.Status == InvoiceStatus.Draft) await invoices.PostAsync(ctx, invId);
         }
         catch (DomainException ex) { error = ex.Message; }
+        catch (DbUpdateException) { error = "Hóa đơn đã phát hành nhưng ghi sổ gặp lỗi cơ sở dữ liệu. Đối chiếu trạng thái và thử ghi sổ lại trên cùng hóa đơn; không phát hành hóa đơn mới."; }
         await db.InTransactionAsync(async () =>
         {
             var d = await db.EInvoiceDocuments.FirstAsync(x => x.Id == documentId);

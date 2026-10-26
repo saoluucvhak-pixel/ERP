@@ -43,9 +43,9 @@ Căn cứ kỳ nhận CKTM: Điều 10(5), (6)(d) của [TT91/2026 trên Công b
 ## Các phần chưa hoàn tất
 
 - CKTM mua trước hóa đơn vẫn là ghi nhận tạm ở tài khoản vai trò đã chọn; phân bổ kho/giá vốn hoàn tất khi hóa đơn được ghi sổ. Chưa phân bổ tự động xuyên sản xuất dở dang, giá thành đã chốt hoặc tài sản.
-- Chưa có run bổ sung/thu hồi sau quyết toán; không sửa snapshot cũ để nhận doanh số mới.
+- Đợt Phase28 đã bổ sung run bổ sung/thu hồi có lịch sử, không sửa snapshot cũ. Xem `2026-10-26-rebate-amendments-fx-replacement.md`.
 - Chưa có giao diện đính chính ngày nhận đã lưu bằng chứng cứ bổ sung; không sửa/xóa trực tiếp dòng chứng cứ.
-- Chưa hỗ trợ tự chuyển phân bổ ngoại tệ đã thanh toán khi thay thế, hóa đơn điều chỉnh gộp nhiều nguồn, hoặc nhập danh sách số hóa đơn NCC thực tế thay cho chuỗi số đầu tiên của nhiều hóa đơn.
+- Phase28 đã hỗ trợ chuyển phân bổ ngoại tệ khi cùng tiền tệ/tỷ giá và khớp giá trị ghi sổ; trường hợp đánh giá lại hoặc đổi cơ sở CK thanh toán vẫn chặn. Chưa có hóa đơn điều chỉnh gộp nhiều nguồn, hoặc nhập danh sách số hóa đơn NCC thực tế thay cho chuỗi số đầu tiên của nhiều hóa đơn.
 - Chưa kiểm thử PostgreSQL thực, adapter/chữ ký số thật hoặc mẫu bảng kê pháp lý chính thức. Kiểm tra model và sinh SQL không thay thế các bước này.
 
 Kiểm chứng đợt hoàn thiện: **541/541 backend** (126 domain + 415 SQLite, gồm 10 ca nghiệp vụ mới), **64/64 frontend**, **13/13 e2e**, build đạt, lint 0 lỗi/25 cảnh báo có sẵn. Test hạ/nâng phiên bản giữ dữ liệu đạt; model SQLite/PG khớp; SQL PostgreSQL sinh thành công. Chưa chạy PostgreSQL thực hoặc NCC thật.

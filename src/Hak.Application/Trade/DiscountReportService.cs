@@ -28,6 +28,11 @@ public sealed class DiscountReportService(HakDbContext db)
         var invs = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines)
             .Where(i => i.CompanyId == ctx.CompanyId && i.Kind == kind && i.Status == InvoiceStatus.Posted && i.PostingDate >= fromDate && i.PostingDate <= toDate).ToListAsync();
         var partners = await db.BusinessPartners.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToDictionaryAsync(p => p.Id);
+        var recognizedByVoucher = (await (from link in db.DiscountSettlementInvoiceLinks.AsNoTracking()
+            join run in db.DiscountAgreementRuns.AsNoTracking() on link.RunId equals run.Id
+            join voucher in db.Vouchers.AsNoTracking() on run.VoucherId equals voucher.Id
+            where run.CompanyId == ctx.CompanyId && run.VoidedAt == null && link.Amount > 0 && voucher.Status == VoucherStatus.Posted
+            select link.AdjustmentInvoiceId).ToListAsync()).ToHashSet();
         var acc = new Dictionary<Guid, decimal[]>();   // 0 gross, 1 onInvoice, 2 trade after, 3 allowance, 4 returns, 5 increase, 6 payment discount
         decimal[] Row(Guid p) => acc.TryGetValue(p, out var r) ? r : acc[p] = new decimal[7];
         foreach (var i in invs)
@@ -38,8 +43,9 @@ public sealed class DiscountReportService(HakDbContext db)
             {
                 case InvoicePurpose.Normal: r[0] += net + i.Lines.Sum(l => l.FunctionalDiscountAmount); r[1] += i.Lines.Sum(l => l.FunctionalDiscountAmount); break;
                 case InvoicePurpose.Return: r[4] += net; break;
+                case InvoicePurpose.Increase when i.AdjustmentReason == InvoiceAdjustmentReason.CommercialRebate: r[2] -= net; break;
                 case InvoicePurpose.Increase: r[5] += net; break;
-                case InvoicePurpose.Discount: if (i.DiscountKind == DiscountKind.Trade) r[2] += net; else r[3] += net; break;
+                case InvoicePurpose.Discount: if (i.DiscountKind == DiscountKind.Trade) { if (!recognizedByVoucher.Contains(i.Id)) r[2] += net; } else r[3] += net; break;
             }
         }
         // Chiết khấu thương mại quyết toán bằng hạch toán điều chỉnh giảm (không có hóa đơn điều chỉnh): chứng từ đã ghi sổ trong kỳ, tính vào cột "CK thương mại sau bán".

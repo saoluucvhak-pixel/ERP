@@ -1,17 +1,24 @@
+import { sha256 } from '@noble/hashes/sha2.js'
+
 export class ApiError extends Error {
   readonly code: string
   readonly status: number
   readonly errors: { code: string; message: string; lineNo?: number | null }[]
   constructor(status: number, code: string, message: string, errors: ApiError['errors'] = []) {
-    super(message)
-    this.status = status
-    this.code = code
-    this.errors = errors
+    super(message); this.status = status; this.code = code; this.errors = errors
   }
 }
 
+const OWNER_KEY = 'hak.auth-owner'
+const PENDING_KEY = 'hak.pending'
+const REVIEW_KEY = 'hak.pending.review'
+// The server retains idempotency responses for seven days. Never replay a tab record near/beyond that boundary.
+const MAX_RETRY_AGE = 6 * 24 * 60 * 60 * 1000
 let token: string | null = sessionStorageGet('hak.token')
 let companyId: string | null = sessionStorageGet('hak.company')
+let authOwner: string | null = token ? sessionStorageGet(OWNER_KEY) ?? newIdempotencyKey() : null
+if (authOwner) sessionStorageSet(OWNER_KEY, authOwner)
+let reviewRequired = sessionStorageGet(REVIEW_KEY) === '1'
 
 function sessionStorageGet(k: string): string | null {
   try { return sessionStorage.getItem(k) } catch { return null }
@@ -19,34 +26,53 @@ function sessionStorageGet(k: string): string | null {
 function sessionStorageSet(k: string, v: string | null) {
   try { if (v == null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v) } catch { /* private mode */ }
 }
+function notifyPending() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('hak-pending'))
+}
+function requireReview() { reviewRequired = true; sessionStorageSet(REVIEW_KEY, '1'); notifyPending() }
+export const pendingReviewNeeded = () => reviewRequired
+export function acknowledgePendingReview() { reviewRequired = false; sessionStorageSet(REVIEW_KEY, null); notifyPending() }
 
-/** Registered by the app shell: called when a request that carried a token is refused as unauthenticated (session expired, revoked, server restarted). */
 let onExpired: (() => void) | null = null
 export const setSessionExpiredHandler = (h: (() => void) | null) => { onExpired = h }
+
+interface Ctx { readonly token: string | null; readonly companyId: string | null; readonly authOwner: string | null }
+const snapshot = (): Ctx => Object.freeze({ token, companyId, authOwner })
+const sameAuth = (c: Ctx) => c.token === token && c.authOwner === authOwner
+const sameCtx = (c: Ctx) => sameAuth(c) && c.companyId === companyId
+const uncertainOps = new Map<string, WriteOp>()
+const inFlightWrites = new Map<string, Promise<unknown>>()
+const activeOps = new Map<string, Promise<unknown>>()
 
 export const session = {
   get token() { return token },
   get companyId() { return companyId },
-  setToken(t: string | null) { token = t; sessionStorageSet('hak.token', t); if (t === null) { uncertainOps.clear(); sessionStorageSet(PENDING_KEY, null) } },
-  setCompany(c: string | null) { companyId = c; sessionStorageSet('hak.company', c) },
+  get ownerId() { return authOwner },
+  setToken(t: string | null) {
+    if (t === token) return
+    if (uncertainOps.size > 0) requireReview()
+    token = t; authOwner = t ? newIdempotencyKey() : null
+    sessionStorageSet('hak.token', t); sessionStorageSet(OWNER_KEY, authOwner)
+    uncertainOps.clear(); inFlightWrites.clear(); activeOps.clear(); sessionStorageSet(PENDING_KEY, null)
+    notifyPending()
+  },
+  setCompany(c: string | null) { companyId = c; sessionStorageSet('hak.company', c); notifyPending() },
 }
 
-/** fetch that reports a stopped / unreachable HAK server in Vietnamese instead of the browser's "TypeError: Failed to fetch". */
 async function send(url: string, init: RequestInit): Promise<Response> {
   try { return await fetch(url, init) }
   catch {
-    throw new ApiError(0, 'KHONG_KET_NOI', 'Không kết nối được máy chủ HAK — có thể HAK đã tắt. Mở lại bằng tệp "Chay HAK", chờ trang tự mở rồi thao tác lại (dữ liệu chưa bị thay đổi).')
+    throw new ApiError(0, 'KHONG_KET_NOI', init.method === 'GET'
+      ? 'Không kết nối được máy chủ HAK. Kiểm tra kết nối và mở lại HAK.'
+      : 'Mất kết nối khi gửi yêu cầu. Chưa xác định đã xử lý hay chưa; kiểm tra kết quả trước khi thực hiện lại.')
   }
 }
-
-/** Response body as JSON; a non-JSON answer (e.g. a proxy error page) becomes a readable error. */
 function parse(text: string, status: number): any {
   if (!text) return undefined
   try { return JSON.parse(text) }
-  catch { throw new ApiError(status, 'HTTP_' + status, `Máy chủ trả lời không đúng định dạng (mã ${status}).`) }
+  catch { throw new ApiError(status >= 200 && status < 300 ? 0 : status, 'HTTP_' + status, `Máy chủ trả lời không đúng định dạng (mã ${status}); cần đối chiếu kết quả.`) }
 }
 
-/** Khóa chống ghi trùng. crypto.randomUUID chỉ có ở ngữ cảnh bảo mật (https/localhost); truy cập qua http trong LAN phải dùng getRandomValues. */
 export function newIdempotencyKey(): string {
   const c = globalThis.crypto
   if (c?.randomUUID) return c.randomUUID()
@@ -56,117 +82,140 @@ export function newIdempotencyKey(): string {
 }
 
 export const UNCERTAIN_CODE = 'KET_QUA_CHUA_XAC_DINH'
-/** Phản hồi của một yêu cầu ĐỌC thuộc phiên/công ty cũ đến sau khi đã đổi ngữ cảnh: bị bỏ, không được ghi đè dữ liệu của ngữ cảnh mới. */
 export const STALE_CODE = 'NGU_CANH_DA_DOI'
 export const isStaleContext = (e: unknown) => e instanceof ApiError && e.code === STALE_CODE
-/** Ngữ cảnh (phiên + công ty) tại thời điểm tạo thao tác; mọi lần gửi lại dùng đúng ngữ cảnh này, không đọc lại biến toàn cục. */
-interface Ctx { token: string | null; companyId: string | null }
-const snapshot = (): Ctx => ({ token, companyId })
-const sameCtx = (c: Ctx) => c.token === token && c.companyId === companyId
-/**
- * Một thao tác ghi: nội dung JSON được chụp THÀNH CHUỖI một lần lúc tạo (sửa đối tượng gốc về sau không đổi được thứ đã/sẽ gửi), cùng khóa, cùng ngữ cảnh.
- * Dedupe, lần gửi đầu, tự gửi lại và "thử lại an toàn" đều dùng đúng chuỗi + khóa này.
- * Trạng thái: InFlight (đang gửi) → Confirmed (máy chủ nhận) | Rejected (máy chủ từ chối rõ ràng) | Uncertain (mất kết nối, chưa biết đã ghi hay chưa).
- */
-export type OpState = 'InFlight' | 'Uncertain' | 'Confirmed' | 'Rejected'
-export interface WriteOp { readonly id: string; readonly method: string; readonly path: string; readonly bodyText: string | undefined; readonly key: string; readonly ctx: Ctx; state: OpState }
-const newOp = (method: string, path: string, body: unknown, key: string | undefined, ctx: Ctx): WriteOp => {
-  const key2 = key ?? newIdempotencyKey()
-  return { id: key2, method, path, bodyText: body === undefined ? undefined : JSON.stringify(body), key: key2, ctx, state: 'InFlight' }
+export type OpState = 'InFlight' | 'Uncertain' | 'Confirmed' | 'Rejected' | 'Detached'
+export interface WriteOp {
+  readonly id: string; readonly method: string; readonly path: string; readonly bodyText: string | undefined
+  readonly key: string; readonly ctx: Ctx; readonly createdAt: number; state: OpState
 }
-/** Các thao tác chưa xác định, theo thứ tự phát sinh; mỗi thao tác một chỗ (không ghi đè nhau), lọc theo phiên + công ty khi đọc. */
-const uncertainOps = new Map<string, WriteOp>()
+const newOp = (method: string, path: string, body: unknown, key: string | undefined, ctx: Ctx): WriteOp => ({
+  id: newIdempotencyKey(), method, path, bodyText: body === undefined ? undefined : JSON.stringify(body), key: key ?? newIdempotencyKey(),
+  ctx: Object.freeze({ ...ctx }), createdAt: Date.now(), state: 'InFlight',
+})
 
-/**
- * Tải lại trang không được làm mất khả năng "thử lại an toàn": thao tác chưa xác định được lưu ở sessionStorage của TAB (cùng nơi giữ token, mất khi đóng tab).
- * Chỉ lưu id, khóa chống trùng, phương thức, đường dẫn, nội dung đã chụp và công ty — KHÔNG lưu token; khi khôi phục gắn với phiên hiện tại. Đường dẫn mang bí mật
- * (đăng nhập, sao lưu, người dùng, khóa trao đổi) không bao giờ có khóa chống trùng nên không bao giờ nằm ở đây. Đăng xuất xóa hết.
- */
-const PENDING_KEY = 'hak.pending'
-interface StoredOp { id: string; method: string; path: string; bodyText: string | undefined; key: string; companyId: string | null }
-export function serializePending(ops: Iterable<WriteOp>): string {
-  return JSON.stringify([...ops].map((o): StoredOp => ({ id: o.id, method: o.method, path: o.path, bodyText: o.bodyText, key: o.key, companyId: o.ctx.companyId })))
-}
-export function restorePending(json: string | null, tokenNow: string | null): WriteOp[] {
-  if (!json || !tokenNow) return []
+/** Match IdempotencyMiddleware.ExcludedPath. Canonicalize dot segments/encoding before deciding whether a request can be stored/replayed. */
+export function supportsSafeRetry(path: string): boolean {
   try {
-    const rows = JSON.parse(json) as StoredOp[]
-    return rows.filter(r => typeof r.id === 'string' && typeof r.key === 'string' && typeof r.method === 'string' && typeof r.path === 'string')
-      .map(r => ({ id: r.id, method: r.method, path: r.path, bodyText: r.bodyText, key: r.key, ctx: { token: tokenNow, companyId: r.companyId }, state: 'Uncertain' as OpState }))
-  } catch { return [] }
+    if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.includes('#')) return false
+    const decoded = decodeURIComponent(path.split('?')[0])
+    if (decoded.includes('\\') || decoded.startsWith('//')) return false
+    const p = new URL(decoded, 'https://hak.invalid').pathname.toLowerCase()
+    return !['/auth', '/setup', '/backups', '/admin/backups', '/admin/users', '/me', '/exchange/keys']
+      .some(prefix => p === prefix || p.startsWith(prefix + '/') || ['/backups', '/admin/backups', '/admin/users', '/exchange/keys'].includes(prefix) && p.startsWith(prefix))
+  } catch { return false }
 }
-const persistPending = () => {
-  sessionStorageSet(PENDING_KEY, uncertainOps.size === 0 ? null : serializePending(uncertainOps.values()))
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event('hak-pending'))   // banner "thao tác chưa xác định" cập nhật
+const fingerprint = (t: string) => Array.from(sha256(new TextEncoder().encode(t)), b => b.toString(16).padStart(2, '0')).join('')
+interface StoredOp { id: string; method: string; path: string; bodyText?: string; key: string; companyId: string | null; createdAt: number }
+interface PendingEnvelope { version: 2; ownerId: string; tokenFingerprint: string; ops: StoredOp[] }
+const fresh = (at: number) => Number.isFinite(at) && at <= Date.now() + 5 * 60 * 1000 && Date.now() - at < MAX_RETRY_AGE
+
+/** Persist no token. The nonce distinguishes login generations; SHA-256 proves the restored token is exactly the token of the original server idempotency scope. Works on HTTP LAN too. */
+export function serializePending(ops: Iterable<WriteOp>): string {
+  const safe = [...ops].filter(o => o.ctx.token && o.ctx.authOwner && supportsSafeRetry(o.path) && fresh(o.createdAt) && (o.state === 'Uncertain' || o.state === 'InFlight'))
+  const first = safe[0]
+  if (!first) return JSON.stringify({ version: 2, ownerId: '', tokenFingerprint: '', ops: [] })
+  return JSON.stringify({ version: 2, ownerId: first.ctx.authOwner!, tokenFingerprint: fingerprint(first.ctx.token!),
+    ops: safe.filter(o => o.ctx.token === first.ctx.token && o.ctx.authOwner === first.ctx.authOwner).map((o): StoredOp => ({
+      id: o.id, method: o.method, path: o.path, bodyText: o.bodyText, key: o.key, companyId: o.ctx.companyId, createdAt: o.createdAt,
+    })),
+  } satisfies PendingEnvelope)
 }
-for (const o of restorePending(sessionStorageGet(PENDING_KEY), token)) uncertainOps.set(o.id, o)
-/** Thao tác chưa xác định của phiên + công ty đang dùng (đổi tài khoản hay công ty thì không thấy; không xóa, không gửi dưới ngữ cảnh mới). */
-export const pendingWrites = (): readonly WriteOp[] => [...uncertainOps.values()].filter(o => sameCtx(o.ctx))
+function inspectPending(json: string | null, tokenNow: string | null, ownerNow: string | null): { ops: WriteOp[]; review: boolean } {
+  if (!json) return { ops: [], review: false }
+  try {
+    const data = JSON.parse(json) as PendingEnvelope
+    if (data.version !== 2 || !tokenNow || !ownerNow || data.ownerId !== ownerNow || data.tokenFingerprint !== fingerprint(tokenNow) || !Array.isArray(data.ops))
+      return { ops: [], review: true }
+    const seen = new Set<string>(); const ops: WriteOp[] = []; let review = false
+    for (const r of data.ops) {
+      if (typeof r.id !== 'string' || !r.id || seen.has(r.id) || typeof r.key !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(r.key)
+        || !['POST', 'PUT', 'DELETE'].includes(r.method) || typeof r.path !== 'string' || !supportsSafeRetry(r.path)
+        || !(r.companyId === null || typeof r.companyId === 'string') || !(r.bodyText === undefined || typeof r.bodyText === 'string') || !fresh(r.createdAt)) { review = true; continue }
+      seen.add(r.id)
+      ops.push({ ...r, bodyText: r.bodyText, ctx: Object.freeze({ token: tokenNow, companyId: r.companyId, authOwner: ownerNow }), state: 'Uncertain' })
+    }
+    return { ops, review }
+  } catch { return { ops: [], review: true } }
+}
+export function restorePending(json: string | null, tokenNow: string | null, ownerNow: string | null = authOwner): WriteOp[] {
+  return inspectPending(json, tokenNow, ownerNow).ops
+}
+function persistPending() {
+  const owned = [...uncertainOps.values()].filter(o => sameAuth(o.ctx))
+  sessionStorageSet(PENDING_KEY, owned.length ? serializePending(owned) : null); notifyPending()
+}
+const restored = inspectPending(sessionStorageGet(PENDING_KEY), token, authOwner)
+for (const op of restored.ops) uncertainOps.set(op.id, op)
+if (restored.review) { requireReview(); persistPending() } // Purge legacy/unbound/sensitive records, retain only independently verified rows.
+export const pendingWrites = (): readonly WriteOp[] => [...uncertainOps.values()].filter(o => sameCtx(o.ctx) && o.state === 'Uncertain')
 export const hasPendingWrite = () => pendingWrites().length > 0
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-/**
- * Thao tác ghi (POST/PUT/DELETE) mang một Idempotency-Key: mất kết nối giữa chừng thì tự gửi lại tối đa 2 lần với CÙNG khóa và CÙNG nội dung (máy chủ trả phản hồi cũ nếu lần trước đã ghi,
- * không ghi hai lần). Vẫn không nối được thì báo "kết quả chưa xác định" và giữ thao tác để người dùng bấm thử lại an toàn; không bao giờ đoán là đã ghi hay chưa.
- */
 export function api<T = unknown>(method: string, path: string, body?: unknown, idempotencyKey?: string, ctx: Ctx = snapshot()): Promise<T> {
   const mutating = method === 'POST' || method === 'PUT' || method === 'DELETE'
-  if (!mutating) return apiCore<T>(method, path, body, undefined, ctx)
+  if (!mutating || !ctx.token || !supportsSafeRetry(path)) return apiCore<T>(method, path, body, ctx)
   const op = newOp(method, path, body, idempotencyKey, ctx)
-  if (idempotencyKey) return runOp<T>(op)
-  // Chống bấm trùng (nhấp đúp, phím tắt lặp): yêu cầu GHI giống hệt (cùng phương thức, đường dẫn, nội dung đã chụp, phiên, công ty) đang bay thì dùng chung một lần gửi
-  // và một khóa — không tạo khóa mới nên không ghi hai lần. Khi lần gửi xong, thao tác y hệt lần sau là một thao tác mới.
-  const signature = `${method} ${path} ${op.bodyText ?? ''} ${ctx.token ?? ''}|${ctx.companyId ?? ''}`
+  const signature = `${method} ${path} ${op.bodyText ?? ''} ${ctx.authOwner ?? ''}|${ctx.companyId ?? ''}|${idempotencyKey ?? ''}`
   const running = inFlightWrites.get(signature)
   if (running) return running as Promise<T>
-  const p = runOp<T>(op).finally(() => { inFlightWrites.delete(signature) })
+  const p = runOp<T>(op).finally(() => { if (inFlightWrites.get(signature) === p) inFlightWrites.delete(signature) })
   inFlightWrites.set(signature, p)
   return p
 }
-const inFlightWrites = new Map<string, Promise<unknown>>()
-
-async function apiCore<T = unknown>(method: string, path: string, body: unknown, _key: undefined, ctx: Ctx): Promise<T> {
+async function apiCore<T>(method: string, path: string, body: unknown, ctx: Ctx): Promise<T> {
   const result = await apiOnce<T>(method, path, body === undefined ? undefined : JSON.stringify(body), undefined, ctx)
-  if (!sameCtx(ctx)) throw new ApiError(0, STALE_CODE, 'Phiên hoặc công ty đã đổi trong lúc tải; bỏ kết quả cũ.')
+  if (!sameCtx(ctx)) throw new ApiError(0, STALE_CODE, 'Phiên hoặc công ty đã đổi; bỏ phản hồi của ngữ cảnh cũ.')
   return result
 }
-
-async function runOp<T>(op: WriteOp): Promise<T> {
+function forget(op: WriteOp) { if (uncertainOps.get(op.id) === op) { uncertainOps.delete(op.id); persistPending() } }
+function detach(op: WriteOp): ApiError {
+  if (sameAuth(op.ctx) && fresh(op.createdAt)) { op.state = 'Uncertain'; uncertainOps.set(op.id, op); persistPending() }
+  else { op.state = 'Detached'; forget(op); requireReview() }
+  return new ApiError(0, STALE_CODE, 'Ngữ cảnh đã đổi; không gửi lại thao tác cũ. Quay lại đúng tài khoản/công ty để đối chiếu kết quả trước khi nhập lại.')
+}
+function runOp<T>(op: WriteOp): Promise<T> {
+  const running = activeOps.get(op.id)
+  if (running) return running as Promise<T>
+  const p = Promise.resolve().then(() => executeOp<T>(op)).finally(() => { if (activeOps.get(op.id) === p) activeOps.delete(op.id) })
+  activeOps.set(op.id, p); return p
+}
+async function executeOp<T>(op: WriteOp): Promise<T> {
   op.state = 'InFlight'
   for (let attempt = 0; ; attempt++) {
+    if (!sameCtx(op.ctx) || !fresh(op.createdAt)) throw detach(op)
+    // Save before dispatch: reloading while the first response is pending must retain the original key too.
+    uncertainOps.set(op.id, op); persistPending()
     try {
       const result = await apiOnce<T>(op.method, op.path, op.bodyText, op.key, op.ctx)
-      op.state = 'Confirmed'; if (uncertainOps.delete(op.id)) persistPending()
+      op.state = 'Confirmed'; forget(op)
+      if (!sameCtx(op.ctx)) { requireReview(); throw new ApiError(0, STALE_CODE, 'Thao tác đã được xác nhận ở ngữ cảnh cũ; đối chiếu tại đúng công ty, không nhập lại.') }
       return result
     } catch (e) {
-      if (!(e instanceof ApiError && e.status === 0)) { op.state = 'Rejected'; if (uncertainOps.delete(op.id)) persistPending(); throw e }
+      if (isStaleContext(e)) throw e
+      const unknown = e instanceof ApiError && (e.status === 0 || e.status >= 500 && e.status < 600)
+      if (!unknown) { op.state = 'Rejected'; forget(op); throw e }
+      if (!sameCtx(op.ctx) || !fresh(op.createdAt)) throw detach(op)
       if (attempt >= 2) {
-        op.state = 'Uncertain'; uncertainOps.set(op.id, op); persistPending()
-        throw new UncertainError(op.id)
+        op.state = 'Uncertain'; uncertainOps.set(op.id, op); persistPending(); throw new UncertainError(op.id)
       }
       await sleep(1000 * (attempt + 1))
     }
   }
 }
-
-/** Kết quả chưa xác định: mang `opId` để nút "Thử lại an toàn" gửi lại ĐÚNG thao tác này. */
 export class UncertainError extends ApiError {
   readonly opId: string
   constructor(opId: string) {
-    super(0, UNCERTAIN_CODE, 'Mất kết nối khi đang ghi: thao tác CÓ THỂ đã được lưu. Bấm "Thử lại an toàn" (không ghi trùng) hoặc mở lại danh sách để kiểm tra trước khi nhập lại.')
+    super(0, UNCERTAIN_CODE, 'Mất phản hồi khi đang ghi: thao tác CÓ THỂ đã lưu. Dùng “Thử lại an toàn” với cùng khóa hoặc đối chiếu danh sách trước khi nhập lại.')
     this.opId = opId
   }
 }
-
-/** Gửi lại một thao tác chưa xác định (theo `opId`, mặc định cái cũ nhất của ngữ cảnh hiện tại) với đúng khóa + nội dung cũ. Trả về true nếu máy chủ xác nhận (ghi mới hoặc nhận lại phản hồi cũ). */
 export async function retryPendingWrite(opId?: string): Promise<boolean> {
   const op = opId ? uncertainOps.get(opId) : pendingWrites()[0]
   if (!op || !sameCtx(op.ctx)) return false
-  await runOp(op)
-  return true
+  await runOp(op); return true
 }
-
-async function apiOnce<T = unknown>(method: string, path: string, bodyText: string | undefined, key: string | undefined, ctx: Ctx): Promise<T> {
+async function apiOnce<T>(method: string, path: string, bodyText: string | undefined, key: string | undefined, ctx: Ctx): Promise<T> {
   const headers: Record<string, string> = { 'X-Device': 'web' }
   if (key) headers['Idempotency-Key'] = key
   if (ctx.token) headers.Authorization = `Bearer ${ctx.token}`
@@ -174,31 +223,26 @@ async function apiOnce<T = unknown>(method: string, path: string, bodyText: stri
   if (bodyText !== undefined) headers['Content-Type'] = 'application/json'
   const res = await send(`/api${path}`, { method, headers, body: bodyText })
   if (res.status === 204) return undefined as T
-  const text = await res.text()
+  let text: string
+  try { text = await res.text() } catch { throw new ApiError(0, 'PHAN_HOI_BI_MAT', 'Mất nội dung phản hồi; chưa xác định kết quả ghi.') }
   const data = parse(text, res.status)
   if (!res.ok) {
-    // chỉ phiên hiện hành mới bị coi là hết hạn; phản hồi 401 của một phiên cũ không được đăng xuất phiên mới
-    if (res.status === 401 && ctx.token && ctx.token === token && (data?.code ?? '') === 'UNAUTHENTICATED') { session.setToken(null); onExpired?.() }
-    else if (res.status === 401 && !ctx.token && !token) session.setToken(null)
+    if (res.status === 401 && ctx.token && sameAuth(ctx) && (data?.code ?? '') === 'UNAUTHENTICATED') { session.setToken(null); onExpired?.() }
     throw new ApiError(res.status, data?.code ?? 'HTTP_' + res.status, data?.message ?? res.statusText, data?.errors ?? [])
   }
   return data as T
 }
-
-/** Sends a text body exactly as given (signed JSON packages must reach the server byte for byte). */
+/** Signed JSON is sent byte-for-byte, once. Raw/excluded routes are never persisted or automatically retried. */
 export async function postRaw<T>(path: string, text: string): Promise<T> {
-  const headers: Record<string, string> = { 'X-Device': 'web', 'Content-Type': 'application/json' }
-  if (token) headers.Authorization = `Bearer ${token}`
-  if (companyId) headers['X-Company-Id'] = companyId
-  const res = await send(`/api${path}`, { method: 'POST', headers, body: text })
-  const data = parse(await res.text(), res.status)
-  if (!res.ok) throw new ApiError(res.status, data?.code ?? 'HTTP_' + res.status, data?.message ?? res.statusText, data?.errors ?? [])
-  return data as T
+  const ctx = snapshot()
+  const result = await apiOnce<T>('POST', path, text, undefined, ctx)
+  if (!sameCtx(ctx)) throw new ApiError(0, STALE_CODE, 'Ngữ cảnh đã đổi; đối chiếu kết quả tại ngữ cảnh gốc.')
+  return result
 }
-
 export const get = <T,>(p: string) => api<T>('GET', p)
 export const post = <T,>(p: string, b?: unknown) => api<T>('POST', p, b ?? {})
 export const put = <T,>(p: string, b?: unknown) => api<T>('PUT', p, b)
+
 
 // ---- DTOs (money fields are decimal strings) ----
 export interface Account { id: string; code: string; name: string; parentId: string | null; isPostable: boolean; requiresPartner: boolean; isActive: boolean; openItemNature: string; cashKind: string; reportTags?: string | null; negativeBalancePolicy?: string }

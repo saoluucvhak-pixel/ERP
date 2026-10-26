@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { get, post, put } from './api'
 import { ErrorBox, ExportButton, FlowStrip, Modal, navStore, PartnerSelect, useAction, useCatalog } from './common'
 import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
+import { RebateAmendments } from './RebateAmendments'
 
 interface Tier { threshold: string; percent: string }
 interface Agreement { id: string; kind: string; partnerId: string; partnerCode: string; partnerName: string; code: string; name: string; fromDate: string; toDate: string; isActive: boolean; rowVersion: number
@@ -30,6 +31,7 @@ export function DiscountsView() {
   const [kind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Sales')   // chiều do phân hệ đang mở quyết định
   const sales = kind === 'Sales'
   const [statement, setStatement] = useState<Statement | null>(null)
+  const [amending, setAmending] = useState<Agreement | null>(null)
   const [lifecycle, setLifecycle] = useState<{ a: Agreement; data: Lifecycle } | null>(null)
   const [linkInvoice, setLinkInvoice] = useState('')
   const [receivedDate, setReceivedDate] = useState(today())
@@ -72,7 +74,7 @@ export function DiscountsView() {
     await load()
   })
   const voidRun = (a: Agreement) => run(async () => {
-    const reason = window.prompt(`Lý do hủy quyết toán ${a.code} (các hóa đơn điều chỉnh nháp sẽ bị hủy):`)
+    const reason = window.prompt(`Lý do hủy lần quyết toán còn hiệu lực mới nhất của ${a.code} (chỉ hủy các hóa đơn nháp của lần đó):`)
     if (!reason) return
     await post(`/discounts/agreements/${a.id}/void-run`, { reason }); setInfo(`Đã hủy quyết toán ${a.code}.`); await load()
   })
@@ -102,12 +104,13 @@ export function DiscountsView() {
           <tbody>{rows.map(a => <tr key={a.id} style={{ opacity: a.isActive ? undefined : 0.55 }}>
             <td>{a.code}<div className="muted">{a.name}{a.isActive ? '' : ' (ngừng)'}</div></td><td>{a.partnerCode} – {a.partnerName}</td><td>{formatDate(a.fromDate)} – {formatDate(a.toDate)}</td>
             <td>{a.tiers.map(t => `từ ${formatMoney(t.threshold)} → ${formatMoney(t.percent)}%`).join('; ')}{a.progressive ? ' (lũy tiến từng phần)' : ' (hồi tố toàn bộ)'}</td>
-            <td>{a.runId ? <>Đã lập quyết toán <b>{formatMoney(a.runAmount)}</b></> : <span className="muted">chưa</span>}</td>
+            <td>{a.runId ? <>Quyết toán gốc <b>{formatMoney(a.runAmount)}</b><div className="muted">Các lần sau: Bổ sung / Thu hồi</div></> : <span className="muted">chưa</span>}</td>
             <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               <button disabled={busy} onClick={() => open(a)}>Xem tính</button>
               {!a.runId && <button disabled={busy} onClick={() => edit(a)}>Sửa</button>}
               {a.runId && <button disabled={busy} onClick={() => run(async () => { setLifecycle({ a, data: await get<Lifecycle>(`/discounts/agreements/${a.id}/lifecycle`) }); setLinkInvoice(''); setReceivedDate(today()) })}>Tiến độ / Hóa đơn</button>}
-              {a.runId && <button disabled={busy} onClick={() => voidRun(a)}>Hủy quyết toán</button>}
+              {a.runId && <button disabled={busy} onClick={() => voidRun(a)}>Hủy lần mới nhất</button>}
+              {a.runId && <button disabled={busy} onClick={() => setAmending(a)}>Bổ sung / Thu hồi</button>}
               {!a.runId && <button disabled={busy} onClick={() => toggle(a)}>{a.isActive ? 'Ngừng' : 'Áp dụng lại'}</button>}</td></tr>)}
             {rows.length === 0 && <tr><td colSpan={6} className="muted">Chưa có thỏa thuận. Lập thỏa thuận với bậc doanh số và tỷ lệ; cuối kỳ bấm “Xem tính” rồi “Quyết toán”.</td></tr>}</tbody>
         </table></div>
@@ -166,6 +169,12 @@ export function DiscountsView() {
             {preview.p.invoices.length === 0 && <tr><td colSpan={4} className="muted">Không có hóa đơn đã ghi sổ của đối tượng này trong kỳ.</td></tr>}</tbody></table>
       </Modal>}
 
+      {amending && <RebateAmendments agreement={amending} onClose={() => setAmending(null)} onChanged={load}
+        onProgress={id => run(async () => {
+          const a = (await get<Agreement[]>(`/discounts/agreements?kind=${kind}`)).find(a => a.id === amending.id)!
+          setLifecycle({ a, data: await get<Lifecycle>(`/discounts/agreements/${a.id}/lifecycle?runId=${id}`) }); setLinkInvoice(''); setAmending(null)
+        })}
+        onStatement={id => run(async () => { setStatement(await get<Statement>(`/discounts/agreements/${amending.id}/statement?runId=${id}`)); setAmending(null) })} />}
       {lifecycle && <Modal title={`Tiến độ quyết toán — ${lifecycle.a.code}`} onClose={() => setLifecycle(null)} busy={busy} footer={<button disabled={busy} onClick={() => setLifecycle(null)}>Đóng</button>}>
         <ErrorBox error={error} />
         <p>Kế toán: <b>{STATUS_VI[lifecycle.data.accountingStatus] ?? lifecycle.data.accountingStatus}</b>; hóa đơn: <b>{STATUS_VI[lifecycle.data.legalInvoiceStatus]}</b>; thuế: <b>{STATUS_VI[lifecycle.data.taxStatus]}</b>.</p>
@@ -182,7 +191,7 @@ export function DiscountsView() {
             {!sales && <label>Ngày nhận HĐ NCC<input type="date" value={receivedDate} onChange={e => setReceivedDate(e.target.value)} /></label>}
             <button disabled={busy || !linkInvoice || (lifecycle.data.byVoucher && lifecycle.data.accountingStatus !== 'Posted')} onClick={() => run(async () => {
               await post(`/discounts/agreements/${lifecycle.a.id}/${lifecycle.data.byVoucher ? 'link-invoice' : 'invoice-received'}`, { rowVersion: lifecycle.a.rowVersion, invoiceId: linkInvoice, receivedDate: sales ? null : receivedDate })
-              setLifecycle({ a: lifecycle.a, data: await get<Lifecycle>(`/discounts/agreements/${lifecycle.a.id}/lifecycle`) }); setLinkInvoice(''); setInfo(lifecycle.data.byVoucher ? 'Đã liên kết. Phát hành/ghi sổ hóa đơn tại màn Hóa đơn; hệ thống bù trừ khoản CKTM đã ghi nhận.' : 'Đã lưu ngày nhận hóa đơn NCC và cập nhật kỳ theo dõi VAT.')
+              setLifecycle({ a: lifecycle.a, data: await get<Lifecycle>(`/discounts/agreements/${lifecycle.a.id}/lifecycle?runId=${lifecycle.data.runId}`) }); setLinkInvoice(''); setInfo(lifecycle.data.byVoucher ? 'Đã liên kết. Phát hành/ghi sổ hóa đơn tại màn Hóa đơn; hệ thống bù trừ khoản CKTM đã ghi nhận.' : 'Đã lưu ngày nhận hóa đơn NCC và cập nhật kỳ theo dõi VAT.')
             })}>{lifecycle.data.byVoucher ? 'Liên kết hóa đơn' : 'Lưu ngày nhận'}</button></div>
         </>}
       </Modal>}

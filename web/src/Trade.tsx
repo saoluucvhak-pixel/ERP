@@ -7,7 +7,8 @@ import { addMoney, formatDate, formatMoney, optionalRate, parseMoney, parseRate,
 
 interface Uninvoiced { stockDocumentId: string; stockDocumentNumber: string; postingDate: string; lineNo: number; itemCode: string; quantity: string; invoicedQuantity: string; bdmt: string | null }
 interface StockDoc { id: string; number: string; type: string; status: string; postingDate: string; lines: { lineNo: number; itemId: string; quantity: string }[] }
-interface Invoice { id: string; rowVersion: number; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string; tradeDiscount?: string; discountKind?: string | null; lines?: { lineNo: number; unitPrice: string }[] }
+interface Invoice { id: string; rowVersion: number; number: string; kind: string; purpose: string; invoiceSeries: string; invoiceNo: string; invoiceDate: string; postingDate: string; partnerId: string; currency: string | null; status: string; total: string; vat: string; tradeDiscount?: string; discountKind?: string | null; replacesInvoiceId?: string | null; lines?: { lineNo: number; unitPrice: string }[] }
+interface ReplacementAllocation { originalAllocationId: string; currency: string | null; amount: string; foreignAmount: string | null; unappliedAmount: string; unappliedForeign: string | null }
 interface SvcCand { orderId: string; orderNumber: string; orderLineNo: number; itemCode: string; itemName: string; unit: string; remaining: string; unitPrice: string; vatRate: string | null; description: string | null }
 interface Candidate { key: string; docId: string; lineNo: number; label: string; bdmt: string | null; remaining: string; svc?: SvcCand }
 interface LineDraft { candidate: string; basis: 'Quantity' | 'Bdmt'; price: string; vat: string; qty: string; accountId: string; description: string; discPct: string; discAmt: string }
@@ -28,6 +29,7 @@ export function TradeView() {
   const [lines, setLines] = useState<LineDraft[]>([empty()])
   useUnsavedWhenChanged([head, lines])
   const [info, setInfo] = useState('')
+  const [allocationPlan, setAllocationPlan] = useState<{ invoice: Invoice; rows: ReplacementAllocation[] } | null>(null)
   const [adjusting, setAdjusting] = useState<Invoice | null>(null)
   const [einv, setEinv] = useState(false)        // đã cấu hình nhà cung cấp hóa đơn điện tử: hiện nút Phát hành / Thay thế
   const [awaitIssue, setAwaitIssue] = useState(false)
@@ -167,6 +169,13 @@ export function TradeView() {
             <td><input className="num" aria-label={`Đơn giá mới dòng ${l.lineNo}`} value={replacing.prices[l.lineNo] ?? ''} onChange={e => setReplacing({ ...replacing, prices: { ...replacing.prices, [l.lineNo]: e.target.value } })} /></td></tr>)}</tbody></table>
       </Modal>}
       {adjusting && <Adjust invoice={adjusting} onDone={msg => { setAdjusting(null); if (msg) setInfo(msg); load() }} />}
+      {allocationPlan && <Modal title={`Phân bổ hóa đơn thay thế — ${allocationPlan.invoice.number}`} onClose={() => setAllocationPlan(null)} busy={busy} footer={<button onClick={() => setAllocationPlan(null)}>Đóng</button>}>
+        <p>Chuyển phân bổ giữ nguyên khoản thu/chi và lãi/lỗ tỷ giá đã ghi nhận. Phần thừa để chưa phân bổ. VAT VND tách khỏi công nợ nguyên tệ. Kế hoạch được kiểm tra lại trước phát hành và trong giao dịch ghi sổ.</p>
+        <table className="grid"><thead><tr><th>Tiền</th><th className="num">Nguyên tệ chuyển</th><th className="num">Giá trị ghi sổ chuyển</th><th className="num">Nguyên tệ thừa</th><th className="num">Giá trị ghi sổ thừa</th></tr></thead><tbody>
+          {allocationPlan.rows.map(r => <tr key={r.originalAllocationId}><td>{r.currency ?? 'Tiền hạch toán / VAT'}</td><td className="num">{r.foreignAmount == null ? '—' : formatMoney(r.foreignAmount)}</td><td className="num">{formatMoney(r.amount)}</td><td className="num">{r.unappliedForeign == null ? '—' : formatMoney(r.unappliedForeign)}</td><td className="num">{formatMoney(r.unappliedAmount)}</td></tr>)}
+          {allocationPlan.rows.length === 0 && <tr><td colSpan={5}>Không có phân bổ cần chuyển.</td></tr>}
+        </tbody></table>
+      </Modal>}
       <div className="scroll">
         <table className="grid">
           <thead><tr><th>Số</th><th>Ký hiệu / Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Đối tượng</th><th className="num">Tiền hàng (VND)</th><th className="num">Thuế</th><th>Trạng thái</th><th /></tr></thead>
@@ -175,6 +184,7 @@ export function TradeView() {
               <td>{partners.find(p => p.id === i.partnerId)?.code}</td><td className="num">{formatMoney(i.total)}{adjusted[i.id] && <div className="muted" title="Sau các hóa đơn điều chỉnh đã ghi sổ; hóa đơn gốc không đổi">sau điều chỉnh {formatMoney(addMoney([i.total, adjusted[i.id].amount]))}</div>}</td><td className="num">{formatMoney(i.vat)}{adjusted[i.id] && <div className="muted">{formatMoney(addMoney([i.vat, adjusted[i.id].vat]))}</div>}</td>
               <td><span className="badge">{STATUS_VI[i.status] ?? i.status}</span></td>
               <td style={{ display: 'flex', gap: 4 }}>
+                {i.status === 'Draft' && i.replacesInvoiceId && <button disabled={busy} onClick={() => run(async () => setAllocationPlan({ invoice: i, rows: await get<ReplacementAllocation[]>(`/invoices/${i.id}/replacement-allocations`) }))}>Phân bổ thay thế</button>}
                 {i.status === 'Draft' && kind === 'Sales' && einv && <button className="primary" disabled={busy} onClick={() => run(async () => {
                   const d = await post<{ status: string; series: string | null; number: string | null; postError: string | null; lastError: string | null }>(`/einvoice/invoices/${i.id}/issue?rowVersion=${i.rowVersion}`)
                   setInfo(d.status === 'Issued' ? `Đã phát hành ${d.series}/${d.number}${d.postError ? ` nhưng chưa ghi sổ: ${d.postError}` : ' và ghi sổ.'}` : d.status === 'Rejected' ? `Bị từ chối: ${d.lastError}` : 'Đang chờ nhà cung cấp — theo dõi ở màn Hóa đơn điện tử.')

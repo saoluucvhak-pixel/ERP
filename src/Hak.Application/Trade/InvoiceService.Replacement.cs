@@ -1,22 +1,43 @@
 using Hak.Application.Security;
 using Hak.Application.Settlement;
 using Hak.Domain.Common;
+using Hak.Domain.Fx;
 using Hak.Domain.Ledger;
 using Hak.Domain.Settlement;
+using Hak.Domain.Security;
 using Hak.Domain.Trade;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hak.Application.Trade;
 
+public sealed record ReplacementAllocationView(Guid OriginalAllocationId, Guid CounterLineId, string? Currency, decimal Amount, decimal? ForeignAmount, decimal UnappliedAmount, decimal? UnappliedForeign, DateOnly Date);
+
 public sealed partial class InvoiceService
 {
-    private sealed record ReplacementAllocation(Guid CounterLineId, decimal Amount, DateOnly Date);
+    public async Task<IReadOnlyList<ReplacementAllocationView>> ReplacementAllocationsAsync(SessionContext ctx, Guid id)
+    {
+        ctx.Require(Permissions.VoucherView);
+        var invoice = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).SingleOrDefaultAsync(i => i.Id == id && i.CompanyId == ctx.CompanyId)
+            ?? throw new DomainException(ErrorCodes.NotFound, "Không có hóa đơn thay thế.");
+        if (invoice.Status != InvoiceStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, "Xem kế hoạch chuyển phân bổ trước khi ghi sổ hóa đơn thay thế.");
+        var plan = await CaptureReplacementAllocationsAsync(ctx, invoice);
+        var result = new List<ReplacementAllocationView>();
+        foreach (var item in plan)
+        {
+            var old = await db.SettlementAllocations.AsNoTracking().SingleAsync(a => a.Id == item.OriginalAllocationId);
+            var currency = await db.JournalLines.Where(l => l.Id == item.CounterLineId).Select(l => l.ForeignCurrency).SingleAsync();
+            result.Add(new(item.OriginalAllocationId, item.CounterLineId, currency, item.Amount, item.ForeignAmount, old.Amount - item.Amount,
+                old.ForeignAmount is { } foreign ? foreign - (item.ForeignAmount ?? 0) : null, item.Date));
+        }
+        return result;
+    }
+    private sealed record ReplacementAllocation(Guid OriginalAllocationId, Guid CounterLineId, decimal Amount, decimal? ForeignAmount, DateOnly Date);
 
     private async Task<List<ReplacementAllocation>> CaptureReplacementAllocationsAsync(SessionContext ctx, CommercialInvoice replacement)
     {
         if (replacement.ReplacesInvoiceId is not { } originalId) return [];
-        var original = await db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == originalId && i.CompanyId == ctx.CompanyId);
+        var original = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == originalId && i.CompanyId == ctx.CompanyId);
         var lines = await (from l in db.JournalLines.AsNoTracking() join e in db.JournalEntries.AsNoTracking() on l.JournalEntryId equals e.Id
                            where e.VoucherId == original.VoucherId select l).ToListAsync();
         var ids = lines.Select(l => l.Id).ToList();
@@ -25,16 +46,72 @@ public sealed partial class InvoiceService
         if (allocations.Count == 0) return [];
         if (original.PartnerId != replacement.PartnerId || original.Currency != replacement.Currency || original.ExchangeRate != replacement.ExchangeRate)
             throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn gốc có phân bổ: xử lý phân bổ trước khi đổi đối tượng/tiền tệ/tỷ giá.");
-        if (allocations.Any(a => a.ForeignAmount is not null))
-            throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn ngoại tệ đã phân bổ: xử lý phân bổ và chênh lệch tỷ giá trước khi thay thế; không tự chuyển số tiền phân bổ.");
+        if (allocations.Any(a => a.ForeignAmount is not null) && (original.PaymentDiscountPercent != replacement.PaymentDiscountPercent
+            || original.PaymentDiscountDays != replacement.PaymentDiscountDays || original.PaymentDiscountOptions != replacement.PaymentDiscountOptions
+            || (original.PaymentDiscountPercent != null || original.PaymentDiscountOptions != null) && original.InvoiceDate != replacement.InvoiceDate))
+            throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn ngoại tệ đã thanh toán: giữ nguyên điều khoản chiết khấu thanh toán khi chuyển phân bổ.");
         foreach (var date in allocations.Select(a => a.AllocationDate > replacement.PostingDate ? a.AllocationDate : replacement.PostingDate).Distinct())
         {
             var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= date && p.EndDate >= date);
             if (period is null || period.Status != Domain.Organization.PeriodStatus.Open)
                 throw new DomainException(ErrorCodes.PeriodLocked, "Kỳ tái phân bổ hóa đơn thay thế không mở; xử lý phân bổ trước khi phát hành.");
         }
-        return allocations.Where(a => ids.Contains(a.DebitLineId) != ids.Contains(a.CreditLineId))
-            .Select(a => new ReplacementAllocation(ids.Contains(a.DebitLineId) ? a.CreditLineId : a.DebitLineId, a.Amount, a.AllocationDate)).ToList();
+        if (allocations.Any(a => ids.Contains(a.DebitLineId) == ids.Contains(a.CreditLineId)))
+            throw new DomainException(ErrorCodes.ValidationFailed, "Phân bổ nội bộ hóa đơn không hỗ trợ tự chuyển khi thay thế.");
+        var settlement = new SettlementService(db, audit, clock);
+        var dp = await settlement.FunctionalDecimalsAsync(ctx.CompanyId);
+        var role = replacement.Kind == InvoiceKind.Sales ? "AR_TRADE" : "AP_TRADE";
+        var account = await db.AccountRoleMappings.Where(m => m.CompanyId == ctx.CompanyId && m.RoleCode == role).Select(m => m.AccountId).SingleAsync();
+        var side = replacement.Kind == InvoiceKind.Sales ? Side.Debit : Side.Credit;
+        var newForeign = replacement.Currency == null ? 0 : replacement.Lines.Sum(l => l.Amount);
+        var newBook = replacement.Lines.Sum(l => l.FunctionalAmount);
+        var newVat = replacement.Lines.Sum(l => l.VatAmount);
+        if (replacement.Currency == null) newBook += newVat;
+        else if (newForeign > 0 && FxSettlementMath.ExactRate(newForeign, newBook, dp) is null)
+            throw new DomainException(ErrorCodes.FxBookValue, "Giá trị hóa đơn thay thế không biểu diễn được bằng tỷ giá ghi sổ.");
+        var counters = new Dictionary<Guid, (JournalLine Line, decimal Foreign, decimal Book)>();
+        foreach (var group in allocations.GroupBy(a => ids.Contains(a.DebitLineId) ? a.CreditLineId : a.DebitLineId))
+        {
+            var counter = await db.JournalLines.AsNoTracking().SingleAsync(l => l.Id == group.Key && l.CompanyId == ctx.CompanyId);
+            var voucher = await (from e in db.JournalEntries join v in db.Vouchers on e.VoucherId equals v.Id where e.Id == counter.JournalEntryId select v).SingleAsync();
+            if (voucher.VoucherType == VoucherTypes.Revaluation)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, "Công nợ đã đánh giá lại: xử lý lần đánh giá lại trước khi thay thế, không chuyển sai giá trị ghi sổ.");
+            if (voucher.SourceSystem == PaymentDiscountService.Source && (original.Lines.Sum(l => l.Amount) != replacement.Lines.Sum(l => l.Amount)
+                || original.Lines.Sum(l => l.FunctionalAmount) != replacement.Lines.Sum(l => l.FunctionalAmount) || original.Lines.Sum(l => l.VatAmount) != replacement.Lines.Sum(l => l.VatAmount)))
+                throw new DomainException(ErrorCodes.InvalidStateTransition, "Khoản đã hưởng/cấp chiết khấu thanh toán: đổi trị giá hóa đơn cần đối chiếu lại quyền lợi chiết khấu trước khi thay thế; không tự chuyển khoản chiết khấu thừa thành tiền ứng trước.");
+            if (counter.AccountId != account || counter.PartnerId != replacement.PartnerId || counter.Side == side)
+                throw new DomainException(ErrorCodes.SettlementMismatch, "Tài khoản/đối tượng/chiều công nợ thay thế khác phân bổ gốc.");
+            var open = await settlement.OpenBothAsync(counter);
+            counters[group.Key] = (counter, open.Foreign + group.Sum(a => a.ForeignAmount ?? 0), open.Amount + group.Sum(a => a.Amount));
+        }
+        var plan = new List<ReplacementAllocation>();
+        foreach (var a in allocations)
+        {
+            var counterId = ids.Contains(a.DebitLineId) ? a.CreditLineId : a.DebitLineId;
+            var c = counters[counterId];
+            decimal amount; decimal? foreign = null;
+            if (c.Line.ForeignCurrency is { } currency)
+            {
+                if (currency != replacement.Currency || a.ForeignAmount is not > 0)
+                    throw new DomainException(ErrorCodes.FxBookValue, "Phân bổ ngoại tệ thiếu nguyên tệ hoặc sai loại tiền; cần đối chiếu trước khi thay thế.");
+                var f = Math.Min(a.ForeignAmount.Value, Math.Min(newForeign, c.Foreign));
+                if (f <= 0) { plan.Add(new(a.Id, counterId, 0, 0, a.AllocationDate)); continue; }
+                amount = FxSettlementMath.BookValue(a.ForeignAmount.Value, a.Amount, f, dp);
+                if (amount <= 0 || FxSettlementMath.BookValue(newForeign, newBook, f, dp) != amount || FxSettlementMath.BookValue(c.Foreign, c.Book, f, dp) != amount)
+                    throw new DomainException(ErrorCodes.FxBookValue, "Phần chuyển phân bổ không khớp giá trị ghi sổ hai phía/làm tròn; cần xử lý chênh lệch tỷ giá riêng trước khi phát hành.");
+                foreign = f; newForeign -= f; newBook -= amount;
+                counters[counterId] = (c.Line, c.Foreign - f, c.Book - amount);
+            }
+            else
+            {
+                var available = replacement.Currency == null ? newBook : newVat;
+                amount = Math.Min(a.Amount, Math.Min(available, c.Book));
+                if (replacement.Currency == null) newBook -= amount; else newVat -= amount;
+                counters[counterId] = (c.Line, c.Foreign, c.Book - amount);
+            }
+            plan.Add(new(a.Id, counterId, amount, foreign, a.AllocationDate));
+        }
+        return plan;
     }
 
     private async Task ReallocateReplacementAsync(SessionContext ctx, CommercialInvoice invoice, IReadOnlyList<ReplacementAllocation> prior)
@@ -51,13 +128,22 @@ public sealed partial class InvoiceService
             {
                 var amount = Math.Min(left, Math.Min(await settlement.OpenAmountAsync(line), await settlement.OpenAmountAsync(counter)));
                 if (amount <= 0) continue;
+                if (old.ForeignAmount is { } foreign)
+                {
+                    var d = await settlement.OpenBothAsync(line); var c = await settlement.OpenBothAsync(counter);
+                    var dp = await settlement.FunctionalDecimalsAsync(ctx.CompanyId);
+                    if (amount != old.Amount || foreign > d.Foreign || foreign > c.Foreign
+                        || FxSettlementMath.BookValue(d.Foreign, d.Amount, foreign, dp) != amount || FxSettlementMath.BookValue(c.Foreign, c.Amount, foreign, dp) != amount)
+                        throw new DomainException(ErrorCodes.FxBookValue, "Nguồn phân bổ đã đổi sau preflight; không chuyển một phần sai giá trị ghi sổ.");
+                }
                 var date = new[] { invoice.PostingDate, old.Date, counter.PostingDate }.Max();
                 // Future allocations must not be moved into a locked period.
                 var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= date && p.EndDate >= date);
                 if (period is null || period.Status != Domain.Organization.PeriodStatus.Open)
                     throw new DomainException(ErrorCodes.PeriodLocked, "Kỳ tái phân bổ hóa đơn thay thế không mở.");
                 var (debit, credit) = line.Side == Side.Debit ? (line, counter) : (counter, line);
-                await settlement.AllocateCoreAsync(ctx.CompanyId, debit, credit, amount, date, "INVOICE_REPLACEMENT", invoice.VoucherId, ctx.UserId);
+                var allocation = await settlement.AllocateCoreAsync(ctx.CompanyId, debit, credit, amount, date, "INVOICE_REPLACEMENT", invoice.VoucherId, ctx.UserId, old.ForeignAmount);
+                await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.replacement.allocation", "settlement_allocation", allocation.Id.ToString(), new { old.OriginalAllocationId, newAllocationId = allocation.Id, old.CounterLineId, amount, old.ForeignAmount });
                 left -= amount;
             }
             // Any excess stays as an unapplied customer credit/supplier advance; no cash voucher is recreated.
