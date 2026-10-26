@@ -18,7 +18,9 @@ export function VoidRunDialog({ agreementId, agreementCode, runId, label, amount
   const [deps, setDeps] = useState<Dependents | null>(null)
   const { busy, error, run } = useAction()
   useEffect(() => {
-    run(async () => setDeps(await get<Dependents>(`/discounts/agreements/${agreementId}/lifecycle${runId ? `?runId=${runId}` : ''}`)))
+    run(async () => setDeps(runId
+      ? await get<Dependents>(`/discounts/agreements/${agreementId}/lifecycle?runId=${runId}`)
+      : await get<Dependents>(`/discounts/agreements/${agreementId}/lifecycle`)))
   }, [agreementId, runId, run])
   const posted = deps?.invoices.filter(i => i.status === 'Posted') ?? []
   return <Modal title={`Hủy quyết toán — ${agreementCode}`} onClose={onClose} busy={busy}
