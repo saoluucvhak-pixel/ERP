@@ -80,8 +80,12 @@ public sealed class SalesApprovalService(HakDbContext db, AccountingEngine engin
                     if (line.StockDocumentId is null) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {l.OriginalLineNo} không gắn phiếu xuất; dùng yêu cầu giảm giá.");
                     if (l.Quantity is not { } q || q <= 0 || q > (line.StockQuantity ?? 0)) throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {l.OriginalLineNo}: số lượng trả phải lớn hơn 0 và không vượt số đã bán {line.StockQuantity}.");
                 }
-                else if (l.Amount is not { } a || a <= 0 || a > line.FunctionalAmount)
-                    throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {l.OriginalLineNo}: số tiền giảm phải lớn hơn 0 và không vượt giá trị dòng {line.FunctionalAmount}.");
+                else
+                {
+                    var ceiling = line.FunctionalAmount + await InvoiceService.PostedIncreaseAsync(db, inv.Id, l.OriginalLineNo);
+                    if (l.Amount is not { } a || a <= 0 || a > ceiling)
+                        throw new DomainException(ErrorCodes.ValidationFailed, $"Dòng {l.OriginalLineNo}: số tiền giảm phải lớn hơn 0 và không vượt giá trị dòng {ceiling}.");
+                }
             }
             var r = new AdjustmentRequest { Id = Ids.New(), CompanyId = ctx.CompanyId, InvoiceId = inv.Id, Kind = input.Kind, Reason = input.Reason.Trim(), CreatedBy = ctx.UserId, CreatedAt = clock.UtcNow };
             r.Number = await NextNumberAsync(ctx.CompanyId, DateOnly.FromDateTime(clock.UtcNow), input.Kind == AdjustmentKind.Return ? "YCTH" : "YCGG");
