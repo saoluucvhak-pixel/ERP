@@ -10,7 +10,8 @@ interface Agreement { id: string; kind: string; partnerId: string; partnerCode: 
 interface Share { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; postingDate: string; sales: string; discount: string }
 interface Statement { snapshotAvailable?: boolean; warning?: string | null; agreementCode: string; agreementName: string; partnerCode: string; partnerName: string; fromDate: string; toDate: string; percent: string; totalSales: string; totalDiscount: string; mode: string
   rows: { no: number; originalSeries: string; originalNo: string; originalDate: string; sales: string; discount: string; adjustmentSeries: string | null; adjustmentNo: string | null; adjustmentDate: string | null; adjustmentVat: string }[] }
-interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[]; accrued?: string }
+interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[]; accrued?: string
+  overlaps?: { agreementId: string; code: string; name: string; fromDate: string; toDate: string; settled: boolean; settledAmount: string }[] | null }
 interface ReportRow { partnerId: string; partnerCode: string; partnerName: string; gross: string; onInvoiceTradeDiscount: string; afterSaleTradeDiscount: string; allowance: string; returns: string; increase: string; net: string; paymentDiscount: string }
 interface Report { rows: ReportRow[]; total: ReportRow }
 
@@ -173,6 +174,9 @@ export function DiscountsView() {
           {preview.p.nextThreshold && <> Còn {formatMoney(String(Number(preview.p.nextThreshold) - Number(preview.p.eligibleSales)))} nữa để lên bậc {formatMoney(preview.p.nextPercent)}%.</>}
           {Number(preview.p.accrued ?? 0) > 0 && <> Đã trích trước (ghi sổ) <b>{formatMoney(preview.p.accrued!)}</b> — quyết toán sẽ bù trừ, không giảm doanh thu hai lần.</>}
           {preview.p.settled && <> <b>Đã lập quyết toán — xem Tiến độ / Hóa đơn để kiểm tra phần còn thiếu.</b></>}</p>
+        {!preview.p.settled && (preview.p.overlaps?.length ?? 0) > 0 && <div className="msg" role="alert">
+          <b>Cùng đối tượng còn thỏa thuận khác có kỳ giao nhau — cùng nguồn doanh số có thể được hưởng nhiều chương trình.</b> Hệ thống không tự cấm (có thể được phép cộng dồn); kiểm tra điều khoản trước khi quyết toán:
+          <ul>{preview.p.overlaps!.map(o => <li key={o.agreementId}>{o.code} – {o.name} ({formatDate(o.fromDate)} – {formatDate(o.toDate)}) — {o.settled ? <>đã quyết toán <b>{formatMoney(o.settledAmount)}</b></> : 'chưa quyết toán'}</li>)}</ul></div>}
         <table className="grid"><thead><tr><th>Hóa đơn</th><th>Ngày</th><th className="num">Doanh số</th><th className="num">Chiết khấu chia</th></tr></thead>
           <tbody>{preview.p.invoices.map(s => <tr key={s.invoiceId}><td>{s.invoiceSeries}/{s.invoiceNo}<div className="muted">{s.number}</div></td><td>{formatDate(s.postingDate)}</td><td className="num">{formatMoney(s.sales)}</td><td className="num">{formatMoney(s.discount)}</td></tr>)}
             {preview.p.invoices.length === 0 && <tr><td colSpan={4} className="muted">Không có hóa đơn đã ghi sổ của đối tượng này trong kỳ.</td></tr>}</tbody></table>
