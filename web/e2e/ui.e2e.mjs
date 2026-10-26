@@ -65,6 +65,78 @@ async function open(user) {
 }
 const selected = page => page.locator('select').evaluateAll(els => els.map(e => e.selectedOptions[0]?.textContent ?? ''))
 
+test('Retry ownership: server commits, response is lost, new login and reload do not replay the old write', async () => {
+  const page = await open('ktt')
+  const nextToken = await ctx.login('ketoan')
+  let sends = 0
+  await page.route('**/api/partners', async route => {
+    if (route.request().method() !== 'POST') return route.continue()
+    sends++
+    const response = await route.fetch()
+    assert.ok(response.ok(), 'first request must actually commit in the temporary database')
+    await page.evaluate(async token => {
+      const api = await import('/src/api.ts')
+      api.session.setToken(null); api.session.setToken(token)
+    }, nextToken)
+    await route.abort('failed')
+  })
+  const code = 'E2E-OWNER-REPLAY'
+  const result = await page.evaluate(async code => {
+    const api = await import('/src/api.ts')
+    try { await api.post('/partners', { code, name: 'Temporary ownership regression' }); return 'unexpected-success' }
+    catch (e) { return e.code }
+  }, code)
+  assert.equal(result, 'NGU_CANH_DA_DOI')
+  await page.reload()
+  await page.waitForSelector('.quick-add-btn')
+  await page.getByText('Có thao tác ở phiên trước cần đối chiếu.', { exact: false }).waitFor()
+  const state = await page.evaluate(async () => {
+    const api = await import('/src/api.ts')
+    return { pending: api.pendingWrites().length, retried: await api.retryPendingWrite(), stored: sessionStorage.getItem('hak.pending') }
+  })
+  assert.deepEqual(state, { pending: 0, retried: false, stored: null })
+  assert.equal(sends, 1)
+  const partners = await call('GET', '/partners', null, nextToken, ctx.company)
+  assert.equal(partners.filter(p => p.code === code).length, 1, 'exactly one committed partner, no hidden replay')
+  await page.getByRole('button', { name: 'Đã đọc nhắc nhở', exact: true }).click()
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('hak.pending.review')), null)
+  await page.close()
+})
+
+test('Safe retry button confirms the original server result without creating a second record', async () => {
+  const page = await open('ktt')
+  const code = 'E2E-OWNER-SAFE-RETRY'
+  const keys = []
+  const loseResponse = async route => {
+    if (route.request().method() !== 'POST') return route.continue()
+    keys.push(route.request().headers()['idempotency-key'])
+    const response = await route.fetch()
+    assert.ok(response.ok())
+    await route.abort('failed')
+  }
+  await page.route('**/api/partners', loseResponse)
+  const result = await page.evaluate(async code => {
+    const api = await import('/src/api.ts')
+    try { await api.post('/partners', { code, name: 'Temporary safe retry regression' }); return 'unexpected-success' }
+    catch (e) { return e.code }
+  }, code)
+  assert.equal(result, 'KET_QUA_CHUA_XAC_DINH')
+  assert.equal(keys.length, 3)
+  assert.equal(new Set(keys).size, 1)
+  await page.unroute('**/api/partners', loseResponse)
+  const confirmation = page.waitForResponse(r => r.url().endsWith('/api/partners') && r.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Thử lại an toàn', exact: true }).click()
+  const response = await confirmation
+  assert.ok(response.ok())
+  assert.equal(response.request().headers()['idempotency-key'], keys[0])
+  await page.getByText('Máy chủ đã xác nhận thao tác', { exact: false }).waitFor()
+  const token = await page.evaluate(() => sessionStorage.getItem('hak.token'))
+  const partners = await call('GET', '/partners', null, token, ctx.company)
+  assert.equal(partners.filter(p => p.code === code).length, 1)
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('hak.pending')), null)
+  await page.close()
+})
+
 test('CKTM: Tiến độ liên kết hóa đơn vào chứng từ đã ghi và không báo hồ sơ thuế hoàn tất', async () => {
   const date = new Date().toISOString().slice(0, 10)
   const chief = await ctx.login('ktt')

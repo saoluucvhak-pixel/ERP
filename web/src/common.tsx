@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { NavIntent } from './navIntents'
 import { hasPermission, usePermission } from './perms'
 import { refuseReason, type ActionOptions } from './actions'
-import { ApiError, UncertainError, UNCERTAIN_CODE, get, isStaleContext, hasPendingWrite, pendingWrites, retryPendingWrite, session, type Account, type Partner } from './api'
+import { ApiError, UncertainError, UNCERTAIN_CODE, get, isStaleContext, hasPendingWrite, pendingWrites, pendingReviewNeeded, acknowledgePendingReview, retryPendingWrite, session, type Account, type Partner } from './api'
 import { formatMoney } from './money'
 import { downloadXlsx, type Cell, type Column } from './xlsx'
 
@@ -185,19 +185,23 @@ export function useAction() {
  */
 export function PendingBanner() {
   const [n, setN] = useState(() => pendingWrites().length)
+  const [review, setReview] = useState(pendingReviewNeeded)
+  const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   useEffect(() => {
-    const h = () => setN(pendingWrites().length)
+    const h = () => { setN(pendingWrites().length); setReview(pendingReviewNeeded()); setMsg('') }
     window.addEventListener('hak-pending', h)
     return () => window.removeEventListener('hak-pending', h)
   }, [])
-  if (n === 0 && !msg) return null
+  if (n === 0 && !review && !msg) return null
   return (
-    <div className={`msg ${n ? 'error' : 'ok'}`} role="alert">
+    <div className={`msg ${n || review ? 'error' : 'ok'}`} role="alert">
+      {review && <p>Có thao tác ở phiên trước cần đối chiếu. Đăng nhập đúng tài khoản, mở đúng công ty và kiểm tra danh sách chứng từ trước khi nhập lại. <button onClick={acknowledgePendingReview}>Đã đọc nhắc nhở</button></p>}
       {n > 0 ? <><strong>{n} thao tác chưa xác định</strong> (mất kết nối khi đang ghi, có thể đã được lưu). </> : null}{msg}
-      {n > 0 && <button style={{ marginLeft: 8 }} onClick={async () => {
-        try { await retryPendingWrite(); setMsg('Máy chủ đã xác nhận thao tác (không ghi trùng). Mở lại danh sách để thấy dữ liệu mới.') } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
-        setN(pendingWrites().length)
+      {n > 0 && <button disabled={busy} style={{ marginLeft: 8 }} onClick={async () => {
+        setBusy(true)
+        try { const confirmed = await retryPendingWrite(); setMsg(confirmed ? 'Máy chủ đã xác nhận thao tác (không ghi trùng). Mở lại danh sách để thấy dữ liệu mới.' : 'Ngữ cảnh đã đổi; chưa gửi lại thao tác.') } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
+        finally { setN(pendingWrites().length); setReview(pendingReviewNeeded()); setBusy(false) }
       }}>Thử lại an toàn</button>}
     </div>
   )

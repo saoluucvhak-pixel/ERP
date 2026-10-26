@@ -1,5 +1,13 @@
 # STATUS — theo Definition of Done (master prompt §48)
 
+## Bổ sung 26/10/2026 — quyền sở hữu thao tác chờ
+
+`AWAITING_REAL_DATA_VALIDATION`: sửa retry phía web sau main PR #65. Đăng xuất/đổi token không chuyển yêu cầu cũ sang phiên mới; đổi công ty dừng tự gửi; tải lại cùng phiên giữ đúng khóa và nội dung; không lưu yêu cầu chứa mật khẩu/quản trị/sao lưu vào hàng chờ. Có nhắc nhở đối chiếu khi không thể chứng minh quyền replay. Không sửa sổ/migration database.
+
+Kiểm chứng: **77/77 frontend**, **15/15 E2E**, build đạt; lint **0 lỗi, 25 cảnh báo cũ**. Backend **541/541** (126 domain + 415 SQLite), chạy lại toàn bộ đạt. E2E mới chứng minh server đã commit một đối tượng, mất phản hồi, đổi tài khoản và reload vẫn chỉ có một bản ghi. Chi tiết: `docs/audit/2026-10-26-retry-ownership.md`.
+
+Chưa triển khai CKTM bổ sung/thu hồi và tự chuyển phân bổ ngoại tệ khi thay thế. Đã chuẩn bị prompt và ca nghiệm thu trong `docs/audit/2026-10-26-next-business-prompts.md`; không tính tài liệu thiết kế là tính năng đã hoàn thành. Chưa đối chiếu dữ liệu thật, PostgreSQL thực hoặc NCC HĐĐT thật trong đợt này. Phần bảng bên dưới giữ các mốc lịch sử.
+
 Cập nhật: 24/10/2026 (rà soát GitHub R01–R06 và các mục kiểm soát nghiệp vụ — xem `docs/audit/BUG_REGISTER.md`, mục "Đợt rà soát 24/10/2026"; trước đó 20/10/2026 rà soát bảo mật/CI; phần chức năng còn ghi theo mốc 14/10/2026, Giai đoạn 3 — Kho, tính giá xuất kho, MT/BDMT dăm gỗ, hóa đơn mua/bán). Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
 
 Trạng thái: `NOT_STARTED` · `DESIGNED` · `IN_PROGRESS` (code + test, thiếu UI hoặc tài liệu) · `AWAITING_REAL_DATA_VALIDATION` (code + UI + test tự động đạt, chờ dữ liệu thực) · `DONE`

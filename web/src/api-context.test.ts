@@ -15,8 +15,13 @@ test('automatic retry must not send an old form under a new company', async () =
     return new Response(JSON.stringify({id:'test-created'}), {status:200});
   };
   try {
-    await api.post('/partners', {code:'AUDIT-RETRY',name:'Only for company A'});
+    await assert.rejects(api.post('/partners', {code:'AUDIT-RETRY',name:'Only for company A'}), api.isStaleContext);
+    assert.deepEqual(calls.map(c=>c.company), ['company-A']);
+    assert.equal(api.hasPendingWrite(), false);
+    api.session.setCompany('company-A');
+    assert.equal(await api.retryPendingWrite(), true);
     assert.deepEqual(calls.map(c=>c.company), ['company-A','company-A']);
+    assert.equal(calls[0].key, calls[1].key);
   } finally { globalThis.fetch = original; }
 });
 
