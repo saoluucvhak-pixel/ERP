@@ -3,6 +3,7 @@ import { get, post, put } from './api'
 import { ErrorBox, ExportButton, FlowStrip, Modal, navStore, PartnerSelect, useAction, useCatalog } from './common'
 import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 import { RebateAmendments } from './RebateAmendments'
+import { VoidRunDialog } from './VoidRunDialog'
 
 interface Tier { threshold: string; percent: string }
 interface Agreement { id: string; kind: string; partnerId: string; partnerCode: string; partnerName: string; code: string; name: string; fromDate: string; toDate: string; isActive: boolean; rowVersion: number
@@ -45,6 +46,7 @@ export function DiscountsView() {
   const [to, setTo] = useState(today())
   const [report, setReport] = useState<Report | null>(null)
   const [info, setInfo] = useState('')
+  const [voiding, setVoiding] = useState<Agreement | null>(null)
   const [purchasePolicy, setPurchasePolicy] = useState<'RevalueInventory' | 'ReduceCogs'>('RevalueInventory')
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setRows(await get<Agreement[]>(`/discounts/agreements?kind=${kind}`))), [run, kind])
@@ -77,11 +79,7 @@ export function DiscountsView() {
       : `Đã quyết toán ${settle.a.code}: chiết khấu ${r.percent}% = ${formatMoney(r.amount)}. Các hóa đơn điều chỉnh nháp ở màn Hóa đơn — người có quyền ghi sổ ghi sổ từng hóa đơn.`)
     await load()
   })
-  const voidRun = (a: Agreement) => run(async () => {
-    const reason = window.prompt(`Lý do hủy lần quyết toán còn hiệu lực mới nhất của ${a.code} (chỉ hủy các hóa đơn nháp của lần đó):`)
-    if (!reason) return
-    await post(`/discounts/agreements/${a.id}/void-run`, { reason }); setInfo(`Đã hủy quyết toán ${a.code}.`); await load()
-  })
+  const voidRun = (a: Agreement) => setVoiding(a)
   const toggle = (a: Agreement) => run(async () => { await post(`/discounts/agreements/${a.id}/active`, { rowVersion: a.rowVersion, active: !a.isActive }); await load() })
 
   const edit = (a: Agreement) => setForm({ id: a.id, rowVersion: a.rowVersion, partnerId: a.partnerId, code: a.code, name: a.name, fromDate: a.fromDate, toDate: a.toDate, tiers: a.tiers.map(t => ({ threshold: formatMoney(t.threshold), percent: t.percent })), progressive: !!a.progressive })
@@ -162,6 +160,8 @@ export function DiscountsView() {
         <p className="muted">Bậc cao hơn không được có tỷ lệ thấp hơn bậc dưới. Đạt bậc nào thì tỷ lệ đó áp cho toàn bộ doanh số trong kỳ.</p>
       </Modal>}
 
+      {voiding && <VoidRunDialog agreementId={voiding.id} agreementCode={voiding.code} runId={null} label="lần quyết toán còn hiệu lực mới nhất" amount={voiding.runAmount}
+        onClose={() => setVoiding(null)} onConfirm={async reason => { await post(`/discounts/agreements/${voiding.id}/void-run`, { reason }); setInfo(`Đã hủy quyết toán ${voiding.code}.`); await load() }} />}
       {preview && !settle && <Modal title={`Tính chiết khấu — ${preview.a.code}`} onClose={() => setPreview(null)} busy={busy}
         footer={<><button onClick={() => setPreview(null)}>Đóng</button><button disabled={busy} title="Bảng kê các hóa đơn gốc được chiết khấu, đính kèm hóa đơn điều chỉnh / chứng từ (Mẫu 01/BK-ĐCTT)" onClick={() => run(async () => setStatement(await get<Statement>(`/discounts/agreements/${preview.a.id}/statement`)))}>Bảng kê…</button>{!preview.p.settled && <button disabled={busy} title="Ước tính theo doanh số đến ngày chọn; sinh chứng từ nháp Nợ giảm trừ doanh thu / Có phải trả chiết khấu" onClick={() => run(async () => {
             const asOf = window.prompt('Trích trước đến ngày (yyyy-mm-dd)', today() < preview.a.toDate ? today() : preview.a.toDate)
