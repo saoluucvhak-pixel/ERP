@@ -200,11 +200,36 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
             return await ViewAsync(ctx, documentId);
         }
 
+        // Kết quả "chấp nhận" bất thường (thiếu ký hiệu / số, hoặc trùng số đã có): nhà cung cấp đã phát hành nên KHÔNG tự gửi lại; lưu lại để xử lý tay thay vì để giao dịch ghi nhận hỏng rồi lặp mãi.
+        if (result.Outcome != ProviderOutcome.Rejected)
+        {
+            var anomaly = string.IsNullOrWhiteSpace(result.Series) || string.IsNullOrWhiteSpace(result.Number)
+                ? "thiếu ký hiệu hoặc số hóa đơn"
+                : await db.EInvoiceDocuments.AsNoTracking().AnyAsync(x => x.CompanyId == ctx.CompanyId && x.Series == result.Series && x.Number == result.Number && x.Id != documentId)
+                    ? $"số hóa đơn {result.Series}/{result.Number} đã tồn tại" : null;
+            if (anomaly is not null)
+            {
+                await db.InTransactionAsync(async () =>
+                {
+                    var d0 = await db.EInvoiceDocuments.FirstAsync(x => x.Id == documentId);
+                    var ob0 = await db.EInvoiceOutbox.FirstAsync(o => o.Id == outbox.Id);
+                    ob0.Attempts++; ob0.State = EInvoiceOutboxState.Failed; ob0.NextAttemptAt = null; ob0.UpdatedAt = clock.UtcNow;
+                    ob0.LastError = d0.LastError = $"Nhà cung cấp trả kết quả chấp nhận bất thường ({anomaly}); đối chiếu với nhà cung cấp và xử lý tay, hệ thống không tự gửi lại.";
+                    d0.RowVersion++;
+                    db.EInvoiceMessages.Add(Message(ctx, documentId, "IN", "Anomaly", null, "ACCEPTED_INVALID", anomaly));
+                    await audit.AppendAsync(ctx.CompanyId, ctx, "einvoice.issue.anomaly", "einvoice_document", d0.Id.ToString(), new { anomaly, result.ProviderRef }, d0.RowVersion);
+                    await db.SaveChangesAsync();
+                });
+                return await ViewAsync(ctx, documentId);
+            }
+        }
+
         // Giao dịch A: ghi nhận kết quả. Đã Issued là bất biến — không bao giờ mất vì ghi sổ lỗi ở bước sau.
         await db.InTransactionAsync(async () =>
         {
             var d = await db.EInvoiceDocuments.FirstAsync(x => x.Id == documentId);
             var ob = await db.EInvoiceOutbox.FirstAsync(o => o.Id == outbox.Id);
+            if (d.Status != EInvoiceDocStatus.Issuing || ob.State != EInvoiceOutboxState.Pending) return;   // một luồng khác (worker / nút gửi tay) đã ghi nhận kết quả của lệnh này
             ob.Attempts++; ob.UpdatedAt = clock.UtcNow; ob.NextAttemptAt = null;
             if (result.Outcome == ProviderOutcome.Rejected)
             {
