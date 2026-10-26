@@ -1316,6 +1316,10 @@ public partial class TradeTests
         Assert.Equal(3_300_000m - 20_000m, await fx.Bal("CASH"));                                               // thu đủ ba hóa đơn trừ chiết khấu
         Assert.Equal(0m, await fx.Bal("AR", fx.H.Partner["KH01"]));
         await LedgerInvariants.AssertAsync(fx.S.Db);
+        // DSC-04: báo cáo chiết khấu phải khớp sổ cái với cả chứng từ thu gộp nhiều hóa đơn.
+        var report = await new DiscountReportService(fx.S.Db).ReportAsync(fx.H.Auditor, InvoiceKind.Sales, D(1, 1), D(12, 31));
+        Assert.Equal(20_000m, report.Total.PaymentDiscount);
+        Assert.Equal(20_000m, report.Rows.Single(r => r.PartnerId == fx.H.Partner["KH01"]).PaymentDiscount);
 
         // Chứng từ gộp bị sửa số chiết khấu ngoài dịch vụ → không ghi sổ được.
         var d = await PostedSaleAsync(fx, "0000721", 10, D(3, 21), price: 100_000);
