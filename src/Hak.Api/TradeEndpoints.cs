@@ -12,13 +12,13 @@ public sealed record ConfirmOrderRequest(string? CreditOverrideReason);
 
 /// <summary>Yêu cầu lập hóa đơn điều chỉnh. Cố ý KHÔNG có cờ "theo thỏa thuận" của AdjustmentInput: cờ đó bỏ qua phê duyệt từng dòng nên chỉ dịch vụ thỏa thuận chiết khấu được đặt.</summary>
 public sealed record AdjustmentRequest(Guid OriginalInvoiceId, InvoicePurpose Purpose, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate,
-    string Description, IReadOnlyList<AdjustmentLineInput> Lines, DiscountKind? DiscountKind = null);
+    string Description, IReadOnlyList<AdjustmentLineInput> Lines, DiscountKind? DiscountKind = null, InvoiceAdjustmentReason AdjustmentReason = InvoiceAdjustmentReason.Unspecified);
 
 public static class TradeEndpoints
 {
     private static object Dto(CommercialInvoice i) => new
     {
-        i.Id, i.Number, kind = i.Kind.ToString(), purpose = i.Purpose.ToString(), discountKind = i.DiscountKind?.ToString(), i.AdjustsInvoiceId, i.InvoiceSeries, i.InvoiceNo, i.InvoiceDate, i.PostingDate, i.DueDate, i.PartnerId, i.Currency, i.ExchangeRate,
+        i.Id, i.Number, kind = i.Kind.ToString(), purpose = i.Purpose.ToString(), discountKind = i.DiscountKind?.ToString(), i.AdjustsInvoiceId, adjustmentReason = i.AdjustmentReason.ToString(), i.InvoiceSeries, i.InvoiceNo, i.InvoiceDate, i.PostingDate, i.DueDate, i.PartnerId, i.Currency, i.ExchangeRate,
         i.Description, status = i.Status.ToString(), i.VoucherId, i.CreatedBy, i.RowVersion,
         total = i.Lines.Sum(l => l.FunctionalAmount), vat = i.Lines.Sum(l => l.VatAmount), tradeDiscount = i.Lines.Sum(l => l.FunctionalDiscountAmount),
         lines = i.Lines.OrderBy(l => l.LineNo).Select(l => new
@@ -105,7 +105,7 @@ public static class TradeEndpoints
             return Results.Ok(new { d.Id, d.Number, value = d.Lines[0].Amount });
         });
         api.MapPost("/invoices/adjustments", async (HttpContext http, AdjustmentRequest r, InvoiceService s) => Results.Ok(Dto(await s.CreateAdjustmentAsync(await http.SessionAsync(),
-            new AdjustmentInput(r.OriginalInvoiceId, r.Purpose, r.InvoiceSeries, r.InvoiceNo, r.InvoiceDate, r.PostingDate, r.Description, r.Lines, r.DiscountKind)))));
+            new AdjustmentInput(r.OriginalInvoiceId, r.Purpose, r.InvoiceSeries, r.InvoiceNo, r.InvoiceDate, r.PostingDate, r.Description, r.Lines, r.DiscountKind, AdjustmentReason: r.AdjustmentReason)))));
         api.MapGet("/orders", async (HttpContext http, HakDbContext db, InvoiceKind? kind, OrderStatus? status, [Microsoft.AspNetCore.Mvc.FromQuery(Name = "from")] DateOnly? dateFrom, [Microsoft.AspNetCore.Mvc.FromQuery(Name = "to")] DateOnly? dateTo, string? search, int? page, int? pageSize) =>
         {
             var ctx = await http.SessionAsync(); ctx.Require(Permissions.VoucherView);

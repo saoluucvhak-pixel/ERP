@@ -1,5 +1,8 @@
 namespace Hak.Domain.Tax;
 
+/// <summary>Unknown identifies legacy evidence without a declared sign convention; never infer a decrease from the books being matched.</summary>
+public enum EInvoiceAmountConvention { Unknown = 0, Signed = 1, MagnitudeWithNature = 2 }
+
 public enum TaxDirection { Input = 1, Output = 2 }
 
 /// <summary>Status of an e-invoice as reported by the e-invoice system [CẦN XÁC MINH theo quy định HĐĐT hiện hành].</summary>
@@ -28,6 +31,8 @@ public sealed class EInvoiceRecord
     public decimal VatAmount { get; set; }
     public decimal TotalPayment { get; set; }
     public EInvoiceStatus Status { get; set; }
+    public EInvoiceAmountConvention AmountConvention { get; set; }
+    public EInvoiceAdjustNature AdjustmentNature { get; set; }
     /// <summary>For replacement/adjustment: the invoice it relates to.</summary>
     public string? RelatedSeries { get; set; }
     public string? RelatedNumber { get; set; }

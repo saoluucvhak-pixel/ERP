@@ -29,6 +29,9 @@ public enum InvoicePurpose
 /// </summary>
 public enum DiscountKind { Allowance = 1, Trade = 2 }
 
+/// <summary>Tax treatment follows the economic reason, never just the sign or document type. Unknown legacy rows require review.</summary>
+public enum InvoiceAdjustmentReason { Unspecified = 0, InvoiceError = 1, CommercialRebate = 2, GoodsReturn = 3, PriceChange = 4 }
+
 /// <summary>
 /// Purchase or sales invoice (master prompt §12–13). Three dates are kept apart: invoice date (on the invoice),
 /// the receipt/delivery date (on the linked stock document) and the posting date (accounting period).
@@ -40,6 +43,7 @@ public sealed class CommercialInvoice
     public InvoiceKind Kind { get; set; }
     public InvoicePurpose Purpose { get; set; } = InvoicePurpose.Normal;
     public Guid? AdjustsInvoiceId { get; set; }
+    public InvoiceAdjustmentReason AdjustmentReason { get; set; }
     /// <summary>Hóa đơn thay thế: hóa đơn gốc bị thay (đã ghi sổ). Khi hóa đơn này ghi sổ, hóa đơn gốc được đảo trong cùng giao dịch.</summary>
     public Guid? ReplacesInvoiceId { get; set; }
     /// <summary>Chỉ dùng khi Purpose = Discount: chiết khấu thương mại hay giảm giá hàng bán. Null = giảm giá hàng bán (bản ghi cũ).</summary>

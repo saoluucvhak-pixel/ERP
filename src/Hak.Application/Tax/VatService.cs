@@ -17,7 +17,8 @@ public sealed record EInvoiceRateInput(decimal? VatRate, decimal AmountBeforeVat
 public sealed record EInvoiceInput(TaxDirection Direction, string SellerTaxCode, string SellerName, string Series, string Number, DateOnly IssueDate,
     decimal AmountBeforeVat, decimal VatAmount, decimal TotalPayment, EInvoiceStatus Status, IReadOnlyList<EInvoiceRateInput> Rates,
     string? BuyerTaxCode = null, string? BuyerName = null, string? Currency = null, decimal? ExchangeRate = null,
-    string? RelatedSeries = null, string? RelatedNumber = null, string? LookupCode = null);
+    string? RelatedSeries = null, string? RelatedNumber = null, string? LookupCode = null,
+    EInvoiceAmountConvention AmountConvention = EInvoiceAmountConvention.Signed, EInvoiceAdjustNature AdjustmentNature = EInvoiceAdjustNature.None);
 
 public sealed record EInvoiceImportResult(Guid BatchId, int Imported, int Duplicates, int StatusChanges, IReadOnlyList<string> Rejected);
 
@@ -36,8 +37,10 @@ public enum TaxDiffType
     CancelledButRecorded = 6,
     PartnerTaxCodeMissing = 7,
     DeclarationDifference = 8,
-    /// <summary>Hóa đơn điều chỉnh (từ 01/07/2026) làm đổi số thuế của kỳ gốc ĐÃ NỘP tờ khai: phải khai bổ sung vào kỳ gốc.</summary>
+    /// <summary>Only a classified invoice-error correction affecting VAT in a filed original period; rebates/returns/price changes are excluded.</summary>
     SupplementalFilingNeeded = 9,
+    TaxTreatmentReviewNeeded = 10,
+    AdjustmentSignReviewNeeded = 11,
 }
 
 public sealed record TaxDifference(TaxDiffType Type, TaxDirection? Direction, string Key, decimal? EInvoiceAmount, decimal? BooksAmount,
@@ -89,6 +92,14 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                 else if (x.Rates.Count > 0 && (x.Rates.Sum(r => r.AmountBeforeVat) != x.AmountBeforeVat || x.Rates.Sum(r => r.VatAmount) != x.VatAmount)) problem = "chi tiết theo thuế suất không khớp tổng";
                 else if (x.Direction == TaxDirection.Output && Norm(x.SellerTaxCode) != own) problem = "hóa đơn đầu ra nhưng người bán không phải công ty";
                 else if (x.Direction == TaxDirection.Input && x.BuyerTaxCode is { } b && Norm(b) != own) problem = "hóa đơn đầu vào nhưng người mua không phải công ty";
+                if (problem is null && (!Enum.IsDefined(x.AmountConvention) || !Enum.IsDefined(x.AdjustmentNature)
+                    || x.AmountConvention == EInvoiceAmountConvention.Unknown)) problem = "phải xác định quy ước dấu của dữ liệu nhập";
+                if (problem is null && x.AmountConvention == EInvoiceAmountConvention.MagnitudeWithNature
+                    && (x.Status != EInvoiceStatus.Adjustment || x.AdjustmentNature is not (EInvoiceAdjustNature.Decrease or EInvoiceAdjustNature.Increase)
+                        || x.AmountBeforeVat < 0 || x.VatAmount < 0 || x.Rates.Any(r => r.AmountBeforeVat < 0 || r.VatAmount < 0))) problem = "số dương phải kèm bản chất tăng/giảm hợp lệ";
+                if (problem is null && x.AmountConvention == EInvoiceAmountConvention.Signed && x.Status == EInvoiceStatus.Adjustment
+                    && ((x.AdjustmentNature == EInvoiceAdjustNature.Decrease && (x.AmountBeforeVat > 0 || x.VatAmount > 0))
+                        || (x.AdjustmentNature == EInvoiceAdjustNature.Increase && (x.AmountBeforeVat < 0 || x.VatAmount < 0)))) problem = "dấu số tiền không khớp bản chất điều chỉnh";
                 if (problem is not null) { rejected.Add($"{key}: {problem}"); continue; }
 
                 var seller = Norm(x.SellerTaxCode);
@@ -108,6 +119,7 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                 {
                     Id = Ids.New(), CompanyId = ctx.CompanyId, Direction = x.Direction, SellerTaxCode = seller, SellerName = x.SellerName, BuyerTaxCode = x.BuyerTaxCode is null ? null : Norm(x.BuyerTaxCode),
                     BuyerName = x.BuyerName, Series = x.Series.Trim(), Number = x.Number.Trim(), IssueDate = x.IssueDate, Currency = x.Currency, ExchangeRate = x.ExchangeRate,
+                    AmountConvention = x.AmountConvention, AdjustmentNature = x.AdjustmentNature,
                     AmountBeforeVat = x.AmountBeforeVat, VatAmount = x.VatAmount, TotalPayment = x.TotalPayment, Status = x.Status, RelatedSeries = x.RelatedSeries,
                     RelatedNumber = x.RelatedNumber, LookupCode = x.LookupCode, ImportBatchId = batch.Id, ImportedAt = clock.UtcNow, ImportedBy = ctx.UserId,
                 };
@@ -171,7 +183,7 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
             }
             if (st == EInvoiceStatus.Adjustment)
             {
-                // Hóa đơn điều chỉnh: ghép với hóa đơn điều chỉnh/trả hàng/giảm giá trong sổ cùng ký hiệu + số (sổ ghi giá trị có dấu, HĐĐT ghi số dương).
+                // Compare signed economic changes; positive magnitudes require an explicit provider nature.
                 var adjs = recs?.Where(r => r.Purpose != InvoicePurpose.Normal).ToList() ?? [];
                 foreach (var r in adjs) seenBookIds.Add(r.InvoiceId);
                 if (adjs.Count == 0)
@@ -182,12 +194,25 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                 }
                 var a = adjs[0];
                 matched++;
-                var (aAmount, aVat) = (Math.Abs(a.AmountBeforeVat), Math.Abs(a.VatAmount));
-                if (aAmount != e.AmountBeforeVat)
-                    diffs.Add(new(TaxDiffType.AmountDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, aAmount - e.AmountBeforeVat,
+                var (aAmount, aVat) = (a.AmountBeforeVat, a.VatAmount);
+                var legacyNature = e.AmountConvention == EInvoiceAmountConvention.Unknown
+                    ? await db.EInvoiceDocuments.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId && d.InvoiceId == a.InvoiceId
+                        && d.Series == e.Series && d.Number == e.Number && d.Relation == EInvoiceRelation.Adjustment
+                        && d.Status == EInvoiceDocStatus.Issued).Select(d => d.Nature).FirstOrDefaultAsync()
+                    : EInvoiceAdjustNature.None;
+                var signed = EInvoiceAmounts.SignedAdjustment(e, legacyNature);
+                if (signed is null)
+                {
+                    diffs.Add(new(TaxDiffType.AdjustmentSignReviewNeeded, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, 0,
+                        "Dữ liệu HĐĐT cũ chưa xác định quy ước dấu/bản chất tăng giảm; đối chiếu chứng từ gốc trước khi kết luận khớp.", a.InvoiceId, e.Id));
+                    continue;
+                }
+                var (eAmount, eVat) = signed.Value;
+                if (aAmount != eAmount)
+                    diffs.Add(new(TaxDiffType.AmountDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, aAmount - eAmount,
                         "Tiền hàng của hóa đơn điều chỉnh trong sổ khác HĐĐT: kiểm tra số tiền điều chỉnh từng dòng.", a.InvoiceId, e.Id));
-                if (aVat != e.VatAmount)
-                    diffs.Add(new(TaxDiffType.VatDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, aVat - e.VatAmount, "Thuế GTGT của hóa đơn điều chỉnh trong sổ khác HĐĐT.", a.InvoiceId, e.Id));
+                if (aVat != eVat)
+                    diffs.Add(new(TaxDiffType.VatDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, aVat - eVat, "Thuế GTGT của hóa đơn điều chỉnh trong sổ khác HĐĐT.", a.InvoiceId, e.Id));
                 if (a.PostingDate < from || a.PostingDate > to)
                     diffs.Add(new(TaxDiffType.PeriodDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, 0,
                         $"Hóa đơn điều chỉnh lập ngày {e.IssueDate.Vn()} nhưng hạch toán ngày {a.PostingDate.Vn()}: xác định đúng kỳ kê khai [CẦN XÁC MINH quy định kê khai bổ sung].", a.InvoiceId, e.Id));
@@ -229,19 +254,30 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                                                   : "Sổ có doanh thu nhưng không có HĐĐT tương ứng: kiểm tra việc xuất hóa đơn.", b.InvoiceId));
         }
 
-        // Từ 01/07/2026 (Nghị định 254/2026, Thông tư 91/2026 Điều 10 — nguồn thứ cấp, chị xác minh): hóa đơn điều chỉnh làm đổi số thuế đã kê khai thì khai bổ sung vào KỲ GỐC; không đổi số thuế thì kê khai ở kỳ hiện tại.
+        // TT91/2026 Điều 10(5), (6)(d): commercial rebates/returns/price changes are not invoice-error corrections. Unknown legacy reasons require review.
         // "Kỳ đã nộp" = có tờ khai GTGT trạng thái Đã nộp chứa ngày ghi sổ hóa đơn gốc và kết thúc trước ngày ghi sổ hóa đơn điều chỉnh.
         var adjustmentCutover = new DateOnly(2026, 7, 1);
         var filed = await db.TaxDeclarations.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId && d.TaxType == "GTGT" && d.Status == DeclarationStatus.Filed).ToListAsync();
         foreach (var b in books.Where(b => b.Purpose != InvoicePurpose.Normal && b.PostingDate >= from && b.PostingDate <= to && b.PostingDate >= adjustmentCutover && b.VatAmount != 0))
         {
-            var originalDate = await db.CommercialInvoices.AsNoTracking().Where(i => i.Id == b.InvoiceId && i.AdjustsInvoiceId != null)
-                .Join(db.CommercialInvoices.AsNoTracking(), i => i.AdjustsInvoiceId, o => o.Id, (i, o) => (DateOnly?)o.PostingDate).FirstOrDefaultAsync();
+            var adjustment = await db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == b.InvoiceId && i.CompanyId == ctx.CompanyId);
+            var reason = adjustment.AdjustmentReason;
+            if (reason == InvoiceAdjustmentReason.Unspecified && adjustment.Purpose == InvoicePurpose.Discount && adjustment.DiscountKind == DiscountKind.Trade)
+                reason = InvoiceAdjustmentReason.CommercialRebate;
+            if (reason is InvoiceAdjustmentReason.CommercialRebate or InvoiceAdjustmentReason.GoodsReturn or InvoiceAdjustmentReason.PriceChange) continue;
+            var originalDate = await db.CommercialInvoices.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId && i.Id == adjustment.AdjustsInvoiceId)
+                .Select(i => (DateOnly?)i.PostingDate).FirstOrDefaultAsync();
             if (originalDate is not { } od) continue;
+            if (reason == InvoiceAdjustmentReason.Unspecified)
+            {
+                diffs.Add(new(TaxDiffType.TaxTreatmentReviewNeeded, b.Direction, $"{b.Series}/{b.InvoiceNo}", null, b.AmountBeforeVat, null, b.VatAmount, 0,
+                    "Chưa xác định lý do điều chỉnh: phân biệt sửa sai hóa đơn với CKTM/trả hàng/thay đổi giá trước khi chọn kỳ kê khai.", b.InvoiceId));
+                continue;
+            }
             var d = filed.FirstOrDefault(x => x.PeriodFrom <= od && od <= x.PeriodTo && x.PeriodTo < b.PostingDate);
             if (d is not null)
                 diffs.Add(new(TaxDiffType.SupplementalFilingNeeded, b.Direction, $"{b.Series}/{b.InvoiceNo}", null, b.AmountBeforeVat, null, b.VatAmount, b.VatAmount,
-                    $"Hóa đơn điều chỉnh ngày {b.PostingDate.Vn()} làm đổi thuế GTGT của kỳ {d.PeriodFrom.Vn()} – {d.PeriodTo.Vn()} đã nộp tờ khai: lập tờ khai bổ sung cho kỳ gốc [CẦN XÁC MINH Điều 10 Thông tư 91/2026].", b.InvoiceId));
+                    $"Hóa đơn điều chỉnh ngày {b.PostingDate.Vn()} làm đổi thuế GTGT của kỳ {d.PeriodFrom.Vn()} – {d.PeriodTo.Vn()} đã nộp tờ khai: kiểm tra hồ sơ sửa sai và tờ khai bổ sung của kỳ gốc (không áp dụng cho CKTM theo doanh số/trả hàng/thay đổi giá).", b.InvoiceId));
         }
 
         var declaration = await db.TaxDeclarations.AsNoTracking().Include(d => d.Lines)

@@ -121,6 +121,18 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                     break;
                 }
 
+                case Domain.Trade.DiscountAgreementRunInvoice when entry.State is EntityState.Modified or EntityState.Deleted:
+                    throw Immutable("Phân bổ quyết toán chiết khấu đã lưu không được sửa/xóa.");
+
+                case Domain.Trade.DiscountAgreementRun when entry.State == EntityState.Deleted:
+                    throw Immutable("Quyết toán chiết khấu không được xóa; hủy có lý do để làm lại.");
+                case Domain.Trade.DiscountAgreementRun when entry.State == EntityState.Modified:
+                    if (entry.OriginalValues[nameof(Domain.Trade.DiscountAgreementRun.SettlementSnapshot)] is not null
+                        && entry.Properties.Any(p => p.IsModified && !Equals(p.OriginalValue, p.CurrentValue)
+                            && p.Metadata.Name is not (nameof(Domain.Trade.DiscountAgreementRun.VoidedAt) or nameof(Domain.Trade.DiscountAgreementRun.VoidedBy))))
+                        throw Immutable("Số liệu và bảng kê quyết toán đã lưu không được sửa; tạo lần xử lý mới có dấu vết.");
+                    break;
+
                 case Domain.Tax.EInvoiceRecord or Domain.Tax.EInvoiceRateLine or Domain.Tax.EInvoiceImportBatch or Domain.Tax.EInvoiceStatusChange
                     when entry.State is EntityState.Modified or EntityState.Deleted:
                     throw Immutable("Dữ liệu hóa đơn điện tử đã nhập là chứng cứ gốc, không được sửa/xóa.");

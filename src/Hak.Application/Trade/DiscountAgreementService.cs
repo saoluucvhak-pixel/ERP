@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Hak.Application.Accounting;
 using Hak.Application.Audit;
 using Hak.Application.Common;
@@ -23,7 +24,7 @@ public sealed record AgreementInvoiceShare(Guid InvoiceId, string Number, string
 public sealed record AgreementStatementRow(int No, string OriginalSeries, string OriginalNo, DateOnly OriginalDate, decimal Sales, decimal Discount, string? AdjustmentSeries, string? AdjustmentNo, DateOnly? AdjustmentDate, decimal AdjustmentVat);
 
 public sealed record AgreementStatement(string AgreementCode, string AgreementName, string PartnerCode, string PartnerName, DateOnly FromDate, DateOnly ToDate, decimal Percent, decimal TotalSales, decimal TotalDiscount,
-    bool Settled, string Mode, IReadOnlyList<AgreementStatementRow> Rows);
+    bool Settled, string Mode, IReadOnlyList<AgreementStatementRow> Rows, bool SnapshotAvailable = true, string? Warning = null);
 
 public sealed record AgreementPreview(Guid AgreementId, decimal EligibleSales, decimal Percent, decimal Amount, decimal? NextThreshold, decimal? NextPercent, bool Settled,
     IReadOnlyList<AgreementInvoiceShare> Invoices, decimal Accrued = 0);
@@ -37,6 +38,30 @@ public sealed record AgreementPreview(Guid AgreementId, decimal EligibleSales, d
 public sealed class DiscountAgreementService(HakDbContext db, InvoiceService invoices, AuditService audit, IClock clock, AccountingEngine? engine = null)
 {
     private static string Norm(string s) => s.Trim();
+
+    private sealed record SourceLineAllocation(int LineNo, decimal Amount, decimal? VatRate, decimal OriginalFunctionalAmount);
+    private sealed record SourceAllocation(Guid InvoiceId, string? Currency, decimal? ExchangeRate, int DecimalPlaces, IReadOnlyList<SourceLineAllocation> Lines);
+    private sealed record SettlementSnapshot(int Version, int FunctionalDecimalPlaces, AgreementStatement Statement, AgreementPreview Preview, AgreementInput Policy, IReadOnlyList<SourceAllocation> Sources);
+
+    private async Task CaptureSnapshotAsync(SessionContext ctx, DiscountAgreement a, Plan plan, DiscountAgreementRun run)
+    {
+        var statement = await BuildStatementAsync(a, plan, run);
+        var preview = new AgreementPreview(a.Id, run.EligibleSales, run.Percent, run.Amount, null, null, true,
+            plan.Shares.Select(s => new AgreementInvoiceShare(s.Invoice.Id, s.Invoice.Number, s.Invoice.InvoiceSeries, s.Invoice.InvoiceNo, s.Invoice.PostingDate, s.Sales, s.Discount)).ToList(), run.AccruedAmount);
+        var policy = new AgreementInput(a.Kind, a.PartnerId, a.Code, a.Name, a.FromDate, a.ToDate,
+            a.Tiers.OrderBy(t => t.Threshold).Select(t => new AgreementTierInput(t.Threshold, t.Percent)).ToList(), a.Progressive);
+        var dp = await FunctionalDpAsync(ctx.CompanyId);
+        var currencyDp = await db.Currencies.AsNoTracking().ToDictionaryAsync(c => c.Code, c => c.DecimalPlaces);
+        run.SettlementSnapshot = JsonSerializer.Serialize(new SettlementSnapshot(1, dp, statement, preview, policy,
+            plan.Shares.Select(s => new SourceAllocation(s.Invoice.Id, s.Invoice.Currency, s.Invoice.ExchangeRate,
+                s.Invoice.Currency is { } currency ? currencyDp[currency] : dp,
+                s.Lines.Select(l => new SourceLineAllocation(l.LineNo, l.Amount,
+                    s.Invoice.Lines.Single(x => x.LineNo == l.LineNo).VatRate, s.Invoice.Lines.Single(x => x.LineNo == l.LineNo).FunctionalAmount)).ToList())).ToList()));
+    }
+
+    private static SettlementSnapshot? ReadSnapshot(DiscountAgreementRun run)
+        => run.SettlementSnapshot is null ? null : JsonSerializer.Deserialize<SettlementSnapshot>(run.SettlementSnapshot)
+            ?? throw new DomainException(ErrorCodes.ValidationFailed, "Bảng kê quyết toán đã lưu không hợp lệ; kiểm tra dữ liệu trước khi xuất.");
 
     public async Task<IReadOnlyList<AgreementView>> ListAsync(SessionContext ctx, InvoiceKind kind)
     {
@@ -232,8 +257,11 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
     {
         ctx.Require(Permissions.ReportView);
         var a = await LoadAsync(ctx, id);
+        var run = await db.DiscountAgreementRuns.AsNoTracking().FirstOrDefaultAsync(r => r.AgreementId == id && r.VoidedAt == null);
+        if (run is not null)
+            return ReadSnapshot(run)?.Preview ?? new AgreementPreview(id, run.EligibleSales, run.Percent, run.Amount, null, null, true, [], run.AccruedAmount);
         var plan = await PlanAsync(ctx, a);
-        var settled = await db.DiscountAgreementRuns.AnyAsync(r => r.AgreementId == id && r.VoidedAt == null);
+        var settled = false;
         return new AgreementPreview(id, plan.Eligible, plan.Percent, plan.Amount, plan.NextThreshold, plan.NextPercent, settled,
             plan.Shares.Select(s => new AgreementInvoiceShare(s.Invoice.Id, s.Invoice.Number, s.Invoice.InvoiceSeries, s.Invoice.InvoiceNo, s.Invoice.PostingDate, s.Sales, s.Discount)).ToList(),
             await PostedAccrualAsync(id));
@@ -247,15 +275,39 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
     {
         ctx.Require(Permissions.ReportView);
         var a = await LoadAsync(ctx, id);
-        var plan = await PlanAsync(ctx, a);
-        var partner = await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == a.PartnerId);
         var run = await db.DiscountAgreementRuns.AsNoTracking().Include(r => r.Invoices).FirstOrDefaultAsync(r => r.AgreementId == id && r.VoidedAt == null);
-        var adjByOriginal = new Dictionary<Guid, (string Series, string No, DateOnly Date, decimal Vat)>();
-        if (run is not null && run.Invoices.Count > 0)
+        if (run is not null)
         {
-            var ids = run.Invoices.Select(i => i.AdjustmentInvoiceId).ToList();
+            var snapshot = ReadSnapshot(run);
+            if (snapshot is not null)
+            {
+                // Provider-assigned legal identities can arrive after settlement. Financial figures remain frozen.
+                var adjIds = run.Invoices.Select(i => i.AdjustmentInvoiceId).ToList();
+                var identities = await db.CommercialInvoices.AsNoTracking().Where(i => adjIds.Contains(i.Id) && i.CompanyId == ctx.CompanyId)
+                    .ToDictionaryAsync(i => i.AdjustsInvoiceId!.Value);
+                var sourceIds = snapshot.Preview.Invoices.ToDictionary(i => (i.InvoiceSeries, i.InvoiceNo), i => i.InvoiceId);
+                return snapshot.Statement with { Rows = snapshot.Statement.Rows.Select(r =>
+                    sourceIds.TryGetValue((r.OriginalSeries, r.OriginalNo), out var sourceId) && identities.TryGetValue(sourceId, out var adj)
+                        ? r with { AdjustmentSeries = adj.InvoiceSeries, AdjustmentNo = adj.InvoiceNo, AdjustmentDate = adj.InvoiceDate } : r).ToList() };
+            }
+            var partner = await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == a.PartnerId);
+            return new AgreementStatement(a.Code, a.Name, partner.Code, partner.Name, a.FromDate, a.ToDate, run.Percent, run.EligibleSales, run.Amount, true,
+                run.VoucherId is null ? "Hóa đơn điều chỉnh" : "Hạch toán điều chỉnh giảm", [], false,
+                "Quyết toán cũ chưa lưu bảng kê nguồn. Tổng tiền lấy từ lần quyết toán; cần đối chiếu hồ sơ cũ để bổ sung chi tiết, không tính lại từ hóa đơn hiện tại.");
+        }
+        return await BuildStatementAsync(a, await PlanAsync(ctx, a), null);
+    }
+
+    private async Task<AgreementStatement> BuildStatementAsync(DiscountAgreement a, Plan plan, DiscountAgreementRun? run)
+    {
+        var partner = await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == a.PartnerId);
+        var adjByOriginal = new Dictionary<Guid, (string Series, string No, DateOnly Date, decimal Vat)>();
+        if (run is not null && run.VoucherId is null)
+        {
+            var allocations = await db.DiscountAgreementRunInvoices.AsNoTracking().Where(i => i.RunId == run.Id).ToListAsync();
+            var ids = allocations.Select(i => i.AdjustmentInvoiceId).ToList();
             var adjs = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).Where(i => ids.Contains(i.Id)).ToListAsync();
-            foreach (var ri in run.Invoices)
+            foreach (var ri in allocations)
             {
                 var adj = adjs.FirstOrDefault(x => x.Id == ri.AdjustmentInvoiceId);
                 if (adj is not null) adjByOriginal[ri.OriginalInvoiceId] = (adj.InvoiceSeries, adj.InvoiceNo, adj.InvoiceDate, adj.Lines.Sum(l => l.VatAmount));
@@ -324,6 +376,7 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
             var actual = (await db.CommercialInvoiceLines.AsNoTracking().Where(l => createdIds.Contains(l.InvoiceId)).Select(l => l.FunctionalAmount).ToListAsync()).Sum();
             var drift = plan.Amount - actual;
             if (drift != 0) throw new DomainException(ErrorCodes.ValidationFailed, $"Không chia hết số chiết khấu {plan.Amount.Vn(0)} lên các dòng hóa đơn (lệch {drift.Vn(0)}: dòng đã giảm gần hết); kiểm tra các điều chỉnh nháp đang có.");
+            await CaptureSnapshotAsync(ctx, a, plan, run);
             await audit.AppendAsync(ctx.CompanyId, ctx, "discount_agreement.settle", "discount_agreement", a.Id.ToString(), new { a.Code, run.EligibleSales, run.Percent, run.Amount, invoices = n });
             await db.SaveChangesAsync();
             return run;
@@ -444,6 +497,7 @@ public sealed class DiscountAgreementService(HakDbContext db, InvoiceService inv
             }
             var v = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, postingDate, postingDate, desc, lines, SourceSystem: VoucherSource, SourceId: run.Id.ToString()));
             run.VoucherId = v.Id;
+            await CaptureSnapshotAsync(ctx, a, plan, run);
             db.DiscountAgreementRuns.Add(run);
             await audit.AppendAsync(ctx.CompanyId, ctx, "discount_agreement.settle", "discount_agreement", a.Id.ToString(), new { a.Code, run.EligibleSales, run.Percent, run.Amount, mode = "voucher", voucher = v.Number });
             await db.SaveChangesAsync();

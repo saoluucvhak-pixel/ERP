@@ -56,6 +56,8 @@ public sealed class DiscountAgreementRun
     /// <summary>Số đã trích trước (ghi sổ) tại thời điểm quyết toán; quyết toán bằng chứng từ bù trừ số này, bằng hóa đơn điều chỉnh thì có chứng từ hoàn nhập <see cref="AccrualReversalVoucherId"/>.</summary>
     public decimal AccruedAmount { get; set; }
     public Guid? AccrualReversalVoucherId { get; set; }
+    /// <summary>Immutable settlement statement, preview and allocation policy. Null means a legacy run whose detail cannot be reconstructed safely.</summary>
+    public string? SettlementSnapshot { get; set; }
     public List<DiscountAgreementRunInvoice> Invoices { get; set; } = [];
 }
 

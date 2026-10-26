@@ -18,7 +18,7 @@ public sealed record AdjustmentLineInput(int OriginalLineNo, Guid? ReturnReceipt
 public sealed record AdjustmentInput(Guid OriginalInvoiceId, InvoicePurpose Purpose, string InvoiceSeries, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate,
     string Description, IReadOnlyList<AdjustmentLineInput> Lines, DiscountKind? DiscountKind = null,
     /// <summary>Chỉ do DiscountAgreementService đặt: chiết khấu theo thỏa thuận đã được người có thẩm quyền lập nên không cần phê duyệt từng dòng (xem RecheckAdjustmentLimitsAsync).</summary>
-    bool UnderAgreement = false);
+    bool UnderAgreement = false, InvoiceAdjustmentReason AdjustmentReason = InvoiceAdjustmentReason.Unspecified);
 
 /// <summary>
 /// Sales adjustments (master prompt §13): returns, discounts/price reductions and increases, each linked to a posted
@@ -27,6 +27,16 @@ public sealed record AdjustmentInput(Guid OriginalInvoiceId, InvoicePurpose Purp
 /// </summary>
 public sealed partial class InvoiceService
 {
+    private static InvoiceAdjustmentReason ResolveAdjustmentReason(AdjustmentInput input)
+    {
+        if (!Enum.IsDefined(input.AdjustmentReason)) throw new DomainException(ErrorCodes.ValidationFailed, "Lý do điều chỉnh không hợp lệ.");
+        if (input.UnderAgreement) return InvoiceAdjustmentReason.CommercialRebate;
+        if (input.AdjustmentReason != InvoiceAdjustmentReason.Unspecified) return input.AdjustmentReason;
+        if (input.Purpose == InvoicePurpose.Return) return InvoiceAdjustmentReason.GoodsReturn;
+        return input.Purpose == InvoicePurpose.Discount && input.DiscountKind == DiscountKind.Trade
+            ? InvoiceAdjustmentReason.CommercialRebate : InvoiceAdjustmentReason.Unspecified;
+    }
+
     /// <summary>
     /// Step 1 of a return: a Draft stock receipt of the returned quantity, valued at the original issue's cost
     /// (Dr inventory / Cr the issue's counter account, i.e. cost of goods sold is reduced by exactly what was booked).
@@ -112,6 +122,7 @@ public sealed partial class InvoiceService
                 Id = Ids.New(), CompanyId = ctx.CompanyId, Kind = orig.Kind, Purpose = input.Purpose, AdjustsInvoiceId = orig.Id,
                 InvoiceSeries = input.InvoiceSeries.Trim(), InvoiceNo = input.InvoiceNo.Trim(), InvoiceDate = input.InvoiceDate, PostingDate = input.PostingDate,
                 PartnerId = orig.PartnerId, Currency = orig.Currency, ExchangeRate = orig.ExchangeRate, Description = input.Description.Trim(),
+                AdjustmentReason = ResolveAdjustmentReason(input),
                 DiscountKind = input.Purpose == InvoicePurpose.Discount ? input.DiscountKind ?? Hak.Domain.Trade.DiscountKind.Allowance : null,
                 CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId, RowVersion = 1,
                 Number = await NextNumberAsync(ctx.CompanyId, fy, (purchase, input.Purpose) switch

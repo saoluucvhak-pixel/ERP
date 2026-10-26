@@ -213,6 +213,7 @@ export function TradeView() {
 function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) => void }) {
   const purchase = invoice.kind === 'Purchase'
   const [purpose, setPurpose] = useState<'Return' | 'Discount' | 'Increase'>('Return')
+  const [reason, setReason] = useState('PriceChange')
   const [dkind, setDkind] = useState<'Trade' | 'Allowance'>('Trade')   // chiết khấu thương mại (sau bán, đạt doanh số…) hay giảm giá hàng (sai quy cách, kém chất lượng)
   const [lineNo, setLineNo] = useState('1')
   const [qty, setQty] = useState('')
@@ -242,7 +243,7 @@ function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) 
       ? { originalLineNo: Number.parseInt(lineNo, 10), returnReceiptId: receiptId, returnReceiptLineNo: 1, amount: null, description: null }
       : { originalLineNo: Number.parseInt(lineNo, 10), returnReceiptId: null, returnReceiptLineNo: null, amount: parseMoney(amount), description: null }
     const inv = await post<{ number: string; total: string; vat: string }>('/invoices/adjustments', {
-      originalInvoiceId: invoice.id, purpose, discountKind: purpose === 'Discount' ? dkind : null, invoiceSeries: series, invoiceNo: no, invoiceDate: date, postingDate: date,
+      originalInvoiceId: invoice.id, purpose, discountKind: purpose === 'Discount' ? dkind : null, adjustmentReason: purpose === 'Return' ? 'GoodsReturn' : purpose === 'Discount' && dkind === 'Trade' ? 'CommercialRebate' : reason, invoiceSeries: series, invoiceNo: no, invoiceDate: date, postingDate: date,
       description: `${purpose === 'Discount' && dkind === 'Trade' ? 'chiết khấu thương mại' : PURPOSE_VI[purpose]} theo HĐ ${invoice.invoiceSeries}/${invoice.invoiceNo}`, lines: [line],
     })
     onDone(`Đã lập ${inv.number} (nháp): ${formatMoney(inv.total)} + thuế ${formatMoney(inv.vat)}. Người khác có quyền ghi sổ sẽ ghi sổ.`)
@@ -256,6 +257,7 @@ function Adjust({ invoice, onDone }: { invoice: Invoice; onDone: (msg?: string) 
       <div className="form-row">
         <label>Loại<select value={purpose} onChange={e => setPurpose(e.target.value as typeof purpose)}><option value="Return">{purchase ? 'Hàng mua trả lại' : 'Hàng bán bị trả lại'}</option><option value="Discount">{purchase ? 'Giảm giá / chiết khấu hàng mua' : 'Giảm giá / chiết khấu hàng bán'}</option><option value="Increase">Điều chỉnh tăng</option></select></label>
         {purpose === 'Discount' && <label>Bản chất<select value={dkind} onChange={e => setDkind(e.target.value as typeof dkind)}><option value="Trade">Chiết khấu thương mại (đạt doanh số, mua nhiều)</option><option value="Allowance">Giảm giá hàng (sai quy cách, kém chất lượng)</option></select></label>}
+        {purpose !== 'Return' && !(purpose === 'Discount' && dkind === 'Trade') && <label>Lý do điều chỉnh<select value={reason} onChange={e => setReason(e.target.value)}><option value="PriceChange">Thay đổi giá theo thỏa thuận / chất lượng</option><option value="InvoiceError">Sửa sai hóa đơn đã lập</option></select></label>}
         <label>Dòng HĐ gốc<input className="num" size={3} value={lineNo} onChange={e => setLineNo(e.target.value)} /></label>
         <label>Ngày<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
         {purpose === 'Return' ? <>

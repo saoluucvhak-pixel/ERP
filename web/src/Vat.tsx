@@ -6,7 +6,7 @@ import { formatDate, formatMoney, parseMoney, today } from './money'
 
 const DIFF_VI: Record<string, string> = {
   MissingInBooks: 'Có HĐĐT, chưa ghi sổ', MissingEInvoice: 'Có trong sổ, không có HĐĐT', AmountDifference: 'Lệch tiền hàng', VatDifference: 'Lệch thuế',
-  PeriodDifference: 'Lệch kỳ', CancelledButRecorded: 'HĐĐT đã hủy/thay thế nhưng vẫn ghi sổ', PartnerTaxCodeMissing: 'Thiếu MST đối tượng', DeclarationDifference: 'Lệch tờ khai', SupplementalFilingNeeded: 'Cần khai bổ sung kỳ gốc',
+  PeriodDifference: 'Lệch kỳ', CancelledButRecorded: 'HĐĐT đã hủy/thay thế nhưng vẫn ghi sổ', PartnerTaxCodeMissing: 'Thiếu MST đối tượng', DeclarationDifference: 'Lệch tờ khai', SupplementalFilingNeeded: 'Cần kiểm tra khai bổ sung kỳ gốc', TaxTreatmentReviewNeeded: 'Cần xác định lý do và kỳ kê khai', AdjustmentSignReviewNeeded: 'Cần xác minh dấu hóa đơn điều chỉnh',
 }
 const MEASURE_VI: Record<string, string> = { None: '(không so sánh)', InputAmountBeforeVat: 'Tiền hàng đầu vào', InputVat: 'Thuế GTGT đầu vào', OutputAmountBeforeVat: 'Doanh số đầu ra', OutputVat: 'Thuế GTGT đầu ra' }
 const firstOfMonth = () => today().slice(0, 8) + '01'

@@ -29,6 +29,8 @@
           "vatAmount": { "$ref": "#/$defs/money" },
           "totalPayment": { "$ref": "#/$defs/money" },
           "status": { "enum": ["Original", "Replacement", "Adjustment", "Replaced", "Cancelled"] },
+          "amountConvention": { "enum": ["Signed", "MagnitudeWithNature"], "default": "Signed", "description": "Signed: giữ nguyên dấu tăng/giảm. MagnitudeWithNature: số dương kèm adjustmentNature bắt buộc cho hóa đơn điều chỉnh." },
+          "adjustmentNature": { "enum": ["None", "Increase", "Decrease", "Information"] },
           "relatedSeries": { "type": ["string", "null"] },
           "relatedNumber": { "type": ["string", "null"] },
           "lookupCode": { "type": ["string", "null"] },

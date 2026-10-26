@@ -68,6 +68,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
                 relatedId = await IssuedDocumentOfAsync(ctx.CompanyId, inv.AdjustsInvoiceId!.Value, "được điều chỉnh");
                 reason = inv.Description;
             }
+            await invoices.PreflightIssueAsync(ctx, inv.Id);
             var doc = NewDocument(ctx, inv.Id, relation, nature, relatedId, reason, inv.InvoiceDate);
             db.EInvoiceDocuments.Add(doc);
             Enqueue(ctx, doc);
@@ -88,6 +89,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
             var doc = await db.EInvoiceDocuments.FirstOrDefaultAsync(d => d.Id == documentId && d.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn điện tử không tồn tại.");
             if (doc.Status == EInvoiceDocStatus.Rejected)
             {
+                if (doc.InvoiceId is { } invoiceId) await invoices.PreflightIssueAsync(ctx, invoiceId);
                 doc.Attempt++; doc.Status = EInvoiceDocStatus.Issuing; doc.LastError = null; doc.RowVersion++;
                 Enqueue(ctx, doc);
                 await audit.AppendAsync(ctx.CompanyId, ctx, "einvoice.issue.retry", "einvoice_document", doc.Id.ToString(), new { doc.Attempt }, doc.RowVersion);
@@ -432,6 +434,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         {
             Id = Ids.New(), CompanyId = ctx.CompanyId, Direction = TaxDirection.Output, SellerTaxCode = own, SellerName = company.Name, BuyerTaxCode = Norm(partner.TaxCode) is { Length: > 0 } b ? b : null, BuyerName = partner.Name,
             Series = d.Series!, Number = d.Number!, IssueDate = d.IssueDate, Currency = inv.Currency, ExchangeRate = inv.ExchangeRate,
+            AmountConvention = d.Relation == EInvoiceRelation.Adjustment ? EInvoiceAmountConvention.MagnitudeWithNature : EInvoiceAmountConvention.Signed, AdjustmentNature = d.Nature,
             AmountBeforeVat = lines.Sum(l => l.FunctionalAmount), VatAmount = lines.Sum(l => l.VatAmount), TotalPayment = lines.Sum(l => l.FunctionalAmount + l.VatAmount),
             Status = d.Relation == EInvoiceRelation.Replacement ? EInvoiceStatus.Replacement : d.Relation == EInvoiceRelation.Adjustment ? EInvoiceStatus.Adjustment : EInvoiceStatus.Original, RelatedSeries = related?.Series, RelatedNumber = related?.Number,
             LookupCode = d.TaxAuthorityCode, ImportBatchId = batch.Id, ImportedAt = clock.UtcNow, ImportedBy = ctx.UserId,
