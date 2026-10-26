@@ -105,6 +105,57 @@ public partial class TradeTests
         await LedgerInvariants.AssertAsync(fx.S.Db);
     }
 
+    private sealed class FlakyProvider(IEInvoiceProvider inner, Func<Exception?> next) : IEInvoiceProvider
+    {
+        public string Name => inner.Name;
+        public bool Configured => true;
+        public int Calls { get; private set; }
+        public Task<ProviderIssueResult> IssueAsync(ProviderIssueRequest request, CancellationToken ct = default)
+        {
+            Calls++;
+            if (next() is { } ex) throw ex;
+            return inner.IssueAsync(request, ct);
+        }
+        public Task<ProviderNoticeResult> SubmitNoticeAsync(ProviderNoticeRequest request, CancellationToken ct = default) => inner.SubmitNoticeAsync(request, ct);
+    }
+
+    // EIN-04: lỗi mạng / hết thời gian (không phải EInvoiceTransientException) cũng chỉ là "chưa rõ kết quả": lệnh ở lại hàng đợi có lùi giờ, gửi lại cùng khóa.
+    [Fact]
+    public async Task EInvoice_AnyProviderException_KeepsTheOrderQueuedWithBackoff_AndTheNextRetryIssuesOnce()
+    {
+        var (fx, sim, _, _) = await EInvoiceSetupAsync(); using var _fx = fx;
+        var failures = new Queue<Exception>([new HttpRequestException("reset"), new TaskCanceledException("timeout")]);
+        var flaky = new FlakyProvider(sim, () => failures.TryDequeue(out var e) ? e : null);
+        var svc = new EInvoiceIssueService(fx.S.Db, fx.Inv, flaky, fx.S.Audit, fx.H.Clock, new EInvoiceOptions("1"));
+        var inv = await AwaitingSaleAsync(fx);
+
+        var queued = await svc.IssueAsync(fx.H.Approver, inv.Id);
+        Assert.Equal(("Issuing", 1), (queued.Status, queued.Attempts));
+        Assert.NotNull(queued.NextAttemptAt);
+        var again = await svc.RetryAsync(fx.H.Approver, queued.Id);
+        Assert.Equal(("Issuing", 2), (again.Status, again.Attempts));
+        var done = await svc.RetryAsync(fx.H.Approver, queued.Id);
+        Assert.Equal("Issued", done.Status);
+        Assert.Equal(1, sim.AcceptedCount);
+        Assert.Equal(1, await fx.S.Db.EInvoiceDocuments.CountAsync());
+    }
+
+    // EIN-01: hóa đơn bị từ chối rồi hủy nháp không được phát hành lại (sẽ tạo hóa đơn pháp lý không có bút toán).
+    [Fact]
+    public async Task EInvoice_RetryAfterTheDraftWasCancelled_IsRefused_AndNeverCallsTheProvider()
+    {
+        var (fx, sim, svc, _) = await EInvoiceSetupAsync(); using var _fx = fx;
+        await fx.S.Db.BusinessPartners.Where(p => p.Id == fx.H.Partner["KH01"]).ExecuteUpdateAsync(s => s.SetProperty(p => p.TaxCode, "123"));
+        var inv = await AwaitingSaleAsync(fx);
+        var rejected = await svc.IssueAsync(fx.H.Approver, inv.Id);
+        Assert.Equal("Rejected", rejected.Status);
+        await fx.Inv.CancelAsync(fx.H.Approver, inv.Id, "Sai MST, lập lại");
+
+        await fx.S.Db.BusinessPartners.Where(p => p.Id == fx.H.Partner["KH01"]).ExecuteUpdateAsync(s => s.SetProperty(p => p.TaxCode, "0301234567"));
+        Assert.Equal(ErrorCodes.InvalidStateTransition, await CodeOf(() => svc.RetryAsync(fx.H.Approver, rejected.Id)));
+        Assert.Equal(0, sim.AcceptedCount);
+    }
+
     [Fact]
     public async Task EInvoice_Rejected_KeepsTheDraft_AndReissuingAfterTheFixUsesANewKey()
     {
@@ -270,7 +321,7 @@ public partial class TradeTests
         fx.S.Db.ChangeTracker.Clear();
 
         // Tầng hai: trigger của cơ sở dữ liệu chặn cả ghi thẳng bằng SQL, bỏ qua EF.
-        foreach (var sql in new[] { "UPDATE e_invoice_documents SET number = '9999999'", "UPDATE e_invoice_documents SET xml_content = 'x'", "DELETE FROM e_invoice_documents", "UPDATE e_invoice_messages SET detail = 'x'", "DELETE FROM e_invoice_messages", "DELETE FROM e_invoice_outbox" })
+        foreach (var sql in new[] { "UPDATE e_invoice_documents SET number = '9999999'", "UPDATE e_invoice_documents SET xml_content = 'x'", "DELETE FROM e_invoice_documents", "UPDATE e_invoice_messages SET detail = 'x'", "DELETE FROM e_invoice_messages", "DELETE FROM e_invoice_outbox", "UPDATE e_invoice_documents SET status = 1 WHERE status = 2", "UPDATE e_invoice_outbox SET idempotency_key = 'x'" })
         {
             var ex = await Assert.ThrowsAnyAsync<Exception>(() => fx.S.Db.Database.ExecuteSqlRawAsync(sql));
             Assert.Contains("LEDGER_IMMUTABLE", ex.ToString());

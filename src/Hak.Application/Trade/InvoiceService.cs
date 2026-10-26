@@ -330,6 +330,8 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
     {
         ctx.Require(Permissions.VoucherPost);
         var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId);
+        // Chỉ hóa đơn nháp được gửi nhà cung cấp: hóa đơn đã hủy / đã ghi sổ mà vẫn phát hành sẽ tạo hóa đơn pháp lý không có bút toán.
+        if (inv.Status != InvoiceStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} ở trạng thái {inv.Status}; chỉ phát hành hóa đơn nháp.");
         var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= inv.PostingDate && p.EndDate >= inv.PostingDate)
             ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Không có kỳ kế toán chứa ngày ghi sổ hóa đơn.");
         if (period.Status != PeriodStatus.Open) throw new DomainException(ErrorCodes.PeriodLocked, "Kỳ ghi sổ hóa đơn đã khóa; xử lý trước khi phát hành.");

@@ -36,7 +36,13 @@ public sealed class EInvoiceWorker(IServiceScopeFactory scopes, IEInvoiceProvide
         {
             ct.ThrowIfCancellationRequested();
             try { await svc.DispatchOneAsync(await auth.ResolveContextAsync(requestedBy, companyId), documentId); n++; }
-            catch (DomainException ex) { log.LogWarning("Hóa đơn điện tử {Document}: {Message}", documentId, ex.Message); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                // Mọi lỗi của một lệnh: ghi nhận và lùi giờ gửi lại để lệnh này không chặn các lệnh sau, rồi làm tiếp lệnh kế tiếp.
+                log.LogWarning(ex, "Hóa đơn điện tử {Document}: {Message}", documentId, ex.Message);
+                try { await svc.DeferAsync(companyId, documentId, ex.Message); } catch (Exception e2) { log.LogError(e2, "Không ghi được lỗi hàng đợi hóa đơn điện tử {Document}", documentId); }
+            }
         }
         return n;
     }
