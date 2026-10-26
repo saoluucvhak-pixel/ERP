@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Hak.Application.Common;
 using Hak.Application.Accounting;
 using Hak.Application.Settlement;
@@ -203,6 +204,26 @@ public sealed partial class DiscountAgreementService
         if (voucher.Status != VoucherStatus.Posted || invoice.PostingDate < voucher.PostingDate || run.RecognitionAccountId is null)
             throw new DomainException(ErrorCodes.InvalidStateTransition, "Chứng từ CKTM nguồn chưa ghi sổ/đã đảo hoặc ngày hóa đơn không phù hợp.");
         return new(link!.Amount, 0, run.RecognitionAccountId, null);
+    }
+
+    /// <summary>
+    /// Hóa đơn gốc là nguồn của quyết toán CKTM còn hiệu lực (kể cả bổ sung/thu hồi, chứng từ hay hóa đơn điều chỉnh còn nháp) thì không đảo / thay thế được:
+    /// cơ sở tính chiết khấu đã chốt trên hóa đơn này, đảo sẽ để lại chiết khấu tính trên hóa đơn không còn và công nợ bù trừ mồ côi.
+    /// Hủy (hoặc đảo) quyết toán trước, rồi quyết toán lại trên hóa đơn thay thế.
+    /// </summary>
+    internal static async Task CheckInvoiceIsNotARebateSourceAsync(HakDbContext database, Guid companyId, CommercialInvoice invoice)
+    {
+        var needle = invoice.Id.ToString();
+        var runs = await (from r in database.DiscountAgreementRuns.AsNoTracking() join a in database.DiscountAgreements.AsNoTracking() on r.AgreementId equals a.Id
+                          where r.CompanyId == companyId && r.VoidedAt == null && r.SettlementSnapshot != null && r.SettlementSnapshot.Contains(needle)
+                          select new { r.Id, r.SettlementSnapshot, a.Code }).ToListAsync();
+        foreach (var r in runs)
+        {
+            var snapshot = JsonSerializer.Deserialize<SettlementSnapshot>(r.SettlementSnapshot!);
+            if (snapshot is null) continue;
+            if (snapshot.Sources.Any(x => x.InvoiceId == invoice.Id) || (snapshot.TargetSources?.Any(x => x.InvoiceId == invoice.Id) ?? false))
+                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {invoice.Number} nằm trong quyết toán chiết khấu thương mại của thỏa thuận {r.Code}; hủy hoặc đảo quyết toán (kể cả phần bổ sung/thu hồi) trước khi đảo hoặc thay thế hóa đơn.");
+        }
     }
 
     internal static async Task CheckSettlementVoucherAsync(HakDbContext database, Voucher voucher, List<ValidationError> errors)
