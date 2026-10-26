@@ -217,6 +217,14 @@ public sealed partial class DiscountAgreementService
         if (voucher.PostingDate != snapshot.VoucherPostingDate || voucher.Lines.Any(l => l.ForeignCurrency is not null)
             || expected.Count != actual.Count || expected.Any(kv => !actual.TryGetValue(kv.Key, out var amount) || amount != kv.Value))
             errors.Add(new(ErrorCodes.ValidationFailed, "Chứng từ CKTM bị đổi tài khoản/số tiền/ngày so với quyết toán đã lưu."));
+        // Số đã trích trước dùng để bù trừ trong chứng từ phải còn đúng khi ghi sổ (trích trước bị đảo hoặc có thêm sau khi lập nháp ⇒ sai giảm trừ doanh thu và TK phải trả chiết khấu).
+        if (run.ParentRunId is null)
+        {
+            var postedAccrual = (await (from a in database.DiscountAccruals.AsNoTracking() join v in database.Vouchers.AsNoTracking() on a.VoucherId equals v.Id
+                                        where a.AgreementId == run.AgreementId && v.Status == VoucherStatus.Posted select a.Adjustment).ToListAsync()).Sum();
+            if (postedAccrual != run.AccruedAmount)
+                errors.Add(new(ErrorCodes.InvalidStateTransition, "Số trích trước đã ghi sổ đã đổi so với lúc lập quyết toán; hủy chứng từ quyết toán nháp và lập lại."));
+        }
     }
 
     internal static async Task CheckReversalAllowedAsync(HakDbContext database, Voucher voucher)
@@ -248,7 +256,7 @@ public sealed partial class DiscountAgreementService
             if (agreementId is null) return;
             var runs = await database.DiscountAgreementRuns.Where(r => r.AgreementId == agreementId && r.VoidedAt == null).ToListAsync();
             var runIds = runs.Select(r => r.Id).ToList(); var voucherIds = runs.Where(r => r.VoucherId != null).Select(r => r.VoucherId!.Value).ToList();
-            if (await database.Vouchers.AnyAsync(v => voucherIds.Contains(v.Id) && v.Status == VoucherStatus.Posted)
+            if (await database.Vouchers.AnyAsync(v => voucherIds.Contains(v.Id) && v.Status != VoucherStatus.Cancelled && v.Status != VoucherStatus.Reversed)
                 || await (from l in database.DiscountAgreementRunInvoices join i in database.CommercialInvoices on l.AdjustmentInvoiceId equals i.Id
                           where runIds.Contains(l.RunId) && i.Status == InvoiceStatus.Posted select i.Id).AnyAsync())
                 throw new DomainException(ErrorCodes.InvalidStateTransition, "Trích trước đã được bù trừ trong quyết toán; đảo chứng từ/hóa đơn quyết toán trước.");

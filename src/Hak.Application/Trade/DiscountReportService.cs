@@ -66,10 +66,19 @@ public sealed class DiscountReportService(HakDbContext db)
                               join l in db.VoucherLines.AsNoTracking() on v.Id equals l.VoucherId
                               where v.CompanyId == ctx.CompanyId && v.SourceSystem == PaymentDiscountService.Source && v.Status == VoucherStatus.Posted
                                     && v.PostingDate >= fromDate && v.PostingDate <= toDate && l.AccountId == acct && l.SettleJournalLineId == null
-                              select new { v.SourceId, l.Amount }).ToListAsync();
+                              select new { v.Id, v.SourceId, l.Amount }).ToListAsync();
             // Chiết khấu độc lập (nguồn PARTNER:…) tính theo đối tượng ghi trong nguồn.
             foreach (var x in rows)
                 if (PaymentDiscountService.TryParsePartnerSource(x.SourceId, out var ppid, out _) && (await db.BusinessPartners.AsNoTracking().AnyAsync(p => p.Id == ppid && p.CompanyId == ctx.CompanyId))) Row(ppid)[6] += x.Amount;
+            // Thu/chi gộp nhiều hóa đơn (nguồn "MULTI:{đối tượng}:…") và thu/chi ngoại tệ (nguồn "FX:…"): đối tượng lấy từ nguồn hoặc từ dòng bù trừ công nợ của chứng từ.
+            foreach (var x in rows)
+            {
+                Guid? owner = null;
+                if (x.SourceId is not null && x.SourceId.StartsWith("MULTI:", StringComparison.Ordinal) && x.SourceId.Length >= 42 && Guid.TryParse(x.SourceId[6..42], out var mp)) owner = mp;
+                else if (x.SourceId is not null && x.SourceId.StartsWith("FX:", StringComparison.Ordinal))
+                    owner = await db.VoucherLines.AsNoTracking().Where(l => l.VoucherId == x.Id && l.SettleJournalLineId != null && l.PartnerId != null).Select(l => l.PartnerId).FirstOrDefaultAsync();
+                if (owner is { } oid && await db.BusinessPartners.AsNoTracking().AnyAsync(p => p.Id == oid && p.CompanyId == ctx.CompanyId)) Row(oid)[6] += x.Amount;
+            }
             var invIds = rows.Select(x => Guid.TryParse(x.SourceId, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
             var owners = await db.CommercialInvoices.AsNoTracking().Where(i => invIds.Contains(i.Id) && i.Kind == kind).Select(i => new { i.Id, i.PartnerId }).ToDictionaryAsync(i => i.Id.ToString(), i => i.PartnerId);
             foreach (var x in rows.Where(x => x.SourceId is not null && owners.ContainsKey(x.SourceId))) Row(owners[x.SourceId!])[6] += x.Amount;
