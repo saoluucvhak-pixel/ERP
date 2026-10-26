@@ -7,11 +7,16 @@ interface Tier { threshold: string; percent: string }
 interface Agreement { id: string; kind: string; partnerId: string; partnerCode: string; partnerName: string; code: string; name: string; fromDate: string; toDate: string; isActive: boolean; rowVersion: number
   tiers: Tier[]; runId: string | null; runAmount: string | null; progressive?: boolean }
 interface Share { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; postingDate: string; sales: string; discount: string }
-interface Statement { agreementCode: string; agreementName: string; partnerCode: string; partnerName: string; fromDate: string; toDate: string; percent: string; totalSales: string; totalDiscount: string; mode: string
+interface Statement { snapshotAvailable?: boolean; warning?: string | null; agreementCode: string; agreementName: string; partnerCode: string; partnerName: string; fromDate: string; toDate: string; percent: string; totalSales: string; totalDiscount: string; mode: string
   rows: { no: number; originalSeries: string; originalNo: string; originalDate: string; sales: string; discount: string; adjustmentSeries: string | null; adjustmentNo: string | null; adjustmentDate: string | null; adjustmentVat: string }[] }
 interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[]; accrued?: string }
 interface ReportRow { partnerId: string; partnerCode: string; partnerName: string; gross: string; onInvoiceTradeDiscount: string; afterSaleTradeDiscount: string; allowance: string; returns: string; increase: string; net: string; paymentDiscount: string }
 interface Report { rows: ReportRow[]; total: ReportRow }
+
+interface Lifecycle { runId: string; byVoucher: boolean; accountingStatus: string; legalInvoiceStatus: string; taxStatus: string; settlementStatus: string; amount: string; postedInvoiceAmount: string; accruedAmount: string; accrualCleared: string; valuationStatus: string; warning: string | null
+  invoices: { id: string; number: string; series: string; invoiceNo: string; status: string; amount: string; accruedToClear: string; receivedDate: string | null; hasLegalEvidence: boolean }[]
+  candidates: { id: string; number: string; series: string; invoiceNo: string; invoiceDate: string; amount: string; vat: string }[] }
+const STATUS_VI: Record<string, string> = { Draft: 'Nháp', Posted: 'Đã ghi sổ', Partial: 'Một phần', Reversed: 'Đã đảo', Cancelled: 'Đã hủy', Complete: 'Đủ hóa đơn', Missing: 'Chưa đủ hóa đơn', ReadyForReview: 'Sẵn sàng kiểm tra kê khai', PendingInvoice: 'Chờ hóa đơn / ghi sổ', PendingReceiptDate: 'Cần ghi ngày nhận hóa đơn NCC', LegacyReview: 'Cần đối chiếu dữ liệu cũ', ReadyForTaxReview: 'Chờ kiểm tra hồ sơ thuế', PartiallyInvoiced: 'Đã nhận/ghi sổ một phần hóa đơn', AccountingOnly: 'Đã hạch toán, còn thiếu hóa đơn', PendingLegalInvoiceAllocation: 'Chờ hóa đơn để phân bổ lại kho/chi phí', AppliedOnInvoicePosting: 'Phân bổ theo hóa đơn khi ghi sổ' }
 
 const yearStart = () => today().slice(0, 4) + '-01-01'
 const blankForm = () => ({ id: '', rowVersion: 0, partnerId: '', code: '', name: '', fromDate: yearStart(), toDate: today().slice(0, 4) + '-12-31', tiers: [{ threshold: '', percent: '' }] as Tier[], progressive: false })
@@ -25,6 +30,9 @@ export function DiscountsView() {
   const [kind] = useState<'Purchase' | 'Sales'>(() => navStore.kind ?? 'Sales')   // chiều do phân hệ đang mở quyết định
   const sales = kind === 'Sales'
   const [statement, setStatement] = useState<Statement | null>(null)
+  const [lifecycle, setLifecycle] = useState<{ a: Agreement; data: Lifecycle } | null>(null)
+  const [linkInvoice, setLinkInvoice] = useState('')
+  const [receivedDate, setReceivedDate] = useState(today())
   const [tab, setTab] = useState<'agreements' | 'report'>('agreements')
   const [rows, setRows] = useState<Agreement[]>([])
   const [form, setForm] = useState<ReturnType<typeof blankForm> | null>(null)
@@ -94,10 +102,11 @@ export function DiscountsView() {
           <tbody>{rows.map(a => <tr key={a.id} style={{ opacity: a.isActive ? undefined : 0.55 }}>
             <td>{a.code}<div className="muted">{a.name}{a.isActive ? '' : ' (ngừng)'}</div></td><td>{a.partnerCode} – {a.partnerName}</td><td>{formatDate(a.fromDate)} – {formatDate(a.toDate)}</td>
             <td>{a.tiers.map(t => `từ ${formatMoney(t.threshold)} → ${formatMoney(t.percent)}%`).join('; ')}{a.progressive ? ' (lũy tiến từng phần)' : ' (hồi tố toàn bộ)'}</td>
-            <td>{a.runId ? <>Đã quyết toán <b>{formatMoney(a.runAmount)}</b></> : <span className="muted">chưa</span>}</td>
+            <td>{a.runId ? <>Đã lập quyết toán <b>{formatMoney(a.runAmount)}</b></> : <span className="muted">chưa</span>}</td>
             <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               <button disabled={busy} onClick={() => open(a)}>Xem tính</button>
               {!a.runId && <button disabled={busy} onClick={() => edit(a)}>Sửa</button>}
+              {a.runId && <button disabled={busy} onClick={() => run(async () => { setLifecycle({ a, data: await get<Lifecycle>(`/discounts/agreements/${a.id}/lifecycle`) }); setLinkInvoice(''); setReceivedDate(today()) })}>Tiến độ / Hóa đơn</button>}
               {a.runId && <button disabled={busy} onClick={() => voidRun(a)}>Hủy quyết toán</button>}
               {!a.runId && <button disabled={busy} onClick={() => toggle(a)}>{a.isActive ? 'Ngừng' : 'Áp dụng lại'}</button>}</td></tr>)}
             {rows.length === 0 && <tr><td colSpan={6} className="muted">Chưa có thỏa thuận. Lập thỏa thuận với bậc doanh số và tỷ lệ; cuối kỳ bấm “Xem tính” rồi “Quyết toán”.</td></tr>}</tbody>
@@ -151,15 +160,37 @@ export function DiscountsView() {
         <p>Doanh số đủ điều kiện <b>{formatMoney(preview.p.eligibleSales)}</b> → bậc <b>{formatMoney(preview.p.percent)}%</b> → chiết khấu <b>{formatMoney(preview.p.amount)}</b>.
           {preview.p.nextThreshold && <> Còn {formatMoney(String(Number(preview.p.nextThreshold) - Number(preview.p.eligibleSales)))} nữa để lên bậc {formatMoney(preview.p.nextPercent)}%.</>}
           {Number(preview.p.accrued ?? 0) > 0 && <> Đã trích trước (ghi sổ) <b>{formatMoney(preview.p.accrued!)}</b> — quyết toán sẽ bù trừ, không giảm doanh thu hai lần.</>}
-          {preview.p.settled && <> <b>Đã quyết toán.</b></>}</p>
+          {preview.p.settled && <> <b>Đã lập quyết toán — xem Tiến độ / Hóa đơn để kiểm tra phần còn thiếu.</b></>}</p>
         <table className="grid"><thead><tr><th>Hóa đơn</th><th>Ngày</th><th className="num">Doanh số</th><th className="num">Chiết khấu chia</th></tr></thead>
           <tbody>{preview.p.invoices.map(s => <tr key={s.invoiceId}><td>{s.invoiceSeries}/{s.invoiceNo}<div className="muted">{s.number}</div></td><td>{formatDate(s.postingDate)}</td><td className="num">{formatMoney(s.sales)}</td><td className="num">{formatMoney(s.discount)}</td></tr>)}
             {preview.p.invoices.length === 0 && <tr><td colSpan={4} className="muted">Không có hóa đơn đã ghi sổ của đối tượng này trong kỳ.</td></tr>}</tbody></table>
       </Modal>}
 
+      {lifecycle && <Modal title={`Tiến độ quyết toán — ${lifecycle.a.code}`} onClose={() => setLifecycle(null)} busy={busy} footer={<button disabled={busy} onClick={() => setLifecycle(null)}>Đóng</button>}>
+        <ErrorBox error={error} />
+        <p>Kế toán: <b>{STATUS_VI[lifecycle.data.accountingStatus] ?? lifecycle.data.accountingStatus}</b>; hóa đơn: <b>{STATUS_VI[lifecycle.data.legalInvoiceStatus]}</b>; thuế: <b>{STATUS_VI[lifecycle.data.taxStatus]}</b>.</p>
+        <p>Quyết toán {formatMoney(lifecycle.data.amount)}; đã ghi sổ hóa đơn {formatMoney(lifecycle.data.postedInvoiceAmount)}; trích trước {formatMoney(lifecycle.data.accruedAmount)}, đã bù trừ {formatMoney(lifecycle.data.accrualCleared)}.</p>
+        {!sales && <p>{STATUS_VI[lifecycle.data.valuationStatus]}</p>}
+        {lifecycle.data.warning && <p className="muted">{lifecycle.data.warning}</p>}
+        <table className="grid"><thead><tr><th>Hóa đơn</th><th>Ghi sổ</th><th className="num">CKTM</th><th className="num">Trích trước bù trừ</th><th>Ngày nhận</th><th>Chứng cứ HĐĐT</th></tr></thead><tbody>
+          {lifecycle.data.invoices.map(i => <tr key={i.id}><td>{i.number} · {i.series}/{i.invoiceNo}</td><td>{STATUS_VI[i.status] ?? i.status}</td><td className="num">{formatMoney(i.amount)}</td><td className="num">{formatMoney(i.accruedToClear)}</td><td>{i.receivedDate ? formatDate(i.receivedDate) : '—'}</td><td>{i.hasLegalEvidence ? 'Đã có' : 'Cần đối chiếu'}</td></tr>)}
+          {lifecycle.data.invoices.length === 0 && <tr><td colSpan={6}>Chưa có hóa đơn quyết toán được liên kết.</td></tr>}
+        </tbody></table>
+        {(lifecycle.data.byVoucher || !sales) && <>
+          <p>{lifecycle.data.byVoucher ? 'Hóa đơn nhận sau phải là CKTM nháp của đúng hóa đơn nguồn. Liên kết trước khi phát hành/ghi sổ để bù trừ khoản đã hạch toán.' : 'Ghi ngày thực nhận hóa đơn NCC để theo dõi đúng kỳ VAT. Ngày nhận đã lưu là chứng cứ có nhật ký.'} Phần VAT chỉ ghi theo hóa đơn; không tự coi hồ sơ đã kê khai.</p>
+          <div className="form-row"><label>{lifecycle.data.byVoucher ? 'Hóa đơn CKTM nháp' : 'Hóa đơn chưa lưu ngày nhận'}<select value={linkInvoice} onChange={e => { setLinkInvoice(e.target.value); const i = lifecycle.data.candidates.find(i => i.id === e.target.value); if (i) setReceivedDate(i.invoiceDate > today() ? i.invoiceDate : today()) }}><option value="">— chọn hóa đơn —</option>{lifecycle.data.candidates.map(i => <option key={i.id} value={i.id}>{i.number} · {i.series}/{i.invoiceNo} · {formatMoney(i.amount)}</option>)}</select></label>
+            {!sales && <label>Ngày nhận HĐ NCC<input type="date" value={receivedDate} onChange={e => setReceivedDate(e.target.value)} /></label>}
+            <button disabled={busy || !linkInvoice || (lifecycle.data.byVoucher && lifecycle.data.accountingStatus !== 'Posted')} onClick={() => run(async () => {
+              await post(`/discounts/agreements/${lifecycle.a.id}/${lifecycle.data.byVoucher ? 'link-invoice' : 'invoice-received'}`, { rowVersion: lifecycle.a.rowVersion, invoiceId: linkInvoice, receivedDate: sales ? null : receivedDate })
+              setLifecycle({ a: lifecycle.a, data: await get<Lifecycle>(`/discounts/agreements/${lifecycle.a.id}/lifecycle`) }); setLinkInvoice(''); setInfo(lifecycle.data.byVoucher ? 'Đã liên kết. Phát hành/ghi sổ hóa đơn tại màn Hóa đơn; hệ thống bù trừ khoản CKTM đã ghi nhận.' : 'Đã lưu ngày nhận hóa đơn NCC và cập nhật kỳ theo dõi VAT.')
+            })}>{lifecycle.data.byVoucher ? 'Liên kết hóa đơn' : 'Lưu ngày nhận'}</button></div>
+        </>}
+      </Modal>}
+
       {statement && <Modal title={`Bảng kê chiết khấu thương mại — ${statement.agreementCode}`} onClose={() => setStatement(null)} busy={busy} footer={<button onClick={() => setStatement(null)}>Đóng</button>}>
+        {statement.warning && <div className="msg error">{statement.warning}</div>}
         <p>{statement.partnerCode} – {statement.partnerName}; kỳ {formatDate(statement.fromDate)} – {formatDate(statement.toDate)}; {statement.mode}; chiết khấu bình quân {formatMoney(statement.percent)}%. Cột theo Mẫu 01/BK-ĐCTT chính thức [CẦN XÁC MINH].</p>
-        <div className="toolbar"><ExportButton fileName={`Bang_ke_CKTM_${statement.agreementCode}`} sheet="Bảng kê CKTM" title={`Bảng kê chiết khấu thương mại – ${statement.agreementName}`} subtitle={`${statement.partnerCode} ${statement.partnerName} · ${formatDate(statement.fromDate)} – ${formatDate(statement.toDate)}`}
+        <div className="toolbar"><ExportButton disabled={statement.snapshotAvailable === false} fileName={`Bang_ke_CKTM_${statement.agreementCode}`} sheet="Bảng kê CKTM" title={`Bảng kê chiết khấu thương mại – ${statement.agreementName}`} subtitle={`${statement.partnerCode} ${statement.partnerName} · ${formatDate(statement.fromDate)} – ${formatDate(statement.toDate)}`}
           columns={[{ header: 'STT', width: 6 }, { header: 'Ký hiệu HĐ gốc', width: 14 }, { header: 'Số HĐ gốc', width: 12 }, { header: 'Ngày HĐ gốc', width: 12 }, { header: 'Doanh số chưa thuế', numeric: true, width: 18 }, { header: 'Chiết khấu', numeric: true, width: 16 }, { header: 'Ký hiệu HĐ điều chỉnh', width: 16 }, { header: 'Số HĐ điều chỉnh', width: 14 }, { header: 'Thuế điều chỉnh', numeric: true, width: 14 }]}
           rows={statement.rows.map(r => [String(r.no), r.originalSeries, r.originalNo, formatDate(r.originalDate), r.sales, r.discount, r.adjustmentSeries ?? '', r.adjustmentNo ?? '', r.adjustmentVat])} /></div>
         <table className="grid"><thead><tr><th>STT</th><th>HĐ gốc</th><th>Ngày</th><th className="num">Doanh số</th><th className="num">Chiết khấu</th><th>HĐ điều chỉnh</th><th className="num">Thuế điều chỉnh</th></tr></thead>
@@ -171,7 +202,7 @@ export function DiscountsView() {
         footer={<><button onClick={() => setSettle(null)}>Đóng</button><button className="primary" disabled={busy || (!settle.byVoucher && (!settle.series.trim() || !settle.no.trim()))} onClick={doSettle}>{settle.byVoucher ? 'Lập chứng từ điều chỉnh giảm (nháp)' : 'Sinh hóa đơn điều chỉnh nháp'}</button></>}>
         {<div className="form-row"><label><input type="radio" name="settleMode" checked={!settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: false })} /> Hóa đơn điều chỉnh giảm (một hóa đơn cho mỗi hóa đơn gốc)</label>
           <label><input type="radio" name="settleMode" checked={settle.byVoucher} onChange={() => setSettle({ ...settle, byVoucher: true })} /> Hạch toán điều chỉnh giảm (một chứng từ kế toán, không phát hành hóa đơn; thuế GTGT không đổi)</label></div>}
-        {settle.byVoucher ? <p>{sales ? 'Lập một chứng từ nháp: Nợ giảm trừ doanh thu (vai trò SALES_TRADE_DISCOUNT, chưa ánh xạ thì SALES_DISCOUNT) / Có phải thu của đối tượng.' : 'Lập một chứng từ nháp: Nợ phải trả nhà cung cấp / Có giảm giá vốn hàng mua (vai trò PURCHASE_TRADE_DISCOUNT) — không định giá lại tồn kho.'} Chỉ dùng cho hóa đơn tiền hạch toán. [CẦN XÁC MINH xử lý thuế khi không có hóa đơn điều chỉnh]</p> : <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>}
+        {settle.byVoucher ? <p>{sales ? 'Lập một chứng từ nháp: Nợ giảm trừ doanh thu (vai trò SALES_TRADE_DISCOUNT, chưa ánh xạ thì SALES_DISCOUNT) / Có phải thu của đối tượng.' : 'Lập một chứng từ nháp: Nợ phải trả nhà cung cấp / Có giảm giá vốn hàng mua (vai trò PURCHASE_TRADE_DISCOUNT) — không định giá lại tồn kho.'} Chỉ dùng cho hóa đơn tiền hạch toán. Chứng từ này chỉ xử lý kế toán, chưa hoàn tất hồ sơ hóa đơn/VAT. Khi nhận hóa đơn phải đối chiếu khoản đã ghi nhận để tránh giảm hai lần.</p> : <p>{sales ? 'Hóa đơn điều chỉnh do công ty phát hành: nhập ký hiệu và số đầu tiên; các hóa đơn sau đánh số liên tiếp.' : 'Hóa đơn điều chỉnh do nhà cung cấp phát hành: nhập ký hiệu và số của chứng từ đầu tiên nhận được; các hóa đơn sau đánh số liên tiếp (sửa lại bằng cách hủy quyết toán nếu số thực tế khác).'}</p>}
         {!settle.byVoucher && <div className="form-row">
           <label>Ký hiệu HĐ<input value={settle.series} onChange={e => setSettle({ ...settle, series: e.target.value })} /></label>
           <label>Số HĐ đầu tiên<input value={settle.no} onChange={e => setSettle({ ...settle, no: e.target.value })} /></label>

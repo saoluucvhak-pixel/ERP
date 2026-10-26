@@ -39,6 +39,8 @@ public sealed class DiscountAgreementTier
 /// Một lần quyết toán thỏa thuận: tổng doanh số, bậc đạt, số chiết khấu và các hóa đơn điều chỉnh nháp đã sinh. Mỗi thỏa thuận chỉ có một lần quyết toán còn hiệu lực
 /// (chỉ mục duy nhất trên các bản ghi chưa hủy); hủy được khi chưa hóa đơn điều chỉnh nào đã ghi sổ.
 /// </summary>
+public enum DiscountAccrualSettlementMode { LegacyReversal = 0, PerInvoice = 1 }
+
 public sealed class DiscountAgreementRun
 {
     public Guid Id { get; set; }
@@ -56,6 +58,11 @@ public sealed class DiscountAgreementRun
     /// <summary>Số đã trích trước (ghi sổ) tại thời điểm quyết toán; quyết toán bằng chứng từ bù trừ số này, bằng hóa đơn điều chỉnh thì có chứng từ hoàn nhập <see cref="AccrualReversalVoucherId"/>.</summary>
     public decimal AccruedAmount { get; set; }
     public Guid? AccrualReversalVoucherId { get; set; }
+    public DiscountAccrualSettlementMode AccrualSettlementMode { get; set; }
+    public Guid? RecognitionAccountId { get; set; }
+    public Guid? AccrualAccountId { get; set; }
+    /// <summary>Immutable settlement statement, preview and allocation policy. Null means a legacy run whose detail cannot be reconstructed safely.</summary>
+    public string? SettlementSnapshot { get; set; }
     public List<DiscountAgreementRunInvoice> Invoices { get; set; } = [];
 }
 
@@ -68,12 +75,27 @@ public sealed class DiscountAgreementRunInvoice
     public Guid OriginalInvoiceId { get; set; }
     public Guid AdjustmentInvoiceId { get; set; }
     public decimal Amount { get; set; }
+    public decimal AccruedAmount { get; set; }
 }
 
 /// <summary>
 /// Trích trước chiết khấu thương mại theo doanh số (chiều bán): ước tính theo doanh số đến ngày <see cref="AsOf"/> với bậc đang đạt; mỗi lần trích là một chứng từ điều chỉnh
 /// (Nợ giảm trừ doanh thu / Có phải trả chiết khấu, âm = hoàn nhập). Tổng đã trích = tổng <see cref="Adjustment"/> của các chứng từ đã ghi sổ.
 /// </summary>
+/// <summary>Immutable link from a voucher settlement to a later legal adjustment invoice. Reversed/cancelled invoice links remain as evidence and cease consuming the quota.</summary>
+public sealed class DiscountSettlementInvoiceLink
+{
+    public Guid Id { get; set; }
+    public Guid CompanyId { get; set; }
+    public Guid RunId { get; set; }
+    public Guid OriginalInvoiceId { get; set; }
+    public Guid AdjustmentInvoiceId { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly? ReceivedDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public Guid CreatedBy { get; set; }
+}
+
 public sealed class DiscountAccrual
 {
     public Guid Id { get; set; }

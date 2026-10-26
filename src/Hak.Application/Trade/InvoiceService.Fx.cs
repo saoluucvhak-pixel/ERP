@@ -18,9 +18,10 @@ public sealed partial class InvoiceService
     /// foreign part, if its carrying amount equals the credit; otherwise the credit stays an unallocated open item.
     /// </summary>
     private async Task<List<VoucherLineInput>> PartnerLinesAsync(Guid companyId, CommercialInvoice inv, Guid account, Side side, string label,
-        DateOnly? dueDate, Guid? settleVoucherId)
+        DateOnly? dueDate, Guid? settleVoucherId, decimal? partnerNetOverride = null)
     {
-        var net = inv.Lines.Sum(x => x.FunctionalAmount);
+        if (partnerNetOverride is not null && inv.Currency is not null) throw new DomainException(ErrorCodes.ValidationFailed, "Bù trừ chứng từ CKTM chưa hỗ trợ hóa đơn ngoại tệ.");
+        var net = partnerNetOverride ?? inv.Lines.Sum(x => x.FunctionalAmount);
         var vat = inv.Lines.Sum(x => x.VatAmount);
         var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == companyId);
         var dp = await db.Currencies.Where(c => c.Code == company.FunctionalCurrency).Select(c => c.DecimalPlaces).FirstAsync();

@@ -65,6 +65,45 @@ async function open(user) {
 }
 const selected = page => page.locator('select').evaluateAll(els => els.map(e => e.selectedOptions[0]?.textContent ?? ''))
 
+test('CKTM: Tiến độ liên kết hóa đơn vào chứng từ đã ghi và không báo hồ sơ thuế hoàn tất', async () => {
+  const date = new Date().toISOString().slice(0, 10)
+  const chief = await ctx.login('ktt')
+  const original = await call('POST', '/invoices', { kind: 'Sales', partnerId: ctx.P('KH01'), invoiceSeries: 'E2E', invoiceNo: 'LIFECYCLE27', invoiceDate: date, postingDate: date,
+    description: 'E2E rebate lifecycle source', lines: [{ unitPrice: '1000000', quantity: '1', accountId: ctx.A('SALESREV'), vatRate: '10' }] }, ctx.preparerToken, ctx.company)
+  await call('POST', `/invoices/${original.id}/post?rowVersion=${original.rowVersion}`, {}, chief, ctx.company)
+  const created = await call('POST', '/discounts/agreements', { kind: 'Sales', partnerId: ctx.P('KH01'), code: 'CYCLE27UI', name: 'E2E cycle', fromDate: date, toDate: date, tiers: [{ threshold: '0', percent: '2' }] }, chief, ctx.company)
+  const agreement = (await call('GET', '/discounts/agreements?kind=Sales', null, chief, ctx.company)).find(a => a.id === created.id)
+  const settled = await call('POST', `/discounts/agreements/${agreement.id}/settle`, { rowVersion: agreement.rowVersion, byVoucher: true, invoiceSeries: '', firstInvoiceNo: '', invoiceDate: date, postingDate: date }, ctx.preparerToken, ctx.company)
+  const vouchers = await call('GET', '/vouchers?text=CYCLE27UI', null, ctx.preparerToken, ctx.company)
+  let voucher = vouchers.items.find(v => v.sourceSystem === 'HAK.TRADEDISC' && v.sourceId === settled.id)
+  assert.ok(voucher, 'phải có chứng từ CKTM')
+  voucher = await call('POST', `/vouchers/${voucher.id}/submit?rowVersion=${voucher.rowVersion}`, {}, ctx.preparerToken, ctx.company)
+  voucher = await call('POST', `/vouchers/${voucher.id}/approve?rowVersion=${voucher.rowVersion}`, {}, chief, ctx.company)
+  await call('POST', `/vouchers/${voucher.id}/post?rowVersion=${voucher.rowVersion}`, {}, chief, ctx.company)
+  const adjustment = await call('POST', '/invoices/adjustments', { originalInvoiceId: original.id, purpose: 'Discount', discountKind: 'Trade', invoiceSeries: 'E2E', invoiceNo: 'LIFECYCLE27-ADJ',
+    invoiceDate: date, postingDate: date, description: 'E2E rebate legal invoice', lines: [{ originalLineNo: 1, amount: '20000' }] }, ctx.preparerToken, ctx.company)
+  const page = await open('ktt')
+  await page.click('.sidebar button:has-text("Bán hàng")')
+  await page.getByRole('tab', { name: 'CK thương mại cho khách', exact: true }).click()
+  const row = page.locator('tbody tr', { hasText: 'CYCLE27UI' })
+  await row.getByRole('button', { name: 'Tiến độ / Hóa đơn', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Tiến độ quyết toán — CYCLE27UI', exact: true })
+  await dialog.waitFor()
+  assert.match(await dialog.textContent(), /Đã ghi sổ/)
+  assert.match(await dialog.textContent(), /Chưa đủ hóa đơn/)
+  await dialog.locator('select').selectOption(adjustment.id)
+  const linkResponse = page.waitForResponse(r => r.url().endsWith(`/discounts/agreements/${agreement.id}/link-invoice`) && r.request().method() === 'POST')
+  await dialog.getByRole('button', { name: 'Liên kết hóa đơn', exact: true }).click()
+  assert.ok((await linkResponse).ok())
+  await dialog.locator('tbody tr', { hasText: adjustment.number }).waitFor()
+  await call('POST', `/invoices/${adjustment.id}/post?rowVersion=${adjustment.rowVersion}`, {}, chief, ctx.company)
+  const progress = await call('GET', `/discounts/agreements/${agreement.id}/lifecycle`, null, chief, ctx.company)
+  assert.equal(progress.postedInvoiceAmount, '20000')
+  assert.equal(progress.legalInvoiceStatus, 'Missing', 'ghi sổ tay không tự xác nhận chứng cứ HĐĐT')
+  assert.equal(progress.taxStatus, 'PendingInvoice')
+  await page.close()
+})
+
 test('R05: Thêm nhanh mở đúng loại phiếu, kể cả khi đang ở đúng màn', async () => {
   const page = await open('ktt')
   const quick = async (label, want, msg) => {

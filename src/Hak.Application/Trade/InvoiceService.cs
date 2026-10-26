@@ -161,6 +161,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                 throw new DomainException(ErrorCodes.ValidationFailed, $"Hóa đơn {inv.Number} đang chờ phát hành điện tử: ký hiệu và số do nhà cung cấp cấp khi phát hành. Dùng Phát hành hóa đơn điện tử, không ghi sổ với số tạm.");
             await CheckDuplicateAsync(ctx.CompanyId, inv.Kind, inv.PartnerId, inv.InvoiceSeries, inv.InvoiceNo, inv.Id);
             if (inv.Purpose != InvoicePurpose.Normal) return await PostAdjustmentCoreAsync(ctx, inv);
+            var priorAllocations = await CaptureReplacementAllocationsAsync(ctx, inv);
             if (inv.ReplacesInvoiceId is { } replaced)
             {
                 // Thay thế: đảo hóa đơn gốc ngay trước khi ghi sổ hóa đơn mới, cùng một giao dịch. Nếu bước nào lỗi (kỳ khóa, còn điều chỉnh…) thì cả hai đều không đổi.
@@ -246,6 +247,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             var v = await engine.PostSystemVoucherAsync(ctx, new VoucherInput(inv.Kind == InvoiceKind.Purchase ? VoucherTypes.PurchaseInvoice : VoucherTypes.SalesInvoice,
                 inv.InvoiceDate, inv.PostingDate, $"{inv.Description} (HĐ {inv.InvoiceSeries}/{inv.InvoiceNo})", gl, SourceSystem: Source, SourceId: inv.Id.ToString()));
             inv.VoucherId = v.Id;
+            await ReallocateReplacementAsync(ctx, inv, priorAllocations);
             inv.Status = InvoiceStatus.Posted;
             inv.PostedBy = ctx.UserId;
             inv.PostedAt = clock.UtcNow;
@@ -268,43 +270,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             if (expectedRowVersion is { } rv && inv.RowVersion != rv)
                 throw new DomainException(ErrorCodes.ConcurrencyConflict, $"Hóa đơn {inv.Number} đã được thay đổi (phiên bản {inv.RowVersion}, bạn đang xem phiên bản {rv}). Vui lòng tải lại.");
             if (inv.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} chưa ghi sổ hoặc đã đảo.");
-            // Hóa đơn gốc còn điều chỉnh (trả hàng / giảm giá / điều chỉnh tăng) đã ghi sổ: phải đảo chứng từ phụ thuộc trước, nếu không điều chỉnh mồ côi
-            // (giảm công nợ / giá trị kho trên một hóa đơn không còn). Kiểm trước mọi thao tác ghi nên thất bại không để lại gì dở dang.
-            var dependents = await db.CommercialInvoices.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId && d.AdjustsInvoiceId == inv.Id && d.Status == InvoiceStatus.Posted)
-                .OrderBy(d => d.Number).Select(d => d.Number).ToListAsync();
-            if (dependents.Count > 0)
-                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} còn hóa đơn điều chỉnh đã ghi sổ ({string.Join(", ", dependents)}). Đảo các hóa đơn điều chỉnh trước.");
-            // Chốt của chị 24/10/2026: hóa đơn gắn phiếu xuất NVL hoặc phiếu nhập thành phẩm của lệnh sản xuất đã hoàn thành (Completed/Closed) thì CHẶN đảo —
-            // giá thành của lệnh đã chốt trên giá kho hiện tại, đảo (tính lại đơn giá kho) sẽ làm giá thành lệch. Muốn đảo phải mở lại lệnh sản xuất theo quy trình riêng.
-            var stockDocIds = await db.CommercialInvoiceLines.AsNoTracking().Where(l => l.InvoiceId == inv.Id && l.StockDocumentId != null).Select(l => l.StockDocumentId!.Value).Distinct().ToListAsync();
-            if (stockDocIds.Count > 0)
-            {
-                var done = new[] { ProductionOrderStatus.Completed, ProductionOrderStatus.Closed };
-                var finished = await db.ProductionOrders.AsNoTracking()
-                    .Where(o => o.CompanyId == ctx.CompanyId && done.Contains(o.Status)
-                                && (db.ProductionOrderIssues.Any(i => i.OrderId == o.Id && stockDocIds.Contains(i.StockDocumentId)) || (o.ReceiptDocumentId != null && stockDocIds.Contains(o.ReceiptDocumentId.Value))))
-                    .OrderBy(o => o.Number).Select(o => o.Number).ToListAsync();
-                if (finished.Count > 0)
-                    throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} gắn phiếu kho của lệnh sản xuất đã hoàn thành ({string.Join(", ", finished)}); không đảo được khi giá thành đã chốt.");
-            }
-            // Hóa đơn MUA: đảo tính lại đơn giá kho (phần đã xuất chuyển sang giá vốn). Nếu vật tư đó đã xuất cho lệnh sản xuất ĐÃ HOÀN THÀNH từ ngày nhập trở đi thì giá thành đã chốt
-            // sẽ lệch → chặn (quy tắc thận trọng: không truy vết theo lô vì kho tính giá bình quân / FIFO theo kho; có thể chặn dư — muốn đảo phải mở lại lệnh sản xuất).
-            if (inv.Kind == InvoiceKind.Purchase && stockDocIds.Count > 0)
-            {
-                var receipts = await db.StockDocuments.AsNoTracking().Where(d => stockDocIds.Contains(d.Id)).Select(d => new { d.PostingDate }).ToListAsync();
-                var firstReceipt = receipts.Min(r => r.PostingDate);
-                var itemIds = await db.StockDocumentLines.AsNoTracking().Where(l => stockDocIds.Contains(l.DocumentId)).Select(l => l.ItemId).Distinct().ToListAsync();
-                var finishedStatuses = new[] { ProductionOrderStatus.Completed, ProductionOrderStatus.Closed };
-                var consumed = await (from i in db.ProductionOrderIssues.AsNoTracking()
-                                      join o in db.ProductionOrders.AsNoTracking() on i.OrderId equals o.Id
-                                      join d in db.StockDocuments.AsNoTracking() on i.StockDocumentId equals d.Id
-                                      join l in db.StockDocumentLines.AsNoTracking() on d.Id equals l.DocumentId
-                                      where o.CompanyId == ctx.CompanyId && finishedStatuses.Contains(o.Status) && d.Status == StockDocumentStatus.Posted
-                                            && d.PostingDate >= firstReceipt && itemIds.Contains(l.ItemId)
-                                      select o.Number).Distinct().OrderBy(n => n).ToListAsync();
-                if (consumed.Count > 0)
-                    throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number}: vật tư đã xuất cho lệnh sản xuất đã hoàn thành ({string.Join(", ", consumed)}); đảo hóa đơn mua sẽ làm lệch giá thành đã chốt.");
-            }
+            await EnsureReversalDependenciesAsync(ctx, inv);
             // Tính lại đơn giá khi đảo: phần giá trị hóa đơn đã nằm trong hàng xuất được chuyển từ tồn kho sang giá vốn TRƯỚC khi ghi bút toán đảo,
             // để tài khoản tồn kho (có thể chặn số dư âm) không âm giữa chừng. Sổ kho: chỉ gỡ phần còn thuộc hàng tồn (adjustments bất biến, không xóa).
             var shifts = await stock.ReverseValueAdjustmentsAsync(ctx, inv.Id, reversalDate, $"Đảo hóa đơn {inv.InvoiceSeries}/{inv.InvoiceNo}", reprice: true);
@@ -316,6 +282,69 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
             await db.SaveChangesAsync();
             return inv;
         });
+    }
+
+    private async Task EnsureReversalDependenciesAsync(SessionContext ctx, CommercialInvoice inv)
+    {
+        // Hóa đơn gốc còn điều chỉnh (trả hàng / giảm giá / điều chỉnh tăng) đã ghi sổ: phải đảo chứng từ phụ thuộc trước, nếu không điều chỉnh mồ côi
+        // (giảm công nợ / giá trị kho trên một hóa đơn không còn). Kiểm trước mọi thao tác ghi nên thất bại không để lại gì dở dang.
+        var dependents = await db.CommercialInvoices.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId && d.AdjustsInvoiceId == inv.Id && d.Status == InvoiceStatus.Posted)
+            .OrderBy(d => d.Number).Select(d => d.Number).ToListAsync();
+        if (dependents.Count > 0)
+            throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} còn hóa đơn điều chỉnh đã ghi sổ ({string.Join(", ", dependents)}). Đảo các hóa đơn điều chỉnh trước.");
+        // Chốt của chị 24/10/2026: hóa đơn gắn phiếu xuất NVL hoặc phiếu nhập thành phẩm của lệnh sản xuất đã hoàn thành (Completed/Closed) thì CHẶN đảo —
+        // giá thành của lệnh đã chốt trên giá kho hiện tại, đảo (tính lại đơn giá kho) sẽ làm giá thành lệch. Muốn đảo phải mở lại lệnh sản xuất theo quy trình riêng.
+        var stockDocIds = await db.CommercialInvoiceLines.AsNoTracking().Where(l => l.InvoiceId == inv.Id && l.StockDocumentId != null).Select(l => l.StockDocumentId!.Value).Distinct().ToListAsync();
+        if (stockDocIds.Count > 0)
+        {
+            var done = new[] { ProductionOrderStatus.Completed, ProductionOrderStatus.Closed };
+            var finished = await db.ProductionOrders.AsNoTracking()
+                .Where(o => o.CompanyId == ctx.CompanyId && done.Contains(o.Status)
+                            && (db.ProductionOrderIssues.Any(i => i.OrderId == o.Id && stockDocIds.Contains(i.StockDocumentId)) || (o.ReceiptDocumentId != null && stockDocIds.Contains(o.ReceiptDocumentId.Value))))
+                .OrderBy(o => o.Number).Select(o => o.Number).ToListAsync();
+            if (finished.Count > 0)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number} gắn phiếu kho của lệnh sản xuất đã hoàn thành ({string.Join(", ", finished)}); không đảo được khi giá thành đã chốt.");
+        }
+        // Hóa đơn MUA: đảo tính lại đơn giá kho (phần đã xuất chuyển sang giá vốn). Nếu vật tư đó đã xuất cho lệnh sản xuất ĐÃ HOÀN THÀNH từ ngày nhập trở đi thì giá thành đã chốt
+        // sẽ lệch → chặn (quy tắc thận trọng: không truy vết theo lô vì kho tính giá bình quân / FIFO theo kho; có thể chặn dư — muốn đảo phải mở lại lệnh sản xuất).
+        if (inv.Kind == InvoiceKind.Purchase && stockDocIds.Count > 0)
+        {
+            var receipts = await db.StockDocuments.AsNoTracking().Where(d => stockDocIds.Contains(d.Id)).Select(d => new { d.PostingDate }).ToListAsync();
+            var firstReceipt = receipts.Min(r => r.PostingDate);
+            var itemIds = await db.StockDocumentLines.AsNoTracking().Where(l => stockDocIds.Contains(l.DocumentId)).Select(l => l.ItemId).Distinct().ToListAsync();
+            var finishedStatuses = new[] { ProductionOrderStatus.Completed, ProductionOrderStatus.Closed };
+            var consumed = await (from i in db.ProductionOrderIssues.AsNoTracking()
+                                  join o in db.ProductionOrders.AsNoTracking() on i.OrderId equals o.Id
+                                  join d in db.StockDocuments.AsNoTracking() on i.StockDocumentId equals d.Id
+                                  join l in db.StockDocumentLines.AsNoTracking() on d.Id equals l.DocumentId
+                                  where o.CompanyId == ctx.CompanyId && finishedStatuses.Contains(o.Status) && d.Status == StockDocumentStatus.Posted
+                                        && d.PostingDate >= firstReceipt && itemIds.Contains(l.ItemId)
+                                  select o.Number).Distinct().OrderBy(n => n).ToListAsync();
+            if (consumed.Count > 0)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {inv.Number}: vật tư đã xuất cho lệnh sản xuất đã hoàn thành ({string.Join(", ", consumed)}); đảo hóa đơn mua sẽ làm lệch giá thành đã chốt.");
+        }
+    }
+
+    /// <summary>Read-only checks before the first external issue request. Issued invoices still use the recoverable PostError path if a race happens later.</summary>
+    public async Task PreflightIssueAsync(SessionContext ctx, Guid invoiceId)
+    {
+        ctx.Require(Permissions.VoucherPost);
+        var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId);
+        var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= inv.PostingDate && p.EndDate >= inv.PostingDate)
+            ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Không có kỳ kế toán chứa ngày ghi sổ hóa đơn.");
+        if (period.Status != PeriodStatus.Open) throw new DomainException(ErrorCodes.PeriodLocked, "Kỳ ghi sổ hóa đơn đã khóa; xử lý trước khi phát hành.");
+        if (inv.Purpose != InvoicePurpose.Normal) await DiscountAgreementService.InvoiceOffsetAsync(db, inv);
+        if (inv.ReplacesInvoiceId is not { } originalId) return;
+        await CaptureReplacementAllocationsAsync(ctx, inv);
+        ctx.Require(Permissions.VoucherReverse);
+        var original = await db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == originalId && i.CompanyId == ctx.CompanyId);
+        if (original.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, "Hóa đơn gốc không còn ở trạng thái đã ghi sổ.");
+        if (inv.PostingDate < original.PostingDate) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày thay thế không được trước ngày hạch toán hóa đơn gốc.");
+        await EnsureReversalDependenciesAsync(ctx, original);
+        var oldLineIds = await (from l in db.JournalLines join e in db.JournalEntries on l.JournalEntryId equals e.Id where e.VoucherId == original.VoucherId select l.Id).ToListAsync();
+        if (await db.ReconciliationMatches.AnyAsync(m => oldLineIds.Contains(m.JournalLineId) && m.VoidedAt == null))
+            throw new DomainException(ErrorCodes.InvalidStateTransition, "Hóa đơn gốc đã khớp sao kê; hủy kết quả đối chiếu trước khi phát hành thay thế.");
+
     }
 
     /// <summary>
@@ -353,6 +382,8 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
             RowVersionCheck.Require(expectedRowVersion, inv.RowVersion, $"Hóa đơn {inv.Number}");
             if (inv.Status != InvoiceStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, "Chỉ hủy được hóa đơn nháp.");
+            if (await db.EInvoiceDocuments.AnyAsync(d => d.InvoiceId == inv.Id && d.CompanyId == ctx.CompanyId && d.Status != Hak.Domain.Tax.EInvoiceDocStatus.Rejected))
+                throw new DomainException(ErrorCodes.InvalidStateTransition, "Hóa đơn đang phát hành hoặc đã phát hành điện tử; đối soát kết quả và dùng quy trình điều chỉnh/thay thế, không hủy nháp ERP.");
             inv.Status = InvoiceStatus.Cancelled;
             inv.RowVersion++;
             await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.cancel", "invoice", inv.Id.ToString(), new { inv.Number, reason }, inv.RowVersion);

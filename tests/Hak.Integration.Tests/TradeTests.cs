@@ -1413,7 +1413,7 @@ public partial class TradeTests
         await fx.Inv.PostAsync(fx.H.Approver, early.Id);
         Assert.DoesNotContain((await vat.ReconcileAsync(fx.H.Auditor, D(6, 1), D(6, 30))).Differences, d => d.Type == Hak.Application.Tax.TaxDiffType.SupplementalFilingNeeded);
 
-        var late = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(sale.Id, InvoicePurpose.Discount, "1C26TBB", "0001003", D(7, 10), D(7, 10), "Giảm giá tháng 7", [new AdjustmentLineInput(1, Amount: 100_000)]));
+        var late = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(sale.Id, InvoicePurpose.Discount, "1C26TBB", "0001003", D(7, 10), D(7, 10), "Sửa sai đơn giá hóa đơn tháng 3", [new AdjustmentLineInput(1, Amount: 100_000)], AdjustmentReason: InvoiceAdjustmentReason.InvoiceError));
         await fx.Inv.PostAsync(fx.H.Approver, late.Id);
         Assert.DoesNotContain((await vat.ReconcileAsync(fx.H.Auditor, D(7, 1), D(7, 31))).Differences, d => d.Type == Hak.Application.Tax.TaxDiffType.SupplementalFilingNeeded);   // kỳ gốc chưa nộp tờ khai
         await vat.MarkFiledAsync(fx.H.Admin, decl.Id, "TK-03/2026", D(4, 20));
@@ -2582,8 +2582,8 @@ public partial class TradeTests
         Assert.Equal(("Hóa đơn điều chỉnh", 250_000m, 7_500m, "0000620", 750m), (st.Mode, row.Sales, row.Discount, row.AdjustmentNo, row.AdjustmentVat));
         Assert.Equal((7_500m, 250_000m), (st.TotalDiscount, st.TotalSales));
         Assert.Equal((7_500m, 7_500m), (run.Amount, run.AccruedAmount));
-        Assert.NotNull(run.AccrualReversalVoucherId);
-        await PostVoucherAsync(fx, run.AccrualReversalVoucherId!.Value);
+        Assert.Null(run.AccrualReversalVoucherId);
+        Assert.Equal(DiscountAccrualSettlementMode.PerInvoice, run.AccrualSettlementMode);
         foreach (var d in await fx.S.Db.CommercialInvoices.Where(i => i.Purpose == InvoicePurpose.Discount && i.Status == InvoiceStatus.Draft).ToListAsync()) await fx.Inv.PostAsync(fx.H.Approver, d.Id);
         Assert.Equal(0m, await fx.Bal("REBPAY", fx.H.Partner["KH01"]));
         Assert.Equal(7_500m, await fx.Bal("SALESDISC"));                                                 // 7.500 trích trước − 7.500 hoàn nhập + 7.500 hóa đơn điều chỉnh

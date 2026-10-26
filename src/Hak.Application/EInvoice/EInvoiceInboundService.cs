@@ -92,20 +92,30 @@ public sealed class EInvoiceInboundService(HakDbContext db, InvoiceService invoi
             throw new DomainException(ErrorCodes.DuplicateSource, $"Hóa đơn {rec.Series}/{rec.Number} đã có trong sổ.");
         var lines = await db.CommercialInvoiceLines.AsNoTracking().Where(l => l.InvoiceId == original.InvoiceId).OrderBy(l => l.LineNo).ToListAsync();
         var total = lines.Sum(l => l.FunctionalAmount);
-        if (total <= 0 || rec.AmountBeforeVat <= 0) throw new DomainException(ErrorCodes.ValidationFailed, "Không chia được số tiền điều chỉnh.");
+        var rateEvidence = await db.EInvoiceRateLines.AsNoTracking().Where(r => r.EInvoiceId == rec.Id).ToListAsync();
+        if (rateEvidence.Select(r => r.VatRate).Distinct().Count() > 1 || lines.Select(l => l.VatRate).Distinct().Count() > 1)
+            throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn có nhiều thuế suất: phân bổ điều chỉnh theo từng dòng/thuế suất từ chứng từ NCC, không chia tự động theo tổng tiền.");
+        var signed = EInvoiceAmounts.SignedAdjustment(rec)
+            ?? throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn cũ chưa có quy ước dấu/bản chất điều chỉnh; đối chiếu chứng từ gốc trước khi lập.");
+        var sign = purpose == InvoicePurpose.Increase ? 1m : -1m;
+        if (signed.Amount * sign <= 0 || signed.Vat * sign < 0)
+            throw new DomainException(ErrorCodes.ValidationFailed, "Loại tăng/giảm đã chọn không khớp dấu hóa đơn NCC; không thể tự chia hóa đơn có các khoản tăng giảm hỗn hợp.");
+        var amount = signed.Amount * sign;
+        var vatAmount = signed.Vat * sign;
+        if (total <= 0) throw new DomainException(ErrorCodes.ValidationFailed, "Không chia được số tiền điều chỉnh.");
         var company = await db.Companies.AsNoTracking().FirstAsync(c => c.Id == ctx.CompanyId);
         var dp = await db.Currencies.Where(c => c.Code == company.FunctionalCurrency).Select(c => c.DecimalPlaces).FirstAsync();
         var shares = new List<AdjustmentLineInput>();
-        var left = rec.AmountBeforeVat; decimal vat = 0;
+        var left = amount; decimal vat = 0;
         foreach (var l in lines)
         {
-            var share = l == lines[^1] ? left : Math.Min(left, MoneyMath.Round(rec.AmountBeforeVat * l.FunctionalAmount / total, dp));
+            var share = l == lines[^1] ? left : Math.Min(left, MoneyMath.Round(amount * l.FunctionalAmount / total, dp));
             left -= share;
             if (share <= 0) continue;
             shares.Add(new AdjustmentLineInput(l.LineNo, Amount: share, Description: $"Theo hóa đơn {rec.Series}/{rec.Number} của {rec.SellerName}"));
             vat += l.VatRate is { } r ? MoneyMath.Round(share * r / 100m, dp) : 0;
         }
-        if (vat != rec.VatAmount)
+        if (vat != vatAmount)
             throw new DomainException(ErrorCodes.ValidationFailed, $"Thuế tính theo thuế suất dòng hóa đơn gốc ({vat:N0}) khác thuế trên hóa đơn của nhà cung cấp ({rec.VatAmount:N0}); lập hóa đơn điều chỉnh thủ công.");
         var draft = await invoices.CreateAdjustmentAsync(ctx, new AdjustmentInput(original.InvoiceId, purpose, rec.Series, rec.Number, rec.IssueDate, postingDate,
             $"{(purpose == InvoicePurpose.Increase ? "Điều chỉnh tăng" : "Điều chỉnh giảm")} theo hóa đơn {rec.Series}/{rec.Number} của {rec.SellerName}", shares, purpose == InvoicePurpose.Discount ? discountKind ?? DiscountKind.Allowance : null));

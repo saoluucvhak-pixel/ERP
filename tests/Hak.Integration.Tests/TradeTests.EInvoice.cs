@@ -351,7 +351,9 @@ public partial class TradeTests
 
     private static EInvoiceInput SupplierInvoice(string no, EInvoiceStatus status, string? relatedNo, decimal before, decimal vat)
         => new(TaxDirection.Input, "0400111222", "Nhà cung cấp 1", "1C26TAA", no, D(3, 20), before, vat, before + vat, status, [new EInvoiceRateInput(10, before, vat)],
-            BuyerTaxCode: "0312345678", RelatedSeries: relatedNo is null ? null : "1C26TAA", RelatedNumber: relatedNo);
+            BuyerTaxCode: "0312345678", RelatedSeries: relatedNo is null ? null : "1C26TAA", RelatedNumber: relatedNo,
+            AmountConvention: status == EInvoiceStatus.Adjustment ? EInvoiceAmountConvention.MagnitudeWithNature : EInvoiceAmountConvention.Signed,
+            AdjustmentNature: status == EInvoiceStatus.Adjustment ? EInvoiceAdjustNature.Decrease : EInvoiceAdjustNature.None);
 
     [Fact]
     public async Task EInvoice_Inbound_SupplierAdjustment_BecomesASuggestionThenADraftWithTheSuppliersNumber()
@@ -429,14 +431,17 @@ public partial class TradeTests
         var (fx, sim, svc, _) = await EInvoiceSetupAsync(); using var _fx = fx;
         var original = await IssuedSaleAsync(fx, svc);
         var origId = original.InvoiceId!.Value;
-        // Hóa đơn gốc còn điều chỉnh đã ghi sổ ⇒ không đảo được (đảo điều chỉnh trước).
+        var draft = await svc.CreateReplacementDraftAsync(fx.H.Preparer, origId, "Sai đơn giá", [new ReplacementLineChange(1, UnitPrice: 90_000)]);
+        sim.FailTransientCalls = 1;
+        var pending = await svc.IssueAsync(fx.H.Approver, draft.Id);
+        Assert.Equal("Issuing", pending.Status);
+        // A new dependency appears AFTER preflight and the first external attempt; keep the same key and recover after issue.
         var adj = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(origId, InvoicePurpose.Discount, "TAM", "TAM1", D(3, 20), D(3, 20), "Giảm giá", [new AdjustmentLineInput(1, Amount: 100_000)]));
         await fx.Inv.PostAsync(fx.H.Approver, adj.Id);
-        var draft = await svc.CreateReplacementDraftAsync(fx.H.Preparer, origId, "Sai đơn giá", [new ReplacementLineChange(1, UnitPrice: 90_000)]);
         var ar = await fx.Bal("AR", fx.H.Partner["KH01"]);
         var journals = await fx.S.Db.JournalEntries.CountAsync();
 
-        var view = await svc.IssueAsync(fx.H.Approver, draft.Id);
+        var view = await svc.RetryAsync(fx.H.Approver, pending.Id);
         Assert.Equal("Issued", view.Status);                                           // cơ quan thuế đã chấp nhận: hóa đơn pháp lý tồn tại
         Assert.Contains("điều chỉnh", view.PostError);                                 // nhưng ERP chưa ghi sổ được — hiện rõ để xử lý
         Assert.Equal(InvoiceStatus.Posted, (await fx.S.Db.CommercialInvoices.AsNoTracking().SingleAsync(i => i.Id == origId)).Status);

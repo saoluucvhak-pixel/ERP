@@ -51,7 +51,7 @@ public static class VatEndpoints
             Results.Ok((await s.LedgerListingAsync(await http.SessionAsync(), direction, from, to)).Select(x => new
             {
                 x.InvoiceId, x.Number, direction = x.Direction.ToString(), x.CounterpartyTaxCode, x.CounterpartyName, x.Series, x.InvoiceNo, x.InvoiceDate, x.PostingDate,
-                purpose = x.Purpose.ToString(), x.AmountBeforeVat, x.VatAmount, byRate = x.ByRate.Select(kv => new { rate = kv.Key, amount = kv.Value.Amount, vat = kv.Value.Vat }),
+                purpose = x.Purpose.ToString(), x.ReceivedDate, x.AmountBeforeVat, x.VatAmount, byRate = x.ByRate.Select(kv => new { rate = kv.Key, amount = kv.Value.Amount, vat = kv.Value.Vat }),
             })));
         api.MapGet("/vat/reconciliation", async (HttpContext http, DateOnly from, DateOnly to, VatService s) =>
         {
