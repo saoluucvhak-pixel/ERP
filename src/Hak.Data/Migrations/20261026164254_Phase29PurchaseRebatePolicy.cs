@@ -21,9 +21,8 @@ namespace Hak.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "purchase_rebate_policy",
-                table: "companies");
+            // SQLite không hỗ trợ DropColumnOperation của EF; dùng DROP COLUMN gốc (SQLite >= 3.35) như Phase27.
+            migrationBuilder.Sql("ALTER TABLE companies DROP COLUMN purchase_rebate_policy;");
         }
     }
 }
