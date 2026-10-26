@@ -140,6 +140,34 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         return rows.Select(r => (r.CompanyId, r.DocumentId, r.RequestedBy)).Distinct().ToList();
     }
 
+    /// <summary>
+    /// Lệnh không gửi được vì lỗi ngoài nhà cung cấp (người yêu cầu bị khóa, thiếu dữ liệu…): ghi lỗi và lùi giờ gửi lại để một lệnh hỏng không chặn các lệnh sau.
+    /// </summary>
+    public async Task DeferAsync(Guid companyId, Guid documentId, string message)
+    {
+        await db.InTransactionAsync(async () =>
+        {
+            var ob = await db.EInvoiceOutbox.FirstOrDefaultAsync(o => o.CompanyId == companyId && o.DocumentId == documentId && o.State == EInvoiceOutboxState.Pending);
+            if (ob is null) return;
+            ob.Attempts++; ob.LastError = message; ob.NextAttemptAt = clock.UtcNow + Backoff(ob.Attempts); ob.UpdatedAt = clock.UtcNow;
+            await db.SaveChangesAsync();
+        });
+    }
+
+    private async Task CloseOrphanedAsync(SessionContext ctx, EInvoiceDocument doc, EInvoiceOutboxItem outbox)
+    {
+        await db.InTransactionAsync(async () =>
+        {
+            var d = await db.EInvoiceDocuments.FirstAsync(x => x.Id == doc.Id);
+            var ob = await db.EInvoiceOutbox.FirstAsync(o => o.Id == outbox.Id);
+            d.Status = EInvoiceDocStatus.Rejected; d.LastError = "Hóa đơn ERP không còn ở trạng thái nháp (đã hủy hoặc ghi sổ); lệnh phát hành bị đóng, chưa gửi nhà cung cấp."; d.RowVersion++;
+            ob.State = EInvoiceOutboxState.Failed; ob.LastError = d.LastError; ob.NextAttemptAt = null; ob.UpdatedAt = clock.UtcNow;
+            db.EInvoiceMessages.Add(Message(ctx, doc.Id, "IN", "Rejected", null, "NOT_DRAFT", d.LastError));
+            await audit.AppendAsync(ctx.CompanyId, ctx, "einvoice.issue.closed_not_draft", "einvoice_document", d.Id.ToString(), new { }, d.RowVersion);
+            await db.SaveChangesAsync();
+        });
+    }
+
     /// <summary>Gửi một lệnh đang chờ (dùng cho dịch vụ nền). Lỗi nghiệp vụ không làm hỏng vòng lặp: ghi vào hóa đơn để người dùng thấy.</summary>
     public async Task DispatchOneAsync(SessionContext ctx, Guid documentId)
     {
