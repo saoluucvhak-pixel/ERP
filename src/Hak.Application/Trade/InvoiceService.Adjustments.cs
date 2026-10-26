@@ -194,8 +194,9 @@ public sealed partial class InvoiceService
                         var pending = inv.Lines.Where(x => x.AdjustsLineNo == ol.LineNo).Sum(x => x.FunctionalAmount);
                         var discounted = await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Discount);
                         var already = discounted + await AdjustedAmountAsync(orig.Id, ol.LineNo, InvoicePurpose.Return) + pending;
-                        if (already + line.FunctionalAmount > ol.FunctionalAmount)
-                            throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: tổng giảm trừ {already + line.FunctionalAmount} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
+                        var ceiling = ol.FunctionalAmount + await PostedIncreaseAsync(db, orig.Id, ol.LineNo);   // giá trị dòng gốc đã điều chỉnh tăng giá / sửa sai doanh thu
+                        if (already + line.FunctionalAmount > ceiling)
+                            throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng {n}: tổng giảm trừ {already + line.FunctionalAmount} vượt giá trị dòng hóa đơn gốc đã điều chỉnh {ceiling}.");
                         if (!purchase && !input.UnderAgreement) await RequireAdjustmentApprovalAsync(ctx, orig.Id, ol.LineNo, AdjustmentKind.Discount, discounted + pending + line.FunctionalAmount);
                     }
                 }
@@ -316,8 +317,9 @@ public sealed partial class InvoiceService
                 var mine = g.Sum(x => x.FunctionalAmount);
                 var discounted = await AdjustedAmountAsync(orig.Id, g.Key, InvoicePurpose.Discount, inv.Id);
                 var others = discounted + await AdjustedAmountAsync(orig.Id, g.Key, InvoicePurpose.Return, inv.Id);
-                if (others + mine > ol.FunctionalAmount)
-                    throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng gốc {g.Key}: tổng giảm trừ {others + mine} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
+                var ceiling = ol.FunctionalAmount + await PostedIncreaseAsync(db, orig.Id, g.Key);
+                if (others + mine > ceiling)
+                    throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng gốc {g.Key}: tổng giảm trừ {others + mine} vượt giá trị dòng hóa đơn gốc đã điều chỉnh {ceiling}.");
                 // Chiết khấu theo thỏa thuận còn hiệu lực (lần quyết toán chưa hủy) đã được duyệt ở cấp thỏa thuận; mọi chiết khấu khác vẫn phải qua phê duyệt từng dòng.
                 var underAgreement = await db.DiscountAgreementRunInvoices.AnyAsync(r => r.AdjustmentInvoiceId == inv.Id && db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.VoidedAt == null))
                     || await db.DiscountSettlementInvoiceLinks.AnyAsync(r => r.AdjustmentInvoiceId == inv.Id && db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.VoidedAt == null));
@@ -394,6 +396,13 @@ public sealed partial class InvoiceService
                 : "Chỉ xuất trả hàng cho hóa đơn mua thường đã ghi sổ.");
         return (orig, orig.Lines.FirstOrDefault(l => l.LineNo == lineNo) ?? throw new DomainException(ErrorCodes.NotFound, $"Hóa đơn gốc không có dòng {lineNo}."));
     }
+
+    /// <summary>Tổng tăng giá / sửa sai doanh thu ĐÃ GHI SỔ trên một dòng hóa đơn gốc (không tính "tăng" lý do thu hồi chiết khấu thương mại — nó chỉ hoàn lại chiết khấu đã cấp).</summary>
+    internal static async Task<decimal> PostedIncreaseAsync(Hak.Data.HakDbContext database, Guid originalInvoiceId, int originalLineNo)
+        => (await (from l in database.CommercialInvoiceLines.AsNoTracking() join i in database.CommercialInvoices.AsNoTracking() on l.InvoiceId equals i.Id
+                   where i.AdjustsInvoiceId == originalInvoiceId && i.Purpose == InvoicePurpose.Increase && i.AdjustmentReason != InvoiceAdjustmentReason.CommercialRebate
+                         && i.Status == InvoiceStatus.Posted && l.AdjustsLineNo == originalLineNo
+                   select l.FunctionalAmount).ToListAsync()).Sum();
 
     private async Task<decimal> AdjustedAmountAsync(Guid originalInvoiceId, int originalLineNo, InvoicePurpose purpose, Guid? exclude = null)
     {

@@ -174,8 +174,12 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
         var adj = await (from l in db.CommercialInvoiceLines.AsNoTracking()
                          join i in db.CommercialInvoices.AsNoTracking() on l.InvoiceId equals i.Id
                          where i.CompanyId == ctx.CompanyId && i.AdjustsInvoiceId != null && ids.Contains(i.AdjustsInvoiceId.Value) && !own.Contains(i.Id)
-                               && (i.Purpose == InvoicePurpose.Return || i.Purpose == InvoicePurpose.Discount) && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.Draft)
-                         select new { Orig = i.AdjustsInvoiceId!.Value, l.AdjustsLineNo, i.Status, l.FunctionalAmount, l.Amount }).ToListAsync();
+                               && (i.Purpose == InvoicePurpose.Return || i.Purpose == InvoicePurpose.Discount
+                                   // Tăng giá / sửa sai doanh thu đã ghi sổ làm tăng doanh số tính CKTM; "tăng" lý do thu hồi CKTM (CommercialRebate) thì KHÔNG, tránh vòng tự sinh quyền lợi.
+                                   || (i.Purpose == InvoicePurpose.Increase && i.AdjustmentReason != InvoiceAdjustmentReason.CommercialRebate))
+                               && (i.Status == InvoiceStatus.Posted || i.Status == InvoiceStatus.Draft)
+                         select new { Orig = i.AdjustsInvoiceId!.Value, l.AdjustsLineNo, i.Status, i.Purpose, l.FunctionalAmount, l.Amount }).ToListAsync();
+        var adjByLine = adj.ToLookup(x => (x.Orig, x.AdjustsLineNo));
 
         // net = doanh số tính chiết khấu (chỉ điều chỉnh đã ghi sổ); room = chỗ còn giảm được trên dòng (tính cả điều chỉnh nháp). Hóa đơn ngoại tệ có thêm số theo tiền hóa đơn.
         var perInvoice = new List<(CommercialInvoice Inv, List<(int LineNo, decimal Net, decimal Room, decimal NetFx, decimal RoomFx)> Lines)>();
@@ -183,10 +187,14 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
         {
             var lines = i.Lines.OrderBy(l => l.LineNo).Select(l =>
             {
-                var mine = adj.Where(x => x.Orig == i.Id && x.AdjustsLineNo == l.LineNo).ToList();
-                var posted = mine.Where(x => x.Status == InvoiceStatus.Posted);
-                return (l.LineNo, Net: Math.Max(0, l.FunctionalAmount - posted.Sum(x => x.FunctionalAmount)), Room: Math.Max(0, l.FunctionalAmount - mine.Sum(x => x.FunctionalAmount)),
-                        NetFx: Math.Max(0, l.Amount - posted.Sum(x => x.Amount)), RoomFx: Math.Max(0, l.Amount - mine.Sum(x => x.Amount)));
+                var mine = adjByLine[(i.Id, (int?)l.LineNo)].ToList();
+                // Tăng đã ghi sổ cộng vào doanh số và vào chỗ còn giảm được; giảm / trả hàng trừ (Net chỉ tính đã ghi sổ, Room tính cả nháp). Tăng còn nháp chưa làm tăng gì.
+                var posted = mine.Where(x => x.Status == InvoiceStatus.Posted).ToList();
+                var upF = posted.Where(x => x.Purpose == InvoicePurpose.Increase).Sum(x => x.FunctionalAmount); var upA = posted.Where(x => x.Purpose == InvoicePurpose.Increase).Sum(x => x.Amount);
+                var downPostedF = posted.Where(x => x.Purpose != InvoicePurpose.Increase).Sum(x => x.FunctionalAmount); var downPostedA = posted.Where(x => x.Purpose != InvoicePurpose.Increase).Sum(x => x.Amount);
+                var downAllF = mine.Where(x => x.Purpose != InvoicePurpose.Increase).Sum(x => x.FunctionalAmount); var downAllA = mine.Where(x => x.Purpose != InvoicePurpose.Increase).Sum(x => x.Amount);
+                return (l.LineNo, Net: Math.Max(0, l.FunctionalAmount + upF - downPostedF), Room: Math.Max(0, l.FunctionalAmount + upF - downAllF),
+                        NetFx: Math.Max(0, l.Amount + upA - downPostedA), RoomFx: Math.Max(0, l.Amount + upA - downAllA));
             }).ToList();
             perInvoice.Add((i, lines));
         }
