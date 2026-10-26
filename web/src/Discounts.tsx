@@ -44,10 +44,13 @@ export function DiscountsView() {
   const [to, setTo] = useState(today())
   const [report, setReport] = useState<Report | null>(null)
   const [info, setInfo] = useState('')
+  const [purchasePolicy, setPurchasePolicy] = useState<'RevalueInventory' | 'ReduceCogs'>('RevalueInventory')
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setRows(await get<Agreement[]>(`/discounts/agreements?kind=${kind}`))), [run, kind])
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- tải danh sách khi mở màn / đổi chiều
   useEffect(() => { load() }, [kind])
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- cách hạch toán chiết khấu chiều mua của công ty
+  useEffect(() => { if (!sales) run(async () => setPurchasePolicy((await get<{ policy: 'RevalueInventory' | 'ReduceCogs' }>('/discounts/purchase-policy')).policy)) }, [kind])
   const loadReport = useCallback(() => run(async () => setReport(await get<Report>(`/discounts/report?kind=${kind}&from=${from}&to=${to}`))), [run, kind, from, to])
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- tải báo cáo khi mở tab / đổi kỳ
   useEffect(() => { if (tab === 'report') loadReport() }, [tab, from, to, kind])
@@ -98,7 +101,13 @@ export function DiscountsView() {
       {info && !error && <div className="msg ok">{info}</div>}
 
       {tab === 'agreements' && <>
-        <div className="toolbar"><button className="primary" onClick={() => setForm(blankForm())}>Lập thỏa thuận</button></div>
+        <div className="toolbar"><button className="primary" onClick={() => setForm(blankForm())}>Lập thỏa thuận</button>
+          {!sales && <label>Hạch toán chiết khấu được hưởng bằng hóa đơn điều chỉnh<select value={purchasePolicy} disabled={busy} onChange={e => run(async () => {
+            const policy = e.target.value as 'RevalueInventory' | 'ReduceCogs'
+            await put('/discounts/purchase-policy', { policy }); setPurchasePolicy(policy)
+          })}>
+            <option value="RevalueInventory">Định giá lại: hàng còn tồn giảm giá trị tồn kho, hàng đã xuất giảm giá vốn</option>
+            <option value="ReduceCogs">Ghi giảm giá vốn ngay, không định giá lại tồn kho</option></select></label>}</div>
         <div className="scroll"><table className="grid">
           <thead><tr><th>Mã</th><th>{sales ? 'Khách hàng' : 'Nhà cung cấp'}</th><th>Kỳ áp dụng</th><th>Bậc chiết khấu (doanh số chưa thuế → %)</th><th>Quyết toán</th><th /></tr></thead>
           <tbody>{rows.map(a => <tr key={a.id} style={{ opacity: a.isActive ? undefined : 0.55 }}>

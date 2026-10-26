@@ -284,6 +284,27 @@ public sealed partial class DiscountAgreementService
         }
     }
 
+    /// <summary>Cách hạch toán chiết khấu thương mại chiều mua của công ty (hóa đơn điều chỉnh giảm): định giá lại tồn kho hay ghi giảm giá vốn ngay.</summary>
+    public async Task<Hak.Domain.Organization.PurchaseRebatePolicy> PurchasePolicyAsync(SessionContext ctx)
+    {
+        ctx.Require(Permissions.VoucherView);
+        return await db.Companies.AsNoTracking().Where(c => c.Id == ctx.CompanyId).Select(c => c.PurchaseRebatePolicy).FirstAsync();
+    }
+
+    public async Task SetPurchasePolicyAsync(SessionContext ctx, Hak.Domain.Organization.PurchaseRebatePolicy policy)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        if (!Enum.IsDefined(policy)) throw new DomainException(ErrorCodes.ValidationFailed, "Cách hạch toán không hợp lệ.");
+        await db.InTransactionAsync(async () =>
+        {
+            var c = await db.Companies.FirstAsync(x => x.Id == ctx.CompanyId);
+            if (c.PurchaseRebatePolicy == policy) return;
+            c.PurchaseRebatePolicy = policy; c.RowVersion++;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "discount.purchase_rebate_policy", "company", c.Id.ToString(), new { policy = policy.ToString() }, c.RowVersion);
+            await db.SaveChangesAsync();
+        });
+    }
+
     public async Task<DiscountLifecycle> LifecycleAsync(SessionContext ctx, Guid agreementId, Guid? runId = null)
     {
         ctx.Require(Permissions.ReportView);

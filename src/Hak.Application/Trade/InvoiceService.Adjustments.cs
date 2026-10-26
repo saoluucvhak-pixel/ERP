@@ -340,9 +340,17 @@ public sealed partial class InvoiceService
         var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).Where(i => i.InventoryAccountId != null).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId!.Value);
         var reduces = inv.Purpose != InvoicePurpose.Increase;
         var gl = new List<VoucherLineInput>();
+        // Chiết khấu thương mại được hưởng: công ty chọn ghi giảm giá vốn ngay (không định giá lại tồn kho) hoặc định giá lại theo hàng còn tồn / đã xuất.
+        var reduceCogs = inv.Purpose == InvoicePurpose.Discount && inv.DiscountKind == DiscountKind.Trade
+            && await db.Companies.AsNoTracking().Where(c => c.Id == ctx.CompanyId).Select(c => c.PurchaseRebatePolicy).FirstAsync() == Hak.Domain.Organization.PurchaseRebatePolicy.ReduceCogs;
         foreach (var l in inv.Lines.OrderBy(x => x.LineNo))
         {
             var ol = original.Lines.Single(x => x.LineNo == l.AdjustsLineNo);
+            if (reduceCogs && ol.StockDocumentId is not null)
+            {
+                gl.Add(new VoucherLineInput(role("PURCHASE_TRADE_DISCOUNT"), Side.Credit, l.FunctionalAmount, Description: $"Chiết khấu thương mại được hưởng theo {label} (giảm giá vốn)"));
+                continue;
+            }
             if (inv.Purpose == InvoicePurpose.Return)
             {
                 var issue = await db.StockDocuments.AsNoTracking().FirstAsync(d => d.Id == l.StockDocumentId);

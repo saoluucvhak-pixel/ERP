@@ -8,6 +8,7 @@ public sealed record AgreementUpdateRequest(long RowVersion, InvoiceKind Kind, G
 public sealed record AgreementAccrueRequest(long RowVersion, DateOnly AsOf);
 public sealed record AgreementActiveRequest(long RowVersion, bool Active);
 public sealed record AgreementSettleRequest(long RowVersion, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate, bool ByVoucher = false);
+public sealed record PurchaseRebatePolicyRequest(Hak.Domain.Organization.PurchaseRebatePolicy Policy);
 public sealed record DiscountLinkInvoiceRequest(long RowVersion, Guid InvoiceId, DateOnly? ReceivedDate);
 public sealed record DiscountInvoiceReceivedRequest(long RowVersion, Guid InvoiceId, DateOnly ReceivedDate);
 public sealed record RebateAmendRequest(long RowVersion, Guid PreviousRunId, string SourceHash, string Reason, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate);
@@ -18,6 +19,9 @@ public static class DiscountEndpoints
     public static void MapDiscountEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api/discounts");
+        api.MapGet("/purchase-policy", async (HttpContext http, DiscountAgreementService s) => Results.Ok(new { policy = (await s.PurchasePolicyAsync(await http.SessionAsync())).ToString() }));
+        api.MapPut("/purchase-policy", async (HttpContext http, PurchaseRebatePolicyRequest r, DiscountAgreementService s) =>
+        { await s.SetPurchasePolicyAsync(await http.SessionAsync(), r.Policy); return Results.NoContent(); });
         api.MapGet("/agreements", async (HttpContext http, InvoiceKind kind, DiscountAgreementService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), kind)));
         api.MapPost("/agreements", async (HttpContext http, AgreementRequest r, DiscountAgreementService s) =>
             Results.Ok(new { (await s.CreateAsync(await http.SessionAsync(), new AgreementInput(r.Kind, r.PartnerId, r.Code, r.Name, r.FromDate, r.ToDate, r.Tiers, r.Progressive))).Id }));

@@ -1,5 +1,8 @@
 namespace Hak.Domain.Organization;
 
+/// <summary>RevalueInventory: phần hàng còn tồn giảm giá trị tồn kho, phần đã xuất giảm giá vốn. ReduceCogs: toàn bộ ghi giảm giá vốn (vai trò PURCHASE_TRADE_DISCOUNT), không định giá lại tồn kho.</summary>
+public enum PurchaseRebatePolicy { RevalueInventory = 0, ReduceCogs = 1 }
+
 public sealed class Company
 {
     public Guid Id { get; set; }
@@ -15,6 +18,8 @@ public sealed class Company
     public bool RequireSupplierApproval { get; set; }
     /// <summary>Nhận hàng bán trả lại và lập hóa đơn giảm giá bán chỉ được trong phạm vi yêu cầu đã duyệt (người có thẩm quyền).</summary>
     public bool RequireSalesAdjustmentApproval { get; set; }
+    /// <summary>Cách hạch toán chiết khấu thương mại được hưởng (chiều mua) bằng hóa đơn điều chỉnh: định giá lại hàng còn tồn / giá vốn hàng đã xuất, hoặc ghi giảm giá vốn ngay.</summary>
+    public PurchaseRebatePolicy PurchaseRebatePolicy { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
