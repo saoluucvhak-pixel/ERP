@@ -2582,8 +2582,8 @@ public partial class TradeTests
         Assert.Equal(("Hóa đơn điều chỉnh", 250_000m, 7_500m, "0000620", 750m), (st.Mode, row.Sales, row.Discount, row.AdjustmentNo, row.AdjustmentVat));
         Assert.Equal((7_500m, 250_000m), (st.TotalDiscount, st.TotalSales));
         Assert.Equal((7_500m, 7_500m), (run.Amount, run.AccruedAmount));
-        Assert.NotNull(run.AccrualReversalVoucherId);
-        await PostVoucherAsync(fx, run.AccrualReversalVoucherId!.Value);
+        Assert.Null(run.AccrualReversalVoucherId);
+        Assert.Equal(DiscountAccrualSettlementMode.PerInvoice, run.AccrualSettlementMode);
         foreach (var d in await fx.S.Db.CommercialInvoices.Where(i => i.Purpose == InvoicePurpose.Discount && i.Status == InvoiceStatus.Draft).ToListAsync()) await fx.Inv.PostAsync(fx.H.Approver, d.Id);
         Assert.Equal(0m, await fx.Bal("REBPAY", fx.H.Partner["KH01"]));
         Assert.Equal(7_500m, await fx.Bal("SALESDISC"));                                                 // 7.500 trích trước − 7.500 hoàn nhập + 7.500 hóa đơn điều chỉnh

@@ -121,6 +121,9 @@ public sealed class LedgerImmutabilityInterceptor : SaveChangesInterceptor
                     break;
                 }
 
+                case Domain.Trade.DiscountSettlementInvoiceLink when entry.State is EntityState.Modified or EntityState.Deleted:
+                    throw Immutable("Liên kết hóa đơn quyết toán là chứng cứ, không được sửa/xóa.");
+
                 case Domain.Trade.DiscountAgreementRunInvoice when entry.State is EntityState.Modified or EntityState.Deleted:
                     throw Immutable("Phân bổ quyết toán chiết khấu đã lưu không được sửa/xóa.");
 

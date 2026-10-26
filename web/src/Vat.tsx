@@ -70,7 +70,7 @@ function Reconciliation() {
   )
 }
 
-interface ListRow { invoiceId: string; number: string; counterpartyTaxCode: string | null; counterpartyName: string; series: string; invoiceNo: string; invoiceDate: string; postingDate: string; purpose: string; amountBeforeVat: string; vatAmount: string; byRate: { rate: string; amount: string; vat: string }[] }
+interface ListRow { invoiceId: string; number: string; counterpartyTaxCode: string | null; counterpartyName: string; series: string; invoiceNo: string; invoiceDate: string; postingDate: string; receivedDate: string | null; purpose: string; amountBeforeVat: string; vatAmount: string; byRate: { rate: string; amount: string; vat: string }[] }
 
 function Listing() {
   const [direction, setDirection] = useState<'Input' | 'Output'>('Input')
@@ -87,13 +87,13 @@ function Listing() {
         <label>Đến ngày<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
         <button className="primary" disabled={busy} onClick={load}>Xem</button>
         <ExportButton fileName={`Bang_ke_${direction === 'Input' ? 'vao' : 'ra'}_${from}_${to}`} sheet={direction === 'Input' ? 'Bảng kê vào' : 'Bảng kê ra'} disabled={!rows}
-          columns={[{ header: 'Ký hiệu', width: 12 }, { header: 'Số HĐ', width: 12 }, { header: 'Ngày HĐ' }, { header: 'Ngày hạch toán' }, { header: 'MST', width: 16 }, { header: 'Tên', width: 36 }, { header: 'Thuế suất' }, { header: 'Tiền hàng', numeric: true }, { header: 'Thuế', numeric: true }]}
-          rows={(rows ?? []).flatMap(r => r.byRate.map(b => [r.series, r.invoiceNo, r.invoiceDate, r.postingDate, r.counterpartyTaxCode ?? '', r.counterpartyName, b.rate === 'KCT' ? 'KCT' : b.rate + '%', b.amount, b.vat]))} />
+          columns={[{ header: 'Ký hiệu', width: 12 }, { header: 'Số HĐ', width: 12 }, { header: 'Ngày HĐ' }, { header: 'Ngày hạch toán' }, { header: 'Ngày nhận CKTM NCC' }, { header: 'MST', width: 16 }, { header: 'Tên', width: 36 }, { header: 'Thuế suất' }, { header: 'Tiền hàng', numeric: true }, { header: 'Thuế', numeric: true }]}
+          rows={(rows ?? []).flatMap(r => r.byRate.map(b => [r.series, r.invoiceNo, r.invoiceDate, r.postingDate, r.receivedDate ?? '', r.counterpartyTaxCode ?? '', r.counterpartyName, b.rate === 'KCT' ? 'KCT' : b.rate + '%', b.amount, b.vat]))} />
       </div>
       <ErrorBox error={error} />
       {rows && <div className="scroll"><table className="grid">
-        <thead><tr><th>Ký hiệu/Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>MST</th><th>Tên</th><th>Thuế suất</th><th className="num">Tiền hàng</th><th className="num">Thuế</th></tr></thead>
-        <tbody>{rows.flatMap(r => r.byRate.map(b => <tr key={r.invoiceId + b.rate}><td>{r.series}/{r.invoiceNo}{r.purpose !== 'Normal' ? ` (${r.purpose})` : ''}</td><td>{formatDate(r.invoiceDate)}</td><td>{formatDate(r.postingDate)}</td>
+        <thead><tr><th>Ký hiệu/Số HĐ</th><th>Ngày HĐ</th><th>Ngày HT</th><th>Ngày nhận CKTM NCC</th><th>MST</th><th>Tên</th><th>Thuế suất</th><th className="num">Tiền hàng</th><th className="num">Thuế</th></tr></thead>
+        <tbody>{rows.flatMap(r => r.byRate.map(b => <tr key={r.invoiceId + b.rate}><td>{r.series}/{r.invoiceNo}{r.purpose !== 'Normal' ? ` (${r.purpose})` : ''}</td><td>{formatDate(r.invoiceDate)}</td><td>{formatDate(r.postingDate)}</td><td>{r.receivedDate ? formatDate(r.receivedDate) : '—'}</td>
           <td>{r.counterpartyTaxCode ?? <span className="muted">thiếu MST</span>}</td><td>{r.counterpartyName}</td><td>{b.rate === 'KCT' ? 'KCT' : b.rate + '%'}</td><td className="num">{formatMoney(b.amount)}</td><td className="num">{formatMoney(b.vat)}</td></tr>))}</tbody>
       </table></div>}
     </>

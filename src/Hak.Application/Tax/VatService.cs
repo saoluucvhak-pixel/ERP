@@ -25,7 +25,7 @@ public sealed record EInvoiceImportResult(Guid BatchId, int Imported, int Duplic
 /// <summary>One invoice as recorded in the books (source 2), signed: returns/discounts are negative.</summary>
 public sealed record LedgerVatInvoice(Guid InvoiceId, string Number, TaxDirection Direction, string? CounterpartyTaxCode, string CounterpartyName,
     string Series, string InvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate, InvoicePurpose Purpose,
-    decimal AmountBeforeVat, decimal VatAmount, IReadOnlyDictionary<string, (decimal Amount, decimal Vat)> ByRate);
+    decimal AmountBeforeVat, decimal VatAmount, IReadOnlyDictionary<string, (decimal Amount, decimal Vat)> ByRate, DateOnly? ReceivedDate = null);
 
 public enum TaxDiffType
 {
@@ -161,10 +161,17 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
         var bookByKey = books.GroupBy(b => Key(b.Direction, b.Direction == TaxDirection.Output ? own : b.CounterpartyTaxCode, b.Series, b.InvoiceNo))
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        var receipts = await (from l in db.DiscountSettlementInvoiceLinks.AsNoTracking() join i in db.CommercialInvoices.AsNoTracking() on l.AdjustmentInvoiceId equals i.Id
+                              join p in db.BusinessPartners.AsNoTracking() on i.PartnerId equals p.Id
+                              where l.CompanyId == ctx.CompanyId && i.Kind == InvoiceKind.Purchase && l.ReceivedDate != null
+                              select new { p.TaxCode, i.InvoiceSeries, i.InvoiceNo, Date = l.ReceivedDate!.Value, l.CreatedAt }).ToListAsync();
+        var receiptByKey = receipts.GroupBy(r => Key(TaxDirection.Input, r.TaxCode, r.InvoiceSeries, r.InvoiceNo))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.CreatedAt).First().Date);
+        DateOnly EvidenceTaxDate(EInvoiceRecord e) => e.Direction == TaxDirection.Input && receiptByKey.TryGetValue(Key(e.Direction, e.SellerTaxCode, e.Series, e.Number), out var received) ? received : e.IssueDate;
         var diffs = new List<TaxDifference>();
         var matched = 0;
         var seenBookIds = new HashSet<Guid>();
-        foreach (var e in einvoices.Where(e => e.IssueDate >= from && e.IssueDate <= to))
+        foreach (var e in einvoices.Where(e => EvidenceTaxDate(e) >= from && EvidenceTaxDate(e) <= to))
         {
             var key = Key(e.Direction, e.SellerTaxCode, e.Series, e.Number);
             var label = $"{(e.Direction == TaxDirection.Input ? "Đầu vào" : "Đầu ra")} {e.SellerTaxCode} {e.Series}/{e.Number}";
@@ -213,7 +220,7 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                         "Tiền hàng của hóa đơn điều chỉnh trong sổ khác HĐĐT: kiểm tra số tiền điều chỉnh từng dòng.", a.InvoiceId, e.Id));
                 if (aVat != eVat)
                     diffs.Add(new(TaxDiffType.VatDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, aVat - eVat, "Thuế GTGT của hóa đơn điều chỉnh trong sổ khác HĐĐT.", a.InvoiceId, e.Id));
-                if (a.PostingDate < from || a.PostingDate > to)
+                if (BookTaxDate(a) < from || BookTaxDate(a) > to)
                     diffs.Add(new(TaxDiffType.PeriodDifference, e.Direction, label, e.AmountBeforeVat, aAmount, e.VatAmount, aVat, 0,
                         $"Hóa đơn điều chỉnh lập ngày {e.IssueDate.Vn()} nhưng hạch toán ngày {a.PostingDate.Vn()}: xác định đúng kỳ kê khai [CẦN XÁC MINH quy định kê khai bổ sung].", a.InvoiceId, e.Id));
                 continue;
@@ -233,7 +240,7 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
             if (b.VatAmount != e.VatAmount)
                 diffs.Add(new(TaxDiffType.VatDifference, e.Direction, label, e.AmountBeforeVat, b.AmountBeforeVat, e.VatAmount, b.VatAmount, b.VatAmount - e.VatAmount,
                     "Thuế GTGT trong sổ khác HĐĐT: kiểm tra thuế suất từng dòng.", b.InvoiceId, e.Id));
-            if (b.PostingDate < from || b.PostingDate > to)
+            if (BookTaxDate(b) < from || BookTaxDate(b) > to)
                 diffs.Add(new(TaxDiffType.PeriodDifference, e.Direction, label, e.AmountBeforeVat, b.AmountBeforeVat, e.VatAmount, b.VatAmount, 0,
                     $"Hóa đơn lập ngày {e.IssueDate.Vn()} nhưng hạch toán ngày {b.PostingDate.Vn()}: xác định đúng kỳ kê khai [CẦN XÁC MINH quy định kê khai bổ sung].", b.InvoiceId, e.Id));
         }
@@ -284,7 +291,7 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
             .FirstOrDefaultAsync(d => d.CompanyId == ctx.CompanyId && d.TaxType == "GTGT" && d.PeriodFrom == from && d.PeriodTo == to);
         if (declaration is not null)
         {
-            var inPeriod = books.Where(b => b.PostingDate >= from && b.PostingDate <= to).ToList();
+            var inPeriod = books.Where(b => BookTaxDate(b) >= from && BookTaxDate(b) <= to).ToList();
             foreach (var l in declaration.Lines.Where(l => l.Measure != TaxMeasure.None))
             {
                 var computed = Measure(inPeriod, l.Measure, l.VatRate);
@@ -360,12 +367,18 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
 
     // ------------------------------------------------------------------
 
+    private static DateOnly BookTaxDate(LedgerVatInvoice invoice)
+        => invoice.Direction == TaxDirection.Input && invoice.ReceivedDate is { } received ? received : invoice.PostingDate;
+
     private async Task<List<LedgerVatInvoice>> LedgerInvoicesAsync(Guid companyId, DateOnly fromDate, DateOnly toDate)
     {
         var rows = await (from i in db.CommercialInvoices
                           join p in db.BusinessPartners on i.PartnerId equals p.Id
-                          where i.CompanyId == companyId && i.Status == InvoiceStatus.Posted && i.PostingDate >= fromDate && i.PostingDate <= toDate
-                          select new { i, p.TaxCode, p.Name }).AsNoTracking().ToListAsync();
+                          join receipt in db.DiscountSettlementInvoiceLinks on i.Id equals receipt.AdjustmentInvoiceId into receiptLinks
+                          from receipt in receiptLinks.DefaultIfEmpty()
+                          let taxDate = i.Kind == InvoiceKind.Purchase && receipt != null && receipt.ReceivedDate != null ? receipt.ReceivedDate.Value : i.PostingDate
+                          where i.CompanyId == companyId && i.Status == InvoiceStatus.Posted && taxDate >= fromDate && taxDate <= toDate
+                          select new { i, p.TaxCode, p.Name, ReceivedDate = i.Kind == InvoiceKind.Purchase && receipt != null ? receipt.ReceivedDate : null }).AsNoTracking().ToListAsync();
         var ids = rows.Select(r => r.i.Id).ToList();
         var lines = await db.CommercialInvoiceLines.AsNoTracking().Where(l => ids.Contains(l.InvoiceId)).ToListAsync();
         return rows.Select(r =>
@@ -376,7 +389,7 @@ public sealed class VatService(HakDbContext db, AuditService audit, IClock clock
                 .ToDictionary(g => g.Key, g => (sign * g.Sum(x => x.FunctionalAmount), sign * g.Sum(x => x.VatAmount)));
             return new LedgerVatInvoice(r.i.Id, r.i.Number, r.i.Kind == InvoiceKind.Purchase ? TaxDirection.Input : TaxDirection.Output,
                 r.TaxCode is null ? null : Norm(r.TaxCode), r.Name, r.i.InvoiceSeries, r.i.InvoiceNo, r.i.InvoiceDate, r.i.PostingDate, r.i.Purpose,
-                sign * ls.Sum(x => x.FunctionalAmount), sign * ls.Sum(x => x.VatAmount), byRate);
+                sign * ls.Sum(x => x.FunctionalAmount), sign * ls.Sum(x => x.VatAmount), byRate, r.ReceivedDate);
         }).OrderBy(x => x.PostingDate).ThenBy(x => x.Number).ToList();
     }
 

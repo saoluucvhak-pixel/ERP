@@ -329,10 +329,11 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
     public async Task PreflightIssueAsync(SessionContext ctx, Guid invoiceId)
     {
         ctx.Require(Permissions.VoucherPost);
-        var inv = await db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId);
+        var inv = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId);
         var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= inv.PostingDate && p.EndDate >= inv.PostingDate)
             ?? throw new DomainException(ErrorCodes.PeriodNotFound, "Không có kỳ kế toán chứa ngày ghi sổ hóa đơn.");
         if (period.Status != PeriodStatus.Open) throw new DomainException(ErrorCodes.PeriodLocked, "Kỳ ghi sổ hóa đơn đã khóa; xử lý trước khi phát hành.");
+        if (inv.Purpose != InvoicePurpose.Normal) await DiscountAgreementService.InvoiceOffsetAsync(db, inv);
         if (inv.ReplacesInvoiceId is not { } originalId) return;
         await CaptureReplacementAllocationsAsync(ctx, inv);
         ctx.Require(Permissions.VoucherReverse);
@@ -381,6 +382,8 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
                       ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
             RowVersionCheck.Require(expectedRowVersion, inv.RowVersion, $"Hóa đơn {inv.Number}");
             if (inv.Status != InvoiceStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, "Chỉ hủy được hóa đơn nháp.");
+            if (await db.EInvoiceDocuments.AnyAsync(d => d.InvoiceId == inv.Id && d.CompanyId == ctx.CompanyId && d.Status != Hak.Domain.Tax.EInvoiceDocStatus.Rejected))
+                throw new DomainException(ErrorCodes.InvalidStateTransition, "Hóa đơn đang phát hành hoặc đã phát hành điện tử; đối soát kết quả và dùng quy trình điều chỉnh/thay thế, không hủy nháp ERP.");
             inv.Status = InvoiceStatus.Cancelled;
             inv.RowVersion++;
             await audit.AppendAsync(ctx.CompanyId, ctx, "invoice.cancel", "invoice", inv.Id.ToString(), new { inv.Number, reason }, inv.RowVersion);

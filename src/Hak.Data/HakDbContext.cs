@@ -101,6 +101,7 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
     public DbSet<DiscountAgreement> DiscountAgreements => Set<DiscountAgreement>();
     public DbSet<DiscountAgreementTier> DiscountAgreementTiers => Set<DiscountAgreementTier>();
     public DbSet<DiscountAgreementRun> DiscountAgreementRuns => Set<DiscountAgreementRun>();
+    public DbSet<DiscountSettlementInvoiceLink> DiscountSettlementInvoiceLinks => Set<DiscountSettlementInvoiceLink>();
     public DbSet<DiscountAccrual> DiscountAccruals => Set<DiscountAccrual>();
     public DbSet<DiscountAgreementRunInvoice> DiscountAgreementRunInvoices => Set<DiscountAgreementRunInvoice>();
     public DbSet<EInvoiceRecord> EInvoiceRecords => Set<EInvoiceRecord>();
@@ -550,6 +551,14 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<DiscountAgreementRunInvoice>(e =>
         {
             e.HasIndex(x => x.AdjustmentInvoiceId).IsUnique();
+            e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.OriginalInvoiceId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.AdjustmentInvoiceId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<DiscountSettlementInvoiceLink>(e =>
+        {
+            e.HasIndex(x => x.AdjustmentInvoiceId).IsUnique();
+            e.HasIndex(x => new { x.RunId, x.OriginalInvoiceId });
+            e.HasOne<DiscountAgreementRun>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.OriginalInvoiceId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<CommercialInvoice>().WithMany().HasForeignKey(x => x.AdjustmentInvoiceId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -1112,6 +1121,8 @@ public sealed class HakDbContext(DbContextOptions<HakDbContext> options) : DbCon
         b.Entity<DiscountAccrual>().Property(x => x.Estimated).HasConversion(money);
         b.Entity<DiscountAccrual>().Property(x => x.Adjustment).HasConversion(money);
         b.Entity<DiscountAgreementRunInvoice>().Property(x => x.Amount).HasConversion(money);
+        b.Entity<DiscountAgreementRunInvoice>().Property(x => x.AccruedAmount).HasConversion(money);
+        b.Entity<DiscountSettlementInvoiceLink>().Property(x => x.Amount).HasConversion(money);
         b.Entity<TradeOrder>().Property(x => x.OverDeliveryTolerancePercent).HasConversion(money);
         b.Entity<TradeOrderLine>().Property(x => x.Quantity).HasConversion(money);
         b.Entity<TradeOrderLine>().Property(x => x.UnitPrice).HasConversion(money);

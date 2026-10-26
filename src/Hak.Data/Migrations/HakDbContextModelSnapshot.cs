@@ -8556,9 +8556,17 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AccrualAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("accrual_account_id");
+
                     b.Property<Guid?>("AccrualReversalVoucherId")
                         .HasColumnType("TEXT")
                         .HasColumnName("accrual_reversal_voucher_id");
+
+                    b.Property<int>("AccrualSettlementMode")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("accrual_settlement_mode");
 
                     b.Property<long>("AccruedAmount")
                         .HasColumnType("INTEGER")
@@ -8591,6 +8599,10 @@ namespace Hak.Data.Migrations
                     b.Property<long>("Percent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("percent");
+
+                    b.Property<Guid?>("RecognitionAccountId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("recognition_account_id");
 
                     b.Property<string>("SettlementSnapshot")
                         .HasColumnType("TEXT")
@@ -8625,6 +8637,10 @@ namespace Hak.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
+
+                    b.Property<long>("AccruedAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("accrued_amount");
 
                     b.Property<Guid>("AdjustmentInvoiceId")
                         .HasColumnType("TEXT")
@@ -8696,6 +8712,61 @@ namespace Hak.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_discount_agreement_tiers_values", "threshold >= 0 AND percent > 0 AND percent <= 1000000");
                         });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountSettlementInvoiceLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AdjustmentInvoiceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("adjustment_invoice_id");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("OriginalInvoiceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("original_invoice_id");
+
+                    b.Property<DateOnly?>("ReceivedDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("received_date");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_settlement_invoice_links");
+
+                    b.HasIndex("AdjustmentInvoiceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_settlement_invoice_links_adjustment_invoice_id");
+
+                    b.HasIndex("OriginalInvoiceId")
+                        .HasDatabaseName("ix_discount_settlement_invoice_links_original_invoice_id");
+
+                    b.HasIndex("RunId", "OriginalInvoiceId")
+                        .HasDatabaseName("ix_discount_settlement_invoice_links_run_id_original_invoice_id");
+
+                    b.ToTable("discount_settlement_invoice_links");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptance", b =>
@@ -10892,6 +10963,30 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_discount_agreement_tiers_discount_agreements_agreement_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountSettlementInvoiceLink", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_settlement_invoice_links_commercial_invoices_adjustment_invoice_id");
+
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_settlement_invoice_links_commercial_invoices_original_invoice_id");
+
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreementRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_settlement_invoice_links_discount_agreement_runs_run_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptanceLine", b =>

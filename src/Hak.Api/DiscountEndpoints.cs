@@ -8,6 +8,8 @@ public sealed record AgreementUpdateRequest(long RowVersion, InvoiceKind Kind, G
 public sealed record AgreementAccrueRequest(long RowVersion, DateOnly AsOf);
 public sealed record AgreementActiveRequest(long RowVersion, bool Active);
 public sealed record AgreementSettleRequest(long RowVersion, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate, bool ByVoucher = false);
+public sealed record DiscountLinkInvoiceRequest(long RowVersion, Guid InvoiceId, DateOnly? ReceivedDate);
+public sealed record DiscountInvoiceReceivedRequest(long RowVersion, Guid InvoiceId, DateOnly ReceivedDate);
 
 /// <summary>Chiết khấu thương mại theo doanh số (thỏa thuận, quyết toán cuối kỳ) và báo cáo chiết khấu.</summary>
 public static class DiscountEndpoints
@@ -30,6 +32,11 @@ public static class DiscountEndpoints
             return Results.Ok(new { run.Id, run.Amount, run.Percent, run.EligibleSales });
         });
         api.MapGet("/agreements/{id:guid}/statement", async (HttpContext http, Guid id, DiscountAgreementService s) => Results.Ok(await s.StatementAsync(await http.SessionAsync(), id)));
+        api.MapGet("/agreements/{id:guid}/lifecycle", async (HttpContext http, Guid id, DiscountAgreementService s) => Results.Ok(await s.LifecycleAsync(await http.SessionAsync(), id)));
+        api.MapPost("/agreements/{id:guid}/link-invoice", async (HttpContext http, Guid id, DiscountLinkInvoiceRequest r, DiscountAgreementService s) =>
+            Results.Ok(new { (await s.LinkInvoiceAsync(await http.SessionAsync(), id, r.RowVersion, r.InvoiceId, r.ReceivedDate)).Id }));
+        api.MapPost("/agreements/{id:guid}/invoice-received", async (HttpContext http, Guid id, DiscountInvoiceReceivedRequest r, DiscountAgreementService s) =>
+        { await s.RecordReceiptAsync(await http.SessionAsync(), id, r.RowVersion, r.InvoiceId, r.ReceivedDate); return Results.NoContent(); });
         api.MapPost("/agreements/{id:guid}/accrue", async (HttpContext http, Guid id, AgreementAccrueRequest r, DiscountAgreementService s) =>
         { var x = await s.AccrueAsync(await http.SessionAsync(), id, r.RowVersion, r.AsOf); return Results.Ok(new { x.Id, x.Estimated, x.Adjustment, x.VoucherId }); });
         api.MapPost("/agreements/{id:guid}/void-run", async (HttpContext http, Guid id, ReasonRequest r, DiscountAgreementService s) => { await s.VoidRunAsync(await http.SessionAsync(), id, r.Reason); return Results.NoContent(); });

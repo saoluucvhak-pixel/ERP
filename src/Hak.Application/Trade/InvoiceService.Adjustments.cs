@@ -219,13 +219,14 @@ public sealed partial class InvoiceService
         var orig = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == inv.AdjustsInvoiceId);
         if (orig.Status != InvoiceStatus.Posted) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn gốc {orig.Number} không còn hiệu lực.");
         await RecheckAdjustmentLimitsAsync(ctx, inv, orig);
+        var offset = await DiscountAgreementService.InvoiceOffsetAsync(db, inv);
         var roles = await db.AccountRoleMappings.AsNoTracking().Where(m => m.CompanyId == ctx.CompanyId).ToDictionaryAsync(m => m.RoleCode, m => m.AccountId);
         Guid Role(string code) => roles.TryGetValue(code, out var id) ? id : throw new DomainException(ErrorCodes.RuleRoleUnmapped, $"Chưa ánh xạ vai trò tài khoản {code}.");
 
         var label = $"HĐ {inv.InvoiceSeries}/{inv.InvoiceNo} điều chỉnh {orig.InvoiceSeries}/{orig.InvoiceNo}";
         var vat = inv.Lines.Sum(x => x.VatAmount);
         var total = inv.Lines.Sum(x => x.FunctionalAmount) + vat;
-        var gl = inv.Kind == InvoiceKind.Purchase ? await PurchaseAdjustmentLinesAsync(ctx, inv, orig, Role, label) : new List<VoucherLineInput>();
+        var gl = inv.Kind == InvoiceKind.Purchase ? await PurchaseAdjustmentLinesAsync(ctx, inv, orig, Role, label, offset?.AlreadyRecognized > 0 ? 0m : null) : new List<VoucherLineInput>();
         foreach (var l in inv.Lines.Where(_ => inv.Kind == InvoiceKind.Sales).OrderBy(x => x.LineNo))
         {
             if (inv.Purpose == InvoicePurpose.Return)
@@ -238,6 +239,7 @@ public sealed partial class InvoiceService
             }
             else if (inv.Purpose == InvoicePurpose.Discount)
             {
+                if (offset?.AlreadyRecognized > 0) continue; // The voucher already recognized the commercial rebate; this invoice only supplies VAT/legal evidence.
                 // Chiết khấu thương mại dùng TK riêng (vai trò SALES_TRADE_DISCOUNT) nếu công ty đã ánh xạ, nếu chưa thì dùng chung TK giảm giá hàng bán.
                 var trade = inv.DiscountKind == DiscountKind.Trade;
                 var account = trade && roles.TryGetValue("SALES_TRADE_DISCOUNT", out var tradeAccount) ? tradeAccount : Role("SALES_DISCOUNT");
@@ -256,9 +258,27 @@ public sealed partial class InvoiceService
             if (vat > 0) gl.Add(new VoucherLineInput(Role("VAT_OUTPUT"), Side.Debit, vat, Description: "Giảm thuế GTGT đầu ra"));
             // Settle the original receivable when it is still open enough (and, in foreign currency, at its carrying amount);
             // otherwise the credit stays unallocated.
-            gl.AddRange(await PartnerLinesAsync(ctx.CompanyId, inv, Role("AR_TRADE"), Side.Credit, label, null, orig.VoucherId));
+            gl.AddRange(await PartnerLinesAsync(ctx.CompanyId, inv, Role("AR_TRADE"), Side.Credit, label, null, orig.VoucherId, offset?.AlreadyRecognized > 0 ? 0m : null));
+        }
+        if (offset is not null)
+        {
+            // Reclassify purchase rebates recognized by a voucher to the actual stock/expense destinations once the legal invoice arrives.
+            if (inv.Kind == InvoiceKind.Purchase && offset.AlreadyRecognized > 0)
+                gl.Add(new VoucherLineInput(offset.RecognitionAccountId!.Value, Side.Debit, offset.AlreadyRecognized, Description: "Bù trừ CKTM đã ghi bằng chứng từ"));
+            if (offset.AccruedToClear > 0)
+            {
+                var sales = inv.Kind == InvoiceKind.Sales;
+                gl.Add(new VoucherLineInput(offset.AccrualAccountId!.Value, sales ? Side.Debit : Side.Credit, offset.AccruedToClear, inv.PartnerId, Description: "Bù trừ trích trước theo phần quyết toán"));
+                gl.Add(new VoucherLineInput(offset.RecognitionAccountId!.Value, sales ? Side.Credit : Side.Debit, offset.AccruedToClear, Description: "Hoàn nhập phần trích trước tương ứng"));
+            }
         }
         gl.RemoveAll(x => x.Amount == 0);
+        if (gl.Count == 0 && offset?.AlreadyRecognized > 0)
+        {
+            // Non-VAT legal evidence still gets an auditable balanced voucher, with no change to any balance or open item.
+            gl.Add(new VoucherLineInput(offset.RecognitionAccountId!.Value, Side.Debit, offset.AlreadyRecognized, Description: "Đối chiếu CKTM đã ghi nhận"));
+            gl.Add(new VoucherLineInput(offset.RecognitionAccountId.Value, Side.Credit, offset.AlreadyRecognized, Description: "Bù trừ CKTM đã ghi nhận"));
+        }
 
         var v = await engine.PostSystemVoucherAsync(ctx, new VoucherInput(inv.Kind == InvoiceKind.Purchase ? VoucherTypes.PurchaseInvoice : VoucherTypes.SalesInvoice, inv.InvoiceDate, inv.PostingDate,
             $"{inv.Description} ({label})", gl, SourceSystem: Source, SourceId: inv.Id.ToString()));
@@ -297,7 +317,8 @@ public sealed partial class InvoiceService
                 if (others + mine > ol.FunctionalAmount)
                     throw new DomainException(ErrorCodes.OverInvoiced, $"Dòng gốc {g.Key}: tổng giảm trừ {others + mine} vượt giá trị dòng hóa đơn gốc {ol.FunctionalAmount}.");
                 // Chiết khấu theo thỏa thuận còn hiệu lực (lần quyết toán chưa hủy) đã được duyệt ở cấp thỏa thuận; mọi chiết khấu khác vẫn phải qua phê duyệt từng dòng.
-                var underAgreement = await db.DiscountAgreementRunInvoices.AnyAsync(r => r.AdjustmentInvoiceId == inv.Id && db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.VoidedAt == null));
+                var underAgreement = await db.DiscountAgreementRunInvoices.AnyAsync(r => r.AdjustmentInvoiceId == inv.Id && db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.VoidedAt == null))
+                    || await db.DiscountSettlementInvoiceLinks.AnyAsync(r => r.AdjustmentInvoiceId == inv.Id && db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.VoidedAt == null));
                 if (inv.Kind == InvoiceKind.Sales && !underAgreement) await RequireAdjustmentApprovalAsync(ctx, orig.Id, g.Key, AdjustmentKind.Discount, discounted + mine);
             }
         }
@@ -311,7 +332,7 @@ public sealed partial class InvoiceService
     /// lines without stock adjust the original expense account. AP debits settle the original invoice while it is open enough.
     /// </summary>
     private async Task<List<VoucherLineInput>> PurchaseAdjustmentLinesAsync(SessionContext ctx, CommercialInvoice inv, CommercialInvoice orig,
-        Func<string, Guid> role, string label)
+        Func<string, Guid> role, string label, decimal? partnerNetOverride = null)
     {
         var original = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstAsync(i => i.Id == orig.Id);
         var itemAccounts = await db.Items.AsNoTracking().Where(i => i.CompanyId == ctx.CompanyId).Where(i => i.InventoryAccountId != null).ToDictionaryAsync(i => i.Id, i => i.InventoryAccountId!.Value);
@@ -355,7 +376,7 @@ public sealed partial class InvoiceService
         var vat = inv.Lines.Sum(x => x.VatAmount);
         if (vat > 0) gl.Add(new VoucherLineInput(role("VAT_INPUT"), reduces ? Side.Credit : Side.Debit, vat, Description: reduces ? "Giảm thuế GTGT đầu vào" : "Thuế GTGT đầu vào"));
         gl.InsertRange(0, reduces
-            ? await PartnerLinesAsync(ctx.CompanyId, inv, role("AP_TRADE"), Side.Debit, label, null, orig.VoucherId)
+            ? await PartnerLinesAsync(ctx.CompanyId, inv, role("AP_TRADE"), Side.Debit, label, null, orig.VoucherId, partnerNetOverride)
             : await PartnerLinesAsync(ctx.CompanyId, inv, role("AP_TRADE"), Side.Credit, label, orig.DueDate, null));
         return gl;
     }

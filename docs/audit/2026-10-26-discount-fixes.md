@@ -19,13 +19,17 @@ Cơ sở: `main` tại `d8f097cd35a0c3f341c39fc0e62825f4b5c49eb7`. Chỉ thử t
 - Hóa đơn điều chỉnh nhập mới bằng số dương được hiểu là tăng khi dùng `Signed`. Nguồn cũ từng gửi số dương cho giảm phải khai quy ước và bản chất rõ ràng theo schema đã cập nhật. Không được suy dấu theo hóa đơn ERP vì sẽ che giấu ghép nhầm tăng/giảm.
 - Sao lưu trước khi triển khai migration vào dữ liệu sử dụng. Đợt này không chạy migration vào DB sử dụng của doanh nghiệp.
 
+## Cập nhật đợt hoàn thiện tiếp theo
+
+Xem [chu trình CKTM](2026-10-26-discount-lifecycle.md) cho phần đã bổ sung sau lượt kiểm tra đầu. Kết quả 531/64/12 ở cuối tài liệu này là của lượt đầu, không phải tổng lượt mới.
+
 ## Giới hạn còn mở — không coi đã hoàn thiện
 
-- Quyết toán bằng chứng từ vẫn chỉ là xử lý kế toán, chưa tự hoàn tất hồ sơ hóa đơn/VAT. UI đã nêu rõ. Chưa có chu trình nhận hóa đơn sau voucher và tự bù trừ khoản đã ghi nhận, kèm trạng thái kế toán/pháp lý/thuế độc lập.
-- CKTM mua bằng voucher/trích trước hiện vẫn ghi vai trò giảm giá vốn; chưa phân bổ xuyên kho–giá vốn–sản xuất–tài sản như đường hóa đơn. Chưa đổi quyết định này một cách ngầm định; cần đối chiếu chính sách tài khoản và đối tượng chi phí trước khi mở rộng.
-- Hoàn nhập trích trước khi quyết toán bằng nhiều hóa đơn vẫn là chứng từ riêng. Cần settlement group/hoàn nhập theo từng phần để kiểm soát ghi sổ một phần; không nên ghi hoàn nhập toàn bộ rồi để các hóa đơn điều chỉnh chưa xử lý.
+- ĐÃ BỔ SUNG chu trình nhận hóa đơn sau voucher, bù trừ khoản đã ghi và trạng thái kế toán/pháp lý/thuế riêng. Trạng thái đủ điều kiện đối chiếu vẫn không có nghĩa đã kê khai/nộp tờ khai.
+- ĐÃ NỐI phân bổ lại tồn kho/giá vốn khi hóa đơn CKTM mua đến sau voucher được ghi sổ. Trước hóa đơn vẫn hiển thị đang chờ phân bổ; sản xuất dở dang/giá thành đã chốt/tài sản còn cần mở rộng.
+- ĐÃ BỔ SUNG bù trừ trích trước theo từng hóa đơn trong cùng voucher/transaction cho run mới. Run cũ hoàn nhập độc lập giữ cơ chế cũ và có cảnh báo đối chiếu.
 - Chưa có run bổ sung/thu hồi CKTM; không mở lại snapshot cũ để đưa doanh số mới vào. Khi run đã ghi sổ cần nghiệp vụ bổ sung có lý do/audit riêng.
-- Kỳ thuế chưa tách đầy đủ ngày nhận hóa đơn đầu vào khỏi ngày kế toán. Cảnh báo đối soát không phải thao tác tự lập/nộp tờ khai.
+- ĐÃ TÁCH ngày nhận có chứng cứ cho hóa đơn CKTM mua trong chu trình và nối vào bảng kê/đối chiếu VAT; chưa áp dụng ngày nhận đầy đủ cho mọi loại hóa đơn đầu vào. Không tự lập/nộp tờ khai.
 - Chưa kiểm định adapter hóa đơn thật, chữ ký số, sandbox nhà cung cấp hoặc mẫu bảng kê pháp lý chính thức.
 - Không sửa lỗi hàng chờ retry sau logout trong đợt này; thuộc phạm vi bảo vệ phiên đăng nhập riêng.
 

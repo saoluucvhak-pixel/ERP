@@ -8707,9 +8707,17 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AccrualAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("accrual_account_id");
+
                     b.Property<Guid?>("AccrualReversalVoucherId")
                         .HasColumnType("uuid")
                         .HasColumnName("accrual_reversal_voucher_id");
+
+                    b.Property<int>("AccrualSettlementMode")
+                        .HasColumnType("integer")
+                        .HasColumnName("accrual_settlement_mode");
 
                     b.Property<decimal>("AccruedAmount")
                         .HasPrecision(19, 4)
@@ -8747,6 +8755,10 @@ namespace Hak.Data.Postgres.Migrations
                         .HasColumnType("numeric(19,4)")
                         .HasColumnName("percent");
 
+                    b.Property<Guid?>("RecognitionAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recognition_account_id");
+
                     b.Property<string>("SettlementSnapshot")
                         .HasColumnType("text")
                         .HasColumnName("settlement_snapshot");
@@ -8780,6 +8792,11 @@ namespace Hak.Data.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<decimal>("AccruedAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("accrued_amount");
 
                     b.Property<Guid>("AdjustmentInvoiceId")
                         .HasColumnType("uuid")
@@ -8854,6 +8871,62 @@ namespace Hak.Data.Postgres.Migrations
                         {
                             t.HasCheckConstraint("ck_discount_agreement_tiers_values", "threshold >= 0 AND percent > 0 AND percent <= 100");
                         });
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountSettlementInvoiceLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AdjustmentInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("adjustment_invoice_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("company_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("OriginalInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_invoice_id");
+
+                    b.Property<DateOnly?>("ReceivedDate")
+                        .HasColumnType("date")
+                        .HasColumnName("received_date");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_discount_settlement_invoice_links");
+
+                    b.HasIndex("AdjustmentInvoiceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_settlement_invoice_links_adjustment_invoice_id");
+
+                    b.HasIndex("OriginalInvoiceId")
+                        .HasDatabaseName("ix_discount_settlement_invoice_links_original_invoice_id");
+
+                    b.HasIndex("RunId", "OriginalInvoiceId")
+                        .HasDatabaseName("ix_discount_settlement_invoice_links_run_id_original_invoice_id");
+
+                    b.ToTable("discount_settlement_invoice_links");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptance", b =>
@@ -11038,6 +11111,30 @@ namespace Hak.Data.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_discount_agreement_tiers_discount_agreements_agreement_id");
+                });
+
+            modelBuilder.Entity("Hak.Domain.Trade.DiscountSettlementInvoiceLink", b =>
+                {
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_settlement_invoice_links_commercial_invoices_adjus~");
+
+                    b.HasOne("Hak.Domain.Trade.CommercialInvoice", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_settlement_invoice_links_commercial_invoices_origi~");
+
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreementRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_discount_settlement_invoice_links_discount_agreement_runs_r~");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.ServiceAcceptanceLine", b =>
