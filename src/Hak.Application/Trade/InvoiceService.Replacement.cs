@@ -23,10 +23,15 @@ public sealed partial class InvoiceService
         if (invoice.Status != InvoiceStatus.Draft) throw new DomainException(ErrorCodes.InvalidStateTransition, "Xem kế hoạch chuyển phân bổ trước khi ghi sổ hóa đơn thay thế.");
         var plan = await CaptureReplacementAllocationsAsync(ctx, invoice);
         var result = new List<ReplacementAllocationView>();
+        // Tải theo lô (một truy vấn cho mọi phân bổ gốc, một cho mọi dòng đối ứng) thay vì hai truy vấn mỗi phần tử.
+        var allocationIds = plan.Select(p => p.OriginalAllocationId).Distinct().ToList();
+        var oldAllocations = (await db.SettlementAllocations.AsNoTracking().Where(a => allocationIds.Contains(a.Id)).ToListAsync()).ToDictionary(a => a.Id);
+        var counterIds = plan.Select(p => p.CounterLineId).Distinct().ToList();
+        var currencies = (await db.JournalLines.AsNoTracking().Where(l => counterIds.Contains(l.Id)).Select(l => new { l.Id, l.ForeignCurrency }).ToListAsync()).ToDictionary(l => l.Id, l => l.ForeignCurrency);
         foreach (var item in plan)
         {
-            var old = await db.SettlementAllocations.AsNoTracking().SingleAsync(a => a.Id == item.OriginalAllocationId);
-            var currency = await db.JournalLines.Where(l => l.Id == item.CounterLineId).Select(l => l.ForeignCurrency).SingleAsync();
+            var old = oldAllocations[item.OriginalAllocationId];
+            var currency = currencies[item.CounterLineId];
             result.Add(new(item.OriginalAllocationId, item.CounterLineId, currency, item.Amount, item.ForeignAmount, old.Amount - item.Amount,
                 old.ForeignAmount is { } foreign ? foreign - (item.ForeignAmount ?? 0) : null, item.Date));
         }
@@ -50,9 +55,11 @@ public sealed partial class InvoiceService
             || original.PaymentDiscountDays != replacement.PaymentDiscountDays || original.PaymentDiscountOptions != replacement.PaymentDiscountOptions
             || (original.PaymentDiscountPercent != null || original.PaymentDiscountOptions != null) && original.InvoiceDate != replacement.InvoiceDate))
             throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn ngoại tệ đã thanh toán: giữ nguyên điều khoản chiết khấu thanh toán khi chuyển phân bổ.");
+        // Một truy vấn kỳ kế toán của công ty rồi tra trong bộ nhớ (trước đây một truy vấn cho mỗi ngày phân bổ khác nhau).
+        var periods = await db.AccountingPeriods.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToListAsync();
         foreach (var date in allocations.Select(a => a.AllocationDate > replacement.PostingDate ? a.AllocationDate : replacement.PostingDate).Distinct())
         {
-            var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(p => p.CompanyId == ctx.CompanyId && p.StartDate <= date && p.EndDate >= date);
+            var period = periods.FirstOrDefault(p => p.StartDate <= date && p.EndDate >= date);
             if (period is null || period.Status != Domain.Organization.PeriodStatus.Open)
                 throw new DomainException(ErrorCodes.PeriodLocked, "Kỳ tái phân bổ hóa đơn thay thế không mở; xử lý phân bổ trước khi phát hành.");
         }
@@ -70,10 +77,17 @@ public sealed partial class InvoiceService
         else if (newForeign > 0 && FxSettlementMath.ExactRate(newForeign, newBook, dp) is null)
             throw new DomainException(ErrorCodes.FxBookValue, "Giá trị hóa đơn thay thế không biểu diễn được bằng tỷ giá ghi sổ.");
         var counters = new Dictionary<Guid, (JournalLine Line, decimal Foreign, decimal Book)>();
-        foreach (var group in allocations.GroupBy(a => ids.Contains(a.DebitLineId) ? a.CreditLineId : a.DebitLineId))
+        var groups = allocations.GroupBy(a => ids.Contains(a.DebitLineId) ? a.CreditLineId : a.DebitLineId).ToList();
+        // Dòng đối ứng và chứng từ của chúng tải theo lô (hai truy vấn cho mọi nhóm).
+        var groupKeys = groups.Select(g => g.Key).ToList();
+        var counterLines = (await db.JournalLines.AsNoTracking().Where(l => groupKeys.Contains(l.Id) && l.CompanyId == ctx.CompanyId).ToListAsync()).ToDictionary(l => l.Id);
+        var entryIds = counterLines.Values.Select(l => l.JournalEntryId).Distinct().ToList();
+        var vouchersByEntry = (await (from e in db.JournalEntries.AsNoTracking() join v in db.Vouchers.AsNoTracking() on e.VoucherId equals v.Id where entryIds.Contains(e.Id) select new { EntryId = e.Id, Voucher = v }).ToListAsync())
+            .ToDictionary(x => x.EntryId, x => x.Voucher);
+        foreach (var group in groups)
         {
-            var counter = await db.JournalLines.AsNoTracking().SingleAsync(l => l.Id == group.Key && l.CompanyId == ctx.CompanyId);
-            var voucher = await (from e in db.JournalEntries join v in db.Vouchers on e.VoucherId equals v.Id where e.Id == counter.JournalEntryId select v).SingleAsync();
+            var counter = counterLines.TryGetValue(group.Key, out var cl) ? cl : throw new InvalidOperationException("Dòng đối ứng của phân bổ không tồn tại.");
+            var voucher = vouchersByEntry.TryGetValue(counter.JournalEntryId, out var cv) ? cv : throw new InvalidOperationException("Chứng từ của dòng đối ứng không tồn tại.");
             if (voucher.VoucherType == VoucherTypes.Revaluation)
                 throw new DomainException(ErrorCodes.InvalidStateTransition, "Công nợ đã đánh giá lại: xử lý lần đánh giá lại trước khi thay thế, không chuyển sai giá trị ghi sổ.");
             if (voucher.SourceSystem == PaymentDiscountService.Source && (original.Lines.Sum(l => l.Amount) != replacement.Lines.Sum(l => l.Amount)
