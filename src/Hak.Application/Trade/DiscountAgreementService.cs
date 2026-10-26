@@ -249,10 +249,12 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
             }
             shares.Add((inv, sales, invAmount - left, lineShares));
         }
+        var currencyDp = new Dictionary<string, int>(StringComparer.Ordinal);
         // Hóa đơn ngoại tệ: chiết khấu từng dòng = % × tiền hàng dòng THEO TIỀN HÓA ĐƠN (tính tròn theo số lẻ của đồng tiền đó), quy ra tiền hạch toán theo tỷ giá của chính hóa đơn.
         foreach (var (inv, lines) in perInvoice.Where(p => p.Inv.Currency != null && p.Lines.Sum(l => l.Net) > 0))
         {
-            var curDp = await db.Currencies.Where(c => c.Code == inv.Currency).Select(c => c.DecimalPlaces).FirstAsync();
+            if (!currencyDp.TryGetValue(inv.Currency!, out var curDp))
+                currencyDp[inv.Currency!] = curDp = await db.Currencies.Where(c => c.Code == inv.Currency).Select(c => c.DecimalPlaces).FirstAsync();   // một lần cho mỗi loại tiền
             var lineShares = new List<(int, decimal)>(); decimal functional = 0;
             foreach (var l in lines.Where(l => l.NetFx > 0))
             {
