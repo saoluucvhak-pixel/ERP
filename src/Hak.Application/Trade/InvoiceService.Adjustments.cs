@@ -398,7 +398,7 @@ public sealed partial class InvoiceService
     }
 
     /// <summary>Tổng tăng giá / sửa sai doanh thu ĐÃ GHI SỔ trên một dòng hóa đơn gốc (không tính "tăng" lý do thu hồi chiết khấu thương mại — nó chỉ hoàn lại chiết khấu đã cấp).</summary>
-    internal static async Task<decimal> PostedIncreaseAsync(HakDbContext database, Guid originalInvoiceId, int originalLineNo)
+    internal static async Task<decimal> PostedIncreaseAsync(Hak.Data.HakDbContext database, Guid originalInvoiceId, int originalLineNo)
         => (await (from l in database.CommercialInvoiceLines.AsNoTracking() join i in database.CommercialInvoices.AsNoTracking() on l.InvoiceId equals i.Id
                    where i.AdjustsInvoiceId == originalInvoiceId && i.Purpose == InvoicePurpose.Increase && i.AdjustmentReason != InvoiceAdjustmentReason.CommercialRebate
                          && i.Status == InvoiceStatus.Posted && l.AdjustsLineNo == originalLineNo
