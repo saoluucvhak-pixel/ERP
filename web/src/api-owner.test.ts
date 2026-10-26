@@ -152,7 +152,7 @@ test('reload during the very first request restores its original key, before any
 }))
 
 test('sensitive routes are sent once without idempotency key or persistent passwords', () => fixture(async (api, storage) => {
-  const paths = ['/auth/login', '/setup/admin', '/admin/users', '/backups/create', '/admin/backups', '/me/password', '/exchange/keys', '/x/../auth/login', '/%61uth/login', '/x%2f..%2fauth/login']
+  const paths = ['/auth/login', '/setup/admin', '/admin/users', '/backups/create', '/admin/backups', '/me/password', '/exchange/keys', '/x/../auth/login', '/%61uth/login', '/x%2f..%2fauth/login', '/einvoice/invoices/abc/issue', '/einvoice/documents/abc/retry', '/einvoice/process-pending', '/einvoice/notices/abc/send']
   let calls = 0
   globalThis.fetch = async (_url, init) => {
     calls++; assert.equal((init!.headers as Record<string, string>)['Idempotency-Key'], undefined)

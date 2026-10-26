@@ -1,5 +1,6 @@
 using Hak.Api;
 using Hak.Domain.Common;
+using Hak.Application.Common;
 using Hak.Domain.Vouchers;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,6 +30,46 @@ public class AuditFixTests
     [InlineData("/api/invoices")]
     [InlineData("/api/payroll/import")]
     public void Idempotency_StillAppliesToBusinessWrites(string path) => Assert.False(IdempotencyMiddleware.ExcludedPath(path));
+
+    // SEC2-02: gọi nhà cung cấp hóa đơn điện tử không nằm trong giao dịch idempotency; các thao tác ghi khác của hóa đơn điện tử vẫn có.
+    [Theory]
+    [InlineData("/api/einvoice/invoices/3f0efecc/issue")]
+    [InlineData("/api/einvoice/documents/3f0efecc/retry")]
+    [InlineData("/api/einvoice/process-pending")]
+    [InlineData("/api/einvoice/documents/3f0efecc/adjust-information")]
+    [InlineData("/api/einvoice/notices/3f0efecc/send")]
+    public void Idempotency_SkipsCallsToTheEInvoiceProvider(string path) => Assert.True(IdempotencyMiddleware.ExcludedPath(path));
+
+    [Theory]
+    [InlineData("/api/einvoice/notices")]
+    [InlineData("/api/einvoice/risk-notices")]
+    [InlineData("/api/einvoice/invoices/3f0efecc/register-external")]
+    public void Idempotency_StillAppliesToEInvoiceDrafts(string path) => Assert.False(IdempotencyMiddleware.ExcludedPath(path));
+
+    // SEC2-01: một đơn vị công việc lồng trong giao dịch có sẵn (yêu cầu có Idempotency-Key) cũng phải hoàn tác trọn vẹn khi bị bắt lỗi rồi đi tiếp.
+    [Fact]
+    public async Task NestedUnitOfWork_RollsBackItsOwnWrites_WhenCaught_InsideAnOuterTransaction()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        static IdempotencyRecord Rec(string key) => new() { Id = Ids.New(), Scope = "s", Key = key, RequestHash = "h", Method = "POST", Path = "/api/x", StatusCode = 200, ResponseBody = "{}", CreatedAt = DateTime.UtcNow, RequiredPermissions = "" };
+
+        await s.Db.InTransactionAsync(async () =>
+        {
+            s.Db.IdempotencyRecords.Add(Rec("outer-before"));
+            await s.Db.InTransactionAsync(async () =>
+            {
+                s.Db.IdempotencyRecords.Add(Rec("nested-fails"));
+                await s.Db.SaveChangesAsync();
+                throw new DomainException(ErrorCodes.ValidationFailed, "boom");
+            }).ContinueWith(t => { Assert.True(t.IsFaulted); });   // người gọi bắt lỗi rồi đi tiếp
+            s.Db.IdempotencyRecords.Add(Rec("outer-after"));
+            await s.Db.SaveChangesAsync();
+        });
+
+        var keys = await s.Db.IdempotencyRecords.AsNoTracking().Where(r => r.Scope == "s").Select(r => r.Key).OrderBy(k => k).ToListAsync();
+        Assert.Equal(new[] { "outer-after", "outer-before" }, keys);
+    }
 
     // SEC-03: người sửa nội dung nháp trở thành người lập, nên không tự gửi và duyệt nháp của người khác.
     [Fact]

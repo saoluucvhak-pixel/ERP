@@ -121,7 +121,22 @@ public sealed partial class IdempotencyMiddleware(RequestDelegate next)
         => path.StartsWith("/api/auth/", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/setup/", StringComparison.OrdinalIgnoreCase)
            || path.StartsWith("/api/backups", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/admin/backups", StringComparison.OrdinalIgnoreCase)
            || path.StartsWith("/api/admin/users", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/api/me/", StringComparison.OrdinalIgnoreCase)
-           || path.StartsWith("/api/exchange/keys", StringComparison.OrdinalIgnoreCase);
+           || path.StartsWith("/api/exchange/keys", StringComparison.OrdinalIgnoreCase)
+           || CallsExternalProvider(path);
+
+    /// <summary>
+    /// Thao tác gọi nhà cung cấp hóa đơn điện tử luôn chạy NGOÀI giao dịch DB (kết quả lưu giao dịch riêng, chống trùng bằng khóa của hàng chờ gửi).
+    /// Bọc chúng trong giao dịch idempotency sẽ giữ khóa ghi toàn cục suốt cuộc gọi mạng và, nếu yêu cầu lỗi sau khi nhà cung cấp đã phát hành,
+    /// hoàn tác mất khóa chống trùng → phát hành trùng hóa đơn pháp lý.
+    /// </summary>
+    public static bool CallsExternalProvider(string path)
+    {
+        if (!path.StartsWith("/api/einvoice/", StringComparison.OrdinalIgnoreCase)) return false;
+        var p = path.TrimEnd('/');
+        return p.EndsWith("/issue", StringComparison.OrdinalIgnoreCase) || p.EndsWith("/retry", StringComparison.OrdinalIgnoreCase)
+            || p.EndsWith("/process-pending", StringComparison.OrdinalIgnoreCase) || p.EndsWith("/adjust-information", StringComparison.OrdinalIgnoreCase)
+            || p.EndsWith("/send", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool Applies(HttpContext http, out string? key)
     {

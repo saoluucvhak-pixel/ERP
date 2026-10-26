@@ -339,6 +339,45 @@ internal static class ImmutabilityTriggers
             """;
     }
 
+    private static readonly string[] EvidenceAppendOnly = ["discount_accruals", "e_invoice_error_notice_lines", "e_invoice_risk_notice_lines"];
+    private static readonly string[] EvidenceNoDelete = ["e_invoice_error_notices", "e_invoice_risk_notices"];
+
+    /// <summary>Bằng chứng trích trước chiết khấu và thông báo hóa đơn điện tử; khóa mở lại trạng thái và khóa chống trùng của hóa đơn điện tử.</summary>
+    public static IEnumerable<string> EvidenceStatements()
+    {
+        foreach (var t in EvidenceAppendOnly)
+            yield return $"CREATE TRIGGER trg_{t}_append_only BEFORE UPDATE OR DELETE ON {t} FOR EACH ROW EXECUTE FUNCTION hak_ledger_immutable();";
+        foreach (var t in EvidenceNoDelete)
+            yield return $"CREATE TRIGGER trg_{t}_no_delete BEFORE DELETE ON {t} FOR EACH ROW EXECUTE FUNCTION hak_ledger_immutable();";
+        yield return """
+            CREATE OR REPLACE FUNCTION hak_einvoice_no_reopen() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+              IF OLD.status NOT IN (1, 3) AND NEW.status IN (1, 3) THEN RAISE EXCEPTION 'LEDGER_IMMUTABLE'; END IF;
+              RETURN NEW;
+            END $$;
+            CREATE TRIGGER trg_einvoice_documents_no_reopen BEFORE UPDATE ON e_invoice_documents FOR EACH ROW EXECUTE FUNCTION hak_einvoice_no_reopen();
+
+            CREATE OR REPLACE FUNCTION hak_einvoice_outbox_key_frozen() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+              IF OLD.idempotency_key IS DISTINCT FROM NEW.idempotency_key OR OLD.document_id IS DISTINCT FROM NEW.document_id OR OLD.company_id IS DISTINCT FROM NEW.company_id THEN
+                RAISE EXCEPTION 'LEDGER_IMMUTABLE';
+              END IF;
+              RETURN NEW;
+            END $$;
+            CREATE TRIGGER trg_einvoice_outbox_key_frozen BEFORE UPDATE ON e_invoice_outbox FOR EACH ROW EXECUTE FUNCTION hak_einvoice_outbox_key_frozen();
+            """;
+    }
+
+    public static IEnumerable<string> EvidenceDownStatements()
+    {
+        foreach (var t in EvidenceAppendOnly) yield return $"DROP TRIGGER IF EXISTS trg_{t}_append_only ON {t};";
+        foreach (var t in EvidenceNoDelete) yield return $"DROP TRIGGER IF EXISTS trg_{t}_no_delete ON {t};";
+        yield return "DROP TRIGGER IF EXISTS trg_einvoice_documents_no_reopen ON e_invoice_documents;";
+        yield return "DROP TRIGGER IF EXISTS trg_einvoice_outbox_key_frozen ON e_invoice_outbox;";
+        yield return "DROP FUNCTION IF EXISTS hak_einvoice_no_reopen();";
+        yield return "DROP FUNCTION IF EXISTS hak_einvoice_outbox_key_frozen();";
+    }
+
     public static IEnumerable<string> EInvoiceDownStatements()
     {
         yield return "DROP TRIGGER IF EXISTS trg_einvoice_messages_append_only ON e_invoice_messages;";

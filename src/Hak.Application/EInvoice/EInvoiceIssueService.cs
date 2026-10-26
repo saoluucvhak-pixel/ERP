@@ -32,6 +32,8 @@ public sealed record ProcessResult(int Dispatched, int Issued, int Rejected, int
 public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoices, IEInvoiceProvider provider, AuditService audit, IClock clock, EInvoiceOptions options)
 {
     private static string Norm(string? v) => (v ?? "").Replace(" ", "").Trim();
+    /// <summary>Thời gian tối đa chờ một lần gọi nhà cung cấp; quá hạn là lỗi tạm thời (kết quả chưa rõ), gửi lại cùng khóa.</summary>
+    private static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(60);
     private static TimeSpan Backoff(int attempts) => TimeSpan.FromSeconds(Math.Min(900, 15 * Math.Pow(2, Math.Max(0, attempts - 1))));
 
     // ------------------------------------------------------------------ phát hành
@@ -116,8 +118,12 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         int issued = 0, rejected = 0, pending = 0;
         foreach (var id in due)
         {
-            var v = await DispatchAsync(ctx, id);
-            if (v.Status == nameof(EInvoiceDocStatus.Issued)) issued++; else if (v.Status == nameof(EInvoiceDocStatus.Rejected)) rejected++; else pending++;
+            try
+            {
+                var v = await DispatchAsync(ctx, id);
+                if (v.Status == nameof(EInvoiceDocStatus.Issued)) issued++; else if (v.Status == nameof(EInvoiceDocStatus.Rejected)) rejected++; else pending++;
+            }
+            catch (DomainException ex) { await DeferAsync(ctx.CompanyId, id, ex.Message); pending++; }   // một lệnh hỏng không chặn các lệnh sau
         }
         return new ProcessResult(due.Count, issued, rejected, pending);
     }
@@ -129,7 +135,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         var rows = await (from o in db.EInvoiceOutbox.AsNoTracking()
                           join d in db.EInvoiceDocuments.AsNoTracking() on o.DocumentId equals d.Id
                           where o.State == EInvoiceOutboxState.Pending && d.Status == EInvoiceDocStatus.Issuing && (o.NextAttemptAt == null || o.NextAttemptAt <= now)
-                          orderby o.CreatedAt
+                          orderby o.NextAttemptAt, o.CreatedAt
                           select new { o.CompanyId, o.DocumentId, d.RequestedBy }).Take(50).ToListAsync();
         return rows.Select(r => (r.CompanyId, r.DocumentId, r.RequestedBy)).Distinct().ToList();
     }
@@ -145,9 +151,16 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
     {
         var (doc, outbox, request) = await BuildRequestAsync(ctx, documentId);
         if (doc.Status != EInvoiceDocStatus.Issuing || outbox is null) return await ViewAsync(ctx, documentId);
+        // Hóa đơn ERP đã hủy / đã ghi sổ thì không gửi nhà cung cấp nữa (kể cả lệnh còn nằm trong hàng đợi): đóng lệnh thay vì phát hành hóa đơn không có bút toán.
+        if (doc.InvoiceId is { } linked && await db.CommercialInvoices.AsNoTracking().AnyAsync(i => i.Id == linked && i.Status != InvoiceStatus.Draft))
+        {
+            await CloseOrphanedAsync(ctx, doc, outbox);
+            return await ViewAsync(ctx, documentId);
+        }
         ProviderIssueResult result;
-        try { result = await provider.IssueAsync(request); }
-        catch (EInvoiceTransientException ex)
+        try { result = await provider.IssueAsync(request).WaitAsync(ProviderTimeout); }
+        // Mọi lỗi ngoài DomainException (mạng, hết thời gian, JSON…) đều là "chưa rõ kết quả": giữ lệnh, gửi lại với CÙNG khóa chống trùng sau một khoảng lùi.
+        catch (Exception ex) when (ex is not DomainException)
         {
             await db.InTransactionAsync(async () =>
             {

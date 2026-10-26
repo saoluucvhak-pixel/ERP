@@ -101,6 +101,8 @@ export function supportsSafeRetry(path: string): boolean {
     const decoded = decodeURIComponent(path.split('?')[0])
     if (decoded.includes('\\') || decoded.startsWith('//')) return false
     const p = new URL(decoded, 'https://hak.invalid').pathname.toLowerCase()
+    // Match IdempotencyMiddleware.CallsExternalProvider: calls to the e-invoice provider run outside the idempotency transaction.
+    if (/^\/einvoice\/(.*\/)?(issue|retry|process-pending|adjust-information|send)\/?$/.test(p)) return false
     return !['/auth', '/setup', '/backups', '/admin/backups', '/admin/users', '/me', '/exchange/keys']
       .some(prefix => p === prefix || p.startsWith(prefix + '/') || ['/backups', '/admin/backups', '/admin/users', '/exchange/keys'].includes(prefix) && p.startsWith(prefix))
   } catch { return false }

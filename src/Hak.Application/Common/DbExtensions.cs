@@ -23,7 +23,7 @@ public static class DbExtensions
     /// </summary>
     public static async Task<T> InTransactionAsync<T>(this HakDbContext db, Func<Task<T>> work)
     {
-        if (db.Database.CurrentTransaction is not null) return await work();
+        if (db.Database.CurrentTransaction is { } outer) return await InSavepointAsync(db, outer, work);
         for (var attempt = 1; ; attempt++)
         {
             var postgres = db.Database.IsNpgsql();
@@ -48,6 +48,30 @@ public static class DbExtensions
                 }
                 throw Map(ex);
             }
+        }
+    }
+
+    /// <summary>
+    /// Đơn vị công việc lồng trong một giao dịch có sẵn (ví dụ yêu cầu có Idempotency-Key): nếu lỗi thì quay về savepoint và xóa bộ theo dõi, đúng như khi chạy
+    /// một mình — nếu không, phần đã ghi dở của bước lỗi vẫn bị commit cùng giao dịch ngoài khi người gọi bắt lỗi rồi đi tiếp. Lỗi vẫn ném lại nguyên dạng
+    /// (giao dịch ngoài tự ánh xạ và quyết định rollback toàn bộ). Thay đổi đang chờ của giao dịch ngoài được ghi xuống trước savepoint để không bị xóa theo.
+    /// </summary>
+    private static async Task<T> InSavepointAsync<T>(HakDbContext db, Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction tx, Func<Task<T>> work)
+    {
+        if (db.ChangeTracker.HasChanges()) await db.SaveChangesAsync();
+        var name = "hak_sp_" + Guid.NewGuid().ToString("N");
+        await tx.CreateSavepointAsync(name);
+        try
+        {
+            var result = await work();
+            await tx.ReleaseSavepointAsync(name);
+            return result;
+        }
+        catch
+        {
+            try { await tx.RollbackToSavepointAsync(name); } catch { /* giao dịch ngoài đã hỏng: nó sẽ tự rollback */ }
+            db.ChangeTracker.Clear();
+            throw;
         }
     }
 
