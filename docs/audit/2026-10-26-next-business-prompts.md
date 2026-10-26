@@ -1,6 +1,6 @@
 # Prompt triển khai các phần nghiệp vụ tiếp theo
 
-Các mục dưới đây là thiết kế và tiêu chí kiểm thử, chưa phải tính năng đã hoàn thành. Đọc cùng `2026-10-26-discount-lifecycle.md`. Giữ nguyên snapshot/lịch sử đã ghi sổ; không gỡ chặn nghiệp vụ chỉ để làm thao tác chạy qua.
+Phạm vi lõi của hai mục đã được triển khai ở đợt Phase28; xem `2026-10-26-rebate-amendments-fx-replacement.md` để biết hành vi thực tế, kiểm thử và các trường hợp nâng cao còn chặn. Nội dung bên dưới được giữ làm tiêu chí thiết kế/nghiệm thu, không có nghĩa mọi trường hợp nâng cao đã hỗ trợ. Giữ nguyên snapshot/lịch sử đã ghi sổ; không gỡ chặn nghiệp vụ chỉ để làm thao tác chạy qua.
 
 ## 1. Quyết toán CKTM bổ sung / thu hồi
 

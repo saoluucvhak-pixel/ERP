@@ -1,12 +1,20 @@
 # STATUS — theo Definition of Done (master prompt §48)
 
+## Bổ sung 26/10/2026 — Phase28: CKTM bổ sung/thu hồi và thay thế ngoại tệ
+
+`AWAITING_REAL_DATA_VALIDATION` — code/UI và toàn bộ kiểm thử tự động bản cuối đã đạt. Đã triển khai code/API/UI và migration SQLite/PostgreSQL cho chuỗi run bổ sung/thu hồi, snapshot quyền lợi lũy kế, hash nguồn/phiên bản, ghi sổ đúng tài khoản, giữ lịch sử, kiểm tra ngày và thứ tự đảo/hủy. Đã có kế hoạch/chuyển phân bổ ngoại tệ theo cả nguyên tệ và giá trị ghi sổ, phần thừa chưa phân bổ, không ghi lại dòng tiền/FX; lỗi DB sau phát hành giữ PostError để phục hồi.
+
+Đã đạt **20/20 ca nghiệp vụ mới**, **17/17 E2E trên cùng bộ API binary kiểm thử**, **77/77 frontend**, build đạt, lint không có lỗi. Model cả hai provider khớp migration và sinh SQL PostgreSQL thành công. Backend toàn bộ **561/561** (126 domain + 435 SQLite), gồm 20 ca nghiệp vụ mới; nâng/hạ/nâng phiên bản giữ dữ liệu đạt. Dữ liệu thử độc lập, không dùng DB thật.
+
+Mở CKTM → **Bổ sung / Thu hồi**, hoặc hóa đơn thay thế nháp → **Phân bổ thay thế**. Phạm vi, ví dụ, migration và các trường hợp nâng cao còn chặn: `docs/audit/2026-10-26-rebate-amendments-fx-replacement.md`. Chưa xác nhận PostgreSQL chạy thật, dữ liệu doanh nghiệp hay NCC/chữ ký số thật; không đánh dấu DONE. Nội dung các đợt bên dưới là lịch sử tại thời điểm kiểm tra.
+
 ## Bổ sung 26/10/2026 — quyền sở hữu thao tác chờ
 
 `AWAITING_REAL_DATA_VALIDATION`: sửa retry phía web sau main PR #65. Đăng xuất/đổi token không chuyển yêu cầu cũ sang phiên mới; đổi công ty dừng tự gửi; tải lại cùng phiên giữ đúng khóa và nội dung; không lưu yêu cầu chứa mật khẩu/quản trị/sao lưu vào hàng chờ. Có nhắc nhở đối chiếu khi không thể chứng minh quyền replay. Không sửa sổ/migration database.
 
 Kiểm chứng: **77/77 frontend**, **15/15 E2E**, build đạt; lint **0 lỗi, 25 cảnh báo cũ**. Backend **541/541** (126 domain + 415 SQLite), chạy lại toàn bộ đạt. E2E mới chứng minh server đã commit một đối tượng, mất phản hồi, đổi tài khoản và reload vẫn chỉ có một bản ghi. Chi tiết: `docs/audit/2026-10-26-retry-ownership.md`.
 
-Chưa triển khai CKTM bổ sung/thu hồi và tự chuyển phân bổ ngoại tệ khi thay thế. Đã chuẩn bị prompt và ca nghiệm thu trong `docs/audit/2026-10-26-next-business-prompts.md`; không tính tài liệu thiết kế là tính năng đã hoàn thành. Chưa đối chiếu dữ liệu thật, PostgreSQL thực hoặc NCC HĐĐT thật trong đợt này. Phần bảng bên dưới giữ các mốc lịch sử.
+Tại đợt retry, CKTM bổ sung/thu hồi và chuyển phân bổ ngoại tệ mới là prompt. Hai phần lõi đã được triển khai ở Phase28 bên trên; các giới hạn nâng cao được ghi rõ, không tính tài liệu thiết kế là tính năng đã hoàn thành. Phần bảng bên dưới giữ các mốc lịch sử.
 
 Cập nhật: 24/10/2026 (rà soát GitHub R01–R06 và các mục kiểm soát nghiệp vụ — xem `docs/audit/BUG_REGISTER.md`, mục "Đợt rà soát 24/10/2026"; trước đó 20/10/2026 rà soát bảo mật/CI; phần chức năng còn ghi theo mốc 14/10/2026, Giai đoạn 3 — Kho, tính giá xuất kho, MT/BDMT dăm gỗ, hóa đơn mua/bán). Chưa chức năng nào đạt **DONE**: chưa đối chiếu dữ liệu thực và chưa có chế độ kế toán TT 99 đã xác minh; tài liệu hướng dẫn người dùng cuối chưa viết.
 

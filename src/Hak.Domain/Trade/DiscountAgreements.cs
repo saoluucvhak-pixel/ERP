@@ -36,8 +36,8 @@ public sealed class DiscountAgreementTier
 }
 
 /// <summary>
-/// Một lần quyết toán thỏa thuận: tổng doanh số, bậc đạt, số chiết khấu và các hóa đơn điều chỉnh nháp đã sinh. Mỗi thỏa thuận chỉ có một lần quyết toán còn hiệu lực
-/// (chỉ mục duy nhất trên các bản ghi chưa hủy); hủy được khi chưa hóa đơn điều chỉnh nào đã ghi sổ.
+/// Một lần quyết toán: run gốc lưu quyền lợi ban đầu; run con lưu chênh lệch và tham chiếu lần trước. Một gốc hiệu lực và một con hiệu lực cho mỗi cha.
+/// Hủy được sau khi đảo toàn bộ hóa đơn đã ghi sổ và hủy lần phụ thuộc phía sau; không xóa lịch sử hoặc thay snapshot đã chốt.
 /// </summary>
 public enum DiscountAccrualSettlementMode { LegacyReversal = 0, PerInvoice = 1 }
 
@@ -46,6 +46,10 @@ public sealed class DiscountAgreementRun
     public Guid Id { get; set; }
     public Guid CompanyId { get; set; }
     public Guid AgreementId { get; set; }
+    /// <summary>Previous effective run; null is the original settlement. Financial snapshots are never overwritten.</summary>
+    public Guid? ParentRunId { get; set; }
+    public int Sequence { get; set; }
+    public string? AmendmentReason { get; set; }
     public decimal EligibleSales { get; set; }
     public decimal Percent { get; set; }
     public decimal Amount { get; set; }
@@ -108,4 +112,3 @@ public sealed class DiscountAccrual
     public DateTime CreatedAt { get; set; }
     public Guid CreatedBy { get; set; }
 }
-

@@ -82,7 +82,7 @@ public sealed partial class DiscountAgreementService
         {
             var a = await LoadAsync(ctx, agreementId);
             RowVersionCheck.Require(a.RowVersion, expectedRowVersion, $"Thỏa thuận {a.Code}");
-            var run = await db.DiscountAgreementRuns.AsNoTracking().FirstOrDefaultAsync(r => r.CompanyId == ctx.CompanyId && r.AgreementId == a.Id && r.VoidedAt == null)
+            var run = await db.DiscountAgreementRuns.AsNoTracking().FirstOrDefaultAsync(r => r.CompanyId == ctx.CompanyId && r.AgreementId == a.Id && r.VoidedAt == null && r.ParentRunId == null)
                 ?? throw new DomainException(ErrorCodes.NotFound, "Chưa có quyết toán còn hiệu lực.");
             if (run.VoucherId is not { } voucherId || run.RecognitionAccountId is null)
                 throw new DomainException(ErrorCodes.InvalidStateTransition, "Chỉ liên kết vào quyết toán bằng chứng từ có dữ liệu nguồn và tài khoản đã lưu.");
@@ -134,6 +134,8 @@ public sealed partial class DiscountAgreementService
         var link = await database.DiscountSettlementInvoiceLinks.AsNoTracking().FirstOrDefaultAsync(l => l.AdjustmentInvoiceId == invoice.Id);
         if (allocation is null && link is null)
         {
+            if (invoice.Purpose == InvoicePurpose.Increase && invoice.AdjustmentReason == InvoiceAdjustmentReason.CommercialRebate)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, "Thu hồi CKTM phải được tạo từ quyết toán bổ sung/thu hồi có nguồn đã duyệt.");
             if (invoice.Purpose == InvoicePurpose.Discount && invoice.DiscountKind == DiscountKind.Trade && invoice.AdjustsInvoiceId is { } originalId)
             {
                 var runs = await (from r in database.DiscountAgreementRuns.AsNoTracking() join a in database.DiscountAgreements.AsNoTracking() on r.AgreementId equals a.Id
@@ -154,11 +156,12 @@ public sealed partial class DiscountAgreementService
         var run = await database.DiscountAgreementRuns.AsNoTracking().FirstAsync(r => r.Id == runId && r.CompanyId == invoice.CompanyId);
         if (run.VoidedAt is not null) throw new DomainException(ErrorCodes.InvalidStateTransition, "Quyết toán nguồn đã hủy.");
         var snapshot = ReadSnapshot(run) ?? throw new DomainException(ErrorCodes.ValidationFailed, "Quyết toán thiếu bảng kê nguồn; không tự suy phần bù trừ.");
-        var source = snapshot.Sources.SingleOrDefault(s => s.InvoiceId == invoice.AdjustsInvoiceId);
+        var source = snapshot.Sources.SingleOrDefault(s => s.InvoiceId == invoice.AdjustsInvoiceId && s.Purpose == invoice.Purpose);
         var amount = invoice.Lines.Sum(l => l.FunctionalAmount);
         var expectedAmount = allocation?.Amount ?? link!.Amount;
-        if (invoice.Purpose != InvoicePurpose.Discount || invoice.DiscountKind != DiscountKind.Trade || invoice.PartnerId != snapshot.Policy.PartnerId
-            || invoice.Kind != snapshot.Policy.Kind || source is null || amount != expectedAmount || invoice.Currency != source.Currency
+        var clawback = run.ParentRunId != null && expectedAmount < 0 && invoice.Purpose == InvoicePurpose.Increase && invoice.AdjustmentReason == InvoiceAdjustmentReason.CommercialRebate;
+        if ((!clawback && (invoice.Purpose != InvoicePurpose.Discount || invoice.DiscountKind != DiscountKind.Trade)) || invoice.PartnerId != snapshot.Policy.PartnerId
+            || invoice.Kind != snapshot.Policy.Kind || source is null || amount != Math.Abs(expectedAmount) || invoice.Currency != source.Currency
             || invoice.ExchangeRate != source.ExchangeRate || invoice.Lines.Any(l => !source.Lines.Any(s => s.LineNo == l.AdjustsLineNo && s.VatRate == l.VatRate)))
             throw new DomainException(ErrorCodes.ValidationFailed, "Hóa đơn không còn khớp nguồn quyết toán đã lưu; hủy nháp sai và lập lại.");
         foreach (var line in invoice.Lines)
@@ -173,6 +176,14 @@ public sealed partial class DiscountAgreementService
             foreach (var l in source.Lines)
                 if (invoice.Lines.Where(i => i.AdjustsLineNo == l.LineNo).Sum(i => i.Amount) != l.Amount)
                     throw new DomainException(ErrorCodes.ValidationFailed, "Dòng hóa đơn bị đổi so với phân bổ quyết toán.");
+            if (run.ParentRunId != null)
+            {
+                if (invoice.Kind == InvoiceKind.Purchase) await CheckAmendmentPurchaseDestinationsAsync(database, invoice.CompanyId, [invoice.AdjustsInvoiceId!.Value]);
+                if (allocation.Amount > 0 && await (from ri in database.DiscountAgreementRunInvoices join i in database.CommercialInvoices on ri.AdjustmentInvoiceId equals i.Id
+                    where ri.RunId == run.Id && ri.Amount < 0 && i.Status != InvoiceStatus.Posted select i.Id).AnyAsync())
+                    throw new DomainException(ErrorCodes.InvalidStateTransition, "Ghi sổ hóa đơn thu hồi của lần này trước phần bổ sung để không cấp vượt quyền lợi còn lại.");
+                return new(0, 0, run.RecognitionAccountId, null); // Accrual was consumed by the original run, never clear it twice.
+            }
             if (run.AccrualSettlementMode != DiscountAccrualSettlementMode.PerInvoice) return null; // Existing runs retain their original reversal workflow.
             var postedAccrual = (await (from a in database.DiscountAccruals.AsNoTracking() join v in database.Vouchers.AsNoTracking() on a.VoucherId equals v.Id
                                        where a.AgreementId == run.AgreementId && v.Status == VoucherStatus.Posted select a.Adjustment).ToListAsync()).Sum();
@@ -210,6 +221,14 @@ public sealed partial class DiscountAgreementService
 
     internal static async Task CheckReversalAllowedAsync(HakDbContext database, Voucher voucher)
     {
+        var clawbackRuns = await (from ri in database.DiscountAgreementRunInvoices join i in database.CommercialInvoices on ri.AdjustmentInvoiceId equals i.Id where i.VoucherId == voucher.Id && ri.Amount < 0 select ri.RunId).ToListAsync();
+        if (await (from ri in database.DiscountAgreementRunInvoices join i in database.CommercialInvoices on ri.AdjustmentInvoiceId equals i.Id where clawbackRuns.Contains(ri.RunId) && ri.Amount > 0 && i.Status == InvoiceStatus.Posted select i.Id).AnyAsync())
+            throw new DomainException(ErrorCodes.InvalidStateTransition, "Đảo phần bổ sung cùng lần trước khi đảo phần thu hồi.");
+        var sourceRuns = await database.DiscountAgreementRuns.Where(r => r.VoucherId == voucher.Id).Select(r => r.Id)
+            .Concat(from ri in database.DiscountAgreementRunInvoices join i in database.CommercialInvoices on ri.AdjustmentInvoiceId equals i.Id where i.VoucherId == voucher.Id select ri.RunId)
+            .Concat(from ri in database.DiscountSettlementInvoiceLinks join i in database.CommercialInvoices on ri.AdjustmentInvoiceId equals i.Id where i.VoucherId == voucher.Id select ri.RunId).ToListAsync();
+        if (await database.DiscountAgreementRuns.AnyAsync(r => r.ParentRunId != null && sourceRuns.Contains(r.ParentRunId.Value) && r.VoidedAt == null))
+            throw new DomainException(ErrorCodes.InvalidStateTransition, "Có quyết toán bổ sung/thu hồi phụ thuộc: đảo và hủy lần phía sau trước, không thay đổi nguồn đã chốt.");
         if (voucher.SourceSystem == VoucherSource)
         {
             var issuing = await (from l in database.DiscountSettlementInvoiceLinks join r in database.DiscountAgreementRuns on l.RunId equals r.Id
@@ -236,11 +255,11 @@ public sealed partial class DiscountAgreementService
         }
     }
 
-    public async Task<DiscountLifecycle> LifecycleAsync(SessionContext ctx, Guid agreementId)
+    public async Task<DiscountLifecycle> LifecycleAsync(SessionContext ctx, Guid agreementId, Guid? runId = null)
     {
         ctx.Require(Permissions.ReportView);
         var a = await LoadAsync(ctx, agreementId);
-        var run = await db.DiscountAgreementRuns.AsNoTracking().Include(r => r.Invoices).FirstOrDefaultAsync(r => r.CompanyId == ctx.CompanyId && r.AgreementId == a.Id && r.VoidedAt == null)
+        var run = await db.DiscountAgreementRuns.AsNoTracking().Include(r => r.Invoices).FirstOrDefaultAsync(r => r.CompanyId == ctx.CompanyId && r.AgreementId == a.Id && (runId != null ? r.Id == runId : r.ParentRunId == null && r.VoidedAt == null))
             ?? throw new DomainException(ErrorCodes.NotFound, "Thỏa thuận chưa quyết toán.");
         var snapshot = ReadSnapshot(run);
         var links = await db.DiscountSettlementInvoiceLinks.AsNoTracking().Where(l => l.RunId == run.Id).ToListAsync();
@@ -260,7 +279,7 @@ public sealed partial class DiscountAgreementService
                 && e.SellerTaxCode == (a.Kind == InvoiceKind.Sales ? ownTax : partnerTax)
                 && (a.Kind != InvoiceKind.Sales || e.BuyerTaxCode is null || e.BuyerTaxCode == partnerTax)
                 && e.RelatedSeries == original.InvoiceSeries && e.RelatedNumber == original.InvoiceNo
-                && EInvoiceAmounts.SignedAdjustment(e) is { } signed && signed.Amount == -invoice.Lines.Sum(l => l.FunctionalAmount) && signed.Vat == -invoice.Lines.Sum(l => l.VatAmount)
+                && EInvoiceAmounts.SignedAdjustment(e) is { } signed && signed.Amount == (invoice.Purpose == InvoicePurpose.Increase ? 1 : -1) * invoice.Lines.Sum(l => l.FunctionalAmount) && signed.Vat == (invoice.Purpose == InvoicePurpose.Increase ? 1 : -1) * invoice.Lines.Sum(l => l.VatAmount)
                 && (statusChanges.Where(s => s.EInvoiceId == e.Id).OrderBy(s => s.At).LastOrDefault()?.NewStatus ?? e.Status) == EInvoiceStatus.Adjustment);
         }
         var progress = invoices.Select(i => new DiscountInvoiceProgress(i.Id, i.Number, i.InvoiceSeries, i.InvoiceNo, i.Status.ToString(),
@@ -271,9 +290,12 @@ public sealed partial class DiscountAgreementService
         var posted = progress.Where(i => i.Status == nameof(InvoiceStatus.Posted)).Sum(i => i.Amount);
         var legal = progress.Where(i => i.Status is not (nameof(InvoiceStatus.Cancelled) or nameof(InvoiceStatus.Reversed)) && i.HasLegalEvidence).Sum(i => i.Amount);
         var voucherStatus = run.VoucherId is { } vid ? (await db.Vouchers.AsNoTracking().FirstAsync(v => v.Id == vid)).Status : (VoucherStatus?)null;
-        var accounting = run.VoucherId is not null ? voucherStatus.ToString()! : posted == run.Amount ? "Posted" : posted > 0 ? "Partial" : "Draft";
-        var legalStatus = legal == run.Amount ? "Complete" : legal > 0 ? "Partial" : "Missing";
-        var taxStatus = posted == run.Amount && legal == run.Amount
+        var coverage = progress.Where(i => i.Status == nameof(InvoiceStatus.Posted)).Sum(i => Math.Abs(i.Amount));
+        var requiredCoverage = snapshot?.Sources.Sum(s => s.Lines.Sum(l => MoneyMath.Convert(l.Amount, s.ExchangeRate ?? 1, snapshot.FunctionalDecimalPlaces))) ?? Math.Abs(run.Amount);
+        var legalCoverage = progress.Where(i => i.Status is not (nameof(InvoiceStatus.Cancelled) or nameof(InvoiceStatus.Reversed)) && i.HasLegalEvidence).Sum(i => Math.Abs(i.Amount));
+        var accounting = run.VoidedAt != null ? "Cancelled" : run.VoucherId is not null ? voucherStatus.ToString()! : coverage == requiredCoverage && progress.Count > 0 && progress.All(i => i.Status == nameof(InvoiceStatus.Posted)) ? "Posted" : coverage > 0 ? "Partial" : "Draft";
+        var legalStatus = legalCoverage == requiredCoverage && progress.Count > 0 ? "Complete" : legalCoverage > 0 ? "Partial" : "Missing";
+        var taxStatus = run.VoidedAt == null && coverage == requiredCoverage && legalStatus == "Complete"
             ? a.Kind == InvoiceKind.Purchase && progress.Any(i => i.Status == nameof(InvoiceStatus.Posted) && i.ReceivedDate is null) ? "PendingReceiptDate" : "ReadyForReview"
             : "PendingInvoice";
         var settlement = snapshot is null ? "LegacyReview" : accounting == "Posted" && taxStatus == "ReadyForReview" ? "ReadyForTaxReview"

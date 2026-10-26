@@ -19,7 +19,7 @@ public static class TradeEndpoints
     private static object Dto(CommercialInvoice i) => new
     {
         i.Id, i.Number, kind = i.Kind.ToString(), purpose = i.Purpose.ToString(), discountKind = i.DiscountKind?.ToString(), i.AdjustsInvoiceId, adjustmentReason = i.AdjustmentReason.ToString(), i.InvoiceSeries, i.InvoiceNo, i.InvoiceDate, i.PostingDate, i.DueDate, i.PartnerId, i.Currency, i.ExchangeRate,
-        i.Description, status = i.Status.ToString(), i.VoucherId, i.CreatedBy, i.RowVersion,
+        i.Description, status = i.Status.ToString(), i.VoucherId, i.CreatedBy, i.RowVersion, i.ReplacesInvoiceId,
         total = i.Lines.Sum(l => l.FunctionalAmount), vat = i.Lines.Sum(l => l.VatAmount), tradeDiscount = i.Lines.Sum(l => l.FunctionalDiscountAmount),
         lines = i.Lines.OrderBy(l => l.LineNo).Select(l => new
         {
@@ -88,6 +88,7 @@ public static class TradeEndpoints
             return Results.Ok(Dto(inv));
         });
         api.MapGet("/invoices/{id:guid}/price-differences", async (HttpContext http, Guid id, InvoiceService s) => Results.Ok(await s.PriceDifferencesAsync(await http.SessionAsync(), id)));
+        api.MapGet("/invoices/{id:guid}/replacement-allocations", async (HttpContext http, Guid id, InvoiceService s) => Results.Ok(await s.ReplacementAllocationsAsync(await http.SessionAsync(), id)));
         api.MapPost("/invoices/{id:guid}/post", async (HttpContext http, Guid id, long rowVersion, bool? acknowledgePriceDifferences, InvoiceService s) =>   // rowVersion bắt buộc: thiếu → 400, cũ → 409
             Results.Ok(Dto(await s.PostAsync(await http.SessionAsync(), id, acknowledgePriceDifferences ?? false, rowVersion))));
         api.MapPost("/invoices/{id:guid}/cancel", async (HttpContext http, Guid id, long rowVersion, ReasonRequest r, InvoiceService s) => Results.Ok(Dto(await s.CancelAsync(await http.SessionAsync(), id, r.Reason, rowVersion))));

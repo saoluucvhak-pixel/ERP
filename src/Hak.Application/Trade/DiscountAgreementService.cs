@@ -33,17 +33,17 @@ public sealed record AgreementPreview(Guid AgreementId, decimal EligibleSales, d
 /// Chiết khấu thương mại theo doanh số cuối kỳ (rebate): thỏa thuận có bậc, tính trên doanh số hàng chưa thuế (tiền hạch toán) của hóa đơn thường đã ghi sổ trong khoảng ngày, trừ hàng trả lại / giảm giá đã ghi sổ.
 /// Hóa đơn ngoại tệ tính doanh số theo tiền hạch toán nhưng chiết khấu từng dòng theo tiền của hóa đơn (và tỷ giá của chính nó). Quyết toán sinh hóa đơn điều chỉnh giảm NHÁP (loại chiết khấu thương mại) cho từng hóa đơn gốc, chia theo tỷ lệ doanh số và theo từng dòng
 /// để thuế GTGT giảm đúng thuế suất của dòng; ghi sổ hóa đơn do người có quyền ghi sổ làm như mọi điều chỉnh khác (bên bán: Nợ chiết khấu thương mại; bên mua: giảm hàng tồn kho / giá vốn).
-/// Mỗi thỏa thuận chỉ có một lần quyết toán còn hiệu lực. Lập / sửa thỏa thuận là hành vi của người có thẩm quyền duyệt nên cần quyền duyệt chứng từ.
+/// Mỗi thỏa thuận có một quyết toán gốc hiệu lực; bổ sung/thu hồi nối chuỗi có snapshot riêng. Lập / sửa điều khoản cần quyền duyệt chứng từ.
 /// </summary>
 public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceService invoices, AuditService audit, IClock clock, AccountingEngine? engine = null)
 {
     private static string Norm(string s) => s.Trim();
 
     private sealed record SourceLineAllocation(int LineNo, decimal Amount, decimal? VatRate, decimal OriginalFunctionalAmount);
-    private sealed record SourceAllocation(Guid InvoiceId, string? Currency, decimal? ExchangeRate, int DecimalPlaces, IReadOnlyList<SourceLineAllocation> Lines);
+    private sealed record SourceAllocation(Guid InvoiceId, string? Currency, decimal? ExchangeRate, int DecimalPlaces, IReadOnlyList<SourceLineAllocation> Lines, InvoicePurpose Purpose = InvoicePurpose.Discount);
     private sealed record FrozenAccountingLine(Guid AccountId, Side Side, decimal Amount, Guid? PartnerId, Guid? SettleJournalLineId = null);
     private sealed record SettlementSnapshot(int Version, int FunctionalDecimalPlaces, AgreementStatement Statement, AgreementPreview Preview, AgreementInput Policy, IReadOnlyList<SourceAllocation> Sources,
-        DateOnly? VoucherPostingDate = null, IReadOnlyList<FrozenAccountingLine>? AccountingLines = null);
+        DateOnly? VoucherPostingDate = null, IReadOnlyList<FrozenAccountingLine>? AccountingLines = null, IReadOnlyList<SourceAllocation>? TargetSources = null);
 
     private async Task CaptureSnapshotAsync(SessionContext ctx, DiscountAgreement a, Plan plan, DiscountAgreementRun run)
     {
@@ -72,7 +72,7 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
         ctx.Require(Permissions.ReportView);
         var list = await db.DiscountAgreements.AsNoTracking().Include(a => a.Tiers).Where(a => a.CompanyId == ctx.CompanyId && a.Kind == kind).OrderByDescending(a => a.FromDate).ThenBy(a => a.Code).ToListAsync();
         var partners = await db.BusinessPartners.AsNoTracking().Where(p => p.CompanyId == ctx.CompanyId).ToDictionaryAsync(p => p.Id);
-        var runs = await db.DiscountAgreementRuns.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && r.VoidedAt == null).ToDictionaryAsync(r => r.AgreementId);
+        var runs = await db.DiscountAgreementRuns.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && r.VoidedAt == null && r.ParentRunId == null).ToDictionaryAsync(r => r.AgreementId);
         return list.Select(a => new AgreementView(a.Id, a.Kind, a.PartnerId, partners[a.PartnerId].Code, partners[a.PartnerId].Name, a.Code, a.Name, a.FromDate, a.ToDate, a.IsActive, a.RowVersion,
             a.Tiers.OrderBy(t => t.Threshold).Select(t => new AgreementTierInput(t.Threshold, t.Percent)).ToList(), runs.GetValueOrDefault(a.Id)?.Id, runs.GetValueOrDefault(a.Id)?.Amount, a.Progressive)).ToList();
     }
@@ -169,7 +169,8 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
             .OrderBy(i => i.PostingDate).ThenBy(i => i.Number).ToListAsync();
         var ids = invs.Select(i => i.Id).ToList();
         // Điều chỉnh giảm / trả hàng đã có (bỏ các hóa đơn thuộc lần quyết toán còn hiệu lực của chính thỏa thuận này để xem lại số liệu sau khi quyết toán vẫn ổn định).
-        var own = await db.DiscountAgreementRunInvoices.AsNoTracking().Where(r => db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.AgreementId == a.Id && x.VoidedAt == null)).Select(r => r.AdjustmentInvoiceId).ToListAsync();
+        var own = await db.DiscountAgreementRunInvoices.AsNoTracking().Where(r => db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.AgreementId == a.Id && x.VoidedAt == null)).Select(r => r.AdjustmentInvoiceId)
+            .Concat(db.DiscountSettlementInvoiceLinks.Where(r => db.DiscountAgreementRuns.Any(x => x.Id == r.RunId && x.AgreementId == a.Id && x.VoidedAt == null)).Select(r => r.AdjustmentInvoiceId)).ToListAsync();
         var adj = await (from l in db.CommercialInvoiceLines.AsNoTracking()
                          join i in db.CommercialInvoices.AsNoTracking() on l.InvoiceId equals i.Id
                          where i.CompanyId == ctx.CompanyId && i.AdjustsInvoiceId != null && ids.Contains(i.AdjustsInvoiceId.Value) && !own.Contains(i.Id)
@@ -261,7 +262,7 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
     {
         ctx.Require(Permissions.ReportView);
         var a = await LoadAsync(ctx, id);
-        var run = await db.DiscountAgreementRuns.AsNoTracking().FirstOrDefaultAsync(r => r.AgreementId == id && r.VoidedAt == null);
+        var run = await db.DiscountAgreementRuns.AsNoTracking().FirstOrDefaultAsync(r => r.AgreementId == id && r.VoidedAt == null && r.ParentRunId == null);
         if (run is not null)
             return ReadSnapshot(run)?.Preview ?? new AgreementPreview(id, run.EligibleSales, run.Percent, run.Amount, null, null, true, [], run.AccruedAmount);
         var plan = await PlanAsync(ctx, a);
@@ -275,11 +276,12 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
     /// Bảng kê các hóa đơn gốc được chiết khấu (dùng đính kèm hóa đơn điều chỉnh / chứng từ điều chỉnh giảm — Mẫu 01/BK-ĐCTT theo cách gọi trong Thông tư 91/2026 [CẦN XÁC MINH các cột của mẫu chính thức]).
     /// Mỗi dòng: hóa đơn gốc (ký hiệu, số, ngày), doanh số chưa thuế, số chiết khấu chia cho hóa đơn đó và — nếu đã quyết toán bằng hóa đơn điều chỉnh — hóa đơn điều chỉnh tương ứng với tiền thuế điều chỉnh.
     /// </summary>
-    public async Task<AgreementStatement> StatementAsync(SessionContext ctx, Guid id)
+    public async Task<AgreementStatement> StatementAsync(SessionContext ctx, Guid id, Guid? runId = null)
     {
         ctx.Require(Permissions.ReportView);
         var a = await LoadAsync(ctx, id);
-        var run = await db.DiscountAgreementRuns.AsNoTracking().Include(r => r.Invoices).FirstOrDefaultAsync(r => r.AgreementId == id && r.VoidedAt == null);
+        var run = await db.DiscountAgreementRuns.AsNoTracking().Include(r => r.Invoices).FirstOrDefaultAsync(r => r.AgreementId == id && r.CompanyId == ctx.CompanyId && (runId != null ? r.Id == runId : r.ParentRunId == null && r.VoidedAt == null));
+        if (runId != null && run is null) throw new DomainException(ErrorCodes.NotFound, "Không có lần quyết toán được chọn.");
         if (run is not null)
         {
             var snapshot = ReadSnapshot(run);
@@ -288,10 +290,10 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
                 // Provider-assigned legal identities can arrive after settlement. Financial figures remain frozen.
                 var adjIds = run.Invoices.Select(i => i.AdjustmentInvoiceId).ToList();
                 var identities = await db.CommercialInvoices.AsNoTracking().Where(i => adjIds.Contains(i.Id) && i.CompanyId == ctx.CompanyId)
-                    .ToDictionaryAsync(i => i.AdjustsInvoiceId!.Value);
-                var sourceIds = snapshot.Preview.Invoices.ToDictionary(i => (i.InvoiceSeries, i.InvoiceNo), i => i.InvoiceId);
+                    .ToListAsync();
+                var sourceIds = snapshot.Preview.Invoices.GroupBy(i => (i.InvoiceSeries, i.InvoiceNo)).ToDictionary(g => g.Key, g => g.First().InvoiceId);
                 return snapshot.Statement with { Rows = snapshot.Statement.Rows.Select(r =>
-                    sourceIds.TryGetValue((r.OriginalSeries, r.OriginalNo), out var sourceId) && identities.TryGetValue(sourceId, out var adj)
+                    sourceIds.TryGetValue((r.OriginalSeries, r.OriginalNo), out var sourceId) && identities.FirstOrDefault(i => i.AdjustsInvoiceId == sourceId && i.Purpose == (r.Discount < 0 ? InvoicePurpose.Increase : InvoicePurpose.Discount)) is { } adj
                         ? r with { AdjustmentSeries = adj.InvoiceSeries, AdjustmentNo = adj.InvoiceNo, AdjustmentDate = adj.InvoiceDate } : r).ToList() };
             }
             var partner = await db.BusinessPartners.AsNoTracking().FirstAsync(p => p.Id == a.PartnerId);
@@ -516,15 +518,16 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
         });
     }
 
-    /// <summary>Hủy lần quyết toán để làm lại: hủy các hóa đơn điều chỉnh nháp đã sinh; từ chối nếu có hóa đơn đã ghi sổ (phải đảo hóa đơn đó trước).</summary>
-    public async Task VoidRunAsync(SessionContext ctx, Guid agreementId, string reason)
+    /// <summary>Hủy run được chọn, mặc định run hiệu lực mới nhất. Hủy nháp; đã ghi sổ phải đảo trước; không hủy cha còn con hiệu lực.</summary>
+    public async Task VoidRunAsync(SessionContext ctx, Guid agreementId, string reason, Guid? runId = null)
     {
         ctx.Require(Permissions.InvoiceDocument);
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ValidationFailed, "Phải nhập lý do hủy.");
         await db.InTransactionAsync(async () =>
         {
-            var run = await db.DiscountAgreementRuns.Include(r => r.Invoices).FirstOrDefaultAsync(r => r.AgreementId == agreementId && r.CompanyId == ctx.CompanyId && r.VoidedAt == null)
+            var run = await db.DiscountAgreementRuns.Include(r => r.Invoices).Where(r => r.AgreementId == agreementId && r.CompanyId == ctx.CompanyId && r.VoidedAt == null && (runId == null || r.Id == runId)).OrderByDescending(r => r.Sequence).FirstOrDefaultAsync()
                       ?? throw new DomainException(ErrorCodes.NotFound, "Thỏa thuận chưa quyết toán.");
+            if (await db.DiscountAgreementRuns.AnyAsync(r => r.ParentRunId == run.Id && r.VoidedAt == null)) throw new DomainException(ErrorCodes.InvalidStateTransition, "Hủy lần bổ sung/thu hồi phía sau trước.");
             if (run.VoucherId is { } vid)
             {
                 var vch = await db.Vouchers.AsNoTracking().FirstAsync(x => x.Id == vid);

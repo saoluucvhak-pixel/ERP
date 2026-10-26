@@ -8576,6 +8576,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("agreement_id");
 
+                    b.Property<string>("AmendmentReason")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("amendment_reason");
+
                     b.Property<long>("Amount")
                         .HasColumnType("INTEGER")
                         .HasColumnName("amount");
@@ -8596,6 +8600,10 @@ namespace Hak.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("eligible_sales");
 
+                    b.Property<Guid?>("ParentRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_run_id");
+
                     b.Property<long>("Percent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("percent");
@@ -8603,6 +8611,10 @@ namespace Hak.Data.Migrations
                     b.Property<Guid?>("RecognitionAccountId")
                         .HasColumnType("TEXT")
                         .HasColumnName("recognition_account_id");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
 
                     b.Property<string>("SettlementSnapshot")
                         .HasColumnType("TEXT")
@@ -8626,6 +8638,16 @@ namespace Hak.Data.Migrations
                     b.HasIndex("AgreementId")
                         .IsUnique()
                         .HasDatabaseName("ix_discount_agreement_runs_agreement_id")
+                        .HasFilter("voided_at IS NULL AND parent_run_id IS NULL");
+
+                    b.HasIndex("ParentRunId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_agreement_runs_parent_run_id")
+                        .HasFilter("voided_at IS NULL AND parent_run_id IS NOT NULL");
+
+                    b.HasIndex("AgreementId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ix_discount_agreement_runs_agreement_id_sequence")
                         .HasFilter("voided_at IS NULL");
 
                     b.ToTable("discount_agreement_runs");
@@ -10929,6 +10951,12 @@ namespace Hak.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_discount_agreement_runs_discount_agreements_agreement_id");
+
+                    b.HasOne("Hak.Domain.Trade.DiscountAgreementRun", null)
+                        .WithMany()
+                        .HasForeignKey("ParentRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_discount_agreement_runs_discount_agreement_runs_parent_run_id");
                 });
 
             modelBuilder.Entity("Hak.Domain.Trade.DiscountAgreementRunInvoice", b =>

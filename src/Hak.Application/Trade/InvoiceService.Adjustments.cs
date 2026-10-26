@@ -242,9 +242,11 @@ public sealed partial class InvoiceService
                 if (offset?.AlreadyRecognized > 0) continue; // The voucher already recognized the commercial rebate; this invoice only supplies VAT/legal evidence.
                 // Chiết khấu thương mại dùng TK riêng (vai trò SALES_TRADE_DISCOUNT) nếu công ty đã ánh xạ, nếu chưa thì dùng chung TK giảm giá hàng bán.
                 var trade = inv.DiscountKind == DiscountKind.Trade;
-                var account = trade && roles.TryGetValue("SALES_TRADE_DISCOUNT", out var tradeAccount) ? tradeAccount : Role("SALES_DISCOUNT");
+                var account = offset?.RecognitionAccountId ?? (trade && roles.TryGetValue("SALES_TRADE_DISCOUNT", out var tradeAccount) ? tradeAccount : Role("SALES_DISCOUNT"));
                 gl.Add(new VoucherLineInput(account, Side.Debit, l.FunctionalAmount, Description: l.Description ?? (trade ? "Chiết khấu thương mại" : "Giảm giá hàng bán")));
             }
+            else if (inv.Purpose == InvoicePurpose.Increase && inv.AdjustmentReason == InvoiceAdjustmentReason.CommercialRebate)
+                gl.Add(new VoucherLineInput(offset?.RecognitionAccountId ?? throw new DomainException(ErrorCodes.ValidationFailed, "Thu hồi CKTM phải thuộc một lần quyết toán bổ sung đã duyệt."), Side.Credit, l.FunctionalAmount, Description: "Thu hồi chiết khấu thương mại"));
             else
                 gl.Add(new VoucherLineInput(l.AccountId ?? Role("SALES_REVENUE"), Side.Credit, l.FunctionalAmount, Description: l.Description ?? "Điều chỉnh tăng"));
         }
@@ -394,8 +396,18 @@ public sealed partial class InvoiceService
     }
 
     private async Task<decimal> AdjustedAmountAsync(Guid originalInvoiceId, int originalLineNo, InvoicePurpose purpose, Guid? exclude = null)
-        => (await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
+    {
+        var amount = (await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
                    where i.AdjustsInvoiceId == originalInvoiceId && i.Purpose == purpose && l.AdjustsLineNo == originalLineNo
                          && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted) && i.Id != exclude
                    select l.FunctionalAmount).ToListAsync()).Sum();
+        if (purpose == InvoicePurpose.Discount)
+            amount -= (await (from l in db.CommercialInvoiceLines join i in db.CommercialInvoices on l.InvoiceId equals i.Id
+                              join ri in db.DiscountAgreementRunInvoices on i.Id equals ri.AdjustmentInvoiceId join r in db.DiscountAgreementRuns on ri.RunId equals r.Id
+                              where i.AdjustsInvoiceId == originalInvoiceId && l.AdjustsLineNo == originalLineNo && i.Purpose == InvoicePurpose.Increase
+                                  && i.AdjustmentReason == InvoiceAdjustmentReason.CommercialRebate && r.ParentRunId != null && r.VoidedAt == null
+                                  && (i.Status == InvoiceStatus.Draft || i.Status == InvoiceStatus.Posted) && i.Id != exclude
+                              select l.FunctionalAmount).ToListAsync()).Sum();
+        return Math.Max(0, amount);
+    }
 }
