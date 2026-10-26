@@ -73,9 +73,12 @@ public sealed class PaymentDiscountService(HakDbContext db, AccountingEngine eng
     }
 
     /// <summary>Lập chứng từ nháp: bù trừ khoản mở đã chọn, tiền thực trả/thu = khoản mở − chiết khấu, phần chiết khấu vào PAYMENT_DISCOUNT_*. Không cần hóa đơn, không cần điều khoản.</summary>
-    public async Task<Voucher> CreateStandaloneVoucherAsync(SessionContext ctx, InvoiceKind kind, Guid partnerId, Guid settleJournalLineId, Guid cashAccountId, DateOnly date, decimal discount)
+    public async Task<Voucher> CreateStandaloneVoucherAsync(SessionContext ctx, InvoiceKind kind, Guid partnerId, Guid settleJournalLineId, Guid cashAccountId, DateOnly date, decimal discount, string evidence)
     {
         ctx.Require(Permissions.VoucherCreate); ctx.Require(Permissions.CashDocument);
+        // Không có hóa đơn / điều khoản làm căn cứ nên bắt buộc ghi chứng cứ tiền về (mã giao dịch ngân hàng hoặc số chứng từ) để người duyệt đối chiếu; chứng từ vẫn phải do người khác duyệt khi công ty bật "lập khác duyệt".
+        evidence = (evidence ?? "").Trim();
+        if (evidence.Length < 3) throw new DomainException(ErrorCodes.ValidationFailed, "Chiết khấu thanh toán độc lập phải ghi chứng cứ tiền về (mã giao dịch ngân hàng / số chứng từ).");
         return await db.InTransactionAsync(async () =>
         {
             var item = (await OpenItemsAsync(ctx, kind, partnerId, date)).FirstOrDefault(o => o.JournalLineId == settleJournalLineId)
@@ -88,14 +91,14 @@ public sealed class PaymentDiscountService(HakDbContext db, AccountingEngine eng
             var role = purchase ? "PAYMENT_DISCOUNT_INCOME" : "PAYMENT_DISCOUNT_EXPENSE";
             var map = await db.AccountRoleMappings.AsNoTracking().FirstOrDefaultAsync(m => m.CompanyId == ctx.CompanyId && m.RoleCode == role)
                       ?? throw new DomainException(ErrorCodes.RuleRoleUnmapped, $"Chưa ánh xạ vai trò tài khoản {role}.");
-            var desc = $"{(purchase ? "Trả" : "Thu")} tiền {item.VoucherNumber} có chiết khấu thanh toán";
+            var desc = $"{(purchase ? "Trả" : "Thu")} tiền {item.VoucherNumber} có chiết khấu thanh toán (chứng cứ: {evidence})";
             var lines = purchase
                 ? new List<VoucherLineInput> { new(item.AccountId, Side.Debit, item.Open, partnerId, Description: desc, SettleJournalLineId: item.JournalLineId), new(cash.Id, Side.Credit, item.Open - discount, Description: desc) }
                 : new List<VoucherLineInput> { new(cash.Id, Side.Debit, item.Open - discount, Description: desc), new(item.AccountId, Side.Credit, item.Open, partnerId, Description: desc, SettleJournalLineId: item.JournalLineId) };
             lines.Add(new VoucherLineInput(map.AccountId, purchase ? Side.Credit : Side.Debit, discount, Description: "Chiết khấu thanh toán"));
             var v = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, date, date, desc, lines, SourceSystem: Source,
                 SourceId: $"PARTNER:{partnerId}#manual:{discount.ToString(System.Globalization.CultureInfo.InvariantCulture)}#{Ids.New():N}"));
-            await audit.AppendAsync(ctx.CompanyId, ctx, "payment_discount.standalone", "partner", partnerId.ToString(), new { item.VoucherNumber, item.Open, discount, voucher = v.Number });
+            await audit.AppendAsync(ctx.CompanyId, ctx, "payment_discount.standalone", "partner", partnerId.ToString(), new { item.VoucherNumber, item.Open, discount, evidence, voucher = v.Number });
             await db.SaveChangesAsync();
             return v;
         });

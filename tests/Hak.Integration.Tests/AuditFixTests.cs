@@ -71,6 +71,22 @@ public class AuditFixTests
         Assert.Equal(new[] { "outer-after", "outer-before" }, keys);
     }
 
+    // SEC-08: quản trị viên không tự cấp cho mình quyền duyệt / ghi sổ khi còn quản trị viên khác; quản trị viên duy nhất vẫn được (ghi nhật ký riêng).
+    [Fact]
+    public async Task AdminCannotGrantThemselvesApprovalRights_WhenAnotherAdminExists_ButASoleAdminCan()
+    {
+        using var h = await TestHost.CreateAsync();
+        using var s = h.NewScope();
+        await s.Setup.GrantRoleAsync(h.AdminId, h.AdminId, h.CompanyId, "CHIEF_ACCOUNTANT");   // quản trị viên duy nhất: được phép
+        Assert.True(await s.Db.AuditLogs.AnyAsync(a => a.Action == "role.grant.self"));
+
+        var second = await s.Setup.CreateUserAsync(h.AdminId, "admin2", "Quản trị 2", TestHost.Password, isSystemAdmin: true);
+        var other = await s.Setup.CreateUserAsync(h.AdminId, "ketoan2", "Kế toán 2", TestHost.Password);
+        Assert.Equal(ErrorCodes.SodViolation, await CodeOf(() => s.Setup.GrantRoleAsync(h.AdminId, h.AdminId, h.CompanyId, "CHIEF_ACCOUNTANT")));   // đã có quản trị viên khác
+        await s.Setup.GrantRoleAsync(second.Id, h.AdminId, h.CompanyId, "CHIEF_ACCOUNTANT");     // người khác cấp thì được
+        await s.Setup.GrantRoleAsync(h.AdminId, other.Id, h.CompanyId, "CHIEF_ACCOUNTANT");      // cấp cho người khác thì được
+    }
+
     // SEC-03: người sửa nội dung nháp trở thành người lập, nên không tự gửi và duyệt nháp của người khác.
     [Fact]
     public async Task EditingSomeoneElsesDraft_MakesTheEditorThePreparer_SoTheyCannotApproveIt()
