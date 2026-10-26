@@ -27,7 +27,10 @@ public sealed record AgreementStatement(string AgreementCode, string AgreementNa
     bool Settled, string Mode, IReadOnlyList<AgreementStatementRow> Rows, bool SnapshotAvailable = true, string? Warning = null);
 
 public sealed record AgreementPreview(Guid AgreementId, decimal EligibleSales, decimal Percent, decimal Amount, decimal? NextThreshold, decimal? NextPercent, bool Settled,
-    IReadOnlyList<AgreementInvoiceShare> Invoices, decimal Accrued = 0);
+    IReadOnlyList<AgreementInvoiceShare> Invoices, decimal Accrued = 0, IReadOnlyList<AgreementOverlap>? Overlaps = null);
+
+/// <summary>Thỏa thuận khác còn áp dụng cùng chiều / đối tượng có khoảng ngày giao nhau: cùng nguồn doanh số có thể được hưởng nhiều chương trình. Chỉ để cảnh báo, không cấm (nhiều chương trình có thể được cộng dồn).</summary>
+public sealed record AgreementOverlap(Guid AgreementId, string Code, string Name, DateOnly FromDate, DateOnly ToDate, bool Settled, decimal SettledAmount);
 
 /// <summary>
 /// Chiết khấu thương mại theo doanh số cuối kỳ (rebate): thỏa thuận có bậc, tính trên doanh số hàng chưa thuế (tiền hạch toán) của hóa đơn thường đã ghi sổ trong khoảng ngày, trừ hàng trả lại / giảm giá đã ghi sổ.
@@ -275,9 +278,15 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
             return ReadSnapshot(run)?.Preview ?? new AgreementPreview(id, run.EligibleSales, run.Percent, run.Amount, null, null, true, [], run.AccruedAmount);
         var plan = await PlanAsync(ctx, a);
         var settled = false;
+        // Cảnh báo chồng kỳ: thỏa thuận khác còn áp dụng của cùng đối tượng, khoảng ngày giao nhau; kèm số đã quyết toán (nếu có) để người xem thấy tổng quyền lợi trên cùng nguồn doanh số.
+        var others = await db.DiscountAgreements.AsNoTracking().Where(o => o.CompanyId == ctx.CompanyId && o.Id != a.Id && o.Kind == a.Kind && o.PartnerId == a.PartnerId && o.IsActive
+                                                                            && o.FromDate <= a.ToDate && a.FromDate <= o.ToDate).OrderBy(o => o.FromDate).ThenBy(o => o.Code).ToListAsync();
+        var otherIds = others.Select(o => o.Id).ToList();
+        var runs = await db.DiscountAgreementRuns.AsNoTracking().Where(r => otherIds.Contains(r.AgreementId) && r.VoidedAt == null).Select(r => new { r.AgreementId, r.Amount }).ToListAsync();
+        var overlaps = others.Select(o => new AgreementOverlap(o.Id, o.Code, o.Name, o.FromDate, o.ToDate, runs.Any(r => r.AgreementId == o.Id), runs.Where(r => r.AgreementId == o.Id).Sum(r => r.Amount))).ToList();
         return new AgreementPreview(id, plan.Eligible, plan.Percent, plan.Amount, plan.NextThreshold, plan.NextPercent, settled,
             plan.Shares.Select(s => new AgreementInvoiceShare(s.Invoice.Id, s.Invoice.Number, s.Invoice.InvoiceSeries, s.Invoice.InvoiceNo, s.Invoice.PostingDate, s.Sales, s.Discount)).ToList(),
-            await PostedAccrualAsync(id));
+            await PostedAccrualAsync(id), overlaps.Count == 0 ? null : overlaps);
     }
 
     /// <summary>

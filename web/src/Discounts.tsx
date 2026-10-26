@@ -3,6 +3,7 @@ import { get, post, put } from './api'
 import { ErrorBox, ExportButton, FlowStrip, Modal, navStore, PartnerSelect, useAction, useCatalog } from './common'
 import { formatDate, formatMoney, parseMoney, parseRate, today } from './money'
 import { RebateAmendments } from './RebateAmendments'
+import { VoidRunDialog } from './VoidRunDialog'
 
 interface Tier { threshold: string; percent: string }
 interface Agreement { id: string; kind: string; partnerId: string; partnerCode: string; partnerName: string; code: string; name: string; fromDate: string; toDate: string; isActive: boolean; rowVersion: number
@@ -10,7 +11,8 @@ interface Agreement { id: string; kind: string; partnerId: string; partnerCode: 
 interface Share { invoiceId: string; number: string; invoiceSeries: string; invoiceNo: string; postingDate: string; sales: string; discount: string }
 interface Statement { snapshotAvailable?: boolean; warning?: string | null; agreementCode: string; agreementName: string; partnerCode: string; partnerName: string; fromDate: string; toDate: string; percent: string; totalSales: string; totalDiscount: string; mode: string
   rows: { no: number; originalSeries: string; originalNo: string; originalDate: string; sales: string; discount: string; adjustmentSeries: string | null; adjustmentNo: string | null; adjustmentDate: string | null; adjustmentVat: string }[] }
-interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[]; accrued?: string }
+interface Preview { agreementId: string; eligibleSales: string; percent: string; amount: string; nextThreshold: string | null; nextPercent: string | null; settled: boolean; invoices: Share[]; accrued?: string
+  overlaps?: { agreementId: string; code: string; name: string; fromDate: string; toDate: string; settled: boolean; settledAmount: string }[] | null }
 interface ReportRow { partnerId: string; partnerCode: string; partnerName: string; gross: string; onInvoiceTradeDiscount: string; afterSaleTradeDiscount: string; allowance: string; returns: string; increase: string; net: string; paymentDiscount: string }
 interface Report { rows: ReportRow[]; total: ReportRow }
 
@@ -44,6 +46,7 @@ export function DiscountsView() {
   const [to, setTo] = useState(today())
   const [report, setReport] = useState<Report | null>(null)
   const [info, setInfo] = useState('')
+  const [voiding, setVoiding] = useState<Agreement | null>(null)
   const [purchasePolicy, setPurchasePolicy] = useState<'RevalueInventory' | 'ReduceCogs'>('RevalueInventory')
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setRows(await get<Agreement[]>(`/discounts/agreements?kind=${kind}`))), [run, kind])
@@ -76,11 +79,7 @@ export function DiscountsView() {
       : `Đã quyết toán ${settle.a.code}: chiết khấu ${r.percent}% = ${formatMoney(r.amount)}. Các hóa đơn điều chỉnh nháp ở màn Hóa đơn — người có quyền ghi sổ ghi sổ từng hóa đơn.`)
     await load()
   })
-  const voidRun = (a: Agreement) => run(async () => {
-    const reason = window.prompt(`Lý do hủy lần quyết toán còn hiệu lực mới nhất của ${a.code} (chỉ hủy các hóa đơn nháp của lần đó):`)
-    if (!reason) return
-    await post(`/discounts/agreements/${a.id}/void-run`, { reason }); setInfo(`Đã hủy quyết toán ${a.code}.`); await load()
-  })
+  const voidRun = (a: Agreement) => setVoiding(a)
   const toggle = (a: Agreement) => run(async () => { await post(`/discounts/agreements/${a.id}/active`, { rowVersion: a.rowVersion, active: !a.isActive }); await load() })
 
   const edit = (a: Agreement) => setForm({ id: a.id, rowVersion: a.rowVersion, partnerId: a.partnerId, code: a.code, name: a.name, fromDate: a.fromDate, toDate: a.toDate, tiers: a.tiers.map(t => ({ threshold: formatMoney(t.threshold), percent: t.percent })), progressive: !!a.progressive })
@@ -161,6 +160,8 @@ export function DiscountsView() {
         <p className="muted">Bậc cao hơn không được có tỷ lệ thấp hơn bậc dưới. Đạt bậc nào thì tỷ lệ đó áp cho toàn bộ doanh số trong kỳ.</p>
       </Modal>}
 
+      {voiding && <VoidRunDialog agreementId={voiding.id} agreementCode={voiding.code} runId={null} label="lần quyết toán còn hiệu lực mới nhất" amount={voiding.runAmount}
+        onClose={() => setVoiding(null)} onConfirm={async reason => { await post(`/discounts/agreements/${voiding.id}/void-run`, { reason }); setInfo(`Đã hủy quyết toán ${voiding.code}.`); await load() }} />}
       {preview && !settle && <Modal title={`Tính chiết khấu — ${preview.a.code}`} onClose={() => setPreview(null)} busy={busy}
         footer={<><button onClick={() => setPreview(null)}>Đóng</button><button disabled={busy} title="Bảng kê các hóa đơn gốc được chiết khấu, đính kèm hóa đơn điều chỉnh / chứng từ (Mẫu 01/BK-ĐCTT)" onClick={() => run(async () => setStatement(await get<Statement>(`/discounts/agreements/${preview.a.id}/statement`)))}>Bảng kê…</button>{!preview.p.settled && <button disabled={busy} title="Ước tính theo doanh số đến ngày chọn; sinh chứng từ nháp Nợ giảm trừ doanh thu / Có phải trả chiết khấu" onClick={() => run(async () => {
             const asOf = window.prompt('Trích trước đến ngày (yyyy-mm-dd)', today() < preview.a.toDate ? today() : preview.a.toDate)
@@ -173,6 +174,9 @@ export function DiscountsView() {
           {preview.p.nextThreshold && <> Còn {formatMoney(String(Number(preview.p.nextThreshold) - Number(preview.p.eligibleSales)))} nữa để lên bậc {formatMoney(preview.p.nextPercent)}%.</>}
           {Number(preview.p.accrued ?? 0) > 0 && <> Đã trích trước (ghi sổ) <b>{formatMoney(preview.p.accrued!)}</b> — quyết toán sẽ bù trừ, không giảm doanh thu hai lần.</>}
           {preview.p.settled && <> <b>Đã lập quyết toán — xem Tiến độ / Hóa đơn để kiểm tra phần còn thiếu.</b></>}</p>
+        {!preview.p.settled && (preview.p.overlaps?.length ?? 0) > 0 && <div className="msg" role="alert">
+          <b>Cùng đối tượng còn thỏa thuận khác có kỳ giao nhau — cùng nguồn doanh số có thể được hưởng nhiều chương trình.</b> Hệ thống không tự cấm (có thể được phép cộng dồn); kiểm tra điều khoản trước khi quyết toán:
+          <ul>{preview.p.overlaps!.map(o => <li key={o.agreementId}>{o.code} – {o.name} ({formatDate(o.fromDate)} – {formatDate(o.toDate)}) — {o.settled ? <>đã quyết toán <b>{formatMoney(o.settledAmount)}</b></> : 'chưa quyết toán'}</li>)}</ul></div>}
         <table className="grid"><thead><tr><th>Hóa đơn</th><th>Ngày</th><th className="num">Doanh số</th><th className="num">Chiết khấu chia</th></tr></thead>
           <tbody>{preview.p.invoices.map(s => <tr key={s.invoiceId}><td>{s.invoiceSeries}/{s.invoiceNo}<div className="muted">{s.number}</div></td><td>{formatDate(s.postingDate)}</td><td className="num">{formatMoney(s.sales)}</td><td className="num">{formatMoney(s.discount)}</td></tr>)}
             {preview.p.invoices.length === 0 && <tr><td colSpan={4} className="muted">Không có hóa đơn đã ghi sổ của đối tượng này trong kỳ.</td></tr>}</tbody></table>

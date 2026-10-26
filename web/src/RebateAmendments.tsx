@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get, post } from './api'
 import { ErrorBox, Modal, useAction } from './common'
+import { VoidRunDialog } from './VoidRunDialog'
 import { addMoney, formatDate, formatMoney, today } from './money'
 
 interface Agreement { id: string; code: string; toDate: string }
@@ -19,10 +20,16 @@ export function RebateAmendments({ agreement, onClose, onChanged, onProgress, on
   const [date, setDate] = useState(agreement.toDate > today() ? agreement.toDate : today())
   const [postingDate, setPostingDate] = useState(date)
   const [info, setInfo] = useState('')
+  const [voiding, setVoiding] = useState<History | null>(null)
   const { busy, error, run } = useAction()
   const base = `/discounts/agreements/${agreement.id}`
   useEffect(() => { run(async () => setHistory(await get<History[]>(`${base}/history`))) }, [base, run])
   return <Modal title={`Bổ sung / thu hồi CKTM — ${agreement.code}`} onClose={onClose} busy={busy} footer={<button disabled={busy} onClick={onClose}>Đóng</button>}>
+    {voiding && <VoidRunDialog agreementId={agreement.id} agreementCode={agreement.code} runId={voiding.id} label={voiding.parentRunId ? `lần bổ sung/thu hồi ${voiding.sequence}` : 'quyết toán gốc'} amount={voiding.amount}
+      onClose={() => setVoiding(null)} onConfirm={async why => {
+        await post(`${base}/runs/${voiding.id}/void`, { reason: why }); setPreview(null)
+        setHistory(await get<History[]>(`${base}/history`)); await onChanged()
+      }} />}
     <ErrorBox error={error} />
     {info && <p role="status">{info}</p>}
     <p>Quyền lợi lũy kế đã lập (gồm nháp, không tính lần đã hủy): <b>{formatMoney(addMoney(history.filter(h => !h.voided).map(h => h.amount)))}</b>. Xem tiến độ từng lần để phân biệt số đã ghi sổ.</p>
@@ -31,12 +38,7 @@ export function RebateAmendments({ agreement, onClose, onChanged, onProgress, on
       {history.map(h => <tr key={h.id}><td>{h.parentRunId ? h.sequence : 'Gốc'}{h.voided ? ' · đã hủy' : ''}</td><td>{formatDate(h.createdAt.slice(0, 10))}</td><td className="num">{formatMoney(h.amount)}</td><td>{h.reason ?? 'Quyết toán ban đầu'}</td><td>
         <button disabled={busy} onClick={() => onProgress(h.id)}>Tiến độ lần này</button>
         <button disabled={busy} onClick={() => onStatement(h.id)}>Bảng kê lần này</button>
-        {!h.voided && <button disabled={busy} onClick={() => run(async () => {
-          const why = window.prompt('Lý do hủy lần này (phải đảo các hóa đơn đã ghi sổ và hủy lần phía sau trước):')
-          if (!why) return
-          await post(`${base}/runs/${h.id}/void`, { reason: why }); setPreview(null)
-          setHistory(await get<History[]>(`${base}/history`)); await onChanged()
-        })}>Hủy lần này</button>}
+        {!h.voided && <button disabled={busy} onClick={() => setVoiding(h)}>Hủy lần này</button>}
       </td></tr>)}
     </tbody></table>
     <button disabled={busy} onClick={() => run(async () => { setPreview(null); setPreview(await get<Preview>(`${base}/amendment-preview`)); setInfo('') })}>Tính lại chênh lệch</button>
