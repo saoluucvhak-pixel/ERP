@@ -71,6 +71,12 @@ public partial class ImmutabilityParityTests
         Assert.Contains("file_attachments:DELETE", sqlite);
         Assert.Contains("depreciation_entry_splits:UPDATE", sqlite);
         Assert.Contains("depreciation_entry_splits:DELETE", sqlite);
+        // DATA-01 / EIN-07: bằng chứng trích trước chiết khấu và thông báo hóa đơn điện tử.
+        foreach (var t in new[] { "discount_accruals", "e_invoice_error_notice_lines", "e_invoice_risk_notice_lines" })
+        { Assert.Contains($"{t}:UPDATE", sqlite); Assert.Contains($"{t}:DELETE", sqlite); }
+        foreach (var t in new[] { "e_invoice_error_notices", "e_invoice_risk_notices" }) Assert.Contains($"{t}:DELETE", sqlite);
+        Assert.Contains("e_invoice_outbox:UPDATE", sqlite);
+        Assert.Contains("e_invoice_documents:UPDATE", sqlite);
     }
 
     [Theory]

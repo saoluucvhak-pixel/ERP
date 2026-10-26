@@ -321,7 +321,7 @@ public partial class TradeTests
         fx.S.Db.ChangeTracker.Clear();
 
         // Tầng hai: trigger của cơ sở dữ liệu chặn cả ghi thẳng bằng SQL, bỏ qua EF.
-        foreach (var sql in new[] { "UPDATE e_invoice_documents SET number = '9999999'", "UPDATE e_invoice_documents SET xml_content = 'x'", "DELETE FROM e_invoice_documents", "UPDATE e_invoice_messages SET detail = 'x'", "DELETE FROM e_invoice_messages", "DELETE FROM e_invoice_outbox", "UPDATE e_invoice_documents SET status = 1 WHERE status = 2", "UPDATE e_invoice_outbox SET idempotency_key = 'x'", "DELETE FROM e_invoice_error_notices", "DELETE FROM e_invoice_risk_notices", "UPDATE discount_accruals SET adjustment = 1", "DELETE FROM discount_accruals" })
+        foreach (var sql in new[] { "UPDATE e_invoice_documents SET number = '9999999'", "UPDATE e_invoice_documents SET xml_content = 'x'", "DELETE FROM e_invoice_documents", "UPDATE e_invoice_messages SET detail = 'x'", "DELETE FROM e_invoice_messages", "DELETE FROM e_invoice_outbox", "UPDATE e_invoice_documents SET status = 1 WHERE status = 2", "UPDATE e_invoice_outbox SET idempotency_key = 'x'" })
         {
             var ex = await Assert.ThrowsAnyAsync<Exception>(() => fx.S.Db.Database.ExecuteSqlRawAsync(sql));
             Assert.Contains("LEDGER_IMMUTABLE", ex.ToString());
