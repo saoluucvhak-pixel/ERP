@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Hak.Application.Common;
 using Hak.Application.Accounting;
 using Hak.Application.Settlement;
@@ -205,6 +206,26 @@ public sealed partial class DiscountAgreementService
         return new(link!.Amount, 0, run.RecognitionAccountId, null);
     }
 
+    /// <summary>
+    /// Hóa đơn gốc là nguồn của quyết toán CKTM còn hiệu lực (kể cả bổ sung/thu hồi, chứng từ hay hóa đơn điều chỉnh còn nháp) thì không đảo / thay thế được:
+    /// cơ sở tính chiết khấu đã chốt trên hóa đơn này, đảo sẽ để lại chiết khấu tính trên hóa đơn không còn và công nợ bù trừ mồ côi.
+    /// Hủy (hoặc đảo) quyết toán trước, rồi quyết toán lại trên hóa đơn thay thế.
+    /// </summary>
+    internal static async Task CheckInvoiceIsNotARebateSourceAsync(HakDbContext database, Guid companyId, CommercialInvoice invoice)
+    {
+        var needle = invoice.Id.ToString();
+        var runs = await (from r in database.DiscountAgreementRuns.AsNoTracking() join a in database.DiscountAgreements.AsNoTracking() on r.AgreementId equals a.Id
+                          where r.CompanyId == companyId && r.VoidedAt == null && r.SettlementSnapshot != null && r.SettlementSnapshot.Contains(needle)
+                          select new { r.Id, r.SettlementSnapshot, a.Code }).ToListAsync();
+        foreach (var r in runs)
+        {
+            var snapshot = JsonSerializer.Deserialize<SettlementSnapshot>(r.SettlementSnapshot!);
+            if (snapshot is null) continue;
+            if (snapshot.Sources.Any(x => x.InvoiceId == invoice.Id) || (snapshot.TargetSources?.Any(x => x.InvoiceId == invoice.Id) ?? false))
+                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Hóa đơn {invoice.Number} nằm trong quyết toán chiết khấu thương mại của thỏa thuận {r.Code}; hủy hoặc đảo quyết toán (kể cả phần bổ sung/thu hồi) trước khi đảo hoặc thay thế hóa đơn.");
+        }
+    }
+
     internal static async Task CheckSettlementVoucherAsync(HakDbContext database, Voucher voucher, List<ValidationError> errors)
     {
         if (!Guid.TryParse(voucher.SourceId, out var runId)) { errors.Add(new(ErrorCodes.ValidationFailed, "Nguồn chứng từ CKTM không hợp lệ.")); return; }
@@ -261,6 +282,27 @@ public sealed partial class DiscountAgreementService
                           where runIds.Contains(l.RunId) && i.Status == InvoiceStatus.Posted select i.Id).AnyAsync())
                 throw new DomainException(ErrorCodes.InvalidStateTransition, "Trích trước đã được bù trừ trong quyết toán; đảo chứng từ/hóa đơn quyết toán trước.");
         }
+    }
+
+    /// <summary>Cách hạch toán chiết khấu thương mại chiều mua của công ty (hóa đơn điều chỉnh giảm): định giá lại tồn kho hay ghi giảm giá vốn ngay.</summary>
+    public async Task<Hak.Domain.Organization.PurchaseRebatePolicy> PurchasePolicyAsync(SessionContext ctx)
+    {
+        ctx.Require(Permissions.VoucherView);
+        return await db.Companies.AsNoTracking().Where(c => c.Id == ctx.CompanyId).Select(c => c.PurchaseRebatePolicy).FirstAsync();
+    }
+
+    public async Task SetPurchasePolicyAsync(SessionContext ctx, Hak.Domain.Organization.PurchaseRebatePolicy policy)
+    {
+        ctx.Require(Permissions.CatalogManage);
+        if (!Enum.IsDefined(policy)) throw new DomainException(ErrorCodes.ValidationFailed, "Cách hạch toán không hợp lệ.");
+        await db.InTransactionAsync(async () =>
+        {
+            var c = await db.Companies.FirstAsync(x => x.Id == ctx.CompanyId);
+            if (c.PurchaseRebatePolicy == policy) return;
+            c.PurchaseRebatePolicy = policy; c.RowVersion++;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "discount.purchase_rebate_policy", "company", c.Id.ToString(), new { policy = policy.ToString() }, c.RowVersion);
+            await db.SaveChangesAsync();
+        });
     }
 
     public async Task<DiscountLifecycle> LifecycleAsync(SessionContext ctx, Guid agreementId, Guid? runId = null)

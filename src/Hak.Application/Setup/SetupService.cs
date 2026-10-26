@@ -101,11 +101,26 @@ public sealed partial class SetupService(HakDbContext db, AuditService audit, IC
         await RequireSystemAdminAsync(adminId);
         var role = await db.Roles.FirstOrDefaultAsync(r => r.Code == roleCode)
                    ?? throw new DomainException(ErrorCodes.NotFound, $"Vai trò {roleCode} không tồn tại.");
+        // Quản trị viên tự cấp cho mình vai trò có quyền duyệt / ghi sổ / đảo / khóa kỳ thì tự phá kiểm soát hai người. Khi công ty bật "lập khác duyệt" và còn quản trị viên khác
+        // đang hoạt động, người đó phải cấp; nếu mình là quản trị viên duy nhất (doanh nghiệp nhỏ) thì vẫn được nhưng ghi nhật ký riêng.
+        var selfGrant = false;
+        if (adminId == userId)
+        {
+            string[] sensitive = [Permissions.VoucherApprove, Permissions.VoucherPost, Permissions.VoucherReverse, Permissions.PeriodLock];
+            var rolePermissions = await db.RolePermissions.AsNoTracking().Where(p => p.RoleId == role.Id).Select(p => p.Permission).ToListAsync();
+            if (rolePermissions.Any(sensitive.Contains))
+            {
+                selfGrant = true;
+                var distinct = (await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => (bool?)c.RequireDistinctApprover).FirstOrDefaultAsync()) ?? true;
+                if (distinct && await db.Users.AsNoTracking().AnyAsync(u => u.IsSystemAdmin && u.IsActive && u.Id != adminId))
+                    throw new DomainException(ErrorCodes.SodViolation, "Quản trị viên không tự cấp cho mình vai trò có quyền duyệt / ghi sổ / đảo / khóa kỳ; nhờ quản trị viên khác cấp.");
+            }
+        }
         await db.InTransactionAsync(async () =>
         {
             if (!await db.UserCompanyRoles.AnyAsync(x => x.UserId == userId && x.CompanyId == companyId && x.RoleId == role.Id))
                 db.UserCompanyRoles.Add(new UserCompanyRole { UserId = userId, CompanyId = companyId, RoleId = role.Id });
-            await audit.AppendAsync(companyId, null, "role.grant", "user", userId.ToString(), new { roleCode }, userIdOverride: adminId);
+            await audit.AppendAsync(companyId, null, selfGrant ? "role.grant.self" : "role.grant", "user", userId.ToString(), new { roleCode }, userIdOverride: adminId);
             await db.SaveChangesAsync();
         });
     }

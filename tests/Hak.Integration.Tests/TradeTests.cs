@@ -1439,9 +1439,10 @@ public partial class TradeTests
         await fx.S.Rules.SetRoleMappingAsync(fx.H.Admin, "PAYMENT_DISCOUNT_INCOME", "FININC");
         await fx.H.PostedAsync(fx.S, new VoucherInput(VoucherTypes.General, D(3, 1), D(3, 1), "Góp vốn", [new(fx.A("CASH"), Side.Debit, 10_000_000), new(fx.A("EQUITY"), Side.Credit, 10_000_000)]));
         var item = Assert.Single(await pd.OpenItemsAsync(fx.H.Auditor, InvoiceKind.Purchase, fx.H.Partner["NCC01"], D(3, 10)));
-        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), 0)));
-        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), item.Open)));
-        var v = await pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), 100_000);
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), 0, "GD-NH-001")));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), item.Open, "GD-NH-001")));
+        Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), 100_000, " ")));   // DSC-06: thiếu chứng cứ tiền về
+        var v = await pd.CreateStandaloneVoucherAsync(fx.H.Preparer, InvoiceKind.Purchase, fx.H.Partner["NCC01"], item.JournalLineId, fx.A("CASH"), D(3, 10), 100_000, "GD-NH-001");
         await PostVoucherAsync(fx, v.Id);
         Assert.Equal(0m, await fx.Bal("AP"));
         Assert.Equal(-100_000m, await fx.Bal("FININC"));

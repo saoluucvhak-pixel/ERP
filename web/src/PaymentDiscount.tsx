@@ -23,7 +23,7 @@ export function PaymentDiscountView() {
   const [picked, setPicked] = useState<string[]>([])                       // hóa đơn chọn để thanh toán gộp một chứng từ
   const [multi, setMulti] = useState<{ ids: string[]; partner: string; cash: string; date: string } | null>(null)
   // Chiết khấu thanh toán độc lập: không xuất hóa đơn nên không ghép với hóa đơn — chọn khoản công nợ còn mở của đối tượng.
-  const [solo, setSolo] = useState<{ partner: string; items: OpenRow[]; item: string; cash: string; date: string; discount: string } | null>(null)
+  const [solo, setSolo] = useState<{ partner: string; items: OpenRow[]; item: string; cash: string; date: string; discount: string; evidence: string } | null>(null)
   const { busy, error, run } = useAction()
   const load = useCallback(() => run(async () => setRows(await get<Cand[]>(`/payment-discounts?kind=${kind}&asOf=${asOf}`))), [run, kind, asOf])
   useEffect(() => { load() }, [load])
@@ -39,7 +39,7 @@ export function PaymentDiscountView() {
           if (new Set(sel.map(r => r.partnerCode)).size !== 1) { setInfo('Chỉ gộp các hóa đơn của cùng một đối tượng.'); return }
           setMulti({ ids: picked, partner: sel[0].partnerId ?? '', cash: '', date: asOf })
         }}>Thanh toán gộp ({picked.length})…</button>
-        <button onClick={() => setSolo({ partner: '', items: [], item: '', cash: '', date: asOf, discount: '' })}>Chiết khấu không theo hóa đơn…</button>
+        <button onClick={() => setSolo({ partner: '', items: [], item: '', cash: '', date: asOf, discount: '', evidence: '' })}>Chiết khấu không theo hóa đơn…</button>
         <ExportButton fileName={`Chiet_khau_thanh_toan_${kind}_${asOf}`} sheet="Chiết khấu thanh toán" disabled={shown.length === 0}
           columns={[{ header: 'Hóa đơn', width: 18 }, { header: 'Ngày HĐ', width: 12 }, { header: 'Đối tượng', width: 30 }, { header: 'Hạn hưởng', width: 12 }, { header: 'Còn mở', numeric: true, width: 16 }, { header: 'Chiết khấu', numeric: true, width: 14 }, { header: purchase ? 'Thực trả' : 'Thực thu', numeric: true, width: 16 }]}
           rows={shown.map(r => [`${r.invoiceSeries}/${r.invoiceNo}`, r.invoiceDate, `${r.partnerCode} – ${r.partnerName}`, r.deadline, r.open, r.discount, r.cashToPay])} /></div>
@@ -78,8 +78,8 @@ export function PaymentDiscountView() {
       </Modal>}
 
       {solo && <Modal title={`${purchase ? 'Trả' : 'Thu'} tiền có chiết khấu — không theo hóa đơn`} onClose={() => setSolo(null)} busy={busy}
-        footer={<><button onClick={() => setSolo(null)}>Đóng</button><button className="primary" disabled={busy || !solo.item || !solo.cash || !solo.discount} onClick={() => run(async () => {
-          const v = await post<{ number: string }>('/payment-discounts/standalone', { kind, partnerId: solo.partner, settleJournalLineId: solo.item, cashAccountId: solo.cash, date: solo.date, discount: solo.discount })
+        footer={<><button onClick={() => setSolo(null)}>Đóng</button><button className="primary" disabled={busy || !solo.item || !solo.cash || !solo.discount || solo.evidence.trim().length < 3} onClick={() => run(async () => {
+          const v = await post<{ number: string }>('/payment-discounts/standalone', { kind, partnerId: solo.partner, settleJournalLineId: solo.item, cashAccountId: solo.cash, date: solo.date, discount: solo.discount, evidence: solo.evidence.trim() })
           setSolo(null); setInfo(`Đã lập chứng từ ${v.number} (nháp) — duyệt và ghi sổ ở màn Chứng từ.`)
         })}>Lập chứng từ</button></>}>
         <p>Chiết khấu thanh toán không xuất hóa đơn nên không ghép với hóa đơn: chỉ là một dòng trong bút toán thanh toán riêng, bù trừ khoản công nợ còn mở bạn chọn.</p>
@@ -91,7 +91,8 @@ export function PaymentDiscountView() {
           {solo.items.map(o => <option key={o.journalLineId} value={o.journalLineId}>{o.voucherNumber} · {formatDate(o.postingDate)} · còn {formatMoney(o.open)}</option>)}</select></label>
           <label>Chiết khấu (đồng)<input inputMode="numeric" value={solo.discount} onChange={e => setSolo({ ...solo, discount: e.target.value.replace(/[^0-9]/g, '') })} /></label></div>
         <div className="form-row"><label>Tài khoản tiền<AccountSelect accounts={accounts} value={solo.cash} onChange={id => setSolo({ ...solo, cash: id })} filter={a => a.cashKind === 'Cash' || a.cashKind === 'Bank'} /></label>
-          <label>Ngày<input type="date" value={solo.date} onChange={e => setSolo({ ...solo, date: e.target.value })} /></label></div>
+          <label>Ngày tiền về ngân hàng<input type="date" value={solo.date} onChange={e => setSolo({ ...solo, date: e.target.value })} /></label></div>
+        <div className="form-row"><label>Chứng cứ tiền về (mã giao dịch ngân hàng / số chứng từ) — bắt buộc<input value={solo.evidence} onChange={e => setSolo({ ...solo, evidence: e.target.value })} /></label></div>
       </Modal>}
 
       {dlg && <Modal title={`${purchase ? 'Trả' : 'Thu'} tiền có chiết khấu — ${dlg.c.invoiceSeries}/${dlg.c.invoiceNo}`} onClose={() => setDlg(null)} busy={busy}

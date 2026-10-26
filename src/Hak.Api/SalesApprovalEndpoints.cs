@@ -25,7 +25,7 @@ public static class SalesApprovalEndpoints
     }
 }
 
-public sealed record StandalonePaymentDiscountRequest(Hak.Domain.Trade.InvoiceKind Kind, Guid PartnerId, Guid SettleJournalLineId, Guid CashAccountId, DateOnly Date, decimal Discount);
+public sealed record StandalonePaymentDiscountRequest(Hak.Domain.Trade.InvoiceKind Kind, Guid PartnerId, Guid SettleJournalLineId, Guid CashAccountId, DateOnly Date, decimal Discount, string Evidence);
 
 public sealed record MultiPaymentDiscountRequest(Hak.Domain.Trade.InvoiceKind Kind, Guid PartnerId, List<Guid> InvoiceIds, Guid CashAccountId, DateOnly Date);
 
@@ -47,7 +47,7 @@ public static class PaymentDiscountEndpoints
         api.MapPost("/multi", async (HttpContext http, MultiPaymentDiscountRequest r, PaymentDiscountService s) =>
         { var v = await s.CreateMultiVoucherAsync(await http.SessionAsync(), r.Kind, r.PartnerId, r.InvoiceIds, r.CashAccountId, r.Date); return Results.Ok(new { v.Id, v.Number }); });
         api.MapPost("/standalone", async (HttpContext http, StandalonePaymentDiscountRequest r, PaymentDiscountService s) =>
-        { var v = await s.CreateStandaloneVoucherAsync(await http.SessionAsync(), r.Kind, r.PartnerId, r.SettleJournalLineId, r.CashAccountId, r.Date, r.Discount); return Results.Ok(new { v.Id, v.Number }); });
+        { var v = await s.CreateStandaloneVoucherAsync(await http.SessionAsync(), r.Kind, r.PartnerId, r.SettleJournalLineId, r.CashAccountId, r.Date, r.Discount, r.Evidence); return Results.Ok(new { v.Id, v.Number }); });
         api.MapPost("/{invoiceId:guid}/voucher", async (HttpContext http, Guid invoiceId, PaymentDiscountVoucherRequest r, PaymentDiscountService s) =>
         { var v = await s.CreateVoucherAsync(await http.SessionAsync(), invoiceId, r.CashAccountId, r.Date); return Results.Ok(new { v.Id, v.Number }); });
     }

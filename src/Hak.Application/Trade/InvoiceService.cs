@@ -288,6 +288,7 @@ public sealed partial class InvoiceService(HakDbContext db, AccountingEngine eng
     {
         // Hóa đơn gốc còn điều chỉnh (trả hàng / giảm giá / điều chỉnh tăng) đã ghi sổ: phải đảo chứng từ phụ thuộc trước, nếu không điều chỉnh mồ côi
         // (giảm công nợ / giá trị kho trên một hóa đơn không còn). Kiểm trước mọi thao tác ghi nên thất bại không để lại gì dở dang.
+        await DiscountAgreementService.CheckInvoiceIsNotARebateSourceAsync(db, ctx.CompanyId, inv);
         var dependents = await db.CommercialInvoices.AsNoTracking().Where(d => d.CompanyId == ctx.CompanyId && d.AdjustsInvoiceId == inv.Id && d.Status == InvoiceStatus.Posted)
             .OrderBy(d => d.Number).Select(d => d.Number).ToListAsync();
         if (dependents.Count > 0)
