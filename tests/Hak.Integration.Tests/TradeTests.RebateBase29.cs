@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Hak.Application.Trade;
 using Hak.Domain.Common;
 using Hak.Domain.Trade;
