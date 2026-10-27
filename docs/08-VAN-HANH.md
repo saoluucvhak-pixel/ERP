@@ -154,4 +154,5 @@ Phiên bản trước bản sửa SEC-01 lưu vào bảng `idempotency_records` 
 
 ## Ảnh đính kèm và điện thoại
 - Ảnh sự cố / nghiệm thu nằm ở thư mục `attachments` cạnh tệp cơ sở dữ liệu (đổi bằng cấu hình `Hak:AttachmentsPath`). **Bản sao lưu mã hóa chỉ gồm cơ sở dữ liệu — sao chép thư mục `attachments` cùng lúc khi sao lưu** (mỗi tệp có mã SHA-256 trong cơ sở dữ liệu để kiểm tra).
+- **Bảo mật mạng LAN:** truy cập bằng HTTP thuần qua Wi-Fi/LAN thì mật khẩu và token đi dạng rõ. API ghi cảnh báo khi khởi động nếu nghe HTTP trên địa chỉ không phải loopback; đặt `Hak:RequireTlsForLan=true` (Production) để từ chối khởi động trong trường hợp đó và chạy sau proxy có chứng chỉ TLS (hoặc cấu hình Kestrel HTTPS). Chưa tự sinh chứng chỉ trong bộ cài.
 - Điện thoại truy cập bằng địa chỉ IP của máy chủ trong mạng Wi-Fi nội bộ (ví dụ `http://192.168.1.10:5080`); mở cổng đó trên tường lửa Windows cho mạng riêng. Quét QR bằng ứng dụng Camera của điện thoại. Quét ngay trong trang và cài ứng dụng offline cần HTTPS (đặt sau một proxy có chứng chỉ).
