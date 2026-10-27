@@ -4,7 +4,8 @@ using Hak.Domain.Tax;
 
 namespace Hak.Api;
 
-public sealed record ReplacementRequest(string Reason, IReadOnlyList<ReplacementLineChange>? Changes, Guid? NewPartnerId);
+public sealed record ReplacementRequest(string Reason, IReadOnlyList<ReplacementLineChange>? Changes, Guid? NewPartnerId, DateOnly? InvoiceDate = null, DateOnly? PostingDate = null);
+public sealed record RegisterExternalRequest(string Reason);
 public sealed record InformationRequest(string Reason, IReadOnlyList<InformationChange> Changes);
 public sealed record RiskNoticeRequest(string AuthorityNoticeNo, DateOnly NoticeDate, DateOnly ReceivedDate, DateOnly? ResponseDeadline, string Reason, IReadOnlyList<RiskNoticeLineInput> Lines);
 public sealed record RiskNoticeRespondRequest(long RowVersion, string? Note, Guid? ResponseNoticeId);
@@ -23,10 +24,10 @@ public static class EInvoiceEndpoints
         api.MapGet("/documents", async (HttpContext http, EInvoiceDocStatus? status, bool? attention, EInvoiceIssueService s) => Results.Ok(await s.ListAsync(await http.SessionAsync(), status, attention == true)));
         api.MapGet("/documents/{id:guid}/messages", async (HttpContext http, Guid id, EInvoiceIssueService s) => Results.Ok(await s.MessagesAsync(await http.SessionAsync(), id)));
         api.MapPost("/invoices/{invoiceId:guid}/issue", async (HttpContext http, Guid invoiceId, long rowVersion, EInvoiceIssueService s) => Results.Ok(await s.IssueAsync(await http.SessionAsync(), invoiceId, rowVersion)));
-        api.MapPost("/invoices/{invoiceId:guid}/register-external", async (HttpContext http, Guid invoiceId, EInvoiceIssueService s) => Results.Ok(await s.RegisterExternalAsync(await http.SessionAsync(), invoiceId)));
+        api.MapPost("/invoices/{invoiceId:guid}/register-external", async (HttpContext http, Guid invoiceId, RegisterExternalRequest r, EInvoiceIssueService s) => Results.Ok(await s.RegisterExternalAsync(await http.SessionAsync(), invoiceId, r.Reason)));
         api.MapPost("/invoices/{invoiceId:guid}/replacement", async (HttpContext http, Guid invoiceId, ReplacementRequest r, EInvoiceIssueService s) =>
         {
-            var inv = await s.CreateReplacementDraftAsync(await http.SessionAsync(), invoiceId, r.Reason, r.Changes, r.NewPartnerId);
+            var inv = await s.CreateReplacementDraftAsync(await http.SessionAsync(), invoiceId, r.Reason, r.Changes, r.NewPartnerId, r.InvoiceDate, r.PostingDate);
             return Results.Ok(new { inv.Id, inv.Number, inv.RowVersion });
         });
         api.MapPost("/documents/{id:guid}/retry", async (HttpContext http, Guid id, EInvoiceIssueService s) => Results.Ok(await s.RetryAsync(await http.SessionAsync(), id)));
