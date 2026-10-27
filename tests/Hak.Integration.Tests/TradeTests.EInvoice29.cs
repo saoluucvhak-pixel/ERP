@@ -39,7 +39,7 @@ public partial class TradeTests
         var (fx, _, svc, _) = await EInvoiceSetupAsync(); using var _fx = fx;
         var manual = await PostedSaleAsync(fx, "EXT-1", 10, D(3, 3));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.RegisterExternalAsync(fx.H.Approver, manual.Id, " ")));
-        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.RegisterExternalAsync(fx.H.Preparer, manual.Id, "Phát hành trên cổng nhà cung cấp, mã tra cứu ABC123")));
+        Assert.Equal(ErrorCodes.Forbidden, await CodeOf(() => svc.RegisterExternalAsync(fx.H.Auditor, manual.Id, "Phát hành trên cổng nhà cung cấp, mã tra cứu ABC123")));
         var reg = await svc.RegisterExternalAsync(fx.H.Approver, manual.Id, "Phát hành trên cổng nhà cung cấp, mã tra cứu ABC123");
         Assert.Equal("Issued", reg.Status);
     }
