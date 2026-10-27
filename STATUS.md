@@ -1,5 +1,9 @@
 # STATUS — theo Definition of Done (master prompt §48)
 
+## Bổ sung 27/10/2026 — mốc ngày trích trước CKTM
+
+`AWAITING_REAL_DATA_VALIDATION` — trên main df1ede0, lỗi bỏ sót tăng giá đã có sửa và test RebateBase29. Bổ sung lọc ngày hạch toán điều chỉnh theo ngày ước tính khi trích trước, để điều chỉnh ngày sau không làm lệch số trích kỳ trước; preview/quyết toán vẫn nhận hồ sơ đến muộn. Thêm bốn ca RebateCutoff30, gồm đúng ngày/sau ngày và chênh lệch lần trích tiếp theo. Đã đạt **600/600 backend** (126 domain + 474 SQLite), **6/6 ca trọng tâm**, **77/77 frontend**, **17/17 E2E**, build đạt, lint 0 lỗi/25 cảnh báo có sẵn. Chi tiết `docs/audit/2026-10-27-rebate-accrual-cutoff.md`; không sửa sổ/snapshot cũ, chưa đối chiếu PostgreSQL/dữ liệu thật.
+
 ## Bổ sung 26/10/2026 — Phase28: CKTM bổ sung/thu hồi và thay thế ngoại tệ
 
 `AWAITING_REAL_DATA_VALIDATION` — code/UI và toàn bộ kiểm thử tự động bản cuối đã đạt. Đã triển khai code/API/UI và migration SQLite/PostgreSQL cho chuỗi run bổ sung/thu hồi, snapshot quyền lợi lũy kế, hash nguồn/phiên bản, ghi sổ đúng tài khoản, giữ lịch sử, kiểm tra ngày và thứ tự đảo/hủy. Đã có kế hoạch/chuyển phân bổ ngoại tệ theo cả nguyên tệ và giá trị ghi sổ, phần thừa chưa phân bổ, không ghi lại dòng tiền/FX; lỗi DB sau phát hành giữ PostError để phục hồi.
