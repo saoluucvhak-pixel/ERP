@@ -8,6 +8,7 @@ public sealed record AgreementUpdateRequest(long RowVersion, InvoiceKind Kind, G
 public sealed record AgreementAccrueRequest(long RowVersion, DateOnly AsOf);
 public sealed record AgreementActiveRequest(long RowVersion, bool Active);
 public sealed record AgreementSettleRequest(long RowVersion, string InvoiceSeries, string FirstInvoiceNo, DateOnly InvoiceDate, DateOnly PostingDate, bool ByVoucher = false);
+public sealed record RebateAmendVoucherRequest(long RowVersion, Guid PreviousRunId, string SourceHash, string Reason, DateOnly PostingDate);
 public sealed record PurchaseRebatePolicyRequest(Hak.Domain.Organization.PurchaseRebatePolicy Policy);
 public sealed record DiscountLinkInvoiceRequest(long RowVersion, Guid InvoiceId, DateOnly? ReceivedDate);
 public sealed record DiscountInvoiceReceivedRequest(long RowVersion, Guid InvoiceId, DateOnly ReceivedDate);
@@ -37,7 +38,11 @@ public static class DiscountEndpoints
             return Results.Ok(new { run.Id, run.Amount, run.Percent, run.EligibleSales });
         });
         api.MapGet("/agreements/{id:guid}/history", async (HttpContext http, Guid id, DiscountAgreementService s) => Results.Ok(await s.HistoryAsync(await http.SessionAsync(), id)));
-        api.MapGet("/agreements/{id:guid}/amendment-preview", async (HttpContext http, Guid id, DiscountAgreementService s) => Results.Ok(await s.AmendmentPreviewAsync(await http.SessionAsync(), id)));
+        api.MapGet("/agreements/{id:guid}/amendment-preview", async (HttpContext http, Guid id, bool? byVoucher, DiscountAgreementService s) => Results.Ok(await s.AmendmentPreviewAsync(await http.SessionAsync(), id, byVoucher == true)));
+        api.MapPost("/agreements/{id:guid}/amend-voucher", async (HttpContext http, Guid id, RebateAmendVoucherRequest r, DiscountAgreementService s) => {
+            var result = await s.AmendByVoucherAsync(await http.SessionAsync(), id, r.RowVersion, r.PreviousRunId, r.SourceHash, r.Reason, r.PostingDate);
+            return Results.Ok(new { result.Id, result.Amount, result.Sequence });
+        });
         api.MapPost("/agreements/{id:guid}/amend", async (HttpContext http, Guid id, RebateAmendRequest r, DiscountAgreementService s) => {
             var result = await s.AmendAsync(await http.SessionAsync(), id, r.RowVersion, r.PreviousRunId, r.SourceHash, r.Reason, r.InvoiceSeries, r.FirstInvoiceNo, r.InvoiceDate, r.PostingDate);
             return Results.Ok(new { result.Id, result.Amount, result.Sequence });

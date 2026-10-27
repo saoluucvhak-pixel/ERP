@@ -21,6 +21,7 @@ export function RebateAmendments({ agreement, onClose, onChanged, onProgress, on
   const [postingDate, setPostingDate] = useState(date)
   const [info, setInfo] = useState('')
   const [voiding, setVoiding] = useState<History | null>(null)
+  const [byVoucher, setByVoucher] = useState(false)
   const { busy, error, run } = useAction()
   const base = `/discounts/agreements/${agreement.id}`
   useEffect(() => { run(async () => setHistory(await get<History[]>(`${base}/history`))) }, [base, run])
@@ -41,7 +42,12 @@ export function RebateAmendments({ agreement, onClose, onChanged, onProgress, on
         {!h.voided && <button disabled={busy} onClick={() => setVoiding(h)}>Hủy lần này</button>}
       </td></tr>)}
     </tbody></table>
-    <button disabled={busy} onClick={() => run(async () => { setPreview(null); setPreview(await get<Preview>(`${base}/amendment-preview`)); setInfo('') })}>Tính lại chênh lệch</button>
+    <label><input type="checkbox" checked={byVoucher} onChange={e => { setByVoucher(e.target.checked); setPreview(null) }} /> Bổ sung / thu hồi bằng hạch toán điều chỉnh (chứng từ, không hóa đơn, KHÔNG đổi thuế GTGT) — dùng khi quyết toán gốc bằng chứng từ</label>
+    <button disabled={busy} onClick={() => run(async () => {
+      setPreview(null)
+      setPreview(byVoucher ? await get<Preview>(`${base}/amendment-preview?byVoucher=true`) : await get<Preview>(`${base}/amendment-preview`))
+      setInfo('')
+    })}>Tính lại chênh lệch</button>
     {preview && <>
       <p>Doanh số hiện tại: <b>{formatMoney(preview.eligibleSales)}</b>. Quyền lợi trước: {formatMoney(preview.previousAmount)}; quyền lợi hiện tại: {formatMoney(preview.targetAmount)}; chênh lệch tiền hạch toán: <b>{formatMoney(preview.difference)}</b>.</p>
       <table className="grid"><thead><tr><th>Hóa đơn / dòng</th><th>Tiền</th><th className="num">Đã chốt</th><th className="num">Quyền lợi mới</th><th className="num">Chênh lệch</th><th className="num">Tiền hạch toán</th><th>VAT %</th></tr></thead><tbody>
@@ -51,17 +57,22 @@ export function RebateAmendments({ agreement, onClose, onChanged, onProgress, on
         <p>Số dương tạo hóa đơn giảm CKTM bổ sung; số âm tạo hóa đơn tăng để thu hồi CKTM. Tổng bằng 0 vẫn phải xử lý nếu phân bổ theo nguồn/thuế suất thay đổi. Hóa đơn tạo ở trạng thái nháp, chưa tự ghi sổ hoặc xác nhận hoàn tất thuế.</p>
         <div className="form-row">
           <label>Lý do<input value={reason} onChange={e => setReason(e.target.value)} /></label>
-          <label>Ký hiệu<input value={series} onChange={e => setSeries(e.target.value)} /></label>
-          <label>Số hóa đơn đầu tiên<input value={no} onChange={e => setNo(e.target.value)} /></label>
-          <label>Ngày hóa đơn<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+          {!byVoucher && <>
+            <label>Ký hiệu<input value={series} onChange={e => setSeries(e.target.value)} /></label>
+            <label>Số hóa đơn đầu tiên<input value={no} onChange={e => setNo(e.target.value)} /></label>
+            <label>Ngày hóa đơn<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label></>}
           <label>Ngày hạch toán<input type="date" value={postingDate} onChange={e => setPostingDate(e.target.value)} /></label>
         </div>
         <p className="muted">Hóa đơn NCC phải dùng số/ký hiệu thực nhận; nhiều số không liên tiếp cần chia hồ sơ trước khi xác nhận.</p>
-        <button className="primary" disabled={busy || !reason.trim() || !series.trim() || !no.trim()} onClick={() => run(async () => {
-          const result = await post<{ id: string; amount: string }>(`${base}/amend`, { rowVersion: preview.rowVersion, previousRunId: preview.previousRunId, sourceHash: preview.sourceHash, reason, invoiceSeries: series, firstInvoiceNo: no, invoiceDate: date, postingDate })
-          setPreview(null); setInfo(`Đã lập lần điều chỉnh ${formatMoney(result.amount)}. Mở Hóa đơn để kiểm tra, phát hành và ghi sổ; xem Tiến độ lần này để theo dõi hồ sơ.`)
+        <button className="primary" disabled={busy || !reason.trim() || (!byVoucher && (!series.trim() || !no.trim()))} onClick={() => run(async () => {
+          const result = byVoucher
+            ? await post<{ id: string; amount: string }>(`${base}/amend-voucher`, { rowVersion: preview.rowVersion, previousRunId: preview.previousRunId, sourceHash: preview.sourceHash, reason, postingDate })
+            : await post<{ id: string; amount: string }>(`${base}/amend`, { rowVersion: preview.rowVersion, previousRunId: preview.previousRunId, sourceHash: preview.sourceHash, reason, invoiceSeries: series, firstInvoiceNo: no, invoiceDate: date, postingDate })
+          setPreview(null); setInfo(byVoucher
+            ? `Đã lập chứng từ điều chỉnh ${formatMoney(result.amount)} (nháp, không đổi thuế GTGT). Mở Chứng từ để duyệt và ghi sổ.`
+            : `Đã lập lần điều chỉnh ${formatMoney(result.amount)}. Mở Hóa đơn để kiểm tra, phát hành và ghi sổ; xem Tiến độ lần này để theo dõi hồ sơ.`)
           setHistory(await get<History[]>(`${base}/history`)); await onChanged()
-        })}>Lập hóa đơn nháp theo chênh lệch</button>
+        })}>{byVoucher ? 'Lập chứng từ điều chỉnh nháp' : 'Lập hóa đơn nháp theo chênh lệch'}</button>
       </>}
     </>}
   </Modal>

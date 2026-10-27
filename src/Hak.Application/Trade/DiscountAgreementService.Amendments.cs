@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Hak.Application.Accounting;
 using Hak.Application.Common;
 using Hak.Application.Security;
+using Hak.Application.Settlement;
 using Hak.Domain.Common;
 using Hak.Domain.Security;
 using Hak.Domain.Trade;
@@ -39,7 +41,7 @@ public sealed partial class DiscountAgreementService
             }).ToList())).ToList();
     }
 
-    private async Task RequireCompletedRunAsync(SessionContext ctx, DiscountAgreementRun run)
+    private async Task RequireCompletedRunAsync(SessionContext ctx, DiscountAgreementRun run, bool allowUnlinkedVoucher = false)
     {
         if (run.VoucherId is { } vid && !await db.Vouchers.AnyAsync(v => v.Id == vid && v.Status == VoucherStatus.Posted))
             throw new DomainException(ErrorCodes.InvalidStateTransition, "Ghi sổ quyết toán trước trước khi lập bổ sung/thu hồi.");
@@ -47,18 +49,20 @@ public sealed partial class DiscountAgreementService
         var ids = await db.DiscountAgreementRunInvoices.Where(l => l.RunId == run.Id).Select(l => l.AdjustmentInvoiceId)
             .Concat(db.DiscountSettlementInvoiceLinks.Where(l => l.RunId == run.Id).Select(l => l.AdjustmentInvoiceId)).Distinct().ToListAsync();
         var invs = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).Where(i => ids.Contains(i.Id)).ToListAsync();
+        // Quyết toán (gốc hoặc bổ sung/thu hồi) bằng chứng từ đã ghi sổ mà không có hóa đơn liên kết: chuỗi bổ sung bằng chứng từ không cần hóa đơn.
+        if (allowUnlinkedVoucher && run.VoucherId is not null && invs.Count == 0) return;
         var actual = invs.Where(i => i.Status == InvoiceStatus.Posted).Sum(i => i.Lines.Sum(l => l.FunctionalAmount));
         var required = snapshot.Sources.Sum(s => s.Lines.Sum(l => MoneyMath.Convert(l.Amount, s.ExchangeRate ?? 1, snapshot.FunctionalDecimalPlaces)));
         if (invs.Count == 0 || invs.Any(i => i.Status != InvoiceStatus.Posted) || actual != required)
             throw new DomainException(ErrorCodes.InvalidStateTransition, "Hoàn tất ghi sổ/liên kết toàn bộ hóa đơn của lần quyết toán trước; không cấp hoặc thu hồi hai lần cùng quyền lợi.");
     }
 
-    private async Task<(DiscountAgreement Agreement, DiscountAgreementRun Previous, Plan Plan, List<SourceAllocation> Target, RebateAmendmentPreview Preview)> AmendmentPlanAsync(SessionContext ctx, Guid id)
+    private async Task<(DiscountAgreement Agreement, DiscountAgreementRun Previous, Plan Plan, List<SourceAllocation> Target, RebateAmendmentPreview Preview)> AmendmentPlanAsync(SessionContext ctx, Guid id, bool allowUnlinkedVoucher = false)
     {
         var a = await LoadAsync(ctx, id);
         var runs = await db.DiscountAgreementRuns.AsNoTracking().Where(r => r.CompanyId == ctx.CompanyId && r.AgreementId == id && r.VoidedAt == null).OrderBy(r => r.Sequence).ToListAsync();
         if (runs.Count == 0) throw new DomainException(ErrorCodes.InvalidStateTransition, "Lập quyết toán gốc trước.");
-        foreach (var run in runs) await RequireCompletedRunAsync(ctx, run);
+        foreach (var run in runs) await RequireCompletedRunAsync(ctx, run, allowUnlinkedVoucher);
         var previous = runs[^1];
         var frozen = ReadSnapshot(previous)!;
         // Agreement service forbids editing an effective policy. Also verify against the frozen original policy.
@@ -101,10 +105,10 @@ public sealed partial class DiscountAgreementService
         return (a, previous, plan, target, new(a.Id, a.RowVersion, previous.Id, hash, plan.Eligible, previousAmount, plan.Amount, deltas.Sum(d => d.FunctionalDifference), deltas));
     }
 
-    public async Task<RebateAmendmentPreview> AmendmentPreviewAsync(SessionContext ctx, Guid id)
+    public async Task<RebateAmendmentPreview> AmendmentPreviewAsync(SessionContext ctx, Guid id, bool byVoucher = false)
     {
         ctx.Require(Permissions.ReportView);
-        return (await AmendmentPlanAsync(ctx, id)).Preview;
+        return (await AmendmentPlanAsync(ctx, id, byVoucher)).Preview;
     }
 
     private static async Task CheckAmendmentPurchaseDestinationsAsync(Hak.Data.HakDbContext database, Guid companyId, IReadOnlyList<Guid> ids)
@@ -202,5 +206,114 @@ public sealed partial class DiscountAgreementService
             await audit.AppendAsync(ctx.CompanyId, ctx, "discount_agreement.amend", "discount_agreement", id.ToString(), new { run.Id, previousRunId, sourceHash, reason, run.Amount, sequence });
             await db.SaveChangesAsync(); return run;
         });
+    }
+    /// <summary>
+    /// Bổ sung / thu hồi CKTM bằng HẠCH TOÁN ĐIỀU CHỈNH (chuỗi quyết toán gốc bằng chứng từ, chưa có hóa đơn điều chỉnh). Chị chốt 27/10/2026:
+    /// (1) không đổi thuế GTGT — chiết khấu phải giảm thuế đầu ra thì quyết toán bằng hóa đơn; (2) ngày ghi sổ do người lập chọn, không trước cuối kỳ thỏa thuận / lần trước, kỳ phải còn mở;
+    /// (3) thu hồi không vượt quyền lợi đã chốt (lũy kế không âm). Bổ sung: Nợ giảm trừ doanh thu / Có phải thu (bù trừ công nợ hóa đơn gốc); thu hồi: Nợ phải thu / Có TK chiết khấu, không ghi vào doanh thu.
+    /// Run gốc và snapshot giữ nguyên; chứng từ nháp, người khác duyệt và ghi sổ. Chỉ hóa đơn tiền hạch toán.
+    /// </summary>
+    public async Task<DiscountAgreementRun> AmendByVoucherAsync(SessionContext ctx, Guid id, long rowVersion, Guid previousRunId, string sourceHash, string reason, DateOnly postingDate)
+    {
+        ctx.Require(Permissions.VoucherCreate);
+        if (engine is null) throw new InvalidOperationException("Thiếu AccountingEngine.");
+        if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ValidationFailed, "Phải nhập lý do bổ sung / thu hồi.");
+        return await db.InTransactionAsync(async () =>
+        {
+            var p = await AmendmentPlanAsync(ctx, id, true);
+            RowVersionCheck.Require(p.Agreement.RowVersion, rowVersion, "Thỏa thuận");
+            if (p.Previous.Id != previousRunId || p.Preview.SourceHash != sourceHash)
+                throw new DomainException(ErrorCodes.ConcurrencyConflict, "Nguồn/chuỗi quyết toán đã đổi; tính lại và duyệt số chênh lệch mới.");
+            if (!p.Agreement.IsActive || postingDate < p.Agreement.ToDate)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, "Thỏa thuận phải đang áp dụng và ngày hạch toán không được trước cuối kỳ.");
+            var root = await db.DiscountAgreementRuns.AsNoTracking().FirstOrDefaultAsync(r => r.AgreementId == id && r.CompanyId == ctx.CompanyId && r.VoidedAt == null && r.ParentRunId == null)
+                       ?? throw new DomainException(ErrorCodes.InvalidStateTransition, "Lập quyết toán gốc trước.");
+            if (root.VoucherId is null) throw new DomainException(ErrorCodes.InvalidStateTransition, "Quyết toán gốc bằng hóa đơn điều chỉnh: bổ sung / thu hồi cũng bằng hóa đơn điều chỉnh (không trộn hai chế độ).");
+            if (p.Preview.Lines.Any(l => l.Currency is not null))
+                throw new DomainException(ErrorCodes.ValidationFailed, "Có nguồn ngoại tệ: bổ sung / thu hồi bằng hóa đơn điều chỉnh (hạch toán điều chỉnh chỉ dùng cho hóa đơn tiền hạch toán).");
+            if (p.Preview.Lines.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Không có chênh lệch quyền lợi; không tạo chứng từ.");
+            if (p.Preview.PreviousAmount + p.Preview.Difference < 0) throw new DomainException(ErrorCodes.ValidationFailed, "Thu hồi vượt quyền lợi đã chốt.");
+            var historyIds = await db.DiscountAgreementRuns.Where(r => r.AgreementId == id && r.CompanyId == ctx.CompanyId).Select(r => r.Id).ToListAsync();
+            var historyVouchers = await db.DiscountAgreementRuns.Where(r => historyIds.Contains(r.Id) && r.VoucherId != null).Select(r => r.VoucherId!.Value).ToListAsync();
+            var latestPosting = await db.Vouchers.Where(v => v.CompanyId == ctx.CompanyId && (historyVouchers.Contains(v.Id) || (v.ReversesVoucherId != null && historyVouchers.Contains(v.ReversesVoucherId.Value)))
+                && (v.Status == VoucherStatus.Posted || v.Status == VoucherStatus.Reversed)).MaxAsync(v => (DateOnly?)v.PostingDate);
+            if (latestPosting is { } earliest && postingDate < earliest)
+                throw new DomainException(ErrorCodes.InvalidStateTransition, $"Ngày hạch toán không được trước chứng từ quyết toán / lần đảo đã ghi nhận ({earliest.Vn()}).");
+            var period = await db.AccountingPeriods.AsNoTracking().FirstOrDefaultAsync(x => x.CompanyId == ctx.CompanyId && x.StartDate <= postingDate && x.EndDate >= postingDate);
+            if (period?.Status != Domain.Organization.PeriodStatus.Open) throw new DomainException(ErrorCodes.PeriodLocked, "Kỳ hạch toán bổ sung/thu hồi không mở.");
+
+            var ra = await RebateAccountsAsync(ctx.CompanyId, p.Agreement.Kind, false, true);
+            var recognition = root.RecognitionAccountId ?? ra.Discount;
+            var sequence = await db.DiscountAgreementRuns.Where(r => r.AgreementId == id).MaxAsync(r => r.Sequence) + 1;
+            var run = new DiscountAgreementRun { Id = Ids.New(), AgreementId = id, CompanyId = ctx.CompanyId, ParentRunId = previousRunId, Sequence = sequence,
+                AmendmentReason = reason.Trim(), EligibleSales = p.Plan.Eligible, Percent = p.Plan.Percent, Amount = p.Preview.Difference,
+                RecognitionAccountId = recognition, AccrualSettlementMode = DiscountAccrualSettlementMode.PerInvoice, CreatedAt = clock.UtcNow, CreatedBy = ctx.UserId };
+            var perInvoice = p.Preview.Lines.GroupBy(l => l.OriginalInvoiceId).Select(g => (InvoiceId: g.Key, Delta: g.Sum(l => l.FunctionalDifference))).Where(x => x.Delta != 0).ToList();
+            var supplement = perInvoice.Where(x => x.Delta > 0).Sum(x => x.Delta);
+            var clawback = -perInvoice.Where(x => x.Delta < 0).Sum(x => x.Delta);
+            var desc = $"{(clawback > 0 && supplement == 0 ? "Thu hồi" : supplement > 0 && clawback == 0 ? "Bổ sung" : "Điều chỉnh")} CKTM {p.Agreement.Code}, lần {sequence}: {reason.Trim()} — hạch toán điều chỉnh, không đổi thuế GTGT";
+            var lines = new List<VoucherLineInput>();
+            if (supplement > 0)
+            {
+                lines.Add(new(recognition, ra.DSide, supplement, Description: desc));
+                foreach (var item in perInvoice.Where(x => x.Delta > 0)) lines.AddRange(await SettleOriginalLinesAsync(item.InvoiceId, item.Delta, ra.OpenItem!.Value, ra.BSide, desc));
+            }
+            if (clawback > 0)
+            {
+                lines.Add(new(recognition, Opp(ra.DSide), clawback, Description: desc));     // thu hồi ghi vào TK chiết khấu, không ghi vào doanh thu
+                lines.Add(new(ra.OpenItem!.Value, Opp(ra.BSide), clawback, p.Agreement.PartnerId, Description: desc));
+            }
+            var voucher = await engine.CreateDraftAsync(ctx, new VoucherInput(VoucherTypes.General, postingDate, postingDate, desc, lines, SourceSystem: VoucherSource, SourceId: run.Id.ToString()));
+            run.VoucherId = voucher.Id;
+            db.DiscountAgreementRuns.Add(run);
+            await db.SaveChangesAsync();
+
+            var invoiceIds = perInvoice.Select(x => x.InvoiceId).ToList();
+            var originals = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).Where(i => invoiceIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id);
+            var sources = p.Preview.Lines.GroupBy(l => (l.OriginalInvoiceId, Increase: l.Difference < 0)).Select(g =>
+            {
+                var original = originals[g.Key.OriginalInvoiceId];
+                return new SourceAllocation(original.Id, original.Currency, original.ExchangeRate, p.Target.FirstOrDefault(t => t.InvoiceId == original.Id)?.DecimalPlaces ?? 0,
+                    g.Select(l => new SourceLineAllocation(l.LineNo, Math.Abs(l.Difference), l.VatRate, original.Lines.Single(o => o.LineNo == l.LineNo).FunctionalAmount)).ToList(),
+                    g.Key.Increase ? InvoicePurpose.Increase : InvoicePurpose.Discount);
+            }).ToList();
+            var rowNo = 0;
+            var statementRows = perInvoice.Select(x => { var o = originals[x.InvoiceId];
+                return new AgreementStatementRow(++rowNo, o.InvoiceSeries, o.InvoiceNo, o.InvoiceDate, p.Plan.Shares.FirstOrDefault(s => s.Invoice.Id == o.Id).Sales, x.Delta, null, null, null, 0m); }).ToList();
+            var previewRows = perInvoice.Select(x => { var o = originals[x.InvoiceId];
+                return new AgreementInvoiceShare(o.Id, o.Number, o.InvoiceSeries, o.InvoiceNo, o.PostingDate, p.Plan.Shares.FirstOrDefault(s => s.Invoice.Id == o.Id).Sales, x.Delta); }).ToList();
+            var old = ReadSnapshot(p.Previous)!;
+            var stored = await db.Vouchers.AsNoTracking().Include(v => v.Lines).FirstAsync(v => v.Id == voucher.Id);
+            run.SettlementSnapshot = JsonSerializer.Serialize(new SettlementSnapshot(3, old.FunctionalDecimalPlaces,
+                old.Statement with { TotalSales = statementRows.Sum(r => r.Sales), TotalDiscount = run.Amount, Percent = p.Plan.Percent, Rows = statementRows, Mode = "Bổ sung / thu hồi CKTM bằng hạch toán điều chỉnh",
+                    Warning = "Bổ sung / thu hồi bằng chứng từ hạch toán: không có hóa đơn điều chỉnh và không đổi thuế GTGT [CẦN XÁC MINH cách xử lý thuế]; dấu dương là bổ sung, âm là thu hồi." },
+                new(id, p.Plan.Eligible, p.Plan.Percent, run.Amount, null, null, true, previewRows), old.Policy, sources,
+                stored.PostingDate, stored.Lines.Select(l => new FrozenAccountingLine(l.AccountId, l.Side, l.Amount, l.PartnerId, l.SettleJournalLineId)).ToList(), p.Target));
+            var agreement = await db.DiscountAgreements.SingleAsync(a => a.Id == id); agreement.RowVersion++;
+            await audit.AppendAsync(ctx.CompanyId, ctx, "discount_agreement.amend_voucher", "discount_agreement", id.ToString(), new { run.Id, previousRunId, sourceHash, reason, run.Amount, sequence, voucher = voucher.Number });
+            await db.SaveChangesAsync();
+            return run;
+        });
+    }
+
+    /// <summary>Dòng công nợ của chứng từ bổ sung: bù trừ công nợ còn mở của hóa đơn gốc, phần dư để chưa phân bổ.</summary>
+    private async Task<List<VoucherLineInput>> SettleOriginalLinesAsync(Guid originalInvoiceId, decimal amount, Guid accountId, Side side, string description)
+    {
+        var settlement = new SettlementService(db, audit, clock);
+        var result = new List<VoucherLineInput>();
+        var original = await db.CommercialInvoices.AsNoTracking().FirstAsync(i => i.Id == originalInvoiceId);
+        var targets = await (from l in db.JournalLines.AsNoTracking() join e in db.JournalEntries.AsNoTracking() on l.JournalEntryId equals e.Id
+                             where e.VoucherId == original.VoucherId && l.AccountId == accountId && l.Side != side && l.PartnerId == original.PartnerId && l.ForeignCurrency == null
+                             select l).OrderBy(l => l.LineNo).ToListAsync();
+        var remaining = amount;
+        foreach (var target in targets)
+        {
+            var applied = Math.Min(remaining, await settlement.OpenAmountAsync(target));
+            if (applied <= 0) continue;
+            result.Add(new(accountId, side, applied, original.PartnerId, Description: description, SettleJournalLineId: target.Id));
+            remaining -= applied;
+        }
+        if (remaining > 0) result.Add(new(accountId, side, remaining, original.PartnerId, Description: description + " — phần còn dư chưa phân bổ"));
+        return result;
     }
 }
