@@ -155,3 +155,21 @@ public class AuditFixTests
         Assert.Equal(3000m, (await s.Engine.UpdateDraftAsync(h.Preparer, manual.Id, manual.RowVersion, h.Sale(3000))).TotalDebit);
     }
 }
+
+public class LanSecurityTests
+{
+    [Theory]
+    [InlineData("http://127.0.0.1:5080")]
+    [InlineData("http://localhost:5080")]
+    [InlineData("http://[::1]:5080")]
+    [InlineData("https://192.168.1.10:5443")]
+    public void LoopbackAndHttps_AreNotFlagged(string url) => Assert.Empty(LanSecurity.InsecureLanUrls([url]));
+
+    [Theory]
+    [InlineData("http://192.168.1.10:5080")]
+    [InlineData("http://0.0.0.0:5080")]
+    [InlineData("http://*:5080")]
+    [InlineData("http://+:5080")]
+    [InlineData("http://may-chu:5080")]
+    public void PlainHttpOnTheLan_IsFlagged(string url) => Assert.Single(LanSecurity.InsecureLanUrls([url]));
+}

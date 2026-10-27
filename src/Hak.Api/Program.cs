@@ -93,6 +93,17 @@ var masterKey = runtime.Environment != "Test" || builder.Configuration["Hak:Secr
 builder.Services.AddSingleton(masterKey);
 
 var app = builder.Build();
+// SEC2-03: cảnh báo (hoặc từ chối, nếu Hak:RequireTlsForLan=true ở Production) khi nghe HTTP thuần trên địa chỉ không phải loopback.
+{
+    var listening = (builder.Configuration["urls"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
+    var insecureLan = LanSecurity.InsecureLanUrls(listening);
+    if (insecureLan.Count > 0)
+    {
+        if (runtime.IsProduction && string.Equals(builder.Configuration["Hak:RequireTlsForLan"], "true", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Hak:RequireTlsForLan=true: không cho nghe HTTP thuần trên {string.Join(", ", insecureLan)}. Cấu hình HTTPS (chứng chỉ) hoặc chạy sau proxy có TLS.");
+        app.Logger.LogWarning("Đang nghe HTTP thuần trên {Urls}: mật khẩu và token đi dạng rõ trong mạng. Nên dùng HTTPS (docs/08).", string.Join(", ", insecureLan));
+    }
+}
 
 using (var scope = app.Services.CreateScope())
 {
@@ -136,7 +147,8 @@ app.Use(async (http, next) =>
     h["X-Content-Type-Options"] = "nosniff";
     h["X-Frame-Options"] = "DENY";
     h["Referrer-Policy"] = "no-referrer";
-    h["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'";
+    h["Content-Security-Policy"] = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+    if (http.Request.Path.StartsWithSegments("/api")) h["Cache-Control"] = "no-store";   // dữ liệu kế toán / lương không để trình duyệt hay proxy lưu; tệp đính kèm tự đặt Cache-Control riêng
     await next();
 });
 if (loginLimit > 0) app.UseRateLimiter();
