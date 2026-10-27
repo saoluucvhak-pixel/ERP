@@ -466,9 +466,9 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
             if (await db.DiscountAgreementRuns.AnyAsync(r => r.AgreementId == id && r.VoidedAt == null)) throw new DomainException(ErrorCodes.InvalidStateTransition, $"Thỏa thuận {a.Code} đã quyết toán.");
             var accrued = await SettledAccrualAsync(id);                       // chặn khi còn chứng từ trích trước nháp
             // Trích trước lùi ngày làm lợi nhuận từng tháng lệch dù tổng đúng: không cho trích trước ngày sớm hơn lần trích gần nhất còn hiệu lực.
-            var lastAsOf = (await (from x in db.DiscountAccruals.AsNoTracking() join v in db.Vouchers.AsNoTracking() on x.VoucherId equals v.Id
-                                   where x.AgreementId == id && v.Status != VoucherStatus.Cancelled && v.Status != VoucherStatus.Reversed select (DateOnly?)x.AsOf).ToListAsync()).Max();
-            if (lastAsOf is { } last && asOf < last) throw new DomainException(ErrorCodes.ValidationFailed, $"Đã trích trước đến {last.Vn()}; ngày trích trước mới không được sớm hơn (đảo lần trích gần nhất nếu cần làm lại).");
+            var lastAsOf = (await (from prior in db.DiscountAccruals.AsNoTracking() join priorVoucher in db.Vouchers.AsNoTracking() on prior.VoucherId equals priorVoucher.Id
+                                   where prior.AgreementId == id && priorVoucher.Status != VoucherStatus.Cancelled && priorVoucher.Status != VoucherStatus.Reversed select (DateOnly?)prior.AsOf).ToListAsync()).Max();
+            if (lastAsOf is { } lastDate && asOf < lastDate) throw new DomainException(ErrorCodes.ValidationFailed, $"Đã trích trước đến {lastDate.Vn()}; ngày trích trước mới không được sớm hơn (đảo lần trích gần nhất nếu cần làm lại).");
             var plan = await PlanAsync(ctx, a, asOf);
             var adjustment = plan.Amount - accrued;
             if (adjustment == 0) throw new DomainException(ErrorCodes.ValidationFailed, $"Số ước tính {plan.Amount.Vn(0)} bằng số đã trích trước; không có gì để điều chỉnh.");
