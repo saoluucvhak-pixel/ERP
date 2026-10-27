@@ -29,7 +29,7 @@ public partial class TradeTests
         var (fx, _, svc, _) = await EInvoiceSetupAsync(); using var _fx = fx;
         var original = await IssuedSaleAsync(fx, svc);
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.CreateReplacementDraftAsync(fx.H.Preparer, original.InvoiceId!.Value, "Lùi ngày", null, null, D(3, 1), D(3, 1))));
-        var draft = await svc.CreateReplacementDraftAsync(fx.H.Preparer, original.InvoiceId.Value, "Phát hiện sai ở kỳ sau", [new ReplacementLineChange(1, UnitPrice: 90_000)], null, D(4, 5), D(4, 5));
+        var draft = await svc.CreateReplacementDraftAsync(fx.H.Preparer, original.InvoiceId!.Value, "Phát hiện sai ở kỳ sau", [new ReplacementLineChange(1, UnitPrice: 90_000)], null, D(4, 5), D(4, 5));
         Assert.Equal((D(4, 5), D(4, 5)), (draft.InvoiceDate, draft.PostingDate));
     }
 
