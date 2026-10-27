@@ -1,0 +1,60 @@
+name: build-setup
+# Build HAK-Setup.exe tren may Windows cua GitHub. Repo nay CONG KHAI nhung KHONG chua ma nguon:
+# ma nguon lay tu repo rieng tu (saoluucvhak-pixel/ERP) bang secret ERP_READ_TOKEN (chi doc).
+# Chi chay tay (workflow_dispatch): khong co trigger pull_request / fork de secret khong bi lo.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Nhanh hoac tag cua repo ERP can build
+        default: main
+        required: true
+      version:
+        description: Phien ban bo cai (vi du 1.0.0)
+        default: 1.0.0
+        required: true
+permissions:
+  contents: write   # tao Release trong repo build nay
+jobs:
+  setup:
+    runs-on: windows-latest
+    steps:
+      - name: Lay ma nguon tu repo rieng tu
+        uses: actions/checkout@v7
+        with:
+          repository: saoluucvhak-pixel/ERP
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.ERP_READ_TOKEN }}
+          path: src-erp
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Dong goi thu muc chuong trinh
+        shell: pwsh
+        working-directory: src-erp
+        run: ./tools/package/package.ps1
+      - name: Cai Inno Setup neu chua co
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and -not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Bien dich bo cai
+        shell: pwsh
+        working-directory: src-erp
+        run: |
+          $iscc = if (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") { "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" } else { (Get-Command iscc).Source }
+          & $iscc "/DAppVersion=${{ inputs.version }}" tools/package/HAK.iss
+          if ($LASTEXITCODE) { throw "iscc loi" }
+          $h = (Get-FileHash artifacts/HAK-Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$h  HAK-Setup.exe" | Set-Content artifacts/HAK-Setup.exe.sha256 -Encoding ascii
+          Write-Host "SHA256 $h"
+      - name: Tao Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v${{ inputs.version }}-build${{ github.run_number }}"
+          gh release create $tag src-erp/artifacts/HAK-Setup.exe src-erp/artifacts/HAK-Setup.exe.sha256 --repo ${{ github.repository }} --title "HAK Setup ${{ inputs.version }} (build ${{ github.run_number }})" --notes "Build tu repo rieng tu, nhanh/tag: ${{ inputs.ref }}. Chua ky so: Windows SmartScreen se canh bao nha phat hanh khong xac dinh."
