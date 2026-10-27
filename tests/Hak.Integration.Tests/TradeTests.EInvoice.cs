@@ -203,7 +203,7 @@ public partial class TradeTests
             [new InvoiceLineInput(100_000, issue2.Id, 1, VatRate: 10)]))).Id);
         var adj2 = await fx.Inv.CreateAdjustmentAsync(fx.H.Preparer, new AdjustmentInput(manual.Id, InvoicePurpose.Increase, "TAM", "TAM2", D(3, 21), D(3, 21), "Điều chỉnh tăng", [new AdjustmentLineInput(1, Amount: 50_000)]));
         Assert.Equal(ErrorCodes.ValidationFailed, await CodeOf(() => svc.IssueAsync(fx.H.Approver, adj2.Id)));
-        var reg = await svc.RegisterExternalAsync(fx.H.Approver, manual.Id);
+        var reg = await svc.RegisterExternalAsync(fx.H.Approver, manual.Id, "Phát hành trên cổng nhà cung cấp, mã tra cứu ABC123");
         Assert.Equal(("Issued", "EXTERNAL", "1C26TXX", "0000500"), (reg.Status, reg.Provider, reg.Series, reg.Number));
         var issued2 = await svc.IssueAsync(fx.H.Approver, adj2.Id);
         Assert.Equal(("Issued", "Increase"), (issued2.Status, issued2.Nature));

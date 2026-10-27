@@ -1,4 +1,5 @@
 using Hak.Application.Audit;
+using Hak.Application.Banking;
 using Hak.Application.Common;
 using Hak.Application.Security;
 using Hak.Application.Trade;
@@ -31,6 +32,9 @@ public sealed record ProcessResult(int Dispatched, int Issued, int Rejected, int
 /// </summary>
 public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoices, IEInvoiceProvider provider, AuditService audit, IClock clock, EInvoiceOptions options)
 {
+    /// <summary>Từ (đã bỏ dấu) làm trường điều chỉnh thông tin bị từ chối: mã số thuế, số lượng, đơn giá, tiền, thuế, chiết khấu. [CẦN XÁC MINH theo văn bản hiện hành về điều chỉnh thông tin]</summary>
+    private static readonly string[] InformationBlockedWords = ["mst", "ma so thue", "thue", "thue suat", "tien", "tong", "gia tri", "so luong", "don gia", "gia", "thanh tien", "chiet khau"];
+
     private static string Norm(string? v) => (v ?? "").Replace(" ", "").Trim();
     /// <summary>Thời gian tối đa chờ một lần gọi nhà cung cấp; quá hạn là lỗi tạm thời (kết quả chưa rõ), gửi lại cùng khóa.</summary>
     private static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(60);
@@ -293,13 +297,16 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
     /// Lập hóa đơn thay thế NHÁP từ hóa đơn bán đã ghi sổ: sao chép các dòng (cùng phiếu kho / đơn hàng), áp thay đổi giá / thuế suất / chiết khấu / đối tượng. Sau đó phát hành như hóa đơn thường;
     /// khi cơ quan thuế chấp nhận, hóa đơn gốc được đảo và hóa đơn thay thế được ghi sổ trong cùng giao dịch.
     /// </summary>
-    public async Task<CommercialInvoice> CreateReplacementDraftAsync(SessionContext ctx, Guid originalInvoiceId, string reason, IReadOnlyList<ReplacementLineChange>? changes = null, Guid? newPartnerId = null)
+    public async Task<CommercialInvoice> CreateReplacementDraftAsync(SessionContext ctx, Guid originalInvoiceId, string reason, IReadOnlyList<ReplacementLineChange>? changes = null, Guid? newPartnerId = null, DateOnly? invoiceDate = null, DateOnly? postingDate = null)
     {
         ctx.Require(Permissions.InvoiceDocument); ctx.Require(Permissions.EInvoiceIssue);
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException(ErrorCodes.ValidationFailed, "Phải nhập lý do thay thế.");
         var orig = await db.CommercialInvoices.AsNoTracking().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == originalInvoiceId && i.CompanyId == ctx.CompanyId)
                    ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn gốc không tồn tại.");
         await IssuedDocumentOfAsync(ctx.CompanyId, orig.Id, "bị thay thế");
+        // Phát hiện sai sót ở kỳ sau thì cho chọn ngày lập / ngày hạch toán mới (mặc định giữ ngày của hóa đơn gốc); ngày hạch toán không được trước hóa đơn gốc, kỳ phải còn mở (kiểm lại khi phát hành).
+        if (postingDate is { } pd && pd < orig.PostingDate) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày hạch toán hóa đơn thay thế không được trước ngày hạch toán hóa đơn gốc.");
+        if (invoiceDate is { } newInvoiceDate && newInvoiceDate < orig.InvoiceDate) throw new DomainException(ErrorCodes.ValidationFailed, "Ngày lập hóa đơn thay thế không được trước ngày lập hóa đơn gốc.");
         var byLine = (changes ?? []).ToDictionary(c => c.LineNo);
         foreach (var c in byLine.Values) if (orig.Lines.All(l => l.LineNo != c.LineNo)) throw new DomainException(ErrorCodes.NotFound, $"Hóa đơn gốc không có dòng {c.LineNo}.");
         var lines = orig.Lines.OrderBy(l => l.LineNo).Select(l =>
@@ -314,7 +321,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
                 : new InvoiceLineInput(ch?.UnitPrice ?? l.UnitPrice, Basis: PricingBasis.Quantity, Quantity: l.BasisQuantity, AccountId: l.AccountId, VatRate: ch?.VatRate ?? l.VatRate, Description: l.Description,
                     OrderId: l.OrderId, OrderLineNo: l.OrderLineNo, DiscountPercent: pct, DiscountAmount: amount);
         }).ToList();
-        var input = new InvoiceInput(orig.Kind, newPartnerId ?? orig.PartnerId, InvoiceService.AwaitingSeries, "", orig.InvoiceDate, orig.PostingDate,
+        var input = new InvoiceInput(orig.Kind, newPartnerId ?? orig.PartnerId, InvoiceService.AwaitingSeries, "", invoiceDate ?? orig.InvoiceDate, postingDate ?? orig.PostingDate,
             $"Thay thế hóa đơn {orig.InvoiceSeries}/{orig.InvoiceNo}: {reason.Trim()}", lines, orig.DueDate, orig.Currency, orig.ExchangeRate, orig.PaymentDiscountPercent, orig.PaymentDiscountDays,
             AwaitIssue: true, ReplacesInvoiceId: orig.Id, PaymentDiscountOptions: orig.PaymentDiscountOptions);
         return await invoices.CreateAsync(ctx, input);
@@ -326,10 +333,21 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
         ctx.Require(Permissions.EInvoiceIssue);
         RequireProvider();
         if (string.IsNullOrWhiteSpace(reason) || changes.Count == 0) throw new DomainException(ErrorCodes.ValidationFailed, "Phải nhập lý do và ít nhất một thông tin được điều chỉnh.");
+        // Điều chỉnh thông tin không có bút toán nên chỉ dành cho thông tin mô tả (tên, địa chỉ…). Mã số thuế, số lượng, đơn giá, tiền, thuế, chiết khấu phải đi qua hóa đơn điều chỉnh / thay thế.
+        foreach (var c in changes)
+        {
+            if (string.IsNullOrWhiteSpace(c.Field) || string.IsNullOrWhiteSpace(c.NewValue)) throw new DomainException(ErrorCodes.ValidationFailed, "Mỗi thông tin điều chỉnh phải có tên trường và giá trị mới.");
+            if ((c.OldValue ?? "").Trim() == c.NewValue.Trim()) throw new DomainException(ErrorCodes.ValidationFailed, $"Trường '{c.Field}': giá trị mới trùng giá trị cũ.");
+            var plain = StatementVoucherService.Plain(c.Field);
+            if (InformationBlockedWords.Any(w => $" {plain} ".Contains($" {w} ")))
+                throw new DomainException(ErrorCodes.ValidationFailed, $"Trường '{c.Field}' liên quan mã số thuế / số tiền / thuế: không điều chỉnh thông tin được; dùng hóa đơn điều chỉnh hoặc thay thế.");
+        }
         var docId = await db.InTransactionAsync(async () =>
         {
             var related = await db.EInvoiceDocuments.FirstOrDefaultAsync(d => d.Id == relatedDocumentId && d.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn gốc không tồn tại.");
             if (related.Status != EInvoiceDocStatus.Issued) throw new DomainException(ErrorCodes.InvalidStateTransition, "Chỉ điều chỉnh thông tin của hóa đơn đã phát hành.");
+            if (await db.EInvoiceDocuments.AnyAsync(d => d.RelatedDocumentId == related.Id && d.Nature == EInvoiceAdjustNature.Information && d.Status == EInvoiceDocStatus.Issuing))
+                throw new DomainException(ErrorCodes.DuplicateSource, "Hóa đơn này đang có một lệnh điều chỉnh thông tin chưa hoàn tất; chờ kết quả rồi mới lập tiếp.");
             var text = $"{reason.Trim()} — " + string.Join("; ", changes.Select(c => $"{c.Field}: '{c.OldValue}' → '{c.NewValue}'"));
             var doc = NewDocument(ctx, null, EInvoiceRelation.Adjustment, EInvoiceAdjustNature.Information, related.Id, text, clock.UtcNow.Date is var d ? DateOnly.FromDateTime(d) : default);
             db.EInvoiceDocuments.Add(doc);
@@ -342,9 +360,12 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
     }
 
     /// <summary>Ghi nhận hóa đơn bán ĐÃ phát hành ngoài HAK (phần mềm khác, đã có số thật): tạo bản ghi Issued không qua nhà cung cấp để làm gốc cho điều chỉnh / thay thế sau này.</summary>
-    public async Task<EInvoiceDocumentView> RegisterExternalAsync(SessionContext ctx, Guid invoiceId)
+    public async Task<EInvoiceDocumentView> RegisterExternalAsync(SessionContext ctx, Guid invoiceId, string reason)
     {
-        ctx.Require(Permissions.EInvoiceIssue);
+        // Ghi nhận hóa đơn "đã phát hành ngoài ERP" tạo bản ghi Issued từ ký hiệu / số do người dùng nhập và có thể làm gốc cho điều chỉnh / thay thế sau này:
+        // cần quyền ghi sổ như phát hành, và lý do / chứng cứ (mã tra cứu, nguồn) bắt buộc để người duyệt đối chiếu.
+        ctx.Require(Permissions.EInvoiceIssue); ctx.Require(Permissions.VoucherPost);
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 10) throw new DomainException(ErrorCodes.ValidationFailed, "Phải ghi lý do / chứng cứ hóa đơn đã phát hành ngoài ERP (ít nhất 10 ký tự: nguồn, mã tra cứu…).");
         var id = await db.InTransactionAsync(async () =>
         {
             var inv = await db.CommercialInvoices.AsNoTracking().FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == ctx.CompanyId) ?? throw new DomainException(ErrorCodes.NotFound, "Hóa đơn không tồn tại.");
@@ -358,7 +379,7 @@ public sealed class EInvoiceIssueService(HakDbContext db, InvoiceService invoice
                 IssueDate = inv.InvoiceDate, Status = EInvoiceDocStatus.Issued, Relation = EInvoiceRelation.Original, RequestedBy = ctx.UserId, RequestedAt = clock.UtcNow, RowVersion = 1,
             };
             db.EInvoiceDocuments.Add(doc);
-            await audit.AppendAsync(ctx.CompanyId, ctx, "einvoice.register_external", "einvoice_document", doc.Id.ToString(), new { invoice = inv.Number, doc.Series, doc.Number });
+            await audit.AppendAsync(ctx.CompanyId, ctx, "einvoice.register_external", "einvoice_document", doc.Id.ToString(), new { invoice = inv.Number, doc.Series, doc.Number, reason = reason.Trim() });
             await db.SaveChangesAsync();
             return doc.Id;
         });
