@@ -1,0 +1,216 @@
+<title>Luồng dữ liệu HAK</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: ba cột ghi nhận → xử lý → báo cáo, sáu làn chu trình chạy ngang; lõi xử lý đứng giữa. */
+:root {
+  --bg: #f5f6f4; --panel: #ffffff; --fg: #17211f; --muted: #5d6b67; --line: #c9d1ce;
+  --accent: #0b6e63; --accent-soft: #dcefec; --ext: #9a5b00; --ext-soft: #f6e8cf; --lock: #7a2e4f;
+  --font: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1615; --panel: #172120; --fg: #e5ecea; --muted: #97a8a4; --line: #2d3d3a;
+  --accent: #4cc2b3; --accent-soft: #163a36; --ext: #e0a85a; --ext-soft: #3a2c14; --lock: #e08ab0; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1615; --panel: #172120; --fg: #e5ecea; --muted: #97a8a4; --line: #2d3d3a;
+  --accent: #4cc2b3; --accent-soft: #163a36; --ext: #e0a85a; --ext-soft: #3a2c14; --lock: #e08ab0; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); line-height: 1.55;
+  padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 1120px; margin: 0 auto; display: grid; gap: 22px; }
+header h1 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); line-height: 1.2; margin: 0 0 6px; text-wrap: balance; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); max-width: 70ch; }
+.eyebrow { font: 500 0.72rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { font: 500 0.82rem var(--font); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.chips button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; }
+.scroll { overflow-x: auto; }
+svg { display: block; min-width: 940px; width: 100%; height: auto; font-family: var(--font); }
+figcaption { margin-top: 10px; color: var(--muted); font-size: 0.86rem; max-width: 80ch; }
+.box { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
+.lane .box { transition: opacity .15s; }
+.core { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.lock { fill: var(--panel); stroke: var(--lock); stroke-width: 1.4; }
+.extb { fill: var(--ext-soft); stroke: var(--ext); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.t { font-size: 11.5px; fill: var(--fg); }
+.tm { font-size: 10.5px; fill: var(--muted); }
+.th { font-size: 12.5px; font-weight: 700; fill: var(--fg); }
+.tc { font: 500 10.5px var(--mono); fill: var(--accent); letter-spacing: .08em; }
+.arrow { stroke: var(--muted); stroke-width: 1.3; fill: none; }
+.arrow-core { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+.lane { transition: opacity .15s; }
+.dim { opacity: .18; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.card h3 { margin: 0 0 6px; font-size: 0.98rem; }
+.card p, .card li { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.card ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+code { font: 0.84em var(--mono); background: var(--accent-soft); padding: 1px 5px; border-radius: 3px; }
+@media (prefers-reduced-motion: reduce) { .lane { transition: none; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">HAK Accounting · luồng dữ liệu</div>
+    <h1>Từ chứng từ nghiệp vụ đến báo cáo tài chính</h1>
+    <p>Mọi chu trình đi qua cùng một lõi ghi sổ: dữ liệu phát sinh được ghi nhận bằng chứng từ, xử lý thành nhật ký và các sổ bất biến, rồi báo cáo đọc lại từ chính các sổ đó. Chọn một chu trình để xem đường đi của nó.</p>
+  </header>
+
+  <div class="chips" role="group" aria-label="Chọn chu trình">
+    <button type="button" data-lane="all" aria-pressed="true">Tất cả</button>
+    <button type="button" data-lane="rev" aria-pressed="false">Doanh thu</button>
+    <button type="button" data-lane="sup" aria-pressed="false">Cung ứng</button>
+    <button type="button" data-lane="prod" aria-pressed="false">Chuyển đổi</button>
+    <button type="button" data-lane="fin" aria-pressed="false">Tiền và vay</button>
+    <button type="button" data-lane="fa" aria-pressed="false">Tài sản</button>
+    <button type="button" data-lane="tax" aria-pressed="false">Thuế và hóa đơn điện tử</button>
+  </div>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1000 690" role="img" aria-label="Sáu chu trình nghiệp vụ đi từ chứng từ ghi nhận, qua lõi ghi sổ gồm chứng từ nháp, duyệt và ghi sổ, vào nhật ký và các sổ bất biến, rồi ra báo cáo theo chu trình và báo cáo tài chính">
+      <defs>
+        <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--muted)"/></marker>
+        <marker id="ac" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker>
+      </defs>
+
+      <text class="tc" x="20" y="22">1 · GHI NHẬN</text>
+      <text class="tm" x="20" y="38">chứng từ nghiệp vụ = dữ liệu phát sinh</text>
+      <text class="tc" x="476" y="22">2 · XỬ LÝ</text>
+      <text class="tm" x="476" y="38">nhật ký, sổ kho, phân bổ = dữ liệu chuyển đổi</text>
+      <text class="tc" x="752" y="22">3 · BÁO CÁO</text>
+      <text class="tm" x="752" y="38">tập tin tồn, tổng hợp = dữ liệu kết quả</text>
+
+      <!-- Lane: doanh thu -->
+      <g class="lane" data-lane="rev">
+        <rect class="box" x="20" y="56" width="88" height="44" rx="4"/><text class="t" x="64" y="75" text-anchor="middle">Hợp đồng</text><text class="tm" x="64" y="89" text-anchor="middle">lệnh bán</text>
+        <rect class="box" x="124" y="56" width="88" height="44" rx="4"/><text class="t" x="168" y="75" text-anchor="middle">Phiếu giao</text><text class="tm" x="168" y="89" text-anchor="middle">xuất kho</text>
+        <rect class="box" x="228" y="56" width="88" height="44" rx="4"/><text class="t" x="272" y="75" text-anchor="middle">Hóa đơn bán</text><text class="tm" x="272" y="89" text-anchor="middle">có chiết khấu</text>
+        <rect class="box" x="332" y="56" width="88" height="44" rx="4"/><text class="t" x="376" y="75" text-anchor="middle">Phiếu thu</text><text class="tm" x="376" y="89" text-anchor="middle">hàng chờ thu</text>
+        <line class="arrow" x1="108" y1="78" x2="122" y2="78" marker-end="url(#ah)"/><line class="arrow" x1="212" y1="78" x2="226" y2="78" marker-end="url(#ah)"/><line class="arrow" x1="316" y1="78" x2="330" y2="78" marker-end="url(#ah)"/>
+        <line class="arrow-core" x1="420" y1="78" x2="470" y2="78" marker-end="url(#ac)"/>
+        <rect class="box" x="752" y="56" width="228" height="44" rx="4"/><text class="t" x="866" y="75" text-anchor="middle">Bán hàng, thu tiền, tuổi nợ phải thu</text><text class="tm" x="866" y="89" text-anchor="middle">chiết khấu thương mại và thanh toán</text>
+        <line class="arrow-core" x1="700" y1="78" x2="750" y2="78" marker-end="url(#ac)"/>
+      </g>
+      <!-- Lane: cung ứng -->
+      <g class="lane" data-lane="sup">
+        <rect class="box" x="20" y="130" width="88" height="44" rx="4"/><text class="t" x="64" y="149" text-anchor="middle">Yêu cầu mua</text><text class="tm" x="64" y="163" text-anchor="middle">đơn mua</text>
+        <rect class="box" x="124" y="130" width="88" height="44" rx="4"/><text class="t" x="168" y="149" text-anchor="middle">Phiếu nhập</text><text class="tm" x="168" y="163" text-anchor="middle">kiểm nghiệm</text>
+        <rect class="box" x="228" y="130" width="88" height="44" rx="4"/><text class="t" x="272" y="149" text-anchor="middle">Hóa đơn mua</text><text class="tm" x="272" y="163" text-anchor="middle">đối chiếu 3 bên</text>
+        <rect class="box" x="332" y="130" width="88" height="44" rx="4"/><text class="t" x="376" y="149" text-anchor="middle">Lệnh thanh toán</text><text class="tm" x="376" y="163" text-anchor="middle">lệnh nháp</text>
+        <line class="arrow" x1="108" y1="152" x2="122" y2="152" marker-end="url(#ah)"/><line class="arrow" x1="212" y1="152" x2="226" y2="152" marker-end="url(#ah)"/><line class="arrow" x1="316" y1="152" x2="330" y2="152" marker-end="url(#ah)"/>
+        <line class="arrow-core" x1="420" y1="152" x2="470" y2="152" marker-end="url(#ac)"/>
+        <rect class="box" x="752" y="130" width="228" height="44" rx="4"/><text class="t" x="866" y="149" text-anchor="middle">Công nợ phải trả, kế hoạch tiền</text><text class="tm" x="866" y="163" text-anchor="middle">xếp hạng nhà cung cấp, chiết khấu được hưởng</text>
+        <line class="arrow-core" x1="700" y1="152" x2="750" y2="152" marker-end="url(#ac)"/>
+      </g>
+      <!-- Lane: chuyển đổi -->
+      <g class="lane" data-lane="prod">
+        <rect class="box" x="20" y="204" width="88" height="44" rx="4"/><text class="t" x="64" y="223" text-anchor="middle">Lệnh sản xuất</text><text class="tm" x="64" y="237" text-anchor="middle">định mức</text>
+        <rect class="box" x="124" y="204" width="88" height="44" rx="4"/><text class="t" x="168" y="223" text-anchor="middle">Xuất vật tư</text><text class="tm" x="168" y="237" text-anchor="middle">đo độ khô</text>
+        <rect class="box" x="228" y="204" width="88" height="44" rx="4"/><text class="t" x="272" y="223" text-anchor="middle">Nhập thành phẩm</text><text class="tm" x="272" y="237" text-anchor="middle">bán thành phẩm</text>
+        <rect class="box" x="332" y="204" width="88" height="44" rx="4"/><text class="t" x="376" y="223" text-anchor="middle">Giá thành</text><text class="tm" x="376" y="237" text-anchor="middle">chốt lệnh</text>
+        <line class="arrow" x1="108" y1="226" x2="122" y2="226" marker-end="url(#ah)"/><line class="arrow" x1="212" y1="226" x2="226" y2="226" marker-end="url(#ah)"/><line class="arrow" x1="316" y1="226" x2="330" y2="226" marker-end="url(#ah)"/>
+        <line class="arrow-core" x1="420" y1="226" x2="470" y2="226" marker-end="url(#ac)"/>
+        <rect class="box" x="752" y="204" width="228" height="44" rx="4"/><text class="t" x="866" y="223" text-anchor="middle">Giá thành, nhập – xuất – tồn</text><text class="tm" x="866" y="237" text-anchor="middle">đối chiếu sổ kho với sổ cái</text>
+        <line class="arrow-core" x1="700" y1="226" x2="750" y2="226" marker-end="url(#ac)"/>
+      </g>
+      <!-- Lane: tiền -->
+      <g class="lane" data-lane="fin">
+        <rect class="extb" x="20" y="278" width="88" height="44" rx="4"/><text class="t" x="64" y="297" text-anchor="middle">Sao kê</text><text class="tm" x="64" y="311" text-anchor="middle">ngân hàng</text>
+        <rect class="box" x="124" y="278" width="88" height="44" rx="4"/><text class="t" x="168" y="297" text-anchor="middle">Thu / chi</text><text class="tm" x="168" y="311" text-anchor="middle">tiền, ngoại tệ</text>
+        <rect class="box" x="228" y="278" width="88" height="44" rx="4"/><text class="t" x="272" y="297" text-anchor="middle">Khoản vay</text><text class="tm" x="272" y="311" text-anchor="middle">lịch trả nợ</text>
+        <rect class="box" x="332" y="278" width="88" height="44" rx="4"/><text class="t" x="376" y="297" text-anchor="middle">Đánh giá lại</text><text class="tm" x="376" y="311" text-anchor="middle">tỷ giá cuối kỳ</text>
+        <line class="arrow" x1="108" y1="300" x2="122" y2="300" marker-end="url(#ah)"/><line class="arrow" x1="212" y1="300" x2="226" y2="300" marker-end="url(#ah)"/><line class="arrow" x1="316" y1="300" x2="330" y2="300" marker-end="url(#ah)"/>
+        <line class="arrow-core" x1="420" y1="300" x2="470" y2="300" marker-end="url(#ac)"/>
+        <rect class="box" x="752" y="278" width="228" height="44" rx="4"/><text class="t" x="866" y="297" text-anchor="middle">Sổ quỹ, đối chiếu ngân hàng, vay</text><text class="tm" x="866" y="311" text-anchor="middle">chênh lệch tỷ giá, kế hoạch tiền</text>
+        <line class="arrow-core" x1="700" y1="300" x2="750" y2="300" marker-end="url(#ac)"/>
+      </g>
+      <!-- Lane: tài sản -->
+      <g class="lane" data-lane="fa">
+        <rect class="box" x="20" y="352" width="88" height="44" rx="4"/><text class="t" x="64" y="371" text-anchor="middle">Đề nghị mua</text><text class="tm" x="64" y="385" text-anchor="middle">TSCĐ / CCDC</text>
+        <rect class="box" x="124" y="352" width="88" height="44" rx="4"/><text class="t" x="168" y="371" text-anchor="middle">Thẻ tài sản</text><text class="tm" x="168" y="385" text-anchor="middle">bàn giao</text>
+        <rect class="box" x="228" y="352" width="88" height="44" rx="4"/><text class="t" x="272" y="371" text-anchor="middle">Khấu hao</text><text class="tm" x="272" y="385" text-anchor="middle">phân bổ kỳ</text>
+        <rect class="box" x="332" y="352" width="88" height="44" rx="4"/><text class="t" x="376" y="371" text-anchor="middle">Bảo trì</text><text class="tm" x="376" y="385" text-anchor="middle">sửa chữa</text>
+        <line class="arrow" x1="108" y1="374" x2="122" y2="374" marker-end="url(#ah)"/><line class="arrow" x1="212" y1="374" x2="226" y2="374" marker-end="url(#ah)"/><line class="arrow" x1="316" y1="374" x2="330" y2="374" marker-end="url(#ah)"/>
+        <line class="arrow-core" x1="420" y1="374" x2="470" y2="374" marker-end="url(#ac)"/>
+        <rect class="box" x="752" y="352" width="228" height="44" rx="4"/><text class="t" x="866" y="371" text-anchor="middle">Sổ tài sản, khấu hao theo bộ phận</text><text class="tm" x="866" y="385" text-anchor="middle">nhật ký tài sản, kiểm kê</text>
+        <line class="arrow-core" x1="700" y1="374" x2="750" y2="374" marker-end="url(#ac)"/>
+      </g>
+      <!-- Lane: thuế -->
+      <g class="lane" data-lane="tax">
+        <rect class="extb" x="20" y="426" width="88" height="44" rx="4"/><text class="t" x="64" y="445" text-anchor="middle">Nhà cung cấp</text><text class="tm" x="64" y="459" text-anchor="middle">hóa đơn điện tử</text>
+        <rect class="box" x="124" y="426" width="88" height="44" rx="4"/><text class="t" x="168" y="445" text-anchor="middle">Phát hành</text><text class="tm" x="168" y="459" text-anchor="middle">chờ mã cơ quan thuế</text>
+        <rect class="box" x="228" y="426" width="88" height="44" rx="4"/><text class="t" x="272" y="445" text-anchor="middle">Điều chỉnh</text><text class="tm" x="272" y="459" text-anchor="middle">thay thế, 04/SS</text>
+        <rect class="extb" x="332" y="426" width="88" height="44" rx="4"/><text class="t" x="376" y="445" text-anchor="middle">Cơ quan thuế</text><text class="tm" x="376" y="459" text-anchor="middle">01/TB-RSĐT</text>
+        <line class="arrow" x1="108" y1="448" x2="122" y2="448" marker-end="url(#ah)"/><line class="arrow" x1="212" y1="448" x2="226" y2="448" marker-end="url(#ah)"/><line class="arrow" x1="316" y1="448" x2="330" y2="448" marker-end="url(#ah)"/>
+        <line class="arrow-core" x1="420" y1="448" x2="470" y2="448" marker-end="url(#ac)"/>
+        <rect class="box" x="752" y="426" width="228" height="44" rx="4"/><text class="t" x="866" y="445" text-anchor="middle">Đối soát 3 bên, khấu trừ GTGT</text><text class="tm" x="866" y="459" text-anchor="middle">cờ khai bổ sung kỳ gốc</text>
+        <line class="arrow-core" x1="700" y1="448" x2="750" y2="448" marker-end="url(#ac)"/>
+      </g>
+
+      <!-- Lõi xử lý -->
+      <rect class="core" x="470" y="52" width="230" height="424" rx="6" opacity=".35"/>
+      <rect class="box" x="488" y="66" width="194" height="46" rx="4"/><text class="th" x="585" y="86" text-anchor="middle">Chứng từ nháp</text><text class="tm" x="585" y="101" text-anchor="middle">kiểm tra nguồn, kỳ, tài khoản</text>
+      <line class="arrow-core" x1="585" y1="112" x2="585" y2="128" marker-end="url(#ac)"/>
+      <rect class="box" x="488" y="130" width="194" height="46" rx="4"/><text class="th" x="585" y="150" text-anchor="middle">Gửi duyệt → Duyệt</text><text class="tm" x="585" y="165" text-anchor="middle">người lập khác người duyệt</text>
+      <line class="arrow-core" x1="585" y1="176" x2="585" y2="192" marker-end="url(#ac)"/>
+      <rect class="core" x="488" y="194" width="194" height="46" rx="4"/><text class="th" x="585" y="214" text-anchor="middle">Ghi sổ (một giao dịch)</text><text class="tm" x="585" y="229" text-anchor="middle">cân Nợ = Có, khóa kỳ, idempotent</text>
+      <line class="arrow-core" x1="585" y1="240" x2="585" y2="262" marker-end="url(#ac)"/>
+      <rect class="lock" x="488" y="264" width="194" height="40" rx="4"/><text class="th" x="585" y="282" text-anchor="middle">Nhật ký + chi tiết nhật ký</text><text class="tm" x="585" y="296" text-anchor="middle">bất biến (interceptor + trigger)</text>
+      <rect class="lock" x="488" y="312" width="94" height="40" rx="4"/><text class="th" x="535" y="330" text-anchor="middle">Sổ kho</text><text class="tm" x="535" y="344" text-anchor="middle">giá xuất</text>
+      <rect class="lock" x="588" y="312" width="94" height="40" rx="4"/><text class="th" x="635" y="330" text-anchor="middle">Phân bổ</text><text class="tm" x="635" y="344" text-anchor="middle">công nợ</text>
+      <rect class="lock" x="488" y="360" width="194" height="40" rx="4"/><text class="th" x="585" y="378" text-anchor="middle">Kết quả đo độ khô, BDMT</text><text class="tm" x="585" y="392" text-anchor="middle">chứng thư là chứng từ</text>
+      <rect class="box" x="488" y="410" width="194" height="52" rx="4"/><text class="th" x="585" y="428" text-anchor="middle">Kiểm soát</text><text class="tm" x="585" y="443" text-anchor="middle">quyền ở máy chủ, rowVersion,</text><text class="tm" x="585" y="456" text-anchor="middle">idempotency, nhật ký kiểm toán</text>
+
+      <!-- Báo cáo tài chính -->
+      <rect class="core" x="752" y="498" width="228" height="62" rx="6"/>
+      <text class="th" x="866" y="520" text-anchor="middle">Báo cáo tài chính</text>
+      <text class="tm" x="866" y="536" text-anchor="middle">BCĐPS → B01, B02, B03, B09 (Report Engine)</text>
+      <text class="tm" x="866" y="550" text-anchor="middle">mẫu do kế toán trưởng xác minh</text>
+      <path class="arrow-core" d="M585 476 L585 529 L750 529" marker-end="url(#ac)"/>
+      <path class="arrow" d="M866 470 L866 496" marker-end="url(#ah)"/>
+
+      <!-- Bên ngoài -->
+      <rect class="extb" x="20" y="498" width="400" height="62" rx="6"/>
+      <text class="th" x="220" y="520" text-anchor="middle">Nguồn nhập từ ngoài</text>
+      <text class="tm" x="220" y="536" text-anchor="middle">Excel / CSV (danh mục, số dư đầu kỳ) · JSON trao đổi (lương)</text>
+      <text class="tm" x="220" y="550" text-anchor="middle">dữ liệu FAST (chỉ đọc) · tệp XML hóa đơn · sao kê</text>
+      <line class="arrow" x1="420" y1="529" x2="486" y2="470" marker-end="url(#ah)"/>
+
+      <!-- Chú thích -->
+      <g transform="translate(20,596)">
+        <rect class="box" x="0" y="0" width="14" height="14" rx="2"/><text class="tm" x="22" y="11">chứng từ / báo cáo của HAK</text>
+        <rect class="extb" x="230" y="0" width="14" height="14" rx="2"/><text class="tm" x="252" y="11">nguồn hoặc bên ngoài hệ thống</text>
+        <rect class="lock" x="480" y="0" width="14" height="14" rx="2"/><text class="tm" x="502" y="11">sổ bất biến: chỉ đảo và điều chỉnh, không sửa hay xóa</text>
+      </g>
+      <text class="tm" x="20" y="640">Cuối chu trình này thì chu trình sau tự nhận: hóa đơn bán ghi sổ đưa khoản phải thu vào hàng chờ thu; chấp nhận thanh toán đưa khoản vào kế hoạch tiền và lệnh thanh toán nháp.</text>
+      <text class="tm" x="20" y="658">Đảo hóa đơn bị chặn khi làm lệch giá thành đã chốt hoặc rơi vào kỳ đã khóa.</text>
+    </svg>
+    </div>
+    <figcaption>Sáu chu trình đổ vào một lõi ghi sổ duy nhất. Báo cáo không có kho dữ liệu riêng: mọi con số đọc lại từ nhật ký, sổ kho và phân bổ công nợ nên đối chiếu được từ báo cáo về chứng từ gốc.</figcaption>
+  </figure>
+
+  <section class="grid2" aria-label="Điểm cần nhớ">
+    <div class="card"><h3>Ghi sổ</h3><p>Một chứng từ chỉ vào sổ khi đã duyệt, trong kỳ còn mở và cân Nợ = Có. Ghi sổ là một giao dịch cơ sở dữ liệu; lệnh gọi nhà cung cấp hóa đơn điện tử luôn nằm ngoài giao dịch đó.</p></div>
+    <div class="card"><h3>Sửa sai</h3><p>Sổ không sửa trực tiếp. Sai thì đảo chứng từ hoặc lập chứng từ điều chỉnh. Hóa đơn điều chỉnh điều chỉnh số liệu của hóa đơn gốc; thông báo 04/SS chỉ đính kèm hóa đơn cần sửa.</p></div>
+    <div class="card"><h3>Chiết khấu</h3>
+      <ul><li>Thương mại: trên hóa đơn, hóa đơn điều chỉnh, hoặc hạch toán điều chỉnh giảm; có trích trước theo kỳ.</li><li>Thanh toán: một dòng trong bút toán thanh toán, không đổi hóa đơn và thuế.</li></ul></div>
+    <div class="card"><h3>Hai cơ sở dữ liệu</h3><p>SQLite cho một máy, PostgreSQL cho nhiều người dùng cùng công ty. Cùng một mô hình, mỗi thay đổi có migration cho cả hai; ghi sổ tuần tự theo công ty nên số liệu luôn nhất quán.</p></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var chips = document.querySelectorAll('.chips button');
+  var lanes = document.querySelectorAll('.lane');
+  chips.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var pick = b.getAttribute('data-lane');
+      chips.forEach(function (c) { c.setAttribute('aria-pressed', c === b ? 'true' : 'false'); });
+      lanes.forEach(function (l) { l.classList.toggle('dim', pick !== 'all' && l.getAttribute('data-lane') !== pick); });
+    });
+  });
+})();
+</script>

@@ -277,8 +277,10 @@ test('Worklist: người lập thấy việc duyệt bị chặn, người duy�
 })
 
 test('Chu trình mua / bán không lẫn: mỗi phân hệ chỉ có đơn của chiều mình và không còn nút chuyển', async () => {
+  const now = new Date()
+  const orderDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-')
   for (const [kind, partner, desc] of [['Sales', 'KH01', 'E2E đơn BÁN'], ['Purchase', 'NCC01', 'E2E đơn MUA']])
-    await call('POST', '/orders', { kind, partnerId: ctx.P(partner), orderDate: '2026-10-20', description: desc, contractNo: null, contractId: null, overDeliveryTolerancePercent: '0', currency: null, expectedDate: null,
+    await call('POST', '/orders', { kind, partnerId: ctx.P(partner), orderDate, description: desc, contractNo: null, contractId: null, overDeliveryTolerancePercent: '0', currency: null, expectedDate: null,
       lines: [{ itemId: ctx.item('GOKEO'), quantity: '5', unitPrice: '1000', basis: 'Quantity', vatRate: null, description: null }] }, ctx.preparerToken, ctx.company)
   const page = await open('ktt')
   for (const [module, tab, mine, other] of [['Mua hàng', 'Đơn mua hàng', 'E2E đơn MUA', 'E2E đơn BÁN'], ['Bán hàng', 'Đơn bán hàng', 'E2E đơn BÁN', 'E2E đơn MUA']]) {

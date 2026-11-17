@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "dataflow",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/user/erp/.archify/dataflow-hak-20261025-141714/candidate.json",
+    "sha256": "24da32145c3f2d02eefe9e799121aa22f19d915d31436d66195eab545d826e61",
+    "bytes": 7799
+  },
+  "artifact": {
+    "path": "/home/user/erp/.archify/dataflow-hak-20261025-141714/luong-du-lieu-hak.html",
+    "sha256": "d173a9eec528b347e79d6d9c0a24ab0409e1eed74cca1fa6094e52a094889173",
+    "bytes": 849141
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "skipped"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "No supported browser found. Install Chrome/Chromium (or Microsoft Edge), or set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/home/user/erp/.archify/dataflow-hak-20261025-141714/luong-du-lieu-hak.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome/Chromium executable (or Microsoft Edge) and rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/user/erp/.archify/dataflow-hak-20261025-141714/luong-du-lieu-hak.finalize.json",
+    "summaryReceipt": "/home/user/erp/.archify/dataflow-hak-20261025-141714/luong-du-lieu-hak.finalize-summary.json",
+    "browserCheckReceipt": "/home/user/erp/.archify/dataflow-hak-20261025-141714/luong-du-lieu-hak.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 1448,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  }
+}
