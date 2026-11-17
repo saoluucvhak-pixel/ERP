@@ -43,3 +43,49 @@ Filename: "{app}\Chay HAK.cmd"; WorkingDir: "{app}"; Description: "Mo HAK Accoun
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/c taskkill /im HAK.exe /f"; Flags: runhidden; RunOnceId: "StopHak"
+
+[Code]
+{ Thu muc du lieu: nguoi dung chon luc cai (mac dinh %LOCALAPPDATA%\HAK hoac noi da chon truoc do). Luu vao %LOCALAPPDATA%\HAK\data-location.txt,
+  tep nay nam NGOAI thu muc chuong trinh nen go chuong trinh hoac cai lai khong lam mat thu muc du lieu cung nhu viec chon noi luu. }
+var
+  DataPage: TInputDirWizardPage;
+
+function LocationFile(): String;
+begin
+  Result := ExpandConstant('{localappdata}\HAK\data-location.txt');
+end;
+
+function CurrentDataRoot(): String;
+var
+  Lines: TArrayOfString;
+begin
+  Result := ExpandConstant('{localappdata}\HAK');
+  if LoadStringsFromFile(LocationFile(), Lines) and (GetArrayLength(Lines) > 0) and (Trim(Lines[0]) <> '') then
+    Result := Trim(Lines[0]);
+end;
+
+procedure InitializeWizard();
+begin
+  DataPage := CreateInputDirPage(wpSelectDir, 'Thu muc luu du lieu', 'Chon noi luu so sach cua HAK',
+    'Du lieu (co so du lieu, anh dinh kem, ban sao luu, khoa chu) se nam o thu muc nay va se KHONG bi xoa khi go chuong trinh. ' +
+    'Nen chon o dia khac o Windows hoac o co sao luu (vi du D:\HAK-DuLieu). Co the doi sau bang "Doi thu muc du lieu.cmd".', False, '');
+  DataPage.Add('');
+  DataPage.Values[0] := CurrentDataRoot();
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    ForceDirectories(ExpandConstant('{localappdata}\HAK'));
+    ForceDirectories(DataPage.Values[0]);
+    SaveStringToFile(LocationFile(), DataPage.Values[0] + #13#10, False);
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usDone then
+    MsgBox('Da go chuong trinh HAK.' + #13#10 + #13#10 + 'DU LIEU DUOC GIU NGUYEN tai:' + #13#10 + CurrentDataRoot() + #13#10 + #13#10 +
+      'Chuong trinh khong xoa du lieu. Muon xoa, hay tu xoa thu muc do sau khi da sao luu.', mbInformation, MB_OK);
+end;

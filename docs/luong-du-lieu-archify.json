@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Luồng dữ liệu HAK Accounting",
+    "output": ".archify/dataflow-hak-20261025-141714/luong-du-lieu-hak.html",
+    "locale": "vi",
+    "quality_profile": "showcase"
+  },
+  "stages": [
+    { "label": "Nguồn nghiệp vụ" },
+    { "label": "Ghi nhận" },
+    { "label": "Duyệt và ghi sổ" },
+    { "label": "Sổ bất biến" },
+    { "label": "Báo cáo" }
+  ],
+  "nodes": [
+    { "id": "rev", "type": "frontend", "label": "Doanh thu", "sublabel": "lệnh bán, giao, hóa đơn bán", "stage": 0, "row": 0, "tag": "chu trình" },
+    { "id": "sup", "type": "frontend", "label": "Cung ứng", "sublabel": "đơn mua, nhập, hóa đơn mua", "stage": 0, "row": 1, "tag": "chu trình" },
+    { "id": "prod", "type": "frontend", "label": "Chuyển đổi", "sublabel": "lệnh sản xuất, giá thành", "stage": 0, "row": 2, "tag": "chu trình" },
+    { "id": "fin", "type": "frontend", "label": "Tiền, vay, tài sản", "sublabel": "thu chi, khấu hao, tỷ giá", "stage": 0, "row": 3, "tag": "chu trình" },
+    { "id": "ext", "type": "external", "label": "Bên ngoài", "sublabel": "ngân hàng, HĐĐT, Excel, FAST", "stage": 0, "row": 4, "tag": "nhập vào" },
+
+    { "id": "docs", "type": "backend", "label": "Chứng từ nghiệp vụ", "sublabel": "hóa đơn, phiếu kho, thu chi", "stage": 1, "row": 1, "tag": "dữ liệu phát sinh" },
+    { "id": "gate", "type": "cloud", "label": "Cổng nhập và phát hành", "sublabel": "sao kê, tệp XML, nhà cung cấp HĐĐT", "stage": 1, "row": 3, "tag": "ngoài giao dịch" },
+
+    { "id": "control", "type": "security", "label": "Kiểm soát", "sublabel": "quyền, rowVersion, kỳ khóa", "stage": 2, "row": 0, "tag": "máy chủ" },
+    { "id": "draft", "type": "backend", "label": "Chứng từ nháp", "sublabel": "gửi duyệt, người duyệt khác người lập", "stage": 2, "row": 1, "tag": "duyệt" },
+    { "id": "post", "type": "backend", "label": "Ghi sổ", "sublabel": "một giao dịch, Nợ = Có, idempotent", "stage": 2, "row": 2, "tag": "ACID" },
+
+    { "id": "journal", "type": "database", "label": "Nhật ký + chi tiết", "sublabel": "bất biến", "stage": 3, "row": 0, "tag": "sổ cái" },
+    { "id": "stock", "type": "database", "label": "Sổ kho", "sublabel": "giá xuất, bất biến", "stage": 3, "row": 1, "tag": "kho" },
+    { "id": "alloc", "type": "database", "label": "Phân bổ công nợ", "sublabel": "bù trừ, tuổi nợ", "stage": 3, "row": 2, "tag": "công nợ" },
+    { "id": "measure", "type": "database", "label": "Kết quả đo", "sublabel": "độ khô, BDMT", "stage": 3, "row": 3, "tag": "dăm gỗ" },
+    { "id": "audit", "type": "security", "label": "Nhật ký kiểm toán", "sublabel": "chuỗi băm, chỉ ghi thêm", "stage": 3, "row": 4, "tag": "truy vết" },
+
+    { "id": "tb", "type": "backend", "label": "Sổ cái, BCĐPS", "sublabel": "sổ chi tiết, nhật ký chung", "stage": 4, "row": 0, "tag": "tổng hợp" },
+    { "id": "cyc", "type": "backend", "label": "Báo cáo chu trình", "sublabel": "bán, mua, nhập xuất tồn", "stage": 4, "row": 1, "tag": "quản trị" },
+    { "id": "tax", "type": "backend", "label": "Đối soát thuế GTGT", "sublabel": "3 bên, cờ khai bổ sung", "stage": 4, "row": 2, "tag": "thuế" },
+    { "id": "fs", "type": "backend", "label": "Báo cáo tài chính", "sublabel": "B01, B02, B03, B09", "stage": 4, "row": 3, "tag": "mẫu đã xác minh" },
+    { "id": "close", "type": "backend", "label": "Đóng kỳ và cảnh báo", "sublabel": "bảng kiểm, nợ đến hạn", "stage": 4, "row": 4, "tag": "kiểm tra" }
+  ],
+  "flows": [
+    { "id": "f-rev", "from": "rev", "to": "docs", "label": "bán, giao, thu", "classification": "phát sinh", "variant": "emphasis" },
+    { "id": "f-sup", "from": "sup", "to": "docs", "label": "mua, nhập, trả", "classification": "phát sinh", "variant": "emphasis" },
+    { "id": "f-prod", "from": "prod", "to": "docs", "label": "xuất vật tư", "classification": "phát sinh", "variant": "default" },
+    { "id": "f-fin", "from": "fin", "to": "docs", "label": "thu chi, khấu hao", "classification": "phát sinh", "variant": "default" },
+    { "id": "f-ext", "from": "ext", "to": "gate", "label": "sao kê, HĐĐT, tệp", "classification": "nhập ngoài", "variant": "dashed" },
+    { "id": "f-gate", "from": "gate", "to": "draft", "label": "chứng từ gợi ý", "classification": "chờ xác nhận", "variant": "dashed" },
+    { "id": "f-docs", "from": "docs", "to": "draft", "label": "lập chứng từ", "classification": "nháp", "variant": "emphasis" },
+    { "id": "f-ctl", "from": "control", "to": "post", "label": "quyền, kỳ, phiên bản", "classification": "điều kiện ghi sổ", "variant": "security" },
+    { "id": "f-draft", "from": "draft", "to": "post", "label": "đã duyệt", "classification": "phê duyệt", "variant": "emphasis" },
+    { "id": "f-j", "from": "post", "to": "journal", "label": "bút toán", "classification": "bất biến", "variant": "emphasis" },
+    { "id": "f-s", "from": "post", "to": "stock", "label": "biến động kho", "classification": "bất biến", "variant": "default" },
+    { "id": "f-a", "from": "post", "to": "alloc", "label": "bù trừ công nợ", "classification": "bất biến", "variant": "default" },
+    { "id": "f-m", "from": "post", "to": "measure", "label": "độ khô, BDMT", "classification": "bất biến", "variant": "default" },
+    { "id": "f-au", "from": "post", "to": "audit", "label": "mọi thao tác", "classification": "truy vết", "variant": "security" },
+    { "id": "r-tb", "from": "journal", "to": "tb", "label": "số phát sinh", "classification": "đọc lại", "variant": "emphasis" },
+    { "id": "r-fs", "from": "journal", "to": "fs", "label": "số liệu BCTC", "classification": "đọc lại", "variant": "emphasis" },
+    { "id": "r-cyc", "from": "stock", "to": "cyc", "label": "nhập xuất tồn", "classification": "đọc lại", "variant": "default" },
+    { "id": "r-tax", "from": "journal", "to": "tax", "label": "thuế đầu ra, vào", "classification": "đọc lại", "variant": "default" },
+    { "id": "r-al", "from": "alloc", "to": "close", "label": "nợ đến hạn", "classification": "đọc lại", "variant": "dashed" },
+    { "id": "r-au", "from": "audit", "to": "close", "label": "truy vết", "classification": "đọc lại", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Đường chính", "items": [
+      "Chứng từ phát sinh từ sáu chu trình đi qua một cổng duy nhất: nháp, duyệt, ghi sổ",
+      "Ghi sổ là một giao dịch: Nợ bằng Có, trong kỳ còn mở, chạy lại không tạo bút toán trùng",
+      "Cuối chu trình này thì chu trình sau tự nhận (hàng chờ thu, kế hoạch tiền, lệnh thanh toán nháp)" ] },
+    { "dot": "rose", "title": "Sổ bất biến và kiểm soát", "items": [
+      "Nhật ký, sổ kho, phân bổ công nợ, kết quả đo chỉ ghi thêm; sai thì đảo hoặc điều chỉnh",
+      "Quyền được kiểm tra ở máy chủ; thao tác duyệt và ghi sổ phải đúng phiên bản",
+      "Mọi thao tác ghi vào nhật ký kiểm toán có chuỗi băm" ] },
+    { "dot": "amber", "title": "Nguồn ngoài hệ thống", "items": [
+      "Sao kê ngân hàng không có mã giao dịch chỉ được gợi ý, người dùng xác nhận",
+      "Hóa đơn điện tử: gọi nhà cung cấp luôn ngoài giao dịch; có số thật mới ghi sổ",
+      "Excel, JSON, dữ liệu FAST vào qua nhập liệu có kiểm tra rồi thành chứng từ nháp" ] }
+  ]
+}

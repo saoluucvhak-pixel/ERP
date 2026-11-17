@@ -177,6 +177,8 @@ public sealed partial class DiscountAgreementService(HakDbContext db, InvoiceSer
         var adj = await (from l in db.CommercialInvoiceLines.AsNoTracking()
                          join i in db.CommercialInvoices.AsNoTracking() on l.InvoiceId equals i.Id
                          where i.CompanyId == ctx.CompanyId && i.AdjustsInvoiceId != null && ids.Contains(i.AdjustsInvoiceId.Value) && !own.Contains(i.Id)
+                               // Trích trước chỉ dùng điều chỉnh đến ngày ước tính; quyết toán (upTo null) vẫn nhận hồ sơ điều chỉnh đến muộn.
+                               && (upTo == null || i.PostingDate <= upTo.Value)
                                && (i.Purpose == InvoicePurpose.Return || i.Purpose == InvoicePurpose.Discount
                                    // Tăng giá / sửa sai doanh thu đã ghi sổ làm tăng doanh số tính CKTM; "tăng" lý do thu hồi CKTM (CommercialRebate) thì KHÔNG, tránh vòng tự sinh quyền lợi.
                                    || (i.Purpose == InvoicePurpose.Increase && i.AdjustmentReason != InvoiceAdjustmentReason.CommercialRebate))

@@ -1,5 +1,17 @@
 # STATUS — theo Definition of Done (master prompt §48)
 
+## Tích hợp PR và kế hoạch ERP — 18/11/2026
+
+`AWAITING_REAL_DATA_VALIDATION` — hợp nhất 14 PR #62–64, #78, #82–87, #89–92 từ main df1ede0. Bao gồm đóng gói Windows, sao lưu tự động SQLite, DataRoot, mốc ngày CKTM và cập nhật dependency. Xử lý xung đột tài liệu, project .NET, package.json/lockfile; sửa ngày fixture E2E để phù hợp bộ lọc tháng hiện tại.
+
+Kiểm chứng local **601/601 backend** (126 domain + 475 SQLite), **77/77 frontend**, **17/17 E2E**, web build đạt, lint 0 lỗi/26 cảnh báo. npm audit production 0; audit đầy đủ còn 5 cảnh báo high cùng chuỗi picomatch dev tooling, advisory chưa có bản vá phát hành tại thời điểm kiểm tra. Giữ kiểm tra audit hiện hành. Chưa diễn tập bộ cài/đổi nơi lưu trên Windows hoặc khôi phục sang máy doanh nghiệp.
+
+Prompt 8 nhóm và tiêu chí nghiệm thu tại `docs/roadmap/2026-11-18-ERP-UPGRADE-PROMPT.md`; kết quả tích hợp tại `docs/audit/2026-11-18-all-pr-integration.md`. Mẫu pháp lý cần đối chiếu bản gốc/phụ lục và phiên bản áp dụng trước nghiệm thu dữ liệu thực.
+
+## Bổ sung 27/10/2026 — mốc ngày trích trước CKTM
+
+`AWAITING_REAL_DATA_VALIDATION` — trên main df1ede0, lỗi bỏ sót tăng giá đã có sửa và test RebateBase29. Bổ sung lọc ngày hạch toán điều chỉnh theo ngày ước tính khi trích trước, để điều chỉnh ngày sau không làm lệch số trích kỳ trước; preview/quyết toán vẫn nhận hồ sơ đến muộn. Thêm bốn ca RebateCutoff30, gồm đúng ngày/sau ngày và chênh lệch lần trích tiếp theo. Đã đạt **600/600 backend** (126 domain + 474 SQLite), **6/6 ca trọng tâm**, **77/77 frontend**, **17/17 E2E**, build đạt, lint 0 lỗi/25 cảnh báo có sẵn. Chi tiết `docs/audit/2026-10-27-rebate-accrual-cutoff.md`; không sửa sổ/snapshot cũ, chưa đối chiếu PostgreSQL/dữ liệu thật.
+
 ## Bổ sung 26/10/2026 — Phase28: CKTM bổ sung/thu hồi và thay thế ngoại tệ
 
 `AWAITING_REAL_DATA_VALIDATION` — code/UI và toàn bộ kiểm thử tự động bản cuối đã đạt. Đã triển khai code/API/UI và migration SQLite/PostgreSQL cho chuỗi run bổ sung/thu hồi, snapshot quyền lợi lũy kế, hash nguồn/phiên bản, ghi sổ đúng tài khoản, giữ lịch sử, kiểm tra ngày và thứ tự đảo/hủy. Đã có kế hoạch/chuyển phân bổ ngoại tệ theo cả nguyên tệ và giá trị ghi sổ, phần thừa chưa phân bổ, không ghi lại dòng tiền/FX; lỗi DB sau phát hành giữ PostError để phục hồi.

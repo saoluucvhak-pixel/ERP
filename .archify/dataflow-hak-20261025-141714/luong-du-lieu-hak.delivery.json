@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "69910b4b-85d3-4785-8eaa-265d1dde1e75",
+  "status": "current",
+  "command": "deliver",
+  "type": "dataflow",
+  "input": "/home/user/erp/.archify/dataflow-hak-20261025-141714/candidate.json",
+  "output": "/home/user/erp/.archify/dataflow-hak-20261025-141714/luong-du-lieu-hak.html",
+  "specification": {
+    "sha256": "24da32145c3f2d02eefe9e799121aa22f19d915d31436d66195eab545d826e61",
+    "bytes": 7799
+  },
+  "artifact": {
+    "sha256": "d173a9eec528b347e79d6d9c0a24ab0409e1eed74cca1fa6094e52a094889173",
+    "bytes": 849141
+  }
+}
